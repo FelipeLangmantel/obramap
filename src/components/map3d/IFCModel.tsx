@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Html } from "@react-three/drei";
 import * as THREE from "three";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Props {
   url: string;
+  projectId?: string | null;
+  companyId?: string | null;
   onLoaded: () => void;
   onSceneReady?: (scene: THREE.Object3D) => void;
   onMeshClick?: (mesh: THREE.Object3D) => void;
@@ -36,6 +39,31 @@ interface IfcLayerAssignment {
 }
 
 type IfcInventoryFilter = "all" | "production" | "text" | "unnamed";
+type IfcInventorySaveStatus = "idle" | "saving" | "saved" | "error";
+type Project3DModelIdRow = { id: string };
+type ProtectedIfcElementRow = { ifc_global_id: string | null; ifc_entity_id: string | null };
+
+function asProject3DModelIdRow(data: unknown): Project3DModelIdRow | null {
+  if (!data || typeof data !== "object") return null;
+
+  const maybeRow = data as Record<string, unknown>;
+  return typeof maybeRow.id === "string" ? { id: maybeRow.id } : null;
+}
+
+function normalizeNullableString(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+function asProtectedIfcElementRows(data: unknown): ProtectedIfcElementRow[] {
+  if (!Array.isArray(data)) return [];
+
+  return data
+    .filter((row): row is Record<string, unknown> => !!row && typeof row === "object")
+    .map((row): ProtectedIfcElementRow => ({
+      ifc_global_id: normalizeNullableString(row.ifc_global_id),
+      ifc_entity_id: normalizeNullableString(row.ifc_entity_id),
+    }));
+}
 
 const IFC_ENTITY_TYPES = [
   "IFCBUILDINGELEMENTPROXY",
@@ -234,14 +262,59 @@ function parseIfcText(text: string): IfcInventoryItem[] {
   return items;
 }
 
-export function IFCModel({ url, onLoaded, onSceneReady, onMeshClick, selectedMeshKey }: Props) {
+function getIfcFileName(url: string) {
+  try {
+    const parsedUrl = new URL(url);
+    const pathName = decodeURIComponent(parsedUrl.pathname);
+    return pathName.split("/").filter(Boolean).pop() || "modelo-ifc.ifc";
+  } catch {
+    return url.split("/").filter(Boolean).pop() || "modelo-ifc.ifc";
+  }
+}
+
+function mapIfcCategory(category: IfcInventoryItem["category"]) {
+  if (category === "production") return "production";
+  if (category === "text") return "text_annotation";
+  return "unknown";
+}
+
+function buildIfcElementPayload(item: IfcInventoryItem, projectId: string, companyId: string, modelId: string) {
+  return {
+    company_id: companyId,
+    project_id: projectId,
+    model_id: modelId,
+    ifc_global_id: item.globalId || null,
+    ifc_entity_id: item.id,
+    ifc_type: item.type,
+    ifc_layer_name: item.primaryLayerName,
+    name: item.name || null,
+    detected_service_key: item.detectedServiceKey,
+    detected_service_label: item.detectedServiceLabel,
+    detected_house_number: item.detectedHouseNumber,
+    category: mapIfcCategory(item.category),
+    confidence: item.semanticConfidence,
+    needs_review: item.semanticNeedsReview || item.semanticConfidence !== "high",
+    status: "suggested",
+    raw_properties: {
+      layerNames: item.layerNames,
+      quotedValues: item.quotedValues,
+      rawLine: item.rawLine,
+      reachableRefsCount: item.reachableRefs.length,
+    },
+  };
+}
+
+export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, onMeshClick, selectedMeshKey }: Props) {
   const [items, setItems] = useState<IfcInventoryItem[]>([]);
   const [filter, setFilter] = useState<IfcInventoryFilter>("production");
   const [search, setSearch] = useState("");
   const [expandedRawLines, setExpandedRawLines] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<IfcInventorySaveStatus>("idle");
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const calledRef = useRef(false);
+  const persistedKeyRef = useRef<string | null>(null);
 
   void onSceneReady;
   void onMeshClick;
@@ -253,7 +326,10 @@ export function IFCModel({ url, onLoaded, onSceneReady, onMeshClick, selectedMes
     setError(null);
     setItems([]);
     setExpandedRawLines(new Set());
+    setSaveStatus("idle");
+    setSaveMessage(null);
     calledRef.current = false;
+    persistedKeyRef.current = null;
 
     const loadIfcText = async () => {
       try {
@@ -283,6 +359,114 @@ export function IFCModel({ url, onLoaded, onSceneReady, onMeshClick, selectedMes
     calledRef.current = true;
     requestAnimationFrame(() => requestAnimationFrame(() => onLoaded()));
   }, [loaded, onLoaded]);
+
+  useEffect(() => {
+    if (!loaded || error || !projectId || !companyId) return;
+
+    const persistenceKey = `${projectId}:${companyId}:${url}:${items.length}`;
+    if (persistedKeyRef.current === persistenceKey) return;
+    persistedKeyRef.current = persistenceKey;
+
+    let cancelled = false;
+
+    const persistInventory = async () => {
+      setSaveStatus("saving");
+      setSaveMessage("Salvando inventário como sugestões...");
+
+      try {
+        const modelTable = supabase.from("project_3d_models" as any);
+        const elementsTable = supabase.from("project_ifc_elements" as any);
+
+        const { data: existingModelData, error: findModelError } = await modelTable
+          .select("id")
+          .eq("project_id", projectId)
+          .eq("storage_path", url)
+          .eq("model_type", "ifc")
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        if (findModelError) throw findModelError;
+
+        const existingModel = asProject3DModelIdRow(existingModelData as unknown);
+        let modelId = existingModel?.id as string | undefined;
+
+        if (!modelId) {
+          const { data: insertedModelData, error: insertModelError } = await modelTable
+            .insert([{
+              company_id: companyId,
+              project_id: projectId,
+              model_type: "ifc",
+              storage_path: url,
+              file_name: getIfcFileName(url),
+              status: "uploaded",
+            }])
+            .select("id")
+            .single();
+          if (insertModelError) throw insertModelError;
+          const insertedModel = asProject3DModelIdRow(insertedModelData as unknown);
+          if (!insertedModel?.id) throw new Error("Modelo IFC criado sem id retornado.");
+          modelId = insertedModel.id;
+        }
+
+        const { error: deleteSuggestedError } = await elementsTable
+          .delete()
+          .eq("model_id", modelId)
+          .eq("status", "suggested");
+        if (deleteSuggestedError) throw deleteSuggestedError;
+
+        const { data: protectedElementsData, error: protectedError } = await elementsTable
+          .select("ifc_global_id, ifc_entity_id")
+          .eq("model_id", modelId)
+          .in("status", ["confirmed", "ignored"]);
+        if (protectedError) throw protectedError;
+
+        const protectedElements = asProtectedIfcElementRows(protectedElementsData as unknown);
+        const protectedGlobalIds = new Set(
+          protectedElements
+            .map(item => item.ifc_global_id)
+            .filter((value): value is string => Boolean(value))
+        );
+        const protectedEntityIds = new Set(
+          protectedElements
+            .map(item => item.ifc_entity_id)
+            .filter((value): value is string => Boolean(value))
+        );
+        const rows = items
+          .filter(item => {
+            if (item.globalId && protectedGlobalIds.has(item.globalId)) return false;
+            if (!item.globalId && protectedEntityIds.has(item.id)) return false;
+            return true;
+          })
+          .map(item => buildIfcElementPayload(item, projectId, companyId, modelId!));
+
+        if (rows.length > 0) {
+          const { error: insertElementsError } = await elementsTable.insert(rows);
+          if (insertElementsError) throw insertElementsError;
+        }
+
+        const { error: updateModelError } = await modelTable
+          .update({ status: "inventory_ready" })
+          .eq("id", modelId);
+        if (updateModelError) throw updateModelError;
+
+        if (cancelled) return;
+        setSaveStatus("saved");
+        setSaveMessage("Inventário salvo como sugestões");
+      } catch (err: any) {
+        console.error("[IFC] Falha ao salvar inventário", err);
+        if (cancelled) return;
+        persistedKeyRef.current = null;
+        setSaveStatus("error");
+        setSaveMessage("Falha ao salvar inventário");
+      }
+    };
+
+    void persistInventory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [companyId, error, items, loaded, projectId, url]);
 
   const countsByType = useMemo(() => {
     return items.reduce<Record<string, number>>((acc, item) => {
@@ -392,6 +576,17 @@ export function IFCModel({ url, onLoaded, onSceneReady, onMeshClick, selectedMes
             <p className="mt-1 text-xs text-muted-foreground">
               Renderização IFC 3D será ativada em etapa futura. Nesta etapa o arquivo foi lido para validar entidades e nomes.
             </p>
+            {saveMessage && (
+              <p className={`mt-2 rounded-md px-2 py-1 text-xs ${
+                saveStatus === "saved"
+                  ? "bg-emerald-100 text-emerald-800"
+                  : saveStatus === "error"
+                    ? "bg-destructive/10 text-destructive"
+                    : "bg-muted text-muted-foreground"
+              }`}>
+                {saveMessage}
+              </p>
+            )}
           </div>
 
           {error ? (
