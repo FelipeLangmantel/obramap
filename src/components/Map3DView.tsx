@@ -30,7 +30,7 @@ import { HouseFotoHistoryDrawer } from "@/components/diario/HouseFotoHistoryDraw
 
 interface ModelData {
   url: string;
-  type: "gltf" | "obj";
+  type: "gltf" | "obj" | "ifc";
   mtlUrl?: string;
 }
 
