@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, RotateCcw, XCircle } from "lucide-react";
+import { CheckCircle2, Link2, RotateCcw, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,11 +38,44 @@ interface IfcModelIdRow {
   id: string;
 }
 
+interface ConfirmedIfcElementRow {
+  id: string;
+  company_id: string;
+  project_id: string;
+  model_id: string;
+  detected_house_number: number | null;
+  detected_service_key: string | null;
+  detected_service_label: string | null;
+}
+
+interface IfcElementLinkRow {
+  ifc_element_id: string;
+  house_id: string | null;
+  house_number: number | null;
+  trigger_service_key: string;
+}
+
+interface HouseLookupRow {
+  id?: string | null;
+  houseNumber?: number | null;
+  house_number?: number | null;
+  number?: number | null;
+}
+
+interface LinkSyncResult {
+  totalConfirmed: number;
+  valid: number;
+  created: number;
+  existing: number;
+  ignored: number;
+}
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectId?: string | null;
   modelUrl?: string | null;
+  houses?: HouseLookupRow[];
 }
 
 const statusLabels: Record<IfcSuggestionStatus, string> = {
@@ -99,13 +132,53 @@ function asIfcSuggestionRows(data: unknown): IfcSuggestionRow[] {
     .filter(item => item.id);
 }
 
+function asConfirmedIfcElementRows(data: unknown): ConfirmedIfcElementRow[] {
+  if (!Array.isArray(data)) return [];
+
+  return data
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
+    .map(item => ({
+      id: normalizeNullableString(item.id) || "",
+      company_id: normalizeNullableString(item.company_id) || "",
+      project_id: normalizeNullableString(item.project_id) || "",
+      model_id: normalizeNullableString(item.model_id) || "",
+      detected_house_number: normalizeNullableNumber(item.detected_house_number),
+      detected_service_key: normalizeNullableString(item.detected_service_key),
+      detected_service_label: normalizeNullableString(item.detected_service_label),
+    }))
+    .filter(item => item.id && item.company_id && item.project_id && item.model_id);
+}
+
+function asIfcElementLinkRows(data: unknown): IfcElementLinkRow[] {
+  if (!Array.isArray(data)) return [];
+
+  return data
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
+    .map(item => ({
+      ifc_element_id: normalizeNullableString(item.ifc_element_id) || "",
+      house_id: normalizeNullableString(item.house_id),
+      house_number: normalizeNullableNumber(item.house_number),
+      trigger_service_key: normalizeNullableString(item.trigger_service_key) || "",
+    }))
+    .filter(item => item.ifc_element_id && item.trigger_service_key);
+}
+
+function buildLinkKey(ifcElementId: string, houseId: string | null, houseNumber: number | null, serviceKey: string) {
+  return `${ifcElementId}::${houseId || ""}::${houseNumber ?? ""}::${serviceKey}`;
+}
+
+function getHouseNumber(house: HouseLookupRow) {
+  const value = house.houseNumber ?? house.house_number ?? house.number;
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
 function statusBadgeClass(status: IfcSuggestionStatus) {
   if (status === "confirmed") return "bg-emerald-100 text-emerald-800";
   if (status === "ignored") return "bg-slate-100 text-slate-700";
   return "bg-amber-100 text-amber-800";
 }
 
-export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl }: Props) {
+export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, houses = [] }: Props) {
   const [items, setItems] = useState<IfcSuggestionRow[]>([]);
   const [modelId, setModelId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("suggested");
@@ -113,6 +186,17 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl }:
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [syncingLinks, setSyncingLinks] = useState(false);
+  const [linkSyncResult, setLinkSyncResult] = useState<LinkSyncResult | null>(null);
+
+  const houseIdByNumber = useMemo(() => {
+    const map = new Map<number, string>();
+    houses.forEach(house => {
+      const houseNumber = getHouseNumber(house);
+      if (houseNumber != null && typeof house.id === "string") map.set(houseNumber, house.id);
+    });
+    return map;
+  }, [houses]);
 
   const loadSuggestions = useCallback(async () => {
     if (!projectId) {
@@ -252,6 +336,96 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl }:
     }
   };
 
+  const syncConfirmedLinks = async () => {
+    if (!projectId) {
+      toast.error("Projeto não identificado para gerar vínculos IFC");
+      return;
+    }
+
+    setSyncingLinks(true);
+    try {
+      const elementsTable = supabase.from("project_ifc_elements" as any) as any;
+      const linksTable = supabase.from("project_ifc_element_links" as any) as any;
+
+      let confirmedQuery = elementsTable
+        .select(`
+          id,
+          company_id,
+          project_id,
+          model_id,
+          detected_house_number,
+          detected_service_key,
+          detected_service_label
+        `)
+        .eq("project_id", projectId)
+        .eq("status", "confirmed")
+        .eq("category", "production");
+
+      if (modelId) confirmedQuery = confirmedQuery.eq("model_id", modelId);
+
+      const { data: confirmedData, error: confirmedError } = await confirmedQuery;
+      if (confirmedError) throw confirmedError;
+
+      const confirmedElements = asConfirmedIfcElementRows(confirmedData as unknown);
+      const validElements = confirmedElements.filter(item => (
+        item.detected_house_number != null && !!item.detected_service_key
+      ));
+      const ignored = confirmedElements.length - validElements.length;
+
+      let existingQuery = linksTable
+        .select("ifc_element_id, house_id, house_number, trigger_service_key")
+        .eq("project_id", projectId);
+
+      if (modelId) existingQuery = existingQuery.eq("model_id", modelId);
+
+      const { data: existingData, error: existingError } = await existingQuery;
+      if (existingError) throw existingError;
+
+      const existingLinks = asIfcElementLinkRows(existingData as unknown);
+      const existingKeys = new Set(
+        existingLinks.map(link => buildLinkKey(link.ifc_element_id, link.house_id, link.house_number, link.trigger_service_key))
+      );
+      const rowsToInsert = validElements
+        .map(item => {
+          const houseId = item.detected_house_number != null ? houseIdByNumber.get(item.detected_house_number) || null : null;
+          return { item, houseId };
+        })
+        .filter(({ item, houseId }) => !existingKeys.has(buildLinkKey(item.id, houseId, item.detected_house_number, item.detected_service_key!)))
+        .map(({ item, houseId }) => ({
+          company_id: item.company_id,
+          project_id: item.project_id,
+          model_id: item.model_id,
+          ifc_element_id: item.id,
+          house_id: houseId,
+          house_number: item.detected_house_number,
+          trigger_service_key: item.detected_service_key,
+          trigger_service_label: item.detected_service_label || item.detected_service_key,
+          status: "confirmed",
+          confirmed_at: new Date().toISOString(),
+        }));
+
+      if (rowsToInsert.length > 0) {
+        const { error: insertError } = await linksTable.insert(rowsToInsert);
+        if (insertError) throw insertError;
+      }
+
+      const result = {
+        totalConfirmed: confirmedElements.length,
+        valid: validElements.length,
+        created: rowsToInsert.length,
+        existing: validElements.length - rowsToInsert.length,
+        ignored,
+      };
+      setLinkSyncResult(result);
+      toast.success(`${result.created} vínculo(s) IFC criado(s)`);
+    } catch (err: any) {
+      console.error("[IFC] Falha ao gerar vínculos confirmados", err);
+      toast.error("Falha ao gerar vínculos IFC confirmados");
+    } finally {
+      setSyncingLinks(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[90vh] w-[96vw] max-w-6xl flex-col gap-0 overflow-hidden p-0">
@@ -271,7 +445,7 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl }:
             <Counter label="Revisão" value={counts.needsReview} />
           </div>
 
-          <div className="grid gap-2 md:grid-cols-[180px_220px_1fr_auto]">
+          <div className="grid gap-2 md:grid-cols-[180px_220px_1fr_auto_auto]">
             <select
               value={statusFilter}
               onChange={event => setStatusFilter(event.target.value as StatusFilter)}
@@ -301,7 +475,23 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl }:
             <Button type="button" variant="outline" size="sm" onClick={() => void loadSuggestions()} disabled={loading}>
               Atualizar
             </Button>
+            <Button type="button" size="sm" onClick={() => void syncConfirmedLinks()} disabled={loading || syncingLinks}>
+              <Link2 className="mr-1.5 h-3.5 w-3.5" />
+              {syncingLinks ? "Gerando..." : "Gerar vínculos confirmados"}
+            </Button>
           </div>
+          <p className="text-xs text-muted-foreground">
+            Este vínculo ainda não ativa o 3D Real automaticamente. A ativação será feita em etapa futura.
+          </p>
+          {linkSyncResult && (
+            <div className="grid gap-2 text-xs sm:grid-cols-5">
+              <Counter label="Confirmados" value={linkSyncResult.totalConfirmed} />
+              <Counter label="Válidos" value={linkSyncResult.valid} />
+              <Counter label="Criados" value={linkSyncResult.created} />
+              <Counter label="Já existiam" value={linkSyncResult.existing} />
+              <Counter label="Ignorados" value={linkSyncResult.ignored} />
+            </div>
+          )}
           {!modelId && modelUrl && (
             <p className="text-xs text-muted-foreground">
               Modelo IFC persistido ainda não localizado; exibindo sugestões do projeto.
