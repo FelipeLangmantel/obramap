@@ -817,11 +817,11 @@ export function Map3DView() {
         .on("postgres_changes", {
           event: "*", schema: "public", table: "productions",
           filter: `project_id=eq.${projectId}`,
-        }, () => { void refreshHousesFromDB(); })
+        }, () => { void refreshHousesFromDB(); autoSync(); })
         .on("postgres_changes", {
           event: "*", schema: "public", table: "weekly_productions",
           filter: `project_id=eq.${projectId}`,
-        }, () => { void refreshHousesFromDB(); })
+        }, () => { void refreshHousesFromDB(); autoSync(); })
         .on("postgres_changes", {
           event: "*", schema: "public", table: "diary_items",
         }, (payload: any) => {
@@ -829,6 +829,7 @@ export function Map3DView() {
           const houseId = payload?.new?.house_id ?? payload?.old?.house_id;
           if (!houseId || houseIdSet.has(houseId)) {
             void refreshHousesFromDB();
+            autoSync();
           }
         })
         .subscribe();
