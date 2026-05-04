@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { Html } from "@react-three/drei";
 import * as THREE from "three";
 
@@ -242,7 +241,6 @@ export function IFCModel({ url, onLoaded, onSceneReady, onMeshClick, selectedMes
   const [expandedRawLines, setExpandedRawLines] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [isPanelOpen, setIsPanelOpen] = useState(true);
   const calledRef = useRef(false);
 
   void onSceneReady;
@@ -385,26 +383,15 @@ export function IFCModel({ url, onLoaded, onSceneReady, onMeshClick, selectedMes
     ].join("\n");
   };
 
-  const portalRoot = typeof document === "undefined" ? null : document.body;
-  const portalContent = isPanelOpen ? (
-    <div className="pointer-events-auto fixed left-4 right-4 top-16 bottom-4 z-[9999] flex flex-col overflow-hidden rounded-xl border border-border bg-background shadow-2xl sm:left-auto sm:right-4 sm:top-20 sm:bottom-6 sm:w-[min(820px,calc(100vw-2rem))]">
-      <div className="flex h-full flex-col">
+  return (
+    <Html fullscreen>
+      <div className="pointer-events-none absolute right-4 top-4 bottom-24 w-[min(760px,calc(100vw-2rem))]">
+        <div className="pointer-events-auto flex h-full flex-col overflow-hidden rounded-lg border border-border bg-background/95 shadow-2xl">
           <div className="flex-shrink-0 border-b border-border px-4 py-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
             <h3 className="text-base font-semibold">Inventário IFC</h3>
             <p className="mt-1 text-xs text-muted-foreground">
               Renderização IFC 3D será ativada em etapa futura. Nesta etapa o arquivo foi lido para validar entidades e nomes.
             </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsPanelOpen(false)}
-                className="flex-shrink-0 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium hover:bg-muted"
-              >
-                Fechar painel
-              </button>
-            </div>
           </div>
 
           {error ? (
@@ -504,27 +491,7 @@ export function IFCModel({ url, onLoaded, onSceneReady, onMeshClick, selectedMes
           )}
         </div>
       </div>
-  ) : (
-    <button
-      type="button"
-      onClick={() => setIsPanelOpen(true)}
-      className="pointer-events-auto fixed right-4 top-20 z-[9999] rounded-md border border-border bg-background px-3 py-2 text-sm font-medium shadow-lg hover:bg-muted"
-    >
-      Abrir InventÃ¡rio IFC
-    </button>
-  );
-
-  return (
-    <>
-      {portalRoot ? createPortal(portalContent, portalRoot) : null}
-      {isPanelOpen ? (
-        <Html center>
-          <div className="rounded-md border border-border bg-background/90 px-3 py-2 text-xs shadow">
-            InventÃ¡rio IFC aberto
-          </div>
-        </Html>
-      ) : null}
-    </>
+    </Html>
   );
 }
 
