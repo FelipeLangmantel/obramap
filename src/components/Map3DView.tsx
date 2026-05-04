@@ -1004,7 +1004,65 @@ export function Map3DView() {
                   <Badge variant="secondary" className="ml-1.5 h-4 text-[10px] px-1">
                     {meshAssignments.assignments.length}
                   </Badge>
+            )}
+            {isAdmin && modelData && (
+              <Button
+                variant={reviewMode ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  setReviewMode(p => !p);
+                  setSelectedMeshKey(null);
+                  setIsolatedKeys(null);
+                  if (!reviewMode) setAssignMode(false);
+                }}
+                disabled={isLoading}
+                title="Clique numa mesh para revisar UUID, geometria e vínculos"
+              >
+                <ScanSearch className="h-4 w-4 mr-1.5" />
+                {reviewMode ? "Sair da Revisão" : "Revisar Modelo"}
+                {pendingMeshCount > 0 && (
+                  <Badge variant="secondary" className="ml-1.5 h-4 text-[10px] px-1">
+                    {pendingMeshCount} pend.
+                  </Badge>
                 )}
+              </Button>
+            )}
+            {modelData && (
+              <ToggleGroup
+                type="single"
+                size="sm"
+                value={viewMode}
+                onValueChange={(v) => { if (v) applyViewMode(v as ViewMode); }}
+                className="border border-input rounded-md p-0.5 bg-background"
+              >
+                <ToggleGroupItem value="complete" className="h-7 px-2 text-xs gap-1" title="Mostrar todo o modelo">
+                  <Boxes className="h-3.5 w-3.5" />Completa
+                </ToggleGroupItem>
+                <ToggleGroupItem value="real" className="h-7 px-2 text-xs gap-1" title="Apenas meshes em produção">
+                  <Eye className="h-3.5 w-3.5" />3D Real
+                </ToggleGroupItem>
+                <ToggleGroupItem value="simulation" className="h-7 px-2 text-xs gap-1" title="Modo simulação por camadas">
+                  <Sparkles className="h-3.5 w-3.5" />Simulação
+                </ToggleGroupItem>
+              </ToggleGroup>
+            )}
+            {isAdmin && modelData && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSync3DReal}
+                disabled={isLoading || isSyncing || meshHooks.meshMap.size === 0}
+                title="Atualiza a visibilidade das meshes a partir da produção real"
+              >
+                {isSyncing ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1.5" />}
+                Sincronizar 3D Real
+                {lastSyncResult && (
+                  <Badge variant="secondary" className="ml-1.5 h-4 text-[10px] px-1">
+                    {lastSyncResult.visible}/{lastSyncResult.total}
+                  </Badge>
+                )}
+              </Button>
+            )}
               </Button>
             )}
             {isAdmin && (
