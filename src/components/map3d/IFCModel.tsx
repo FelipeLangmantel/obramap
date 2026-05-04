@@ -19,6 +19,11 @@ interface IfcInventoryItem {
   layerNames: string[];
   primaryLayerName: string | null;
   reachableRefs: string[];
+  detectedServiceKey: string | null;
+  detectedServiceLabel: string | null;
+  detectedHouseNumber: number | null;
+  semanticConfidence: "high" | "medium" | "low";
+  semanticNeedsReview: boolean;
   category: "production" | "text" | "unnamed";
   rawLine: string;
 }
@@ -53,6 +58,53 @@ function isUsefulIfcName(value: string | null | undefined) {
 
 function contains3dText(value: string | null | undefined) {
   return (value || "").toLowerCase().includes("3dtext");
+}
+
+function normalizeIfcLayerName(layerName: string | null) {
+  return (layerName || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseIfcLayerSemantic(layerName: string | null): {
+  serviceKey: string | null;
+  serviceLabel: string | null;
+  houseNumber: number | null;
+  confidence: "high" | "medium" | "low";
+  needsReview: boolean;
+} {
+  const normalized = normalizeIfcLayerName(layerName);
+  const houseMatch = normalized.match(/\b(?:casa|lote)\s*0*(\d+)\b/);
+  const houseNumber = houseMatch ? Number(houseMatch[1]) : null;
+  let serviceKey: string | null = null;
+  let serviceLabel: string | null = null;
+  let needsReview = false;
+
+  if (normalized.includes("radier")) {
+    serviceKey = "radier";
+    serviceLabel = "Radier";
+  } else if (normalized.includes("parede")) {
+    serviceKey = "paredes";
+    serviceLabel = "Paredes";
+  } else if (normalized.includes("oitao")) {
+    serviceKey = "oitao";
+    serviceLabel = "Oitão";
+  } else if (normalized.includes("telhado") || normalized.includes("cobertura")) {
+    serviceKey = "cobertura";
+    serviceLabel = "Cobertura";
+  } else if (normalized.includes("piso")) {
+    serviceKey = "piso";
+    serviceLabel = "Piso";
+  } else if (normalized.includes("lote")) {
+    serviceLabel = "Referência/Lote";
+    needsReview = true;
+  }
+
+  const confidence = serviceKey && houseNumber != null ? "high" : serviceKey ? "medium" : "low";
+  return { serviceKey, serviceLabel, houseNumber, confidence, needsReview };
 }
 
 function classifyIfcElement(name: string, primaryLayerName: string | null): IfcInventoryItem["category"] {
@@ -158,6 +210,7 @@ function parseIfcText(text: string): IfcInventoryItem[] {
     const reachableRefs = collectReachableRefs(id, lineById, 5);
     const layerNames = findLayerNamesForRefs(reachableRefs, refToLayerNames);
     const primaryLayerName = layerNames[0] || null;
+    const semantic = parseIfcLayerSemantic(primaryLayerName);
 
     items.push({
       id,
@@ -168,6 +221,11 @@ function parseIfcText(text: string): IfcInventoryItem[] {
       layerNames,
       primaryLayerName,
       reachableRefs: Array.from(reachableRefs),
+      detectedServiceKey: semantic.serviceKey,
+      detectedServiceLabel: semantic.serviceLabel,
+      detectedHouseNumber: semantic.houseNumber,
+      semanticConfidence: semantic.confidence,
+      semanticNeedsReview: semantic.needsReview,
       category: classifyIfcElement(name, primaryLayerName),
       rawLine: summarizeLine(rawLine),
     });
@@ -247,6 +305,19 @@ export function IFCModel({ url, onLoaded, onSceneReady, onMeshClick, selectedMes
     );
   }, [items]);
 
+  const semanticCounts = useMemo(() => {
+    return items.reduce(
+      (acc, item) => {
+        if (item.detectedServiceKey && item.detectedHouseNumber != null) acc.withServiceAndHouse += 1;
+        else if (item.detectedServiceKey) acc.withServiceWithoutHouse += 1;
+        else acc.withoutService += 1;
+        if (item.semanticNeedsReview) acc.referencesOrLots += 1;
+        return acc;
+      },
+      { withServiceAndHouse: 0, withServiceWithoutHouse: 0, withoutService: 0, referencesOrLots: 0 }
+    );
+  }, [items]);
+
   const filteredItems = useMemo(() => {
     if (filter === "all") return items;
     return items.filter(item => item.category === filter);
@@ -288,6 +359,10 @@ export function IFCModel({ url, onLoaded, onSceneReady, onMeshClick, selectedMes
                 <InventoryMetric label="Textos/anotações" value={inventoryCounts.textElements} />
                 <InventoryMetric label="Sem nome" value={inventoryCounts.unnamedElements} />
                 <InventoryMetric label="Tipos detectados" value={Object.keys(countsByType).length} />
+                <InventoryMetric label="Com serviço e casa" value={semanticCounts.withServiceAndHouse} />
+                <InventoryMetric label="Com serviço sem casa" value={semanticCounts.withServiceWithoutHouse} />
+                <InventoryMetric label="Sem serviço detectado" value={semanticCounts.withoutService} />
+                <InventoryMetric label="Referência/lote" value={semanticCounts.referencesOrLots} />
               </div>
 
               {items.length === 0 ? (
@@ -359,6 +434,27 @@ export function IFCModel({ url, onLoaded, onSceneReady, onMeshClick, selectedMes
                           <span className="text-muted-foreground">Todas as camadas encontradas: </span>
                           {item.layerNames.length > 0 ? item.layerNames.join(", ") : "—"}
                         </p>
+                        {item.category === "production" && (
+                          <div className="mt-1 space-y-0.5 rounded bg-muted/40 px-2 py-1 text-[11px]">
+                            <p>
+                              <span className="text-muted-foreground">Serviço detectado: </span>
+                              {item.detectedServiceLabel || "—"}
+                            </p>
+                            <p>
+                              <span className="text-muted-foreground">Casa detectada: </span>
+                              {item.detectedHouseNumber != null ? item.detectedHouseNumber : "—"}
+                            </p>
+                            <p>
+                              <span className="text-muted-foreground">Confiança: </span>
+                              {item.semanticConfidence}
+                            </p>
+                            {item.semanticNeedsReview && (
+                              <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+                                Revisar
+                              </span>
+                            )}
+                          </div>
+                        )}
                         {(filter === "all" || filter === "unnamed") && (
                           <div className="mt-1 rounded bg-muted/40 px-2 py-1 text-[10px]">
                             <p>
