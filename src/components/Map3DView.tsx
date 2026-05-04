@@ -1114,7 +1114,8 @@ export function Map3DView() {
               savedPosition={savedPos} savedTarget={savedTgt}
               onCameraChange={handleCameraChange} sceneReady={sceneReady}
               onModelLoaded={handleModelLoaded} onSceneReady={handleSceneReady}
-              onMeshClick={assignMode ? handleMeshClick : undefined} />
+              onMeshClick={reviewMode ? handleReviewMeshClick : assignMode ? handleMeshClick : undefined}
+              selectedMeshKey={reviewMode ? selectedMeshKey : null} />
           </Canvas>
         </div>
         {assignMode && (
