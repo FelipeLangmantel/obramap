@@ -22,6 +22,7 @@ import { LayersPanel } from "./map3d/LayersPanel";
 import { LinkLayersDialog } from "./map3d/LinkLayersDialog";
 import { AssignHousePopover } from "./map3d/AssignHousePopover";
 import { useMeshHouseAssignments } from "@/hooks/useMeshHouseAssignments";
+import { IFCModel } from "./map3d/IFCModel";
 import { useProjectModelMeshes, type ProjectModelMesh } from "@/hooks/useProjectModelMeshes";
 import { MeshReviewPanel, type ServiceOption } from "./map3d/MeshReviewPanel";
 import { parseHouseNumberFromMesh } from "./map3d/parseHouseFromMeshName";
