@@ -18,6 +18,7 @@ interface IfcInventoryItem {
   quotedValues: string[];
   layerNames: string[];
   primaryLayerName: string | null;
+  reachableRefs: string[];
   category: "production" | "text" | "unnamed";
   rawLine: string;
 }
@@ -56,7 +57,7 @@ function contains3dText(value: string | null | undefined) {
 
 function classifyIfcElement(name: string, primaryLayerName: string | null): IfcInventoryItem["category"] {
   if (contains3dText(name) || contains3dText(primaryLayerName)) return "text";
-  if (isUsefulIfcName(name) || isUsefulIfcName(primaryLayerName)) return "production";
+  if (isUsefulIfcName(primaryLayerName)) return "production";
   return "unnamed";
 }
 
@@ -108,23 +109,31 @@ function buildRefToLayerNames(layers: IfcLayerAssignment[]) {
   return refToLayerNames;
 }
 
-function findLayerNamesForElement(rawLine: string, refToLayerNames: Map<string, string[]>, lineById: Map<string, string>) {
-  const found = new Set<string>();
-  const directRefs = extractRefs(rawLine);
+function collectReachableRefs(startId: string, lineById: Map<string, string>, maxDepth = 5) {
+  const visited = new Set<string>();
+  const queue: Array<{ id: string; depth: number }> = [{ id: startId, depth: 0 }];
 
-  for (const ref of directRefs) {
-    (refToLayerNames.get(ref) || []).forEach(name => found.add(name));
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    if (visited.has(current.id) || current.depth > maxDepth) continue;
+
+    visited.add(current.id);
+    const line = lineById.get(current.id);
+    if (!line || current.depth === maxDepth) continue;
+
+    for (const ref of extractRefs(line)) {
+      if (!visited.has(ref)) queue.push({ id: ref, depth: current.depth + 1 });
+    }
   }
 
-  if (found.size > 0) return Array.from(found);
+  return visited;
+}
 
-  for (const ref of directRefs) {
-    const linkedLine = lineById.get(ref);
-    if (!linkedLine) continue;
+function findLayerNamesForRefs(reachableRefs: Set<string>, refToLayerNames: Map<string, string[]>) {
+  const found = new Set<string>();
 
-    for (const nestedRef of extractRefs(linkedLine)) {
-      (refToLayerNames.get(nestedRef) || []).forEach(name => found.add(name));
-    }
+  for (const ref of reachableRefs) {
+    (refToLayerNames.get(ref) || []).forEach(name => found.add(name));
   }
 
   return Array.from(found);
@@ -146,7 +155,8 @@ function parseIfcText(text: string): IfcInventoryItem[] {
     const quoted = Array.from(args.matchAll(/'([^']*)'/g)).map(item => item[1]);
     const name = quoted[1] || "";
     const rawLine = match[0];
-    const layerNames = findLayerNamesForElement(rawLine, refToLayerNames, lineById);
+    const reachableRefs = collectReachableRefs(id, lineById, 5);
+    const layerNames = findLayerNamesForRefs(reachableRefs, refToLayerNames);
     const primaryLayerName = layerNames[0] || null;
 
     items.push({
@@ -157,6 +167,7 @@ function parseIfcText(text: string): IfcInventoryItem[] {
       quotedValues: quoted,
       layerNames,
       primaryLayerName,
+      reachableRefs: Array.from(reachableRefs),
       category: classifyIfcElement(name, primaryLayerName),
       rawLine: summarizeLine(rawLine),
     });
@@ -348,6 +359,17 @@ export function IFCModel({ url, onLoaded, onSceneReady, onMeshClick, selectedMes
                           <span className="text-muted-foreground">Todas as camadas encontradas: </span>
                           {item.layerNames.length > 0 ? item.layerNames.join(", ") : "—"}
                         </p>
+                        {(filter === "all" || filter === "unnamed") && (
+                          <div className="mt-1 rounded bg-muted/40 px-2 py-1 text-[10px]">
+                            <p>
+                              <span className="text-muted-foreground">Refs alcançadas: </span>
+                              {item.reachableRefs.length}
+                            </p>
+                            <p className="break-words font-mono text-muted-foreground">
+                              {item.reachableRefs.slice(0, 10).join(", ") || "—"}
+                            </p>
+                          </div>
+                        )}
                         <div className="mt-1 text-[11px]">
                           <span className="text-muted-foreground">Valores textuais encontrados: </span>
                           {item.quotedValues.length > 0 ? (
