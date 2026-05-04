@@ -1133,6 +1133,31 @@ export function Map3DView() {
           onClear={clearAssignment}
           onClose={() => setPickedMesh(null)}
         />
+        {reviewMode && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-primary text-primary-foreground px-3 py-1.5 rounded-full text-xs font-medium shadow-lg flex items-center gap-1.5 pointer-events-none">
+            <ScanSearch className="h-3.5 w-3.5" />
+            Modo Revisão — clique em qualquer mesh do modelo
+          </div>
+        )}
+        {reviewMode && selectedMeshKey && (
+          <MeshReviewPanel
+            meshKey={selectedMeshKey}
+            meshData={meshHooks.meshMap.get(selectedMeshKey) ?? null}
+            sceneRef={sceneObj}
+            houses={houseNumbers}
+            services={serviceOptions}
+            isolated={!!isolatedKeys?.has(selectedMeshKey)}
+            onClose={() => { setSelectedMeshKey(null); setIsolatedKeys(null); }}
+            onIsolate={handleIsolate}
+            onUpdate={async (key, data) => { await meshHooks.upsertMesh({ layer_key: key, ...data }); }}
+            onIgnore={async (key) => {
+              await meshHooks.setIgnored(key, true);
+              setSelectedMeshKey(null);
+              setIsolatedKeys(null);
+              toast.success("Mesh marcada como ignorada");
+            }}
+          />
+        )}
         {showLayers && layerManager.layers.length > 0 && (
           <LayersPanel
             layers={layerManager.layers}
