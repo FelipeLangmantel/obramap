@@ -318,7 +318,7 @@ function AutoFitCamera({
 // Scene
 function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLegendItems,
   resetTrigger, fitTrigger, savedPosition, savedTarget, onCameraChange, sceneReady, onModelLoaded, onSceneReady,
-  onMeshClick, selectedMeshKey,
+  onMeshClick, selectedMeshKey, projectId, companyId,
 }: {
   modelData: ModelData | null; markers: HouseMarker[]; selectedMarkerId: number | null;
   onMarkerClick: (m: HouseMarker) => void; customLegendItems: any[];
@@ -329,6 +329,8 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   onSceneReady?: (scene: THREE.Object3D) => void;
   onMeshClick?: (mesh: THREE.Object3D) => void;
   selectedMeshKey?: string | null;
+  projectId?: string | null;
+  companyId?: string | null;
 }) {
   return (
     <>
@@ -347,7 +349,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
           {modelData.type === "gltf" ? (
             <GLTFModel url={modelData.url} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} selectedMeshKey={selectedMeshKey} />
           ) : modelData.type === "ifc" ? (
-            <IFCModel url={modelData.url} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} selectedMeshKey={selectedMeshKey} />
+            <IFCModel url={modelData.url} projectId={projectId} companyId={companyId} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} selectedMeshKey={selectedMeshKey} />
           ) : (
             <OBJModel url={modelData.url} mtlUrl={modelData.mtlUrl} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} selectedMeshKey={selectedMeshKey} />
           )}
@@ -428,6 +430,7 @@ export function Map3DView() {
   const { currentProject, refreshHousesFromDB } = useConstruction();
   const { isAdmin, profile } = useAuth();
   const projectId = currentProject?.id;
+  const companyId = (currentProject as any)?.company_id || profile?.company_id || null;
   
   const [modelData, setModelData] = useState<ModelData | null>(null);
   const [markers, setMarkers] = useState<HouseMarker[]>([]);
@@ -1124,7 +1127,9 @@ export function Map3DView() {
               onCameraChange={handleCameraChange} sceneReady={sceneReady}
               onModelLoaded={handleModelLoaded} onSceneReady={handleSceneReady}
               onMeshClick={reviewMode ? handleReviewMeshClick : assignMode ? handleMeshClick : undefined}
-              selectedMeshKey={reviewMode ? selectedMeshKey : null} />
+              selectedMeshKey={reviewMode ? selectedMeshKey : null}
+              projectId={projectId}
+              companyId={companyId} />
           </Canvas>
         </div>
         {assignMode && (
