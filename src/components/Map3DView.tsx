@@ -983,7 +983,7 @@ export function Map3DView() {
       <Card>
         <CardContent className="p-3">
           <div className="flex flex-wrap items-center gap-2">
-            <Input ref={fileInputRef} type="file" accept=".gltf,.glb,.obj" onChange={handleFileUpload} className="hidden" disabled={isLoading} />
+            <Input ref={fileInputRef} type="file" accept=".gltf,.glb,.obj,.ifc" onChange={handleFileUpload} className="hidden" disabled={isLoading} />
             <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isLoading}>
               {isLoading ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Upload className="h-4 w-4 mr-1.5" />}Importar 3D
             </Button>
