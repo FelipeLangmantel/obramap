@@ -79,6 +79,22 @@ interface LinkDiagnosticSummary {
   }>;
 }
 
+interface ActivationDiagnosticSummary {
+  totalConfirmed: number;
+  withHouse: number;
+  withService: number;
+  ready: number;
+  missingHouse: number;
+  missingService: number;
+  items: Array<{
+    key: string;
+    serviceLabel: string;
+    houseLabel: string;
+    status: "pronto" | "pendente";
+    total: number;
+  }>;
+}
+
 interface HouseLookupRow {
   id?: string | null;
   houseNumber?: number | null;
@@ -262,6 +278,40 @@ function summarizeLinkDiagnostics(links: IfcLinkDiagnosticRow[]): LinkDiagnostic
   };
 }
 
+function getActivationHouseLabel(link: IfcLinkDiagnosticRow) {
+  if (link.house_number != null) return String(link.house_number);
+  if (link.house_id) return "house_id";
+  return "sem casa";
+}
+
+function summarizeActivationDiagnostics(links: IfcLinkDiagnosticRow[]): ActivationDiagnosticSummary {
+  const groups = new Map<string, { serviceLabel: string; houseLabel: string; status: "pronto" | "pendente"; total: number }>();
+
+  links.forEach(link => {
+    const hasHouse = !!link.house_id || link.house_number != null;
+    const hasService = !!link.trigger_service_key;
+    const serviceLabel = link.trigger_service_label || link.trigger_service_key || "sem serviço";
+    const houseLabel = getActivationHouseLabel(link);
+    const status = hasHouse && hasService ? "pronto" : "pendente";
+    const key = `${serviceLabel}::${houseLabel}::${status}`;
+    const existing = groups.get(key) || { serviceLabel, houseLabel, status, total: 0 };
+    existing.total += 1;
+    groups.set(key, existing);
+  });
+
+  return {
+    totalConfirmed: links.length,
+    withHouse: links.filter(link => !!link.house_id || link.house_number != null).length,
+    withService: links.filter(link => !!link.trigger_service_key).length,
+    ready: links.filter(link => (!!link.house_id || link.house_number != null) && !!link.trigger_service_key).length,
+    missingHouse: links.filter(link => !link.house_id && link.house_number == null).length,
+    missingService: links.filter(link => !link.trigger_service_key).length,
+    items: Array.from(groups.entries())
+      .map(([key, group]) => ({ key, ...group }))
+      .sort((a, b) => a.serviceLabel.localeCompare(b.serviceLabel) || a.houseLabel.localeCompare(b.houseLabel)),
+  };
+}
+
 export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, houses = [] }: Props) {
   const [items, setItems] = useState<IfcSuggestionRow[]>([]);
   const [modelId, setModelId] = useState<string | null>(null);
@@ -274,6 +324,7 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
   const [linkSyncResult, setLinkSyncResult] = useState<LinkSyncResult | null>(null);
   const [loadingDiagnostics, setLoadingDiagnostics] = useState(false);
   const [linkDiagnostics, setLinkDiagnostics] = useState<LinkDiagnosticSummary | null>(null);
+  const [activationDiagnostics, setActivationDiagnostics] = useState<ActivationDiagnosticSummary | null>(null);
 
   const houseIdByNumber = useMemo(() => {
     const map = new Map<number, string>();
@@ -531,7 +582,9 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
       const { data, error } = await query;
       if (error) throw error;
 
-      setLinkDiagnostics(summarizeLinkDiagnostics(asIfcLinkDiagnosticRows(data as unknown)));
+      const links = asIfcLinkDiagnosticRows(data as unknown);
+      setLinkDiagnostics(summarizeLinkDiagnostics(links));
+      setActivationDiagnostics(summarizeActivationDiagnostics(links));
     } catch (err: any) {
       console.error("[IFC] Falha ao carregar diagnóstico de vínculos", err);
       toast.error("Falha ao carregar diagnóstico de vínculos IFC");
@@ -643,6 +696,53 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
                       <div key={group.serviceKey} className="rounded border border-border bg-muted/30 px-3 py-2 text-xs">
                         <span className="font-medium">Serviço: {group.serviceLabel}</span>
                         <span className="text-muted-foreground"> - {group.total} vínculo(s) - casas: {group.houses.join(", ") || "-"}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="rounded-md border border-border bg-background p-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h3 className="text-sm font-semibold">Diagnóstico de ativação por serviço/casa</h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Este diagnóstico apenas prepara a ativação futura. Ele ainda não altera a visibilidade do 3D Real.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void loadLinkDiagnostics()}
+                disabled={loadingDiagnostics}
+              >
+                {loadingDiagnostics ? "Atualizando..." : "Atualizar diagnóstico"}
+              </Button>
+            </div>
+            {activationDiagnostics && (
+              <div className="mt-3 space-y-3">
+                <div className="grid gap-2 text-xs sm:grid-cols-3 lg:grid-cols-6">
+                  <Counter label="Total" value={activationDiagnostics.totalConfirmed} />
+                  <Counter label="Com casa" value={activationDiagnostics.withHouse} />
+                  <Counter label="Com serviço" value={activationDiagnostics.withService} />
+                  <Counter label="Prontos" value={activationDiagnostics.ready} />
+                  <Counter label="Sem casa" value={activationDiagnostics.missingHouse} />
+                  <Counter label="Sem serviço" value={activationDiagnostics.missingService} />
+                </div>
+                <div className="space-y-1.5">
+                  {activationDiagnostics.items.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Nenhum vínculo confirmado encontrado para diagnóstico de ativação.</p>
+                  ) : (
+                    activationDiagnostics.items.map(item => (
+                      <div key={item.key} className="flex flex-wrap items-center gap-2 rounded border border-border bg-muted/30 px-3 py-2 text-xs">
+                        <span><span className="font-medium">Serviço:</span> {item.serviceLabel}</span>
+                        <span><span className="font-medium">Casa:</span> {item.houseLabel}</span>
+                        <span><span className="font-medium">Vínculos:</span> {item.total}</span>
+                        <Badge variant={item.status === "pronto" ? "default" : "outline"} className="text-[10px]">
+                          {item.status}
+                        </Badge>
                       </div>
                     ))
                   )}
