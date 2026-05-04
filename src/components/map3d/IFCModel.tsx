@@ -16,7 +16,16 @@ interface IfcInventoryItem {
   globalId: string;
   name: string;
   quotedValues: string[];
+  layerNames: string[];
+  primaryLayerName: string | null;
   category: "production" | "text" | "unnamed";
+  rawLine: string;
+}
+
+interface IfcLayerAssignment {
+  id: string;
+  name: string;
+  refs: string[];
   rawLine: string;
 }
 
@@ -36,14 +45,95 @@ function summarizeLine(line: string) {
   return compact.length > 180 ? `${compact.slice(0, 177)}...` : compact;
 }
 
-function classifyIfcElement(name: string): IfcInventoryItem["category"] {
-  const normalized = (name || "").trim();
-  if (!normalized || normalized.toLowerCase() === "undefined") return "unnamed";
-  if (normalized.toLowerCase().includes("3dtext")) return "text";
-  return "production";
+function isUsefulIfcName(value: string | null | undefined) {
+  const normalized = (value || "").trim();
+  return !!normalized && normalized.toLowerCase() !== "undefined";
+}
+
+function contains3dText(value: string | null | undefined) {
+  return (value || "").toLowerCase().includes("3dtext");
+}
+
+function classifyIfcElement(name: string, primaryLayerName: string | null): IfcInventoryItem["category"] {
+  if (contains3dText(name) || contains3dText(primaryLayerName)) return "text";
+  if (isUsefulIfcName(name) || isUsefulIfcName(primaryLayerName)) return "production";
+  return "unnamed";
+}
+
+function extractRefs(line: string) {
+  return Array.from(new Set(line.match(/#\d+/g) || []));
+}
+
+function parseIfcLineMap(text: string) {
+  const lineById = new Map<string, string>();
+  const linePattern = /(#\d+)\s*=\s*[^;]+;/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = linePattern.exec(text)) !== null) {
+    lineById.set(match[1], match[0]);
+  }
+
+  return lineById;
+}
+
+function parseLayerAssignments(text: string): IfcLayerAssignment[] {
+  const layerPattern = /(#\d+)\s*=\s*IFCPRESENTATIONLAYERASSIGNMENT\s*\(\s*'([^']*)'\s*,\s*[^,]*,\s*\(([^)]*)\)[^;]*;/gi;
+  const layers: IfcLayerAssignment[] = [];
+  let match: RegExpExecArray | null;
+
+  while ((match = layerPattern.exec(text)) !== null) {
+    const [, id, name, refsText] = match;
+    layers.push({
+      id,
+      name,
+      refs: extractRefs(refsText),
+      rawLine: summarizeLine(match[0]),
+    });
+  }
+
+  return layers;
+}
+
+function buildRefToLayerNames(layers: IfcLayerAssignment[]) {
+  const refToLayerNames = new Map<string, string[]>();
+
+  for (const layer of layers) {
+    for (const ref of layer.refs) {
+      const existing = refToLayerNames.get(ref) || [];
+      if (!existing.includes(layer.name)) existing.push(layer.name);
+      refToLayerNames.set(ref, existing);
+    }
+  }
+
+  return refToLayerNames;
+}
+
+function findLayerNamesForElement(rawLine: string, refToLayerNames: Map<string, string[]>, lineById: Map<string, string>) {
+  const found = new Set<string>();
+  const directRefs = extractRefs(rawLine);
+
+  for (const ref of directRefs) {
+    (refToLayerNames.get(ref) || []).forEach(name => found.add(name));
+  }
+
+  if (found.size > 0) return Array.from(found);
+
+  for (const ref of directRefs) {
+    const linkedLine = lineById.get(ref);
+    if (!linkedLine) continue;
+
+    for (const nestedRef of extractRefs(linkedLine)) {
+      (refToLayerNames.get(nestedRef) || []).forEach(name => found.add(name));
+    }
+  }
+
+  return Array.from(found);
 }
 
 function parseIfcText(text: string): IfcInventoryItem[] {
+  const lineById = parseIfcLineMap(text);
+  const layerAssignments = parseLayerAssignments(text);
+  const refToLayerNames = buildRefToLayerNames(layerAssignments);
   const entityPattern = new RegExp(
     `(#\\d+)\\s*=\\s*(${IFC_ENTITY_TYPES.join("|")})\\s*\\(([^;]*)\\);`,
     "gi"
@@ -55,6 +145,9 @@ function parseIfcText(text: string): IfcInventoryItem[] {
     const [, id, type, args] = match;
     const quoted = Array.from(args.matchAll(/'([^']*)'/g)).map(item => item[1]);
     const name = quoted[1] || "";
+    const rawLine = match[0];
+    const layerNames = findLayerNamesForElement(rawLine, refToLayerNames, lineById);
+    const primaryLayerName = layerNames[0] || null;
 
     items.push({
       id,
@@ -62,8 +155,10 @@ function parseIfcText(text: string): IfcInventoryItem[] {
       globalId: quoted[0] || "",
       name,
       quotedValues: quoted,
-      category: classifyIfcElement(name),
-      rawLine: summarizeLine(match[0]),
+      layerNames,
+      primaryLayerName,
+      category: classifyIfcElement(name, primaryLayerName),
+      rawLine: summarizeLine(rawLine),
     });
   }
 
@@ -242,8 +337,16 @@ export function IFCModel({ url, onLoaded, onSceneReady, onMeshClick, selectedMes
                           {item.globalId || "—"}
                         </p>
                         <p className="truncate text-[11px]">
-                          <span className="text-muted-foreground">Nome: </span>
+                          <span className="text-muted-foreground">Nome IFC: </span>
                           {item.name || "—"}
+                        </p>
+                        <p className="truncate text-[11px]">
+                          <span className="text-muted-foreground">Camada IFC principal: </span>
+                          {item.primaryLayerName || "—"}
+                        </p>
+                        <p className="text-[11px]">
+                          <span className="text-muted-foreground">Todas as camadas encontradas: </span>
+                          {item.layerNames.length > 0 ? item.layerNames.join(", ") : "—"}
                         </p>
                         <div className="mt-1 text-[11px]">
                           <span className="text-muted-foreground">Valores textuais encontrados: </span>
