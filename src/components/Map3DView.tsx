@@ -939,9 +939,15 @@ export function Map3DView() {
         const url = await uploadFile(file, 'gltf');
         if (url) { setModelData({ url, type: "gltf" }); setHasChanges(true); toast.success("Modelo carregado!"); }
       } finally { setIsLoading(false); }
+    } else if (name.endsWith(".ifc")) {
+      setIsLoading(true); setSceneReady(false);
+      try {
+        const url = await uploadFile(file, 'ifc');
+        if (url) { setModelData({ url, type: "ifc" }); setHasChanges(true); toast.success("Modelo IFC carregado!"); }
+      } finally { setIsLoading(false); }
     } else if (name.endsWith(".obj")) {
       setPendingObjFile(file); toast.info("OBJ selecionado. Selecione MTL ou 'Sem MTL'");
-    } else { toast.error("Use .gltf, .glb ou .obj"); }
+    } else { toast.error("Use .gltf, .glb, .ifc ou .obj"); }
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
