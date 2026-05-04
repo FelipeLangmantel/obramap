@@ -1241,6 +1241,7 @@ export function Map3DView() {
           onOpenChange={setIfcSuggestionsOpen}
           projectId={projectId}
           modelUrl={modelData?.type === "ifc" ? modelData.url : null}
+          houses={currentProject?.houses || []}
         />
       )}
     </div>
