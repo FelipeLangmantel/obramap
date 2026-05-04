@@ -9,7 +9,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { X, Copy, Eye, EyeOff, Crosshair, EyeOff as Ignore, Box, Home } from "lucide-react";
+import { X, Copy, Eye, EyeOff, Crosshair, EyeOff as Ignore, Box, Home, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import type { ProjectModelMesh } from "@/hooks/useProjectModelMeshes";
 
@@ -20,9 +20,22 @@ export interface ServiceOption {
   scope_id: string;
 }
 
+export interface ClickHitInfo {
+  uuid: string;
+  name: string;
+  type: string;
+  materialName: string;
+  point: { x: number; y: number; z: number };
+  faceIndex: number | null;
+  instanceId: number | null;
+  parentChain: Array<{ uuid: string; name: string; type: string }>;
+  repeatedMeshDifferentPoint: boolean;
+}
+
 interface Props {
   meshKey: string | null;
   meshData: ProjectModelMesh | null;
+  selectedHitInfo: ClickHitInfo | null;
   sceneRef: THREE.Object3D | null;
   houses: number[];
   services: ServiceOption[];
@@ -34,7 +47,7 @@ interface Props {
 }
 
 export function MeshReviewPanel({
-  meshKey, meshData, sceneRef, houses, services, isolated,
+  meshKey, meshData, selectedHitInfo, sceneRef, houses, services, isolated,
   onClose, onIsolate, onUpdate, onIgnore,
 }: Props) {
   const [bbox, setBbox] = useState<{ size: THREE.Vector3; center: THREE.Vector3 } | null>(null);
@@ -106,6 +119,49 @@ export function MeshReviewPanel({
                 <Badge variant="secondary" className="text-[10px]">Casa detectada: {meshData.detected_house_number}</Badge>
               )}
             </section>
+
+            {/* Diagnostico do clique */}
+            {selectedHitInfo && (
+              <section className="space-y-1.5">
+                <p className="text-[10px] uppercase font-semibold text-muted-foreground">Diagnóstico do Clique</p>
+                {selectedHitInfo.repeatedMeshDifferentPoint && (
+                  <div className="flex gap-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-[10px] text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                    <span>Mesma mesh detectada em múltiplos cliques; o modelo pode estar agrupado por material.</span>
+                  </div>
+                )}
+                <div className="space-y-1 text-[10px]">
+                  <div className="flex gap-1.5">
+                    <span className="text-muted-foreground shrink-0">UUID:</span>
+                    <span className="font-mono truncate" title={selectedHitInfo.uuid}>{selectedHitInfo.uuid}</span>
+                  </div>
+                  <div><span className="text-muted-foreground">Nome: </span>{selectedHitInfo.name || "—"}</div>
+                  <div><span className="text-muted-foreground">Tipo: </span>{selectedHitInfo.type || "—"}</div>
+                  <div><span className="text-muted-foreground">Material: </span>{selectedHitInfo.materialName || "—"}</div>
+                  <div><span className="text-muted-foreground">Face index: </span>{selectedHitInfo.faceIndex ?? "—"}</div>
+                  <div><span className="text-muted-foreground">Instance ID: </span>{selectedHitInfo.instanceId ?? "—"}</div>
+                  <div className="font-mono">
+                    <span className="text-muted-foreground font-sans">Ponto: </span>
+                    x {fmt(selectedHitInfo.point.x)}, y {fmt(selectedHitInfo.point.y)}, z {fmt(selectedHitInfo.point.z)}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[10px] text-muted-foreground">Parent chain</p>
+                  {selectedHitInfo.parentChain.length === 0 ? (
+                    <p className="text-[10px]">—</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {selectedHitInfo.parentChain.map((parent, index) => (
+                        <div key={`${parent.uuid}-${index}`} className="rounded bg-muted/40 px-2 py-1 text-[10px]">
+                          <div className="font-medium truncate" title={parent.name}>{parent.name || "Sem nome"} <span className="text-muted-foreground">({parent.type})</span></div>
+                          <div className="font-mono text-[9px] text-muted-foreground truncate" title={parent.uuid}>{parent.uuid}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
 
             {/* Geometria */}
             {bbox && (

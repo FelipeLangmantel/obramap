@@ -23,7 +23,7 @@ import { LinkLayersDialog } from "./map3d/LinkLayersDialog";
 import { AssignHousePopover } from "./map3d/AssignHousePopover";
 import { useMeshHouseAssignments } from "@/hooks/useMeshHouseAssignments";
 import { useProjectModelMeshes, type ProjectModelMesh } from "@/hooks/useProjectModelMeshes";
-import { MeshReviewPanel, type ServiceOption } from "./map3d/MeshReviewPanel";
+import { MeshReviewPanel, type ClickHitInfo, type ServiceOption } from "./map3d/MeshReviewPanel";
 import { parseHouseNumberFromMesh } from "./map3d/parseHouseFromMeshName";
 import { HouseFotoHistoryDrawer } from "@/components/diario/HouseFotoHistoryDrawer";
 
@@ -39,6 +39,54 @@ interface HouseMarker {
   position: [number, number, number];
   progress: number;
   macros: any[];
+}
+
+type MeshClickHandler = (mesh: THREE.Object3D, hitInfo: ClickHitInfo) => void;
+
+function getMaterialName(obj: THREE.Object3D) {
+  const material = (obj as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
+  if (Array.isArray(material)) return material.map((m: any) => m?.name).filter(Boolean).join(", ");
+  return (material as any)?.name || "";
+}
+
+function buildClickHitInfo(e: any, repeatedMeshDifferentPoint = false): ClickHitInfo {
+  const obj = e.object as THREE.Object3D;
+  const parentChain: ClickHitInfo["parentChain"] = [];
+  let parent = obj.parent;
+
+  while (parent) {
+    parentChain.push({
+      uuid: parent.uuid,
+      name: parent.name || "",
+      type: parent.type || "",
+    });
+    parent = parent.parent;
+  }
+
+  return {
+    uuid: obj.uuid,
+    name: obj.name || "",
+    type: obj.type || "",
+    materialName: getMaterialName(obj),
+    point: {
+      x: Number(e.point?.x ?? 0),
+      y: Number(e.point?.y ?? 0),
+      z: Number(e.point?.z ?? 0),
+    },
+    faceIndex: typeof e.faceIndex === "number" ? e.faceIndex : null,
+    instanceId: typeof e.instanceId === "number" ? e.instanceId : null,
+    parentChain,
+    repeatedMeshDifferentPoint,
+  };
+}
+
+function hasDifferentClickPoint(a: ClickHitInfo, b: ClickHitInfo) {
+  const epsilon = 0.001;
+  return (
+    Math.abs(a.point.x - b.point.x) > epsilon ||
+    Math.abs(a.point.y - b.point.y) > epsilon ||
+    Math.abs(a.point.z - b.point.z) > epsilon
+  );
 }
 
 // Aplica highlight branco emissivo na mesh selecionada (modo Revisar).
@@ -66,7 +114,7 @@ function useSelectionHighlight(scene: THREE.Object3D | null, selectedKey: string
 }
 
 // GLTF model - calls onLoaded after it's in the scene
-function GLTFModel({ url, onLoaded, onSceneReady, onMeshClick, selectedMeshKey }: { url: string; onLoaded: () => void; onSceneReady?: (scene: THREE.Object3D) => void; onMeshClick?: (mesh: THREE.Object3D) => void; selectedMeshKey?: string | null }) {
+function GLTFModel({ url, onLoaded, onSceneReady, onMeshClick, selectedMeshKey }: { url: string; onLoaded: () => void; onSceneReady?: (scene: THREE.Object3D) => void; onMeshClick?: MeshClickHandler; selectedMeshKey?: string | null }) {
   const { scene } = useGLTF(url);
   const calledRef = useRef(false);
   useSelectionHighlight(scene, selectedMeshKey ?? null);
@@ -89,14 +137,14 @@ function GLTFModel({ url, onLoaded, onSceneReady, onMeshClick, selectedMeshKey }
       onClick={(e: any) => {
         if (!onMeshClick) return;
         e.stopPropagation();
-        if (e.object) onMeshClick(e.object);
+        if (e.object) onMeshClick(e.object, buildClickHitInfo(e));
       }}
     />
   );
 }
 
 // OBJ model - calls onLoaded after it's in the scene
-function OBJModel({ url, mtlUrl, onLoaded, onSceneReady, onMeshClick, selectedMeshKey }: { url: string; mtlUrl?: string; onLoaded: () => void; onSceneReady?: (scene: THREE.Object3D) => void; onMeshClick?: (mesh: THREE.Object3D) => void; selectedMeshKey?: string | null }) {
+function OBJModel({ url, mtlUrl, onLoaded, onSceneReady, onMeshClick, selectedMeshKey }: { url: string; mtlUrl?: string; onLoaded: () => void; onSceneReady?: (scene: THREE.Object3D) => void; onMeshClick?: MeshClickHandler; selectedMeshKey?: string | null }) {
   const materials = mtlUrl ? useLoader(MTLLoader, mtlUrl) : null;
   const obj = useLoader(OBJLoader, url, (loader) => {
     if (materials) { materials.preload(); loader.setMaterials(materials); }
@@ -118,7 +166,7 @@ function OBJModel({ url, mtlUrl, onLoaded, onSceneReady, onMeshClick, selectedMe
       onClick={(e: any) => {
         if (!onMeshClick) return;
         e.stopPropagation();
-        if (e.object) onMeshClick(e.object);
+        if (e.object) onMeshClick(e.object, buildClickHitInfo(e));
       }}
     />
   );
@@ -326,7 +374,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   onCameraChange?: (p: [number, number, number], t: [number, number, number]) => void;
   sceneReady: boolean; onModelLoaded: () => void;
   onSceneReady?: (scene: THREE.Object3D) => void;
-  onMeshClick?: (mesh: THREE.Object3D) => void;
+  onMeshClick?: MeshClickHandler;
   selectedMeshKey?: string | null;
 }) {
   return (
@@ -455,6 +503,7 @@ export function Map3DView() {
   // Modo "Revisar Modelo"
   const [reviewMode, setReviewMode] = useState(false);
   const [selectedMeshKey, setSelectedMeshKey] = useState<string | null>(null);
+  const [selectedHitInfo, setSelectedHitInfo] = useState<ClickHitInfo | null>(null);
   const [isolatedKeys, setIsolatedKeys] = useState<Set<string> | null>(null);
 
   // Modo de visualização
@@ -519,10 +568,14 @@ export function Map3DView() {
   // ====================================================
   // Modo "Revisar Modelo": clique destaca a mesh
   // ====================================================
-  const handleReviewMeshClick = useCallback((obj: THREE.Object3D) => {
+  const handleReviewMeshClick = useCallback((obj: THREE.Object3D, hitInfo: ClickHitInfo) => {
     if (!reviewMode) return;
     if (!(obj as THREE.Mesh).isMesh) return;
     setSelectedMeshKey((obj as THREE.Mesh).uuid);
+    setSelectedHitInfo(prev => ({
+      ...hitInfo,
+      repeatedMeshDifferentPoint: !!prev && prev.uuid === hitInfo.uuid && hasDifferentClickPoint(prev, hitInfo),
+    }));
   }, [reviewMode]);
 
   const handleIsolate = useCallback((key: string) => {
@@ -1012,6 +1065,7 @@ export function Map3DView() {
                 onClick={() => {
                   setReviewMode(p => !p);
                   setSelectedMeshKey(null);
+                  setSelectedHitInfo(null);
                   setIsolatedKeys(null);
                   if (!reviewMode) setAssignMode(false);
                 }}
@@ -1143,16 +1197,18 @@ export function Map3DView() {
           <MeshReviewPanel
             meshKey={selectedMeshKey}
             meshData={meshHooks.meshMap.get(selectedMeshKey) ?? null}
+            selectedHitInfo={selectedHitInfo}
             sceneRef={sceneObj}
             houses={houseNumbers}
             services={serviceOptions}
             isolated={!!isolatedKeys?.has(selectedMeshKey)}
-            onClose={() => { setSelectedMeshKey(null); setIsolatedKeys(null); }}
+            onClose={() => { setSelectedMeshKey(null); setSelectedHitInfo(null); setIsolatedKeys(null); }}
             onIsolate={handleIsolate}
             onUpdate={async (key, data) => { await meshHooks.upsertMesh({ layer_key: key, ...data }); }}
             onIgnore={async (key) => {
               await meshHooks.setIgnored(key, true);
               setSelectedMeshKey(null);
+              setSelectedHitInfo(null);
               setIsolatedKeys(null);
               toast.success("Mesh marcada como ignorada");
             }}
