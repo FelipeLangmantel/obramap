@@ -22,6 +22,7 @@ import { LayersPanel } from "./map3d/LayersPanel";
 import { LinkLayersDialog } from "./map3d/LinkLayersDialog";
 import { AssignHousePopover } from "./map3d/AssignHousePopover";
 import { useMeshHouseAssignments } from "@/hooks/useMeshHouseAssignments";
+import { IFCModel } from "./map3d/IFCModel";
 import { useProjectModelMeshes, type ProjectModelMesh } from "@/hooks/useProjectModelMeshes";
 import { MeshReviewPanel, type ServiceOption } from "./map3d/MeshReviewPanel";
 import { parseHouseNumberFromMesh } from "./map3d/parseHouseFromMeshName";
@@ -29,7 +30,7 @@ import { HouseFotoHistoryDrawer } from "@/components/diario/HouseFotoHistoryDraw
 
 interface ModelData {
   url: string;
-  type: "gltf" | "obj";
+  type: "gltf" | "obj" | "ifc";
   mtlUrl?: string;
 }
 
@@ -345,6 +346,8 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
         <Suspense fallback={<Html center><div className="bg-background/90 px-4 py-2 rounded-lg border border-border">Carregando modelo...</div></Html>}>
           {modelData.type === "gltf" ? (
             <GLTFModel url={modelData.url} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} selectedMeshKey={selectedMeshKey} />
+          ) : modelData.type === "ifc" ? (
+            <IFCModel url={modelData.url} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} selectedMeshKey={selectedMeshKey} />
           ) : (
             <OBJModel url={modelData.url} mtlUrl={modelData.mtlUrl} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} selectedMeshKey={selectedMeshKey} />
           )}
@@ -936,9 +939,15 @@ export function Map3DView() {
         const url = await uploadFile(file, 'gltf');
         if (url) { setModelData({ url, type: "gltf" }); setHasChanges(true); toast.success("Modelo carregado!"); }
       } finally { setIsLoading(false); }
+    } else if (name.endsWith(".ifc")) {
+      setIsLoading(true); setSceneReady(false);
+      try {
+        const url = await uploadFile(file, 'ifc');
+        if (url) { setModelData({ url, type: "ifc" }); setHasChanges(true); toast.success("Modelo IFC carregado!"); }
+      } finally { setIsLoading(false); }
     } else if (name.endsWith(".obj")) {
       setPendingObjFile(file); toast.info("OBJ selecionado. Selecione MTL ou 'Sem MTL'");
-    } else { toast.error("Use .gltf, .glb ou .obj"); }
+    } else { toast.error("Use .gltf, .glb, .ifc ou .obj"); }
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -974,7 +983,7 @@ export function Map3DView() {
       <Card>
         <CardContent className="p-3">
           <div className="flex flex-wrap items-center gap-2">
-            <Input ref={fileInputRef} type="file" accept=".gltf,.glb,.obj" onChange={handleFileUpload} className="hidden" disabled={isLoading} />
+            <Input ref={fileInputRef} type="file" accept=".gltf,.glb,.obj,.ifc" onChange={handleFileUpload} className="hidden" disabled={isLoading} />
             <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isLoading}>
               {isLoading ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Upload className="h-4 w-4 mr-1.5" />}Importar 3D
             </Button>
@@ -1190,7 +1199,7 @@ export function Map3DView() {
             <div className="text-center space-y-4 p-8 bg-background/80 rounded-xl border border-border">
               <Move3D className="h-16 w-16 mx-auto text-muted-foreground" />
               <h3 className="text-lg font-semibold">Mapa 3D</h3>
-              <p className="text-sm text-muted-foreground">Importe um modelo 3D (.glTF, .glb ou .obj)</p>
+              <p className="text-sm text-muted-foreground">Importe um modelo 3D (.glTF, .glb, .ifc ou .obj)</p>
             </div>
           </div>
         )}
