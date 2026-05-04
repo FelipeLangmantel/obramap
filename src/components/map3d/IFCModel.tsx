@@ -15,6 +15,7 @@ interface IfcInventoryItem {
   type: string;
   globalId: string;
   name: string;
+  quotedValues: string[];
   category: "production" | "text" | "unnamed";
   rawLine: string;
 }
@@ -60,6 +61,7 @@ function parseIfcText(text: string): IfcInventoryItem[] {
       type: type.toUpperCase(),
       globalId: quoted[0] || "",
       name,
+      quotedValues: quoted,
       category: classifyIfcElement(name),
       rawLine: summarizeLine(match[0]),
     });
@@ -71,6 +73,7 @@ function parseIfcText(text: string): IfcInventoryItem[] {
 export function IFCModel({ url, onLoaded, onSceneReady, onMeshClick, selectedMeshKey }: Props) {
   const [items, setItems] = useState<IfcInventoryItem[]>([]);
   const [filter, setFilter] = useState<IfcInventoryFilter>("production");
+  const [expandedRawLines, setExpandedRawLines] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const calledRef = useRef(false);
@@ -84,6 +87,7 @@ export function IFCModel({ url, onLoaded, onSceneReady, onMeshClick, selectedMes
     setLoaded(false);
     setError(null);
     setItems([]);
+    setExpandedRawLines(new Set());
     calledRef.current = false;
 
     const loadIfcText = async () => {
@@ -141,6 +145,19 @@ export function IFCModel({ url, onLoaded, onSceneReady, onMeshClick, selectedMes
     if (filter === "all") return items;
     return items.filter(item => item.category === filter);
   }, [filter, items]);
+
+  const toggleRawLine = (id: string) => {
+    setExpandedRawLines(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const copyRawLine = async (rawLine: string) => {
+    await navigator.clipboard.writeText(rawLine);
+  };
 
   return (
     <Html center>
@@ -228,6 +245,45 @@ export function IFCModel({ url, onLoaded, onSceneReady, onMeshClick, selectedMes
                           <span className="text-muted-foreground">Nome: </span>
                           {item.name || "—"}
                         </p>
+                        <div className="mt-1 text-[11px]">
+                          <span className="text-muted-foreground">Valores textuais encontrados: </span>
+                          {item.quotedValues.length > 0 ? (
+                            <span className="break-words">
+                              {item.quotedValues.map((value, index) => (
+                                <span key={`${item.id}-quoted-${index}`} className="mr-1">
+                                  {index + 1}. {value || "—"}
+                                </span>
+                              ))}
+                            </span>
+                          ) : (
+                            <span>—</span>
+                          )}
+                        </div>
+                        {item.category === "unnamed" && (
+                          <div className="mt-2 space-y-1">
+                            <div className="flex flex-wrap gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => toggleRawLine(item.id)}
+                                className="rounded border border-border bg-background px-2 py-1 text-[10px] font-medium hover:bg-muted"
+                              >
+                                Ver linha bruta
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void copyRawLine(item.rawLine)}
+                                className="rounded border border-border bg-background px-2 py-1 text-[10px] font-medium hover:bg-muted"
+                              >
+                                Copiar linha IFC
+                              </button>
+                            </div>
+                            {expandedRawLines.has(item.id) && (
+                              <pre className="max-h-24 overflow-auto whitespace-pre-wrap rounded bg-muted/60 p-2 text-[10px] leading-relaxed">
+                                {item.rawLine}
+                              </pre>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))}
                     {filteredItems.length === 0 && (
