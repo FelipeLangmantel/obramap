@@ -237,6 +237,7 @@ function parseIfcText(text: string): IfcInventoryItem[] {
 export function IFCModel({ url, onLoaded, onSceneReady, onMeshClick, selectedMeshKey }: Props) {
   const [items, setItems] = useState<IfcInventoryItem[]>([]);
   const [filter, setFilter] = useState<IfcInventoryFilter>("production");
+  const [search, setSearch] = useState("");
   const [expandedRawLines, setExpandedRawLines] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -257,9 +258,7 @@ export function IFCModel({ url, onLoaded, onSceneReady, onMeshClick, selectedMes
     const loadIfcText = async () => {
       try {
         const response = await fetch(url);
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
         const text = await response.text();
         if (cancelled) return;
@@ -319,9 +318,25 @@ export function IFCModel({ url, onLoaded, onSceneReady, onMeshClick, selectedMes
   }, [items]);
 
   const filteredItems = useMemo(() => {
-    if (filter === "all") return items;
-    return items.filter(item => item.category === filter);
-  }, [filter, items]);
+    const base = filter === "all" ? items : items.filter(item => item.category === filter);
+    const query = search.trim().toLowerCase();
+    if (!query) return base;
+
+    return base.filter(item => {
+      const haystack = [
+        item.id,
+        item.type,
+        item.globalId,
+        item.name,
+        item.primaryLayerName,
+        item.layerNames.join(" "),
+        item.detectedServiceLabel,
+        item.detectedServiceKey,
+        item.detectedHouseNumber != null ? String(item.detectedHouseNumber) : "",
+      ].join(" ").toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [filter, items, search]);
 
   const toggleRawLine = (id: string) => {
     setExpandedRawLines(prev => {
@@ -332,28 +347,60 @@ export function IFCModel({ url, onLoaded, onSceneReady, onMeshClick, selectedMes
     });
   };
 
+  const copyText = async (text: string) => {
+    await navigator.clipboard.writeText(text);
+  };
+
   const copyRawLine = async (rawLine: string) => {
-    await navigator.clipboard.writeText(rawLine);
+    await copyText(rawLine);
+  };
+
+  const formatItemLine = (item: IfcInventoryItem) => {
+    return [
+      item.id,
+      item.type,
+      `GlobalId: ${item.globalId || "-"}`,
+      `Camada: ${item.primaryLayerName || "-"}`,
+      `Serviço: ${item.detectedServiceLabel || "-"}`,
+      `Casa: ${item.detectedHouseNumber ?? "-"}`,
+      `Confiança: ${item.semanticConfidence}`,
+    ].join(" | ");
+  };
+
+  const formatSummary = (list: IfcInventoryItem[]) => {
+    return [
+      "Inventário IFC",
+      `Total: ${inventoryCounts.totalElements}`,
+      `Produtivos: ${inventoryCounts.productionElements}`,
+      `Textos/anotações: ${inventoryCounts.textElements}`,
+      `Sem nome: ${inventoryCounts.unnamedElements}`,
+      `Com serviço e casa: ${semanticCounts.withServiceAndHouse}`,
+      `Com serviço sem casa: ${semanticCounts.withServiceWithoutHouse}`,
+      `Sem serviço detectado: ${semanticCounts.withoutService}`,
+      `Referência/lote: ${semanticCounts.referencesOrLots}`,
+      "",
+      ...list.map(formatItemLine),
+    ].join("\n");
   };
 
   return (
-    <Html center>
-      <div className="w-[420px] max-w-[90vw] max-h-[70vh] overflow-hidden rounded-lg border border-border bg-background/95 shadow-2xl">
-        <div className="border-b border-border px-4 py-3">
-          <h3 className="text-base font-semibold">Inventário IFC</h3>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Renderização IFC 3D será ativada em etapa futura. Nesta etapa o arquivo foi lido para validar entidades e nomes.
-          </p>
-        </div>
+    <Html fullscreen>
+      <div className="pointer-events-none absolute right-4 top-4 bottom-24 w-[min(760px,calc(100vw-2rem))]">
+        <div className="pointer-events-auto flex h-full flex-col overflow-hidden rounded-lg border border-border bg-background/95 shadow-2xl">
+          <div className="flex-shrink-0 border-b border-border px-4 py-3">
+            <h3 className="text-base font-semibold">Inventário IFC</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Renderização IFC 3D será ativada em etapa futura. Nesta etapa o arquivo foi lido para validar entidades e nomes.
+            </p>
+          </div>
 
-        <div className="space-y-3 p-4">
           {error ? (
-            <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <div className="m-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {error}
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-2 gap-2 text-sm">
+              <div className="grid flex-shrink-0 grid-cols-2 gap-2 p-3 text-sm md:grid-cols-4">
                 <InventoryMetric label="Elementos detectados" value={inventoryCounts.totalElements} />
                 <InventoryMetric label="Produtivos" value={inventoryCounts.productionElements} />
                 <InventoryMetric label="Textos/anotações" value={inventoryCounts.textElements} />
@@ -366,147 +413,72 @@ export function IFCModel({ url, onLoaded, onSceneReady, onMeshClick, selectedMes
               </div>
 
               {items.length === 0 ? (
-                <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                <div className="mx-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                   Nenhuma entidade IFC compatível detectada.
                 </div>
               ) : (
                 <>
-                  <div className="flex flex-wrap gap-1.5">
-                    {Object.entries(countsByType).map(([type, count]) => (
-                      <span key={type} className="rounded-full bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary">
-                        {type}: {count}
-                      </span>
-                    ))}
-                  </div>
+                  <div className="flex-shrink-0 space-y-2 border-y border-border bg-muted/20 px-3 py-2">
+                    <div className="flex flex-wrap gap-1.5">
+                      {Object.entries(countsByType).map(([type, count]) => (
+                        <span key={type} className="rounded-full bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary">
+                          {type}: {count}
+                        </span>
+                      ))}
+                    </div>
 
-                  <div className="flex flex-wrap gap-1.5">
-                    {([
-                      ["all", "Todos"],
-                      ["production", "Produtivos"],
-                      ["text", "Textos/anotações"],
-                      ["unnamed", "Sem nome"],
-                    ] as Array<[IfcInventoryFilter, string]>).map(([value, label]) => (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() => setFilter(value)}
-                        className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                          filter === value
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : "border-border bg-background hover:bg-muted"
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="max-h-[320px] overflow-y-auto rounded-md border border-border">
-                    {filteredItems.slice(0, 50).map(item => (
-                      <div key={item.id} className="border-b border-border px-3 py-2 last:border-b-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs font-semibold">{item.type}</span>
-                          <span className="font-mono text-[10px] text-muted-foreground">{item.id}</span>
-                        </div>
-                        {item.category === "text" && (
-                          <span className="mt-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
-                            Texto / anotação — não vincular
-                          </span>
-                        )}
-                        {item.category === "unnamed" && (
-                          <span className="mt-1 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-700">
-                            Sem nome — revisar exportação
-                          </span>
-                        )}
-                        <p className="mt-1 truncate text-[11px]">
-                          <span className="text-muted-foreground">GlobalId: </span>
-                          {item.globalId || "—"}
-                        </p>
-                        <p className="truncate text-[11px]">
-                          <span className="text-muted-foreground">Nome IFC: </span>
-                          {item.name || "—"}
-                        </p>
-                        <p className="truncate text-[11px]">
-                          <span className="text-muted-foreground">Camada IFC principal: </span>
-                          {item.primaryLayerName || "—"}
-                        </p>
-                        <p className="text-[11px]">
-                          <span className="text-muted-foreground">Todas as camadas encontradas: </span>
-                          {item.layerNames.length > 0 ? item.layerNames.join(", ") : "—"}
-                        </p>
-                        {item.category === "production" && (
-                          <div className="mt-1 space-y-0.5 rounded bg-muted/40 px-2 py-1 text-[11px]">
-                            <p>
-                              <span className="text-muted-foreground">Serviço detectado: </span>
-                              {item.detectedServiceLabel || "—"}
-                            </p>
-                            <p>
-                              <span className="text-muted-foreground">Casa detectada: </span>
-                              {item.detectedHouseNumber != null ? item.detectedHouseNumber : "—"}
-                            </p>
-                            <p>
-                              <span className="text-muted-foreground">Confiança: </span>
-                              {item.semanticConfidence}
-                            </p>
-                            {item.semanticNeedsReview && (
-                              <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
-                                Revisar
-                              </span>
-                            )}
-                          </div>
-                        )}
-                        {(filter === "all" || filter === "unnamed") && (
-                          <div className="mt-1 rounded bg-muted/40 px-2 py-1 text-[10px]">
-                            <p>
-                              <span className="text-muted-foreground">Refs alcançadas: </span>
-                              {item.reachableRefs.length}
-                            </p>
-                            <p className="break-words font-mono text-muted-foreground">
-                              {item.reachableRefs.slice(0, 10).join(", ") || "—"}
-                            </p>
-                          </div>
-                        )}
-                        <div className="mt-1 text-[11px]">
-                          <span className="text-muted-foreground">Valores textuais encontrados: </span>
-                          {item.quotedValues.length > 0 ? (
-                            <span className="break-words">
-                              {item.quotedValues.map((value, index) => (
-                                <span key={`${item.id}-quoted-${index}`} className="mr-1">
-                                  {index + 1}. {value || "—"}
-                                </span>
-                              ))}
-                            </span>
-                          ) : (
-                            <span>—</span>
-                          )}
-                        </div>
-                        {item.category === "unnamed" && (
-                          <div className="mt-2 space-y-1">
-                            <div className="flex flex-wrap gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => toggleRawLine(item.id)}
-                                className="rounded border border-border bg-background px-2 py-1 text-[10px] font-medium hover:bg-muted"
-                              >
-                                Ver linha bruta
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => void copyRawLine(item.rawLine)}
-                                className="rounded border border-border bg-background px-2 py-1 text-[10px] font-medium hover:bg-muted"
-                              >
-                                Copiar linha IFC
-                              </button>
-                            </div>
-                            {expandedRawLines.has(item.id) && (
-                              <pre className="max-h-24 overflow-auto whitespace-pre-wrap rounded bg-muted/60 p-2 text-[10px] leading-relaxed">
-                                {item.rawLine}
-                              </pre>
-                            )}
-                          </div>
-                        )}
+                    <div className="flex flex-col gap-2 md:flex-row">
+                      <input
+                        value={search}
+                        onChange={event => setSearch(event.target.value)}
+                        placeholder="Buscar por GlobalId, nome, camada, serviço, casa ou tipo..."
+                        className="h-8 flex-1 rounded-md border border-input bg-background px-2 text-xs outline-none ring-offset-background focus:ring-2 focus:ring-ring"
+                      />
+                      <div className="flex flex-wrap gap-1.5">
+                        <CopyButton onClick={() => copyText(formatSummary(items))}>Copiar resumo</CopyButton>
+                        <CopyButton onClick={() => copyText(formatSummary(filteredItems))}>Copiar elementos filtrados</CopyButton>
+                        <CopyButton onClick={() => copyText(formatSummary(items.filter(item => item.category === "production")))}>Copiar produtivos</CopyButton>
                       </div>
-                    ))}
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5">
+                      {([
+                        ["all", "Todos"],
+                        ["production", "Produtivos"],
+                        ["text", "Textos/anotações"],
+                        ["unnamed", "Sem nome"],
+                      ] as Array<[IfcInventoryFilter, string]>).map(([value, label]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setFilter(value)}
+                          className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                            filter === value
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-border bg-background hover:bg-muted"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                      <span className="ml-auto text-[11px] text-muted-foreground">{filteredItems.length} elemento(s)</span>
+                    </div>
+                  </div>
+
+                  <div className="min-h-0 flex-1 overflow-y-auto p-3">
+                    <div className="space-y-2">
+                      {filteredItems.map(item => (
+                        <IfcItemCard
+                          key={item.id}
+                          item={item}
+                          filter={filter}
+                          expanded={expandedRawLines.has(item.id)}
+                          onToggleRaw={() => toggleRawLine(item.id)}
+                          onCopyRaw={() => copyRawLine(item.rawLine)}
+                          onCopyGlobalId={() => copyText(item.globalId)}
+                        />
+                      ))}
+                    </div>
                     {filteredItems.length === 0 && (
                       <div className="px-3 py-6 text-center text-xs text-muted-foreground">
                         Nenhum elemento nesta categoria.
@@ -525,9 +497,124 @@ export function IFCModel({ url, onLoaded, onSceneReady, onMeshClick, selectedMes
 
 function InventoryMetric({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-md bg-muted/50 px-3 py-2">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="text-xl font-bold">{value}</p>
+    <div className="rounded-md bg-muted/50 px-2 py-1.5">
+      <p className="truncate text-[10px] text-muted-foreground">{label}</p>
+      <p className="text-base font-bold leading-tight">{value}</p>
+    </div>
+  );
+}
+
+function CopyButton({ children, onClick }: { children: string; onClick: () => Promise<void> }) {
+  return (
+    <button type="button" onClick={() => void onClick()} className="rounded border border-border bg-background px-2.5 py-1 text-[11px] font-medium hover:bg-muted">
+      {children}
+    </button>
+  );
+}
+
+function IfcItemCard({
+  item,
+  filter,
+  expanded,
+  onToggleRaw,
+  onCopyRaw,
+  onCopyGlobalId,
+}: {
+  item: IfcInventoryItem;
+  filter: IfcInventoryFilter;
+  expanded: boolean;
+  onToggleRaw: () => void;
+  onCopyRaw: () => Promise<void>;
+  onCopyGlobalId: () => Promise<void>;
+}) {
+  return (
+    <div className="rounded-md border border-border bg-background px-3 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold">{item.primaryLayerName || item.name || item.type}</p>
+          <p className="font-mono text-[10px] text-muted-foreground">{item.id} | {item.type}</p>
+        </div>
+        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+          item.semanticConfidence === "high"
+            ? "bg-emerald-100 text-emerald-800"
+            : item.semanticConfidence === "medium"
+              ? "bg-blue-100 text-blue-800"
+              : "bg-slate-100 text-slate-700"
+        }`}>
+          {item.semanticConfidence}
+        </span>
+      </div>
+
+      {item.category === "text" && (
+        <span className="mt-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+          Texto / anotação - não vincular
+        </span>
+      )}
+      {item.category === "unnamed" && (
+        <span className="mt-1 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-700">
+          Sem nome - revisar exportação
+        </span>
+      )}
+
+      <p className="mt-1 truncate text-[11px]">
+        <span className="text-muted-foreground">GlobalId: </span>
+        {item.globalId || "-"}
+        {item.globalId && (
+          <button type="button" onClick={() => void onCopyGlobalId()} className="ml-2 rounded border border-border px-1.5 py-0.5 text-[10px] hover:bg-muted">
+            Copiar
+          </button>
+        )}
+      </p>
+      <p className="truncate text-[11px]"><span className="text-muted-foreground">Nome IFC: </span>{item.name || "-"}</p>
+      <p className="truncate text-[11px]"><span className="text-muted-foreground">Camada IFC principal: </span>{item.primaryLayerName || "-"}</p>
+      <p className="text-[11px]"><span className="text-muted-foreground">Todas as camadas encontradas: </span>{item.layerNames.length > 0 ? item.layerNames.join(", ") : "-"}</p>
+
+      {item.category === "production" && (
+        <div className="mt-1 grid gap-1 rounded bg-muted/40 px-2 py-1 text-[11px] md:grid-cols-3">
+          <p className="truncate"><span className="text-muted-foreground">Serviço detectado: </span>{item.detectedServiceLabel || "-"}</p>
+          <p><span className="text-muted-foreground">Casa detectada: </span>{item.detectedHouseNumber != null ? item.detectedHouseNumber : "-"}</p>
+          <p><span className="text-muted-foreground">Confiança: </span>{item.semanticConfidence}</p>
+          {item.semanticNeedsReview && (
+            <span className="inline-flex w-fit rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+              Revisar
+            </span>
+          )}
+        </div>
+      )}
+
+      {(filter === "all" || filter === "unnamed") && (
+        <div className="mt-1 rounded bg-muted/40 px-2 py-1 text-[10px]">
+          <p><span className="text-muted-foreground">Refs alcançadas: </span>{item.reachableRefs.length}</p>
+          <p className="break-words font-mono text-muted-foreground">{item.reachableRefs.slice(0, 10).join(", ") || "-"}</p>
+        </div>
+      )}
+
+      <div className="mt-1 text-[11px]">
+        <span className="text-muted-foreground">Valores textuais encontrados: </span>
+        {item.quotedValues.length > 0 ? (
+          <span className="break-words">
+            {item.quotedValues.map((value, index) => (
+              <span key={`${item.id}-quoted-${index}`} className="mr-1">{index + 1}. {value || "-"}</span>
+            ))}
+          </span>
+        ) : (
+          <span>-</span>
+        )}
+      </div>
+
+      {item.category === "unnamed" && (
+        <div className="mt-2 space-y-1">
+          <div className="flex flex-wrap gap-1.5">
+            <button type="button" onClick={onToggleRaw} className="rounded border border-border bg-background px-2 py-1 text-[10px] font-medium hover:bg-muted">Ver linha bruta</button>
+            <button type="button" onClick={() => void onCopyRaw()} className="rounded border border-border bg-background px-2 py-1 text-[10px] font-medium hover:bg-muted">Copiar linha IFC</button>
+          </div>
+          {expanded && (
+            <pre className="max-h-24 overflow-auto whitespace-pre-wrap rounded bg-muted/60 p-2 text-[10px] leading-relaxed">
+              {item.rawLine}
+            </pre>
+          )}
+        </div>
+      )}
     </div>
   );
 }
