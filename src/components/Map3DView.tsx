@@ -1199,7 +1199,7 @@ export function Map3DView() {
             <div className="text-center space-y-4 p-8 bg-background/80 rounded-xl border border-border">
               <Move3D className="h-16 w-16 mx-auto text-muted-foreground" />
               <h3 className="text-lg font-semibold">Mapa 3D</h3>
-              <p className="text-sm text-muted-foreground">Importe um modelo 3D (.glTF, .glb ou .obj)</p>
+              <p className="text-sm text-muted-foreground">Importe um modelo 3D (.glTF, .glb, .ifc ou .obj)</p>
             </div>
           </div>
         )}
