@@ -11,7 +11,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Upload, RotateCcw, Move3D, X, ChevronDown, ChevronRight, Save, Loader2, Home, AlertTriangle, Target, Layers, Camera, MousePointerClick, ScanSearch, RefreshCw } from "lucide-react";
+import { Upload, RotateCcw, Move3D, X, ChevronDown, ChevronRight, Save, Loader2, Home, AlertTriangle, Target, Layers, Camera, MousePointerClick, ScanSearch, RefreshCw, Eye, Boxes, Sparkles } from "lucide-react";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
@@ -662,6 +663,8 @@ export function Map3DView() {
     if (syncDebounceRef.current) clearTimeout(syncDebounceRef.current);
     syncDebounceRef.current = setTimeout(() => { void handleSync3DReal(); }, 800);
   }, [lastSyncResult, handleSync3DReal]);
+  const autoSyncRef = useRef(autoSync);
+  useEffect(() => { autoSyncRef.current = autoSync; }, [autoSync]);
 
 
   const handleMeshClick = useCallback((obj: THREE.Object3D) => {
@@ -816,11 +819,11 @@ export function Map3DView() {
         .on("postgres_changes", {
           event: "*", schema: "public", table: "productions",
           filter: `project_id=eq.${projectId}`,
-        }, () => { void refreshHousesFromDB(); })
+        }, () => { void refreshHousesFromDB(); autoSyncRef.current(); })
         .on("postgres_changes", {
           event: "*", schema: "public", table: "weekly_productions",
           filter: `project_id=eq.${projectId}`,
-        }, () => { void refreshHousesFromDB(); })
+        }, () => { void refreshHousesFromDB(); autoSyncRef.current(); })
         .on("postgres_changes", {
           event: "*", schema: "public", table: "diary_items",
         }, (payload: any) => {
@@ -828,6 +831,7 @@ export function Map3DView() {
           const houseId = payload?.new?.house_id ?? payload?.old?.house_id;
           if (!houseId || houseIdSet.has(houseId)) {
             void refreshHousesFromDB();
+            autoSyncRef.current();
           }
         })
         .subscribe();
@@ -1000,7 +1004,65 @@ export function Map3DView() {
                   <Badge variant="secondary" className="ml-1.5 h-4 text-[10px] px-1">
                     {meshAssignments.assignments.length}
                   </Badge>
+            )}
+            {isAdmin && modelData && (
+              <Button
+                variant={reviewMode ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  setReviewMode(p => !p);
+                  setSelectedMeshKey(null);
+                  setIsolatedKeys(null);
+                  if (!reviewMode) setAssignMode(false);
+                }}
+                disabled={isLoading}
+                title="Clique numa mesh para revisar UUID, geometria e vínculos"
+              >
+                <ScanSearch className="h-4 w-4 mr-1.5" />
+                {reviewMode ? "Sair da Revisão" : "Revisar Modelo"}
+                {pendingMeshCount > 0 && (
+                  <Badge variant="secondary" className="ml-1.5 h-4 text-[10px] px-1">
+                    {pendingMeshCount} pend.
+                  </Badge>
                 )}
+              </Button>
+            )}
+            {modelData && (
+              <ToggleGroup
+                type="single"
+                size="sm"
+                value={viewMode}
+                onValueChange={(v) => { if (v) applyViewMode(v as ViewMode); }}
+                className="border border-input rounded-md p-0.5 bg-background"
+              >
+                <ToggleGroupItem value="complete" className="h-7 px-2 text-xs gap-1" title="Mostrar todo o modelo">
+                  <Boxes className="h-3.5 w-3.5" />Completa
+                </ToggleGroupItem>
+                <ToggleGroupItem value="real" className="h-7 px-2 text-xs gap-1" title="Apenas meshes em produção">
+                  <Eye className="h-3.5 w-3.5" />3D Real
+                </ToggleGroupItem>
+                <ToggleGroupItem value="simulation" className="h-7 px-2 text-xs gap-1" title="Modo simulação por camadas">
+                  <Sparkles className="h-3.5 w-3.5" />Simulação
+                </ToggleGroupItem>
+              </ToggleGroup>
+            )}
+            {isAdmin && modelData && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSync3DReal}
+                disabled={isLoading || isSyncing || meshHooks.meshMap.size === 0}
+                title="Atualiza a visibilidade das meshes a partir da produção real"
+              >
+                {isSyncing ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1.5" />}
+                Sincronizar 3D Real
+                {lastSyncResult && (
+                  <Badge variant="secondary" className="ml-1.5 h-4 text-[10px] px-1">
+                    {lastSyncResult.visible}/{lastSyncResult.total}
+                  </Badge>
+                )}
+              </Button>
+            )}
               </Button>
             )}
             {isAdmin && (
@@ -1052,7 +1114,8 @@ export function Map3DView() {
               savedPosition={savedPos} savedTarget={savedTgt}
               onCameraChange={handleCameraChange} sceneReady={sceneReady}
               onModelLoaded={handleModelLoaded} onSceneReady={handleSceneReady}
-              onMeshClick={assignMode ? handleMeshClick : undefined} />
+              onMeshClick={reviewMode ? handleReviewMeshClick : assignMode ? handleMeshClick : undefined}
+              selectedMeshKey={reviewMode ? selectedMeshKey : null} />
           </Canvas>
         </div>
         {assignMode && (
@@ -1070,6 +1133,31 @@ export function Map3DView() {
           onClear={clearAssignment}
           onClose={() => setPickedMesh(null)}
         />
+        {reviewMode && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-primary text-primary-foreground px-3 py-1.5 rounded-full text-xs font-medium shadow-lg flex items-center gap-1.5 pointer-events-none">
+            <ScanSearch className="h-3.5 w-3.5" />
+            Modo Revisão — clique em qualquer mesh do modelo
+          </div>
+        )}
+        {reviewMode && selectedMeshKey && (
+          <MeshReviewPanel
+            meshKey={selectedMeshKey}
+            meshData={meshHooks.meshMap.get(selectedMeshKey) ?? null}
+            sceneRef={sceneObj}
+            houses={houseNumbers}
+            services={serviceOptions}
+            isolated={!!isolatedKeys?.has(selectedMeshKey)}
+            onClose={() => { setSelectedMeshKey(null); setIsolatedKeys(null); }}
+            onIsolate={handleIsolate}
+            onUpdate={async (key, data) => { await meshHooks.upsertMesh({ layer_key: key, ...data }); }}
+            onIgnore={async (key) => {
+              await meshHooks.setIgnored(key, true);
+              setSelectedMeshKey(null);
+              setIsolatedKeys(null);
+              toast.success("Mesh marcada como ignorada");
+            }}
+          />
+        )}
         {showLayers && layerManager.layers.length > 0 && (
           <LayersPanel
             layers={layerManager.layers}
