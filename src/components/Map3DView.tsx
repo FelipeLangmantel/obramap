@@ -23,6 +23,7 @@ import { LinkLayersDialog } from "./map3d/LinkLayersDialog";
 import { AssignHousePopover } from "./map3d/AssignHousePopover";
 import { useMeshHouseAssignments } from "@/hooks/useMeshHouseAssignments";
 import { IFCModel } from "./map3d/IFCModel";
+import { IfcSuggestionsPanel } from "./map3d/IfcSuggestionsPanel";
 import { useProjectModelMeshes, type ProjectModelMesh } from "@/hooks/useProjectModelMeshes";
 import { MeshReviewPanel, type ServiceOption } from "./map3d/MeshReviewPanel";
 import { parseHouseNumberFromMesh } from "./map3d/parseHouseFromMeshName";
@@ -447,6 +448,7 @@ export function Map3DView() {
   const [pendingTgt, setPendingTgt] = useState<[number, number, number] | null>(null);
   const [sceneReady, setSceneReady] = useState(false);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [ifcSuggestionsOpen, setIfcSuggestionsOpen] = useState(false);
   const [showLayers, setShowLayers] = useState(false);
 
   // Modo "Atribuir Casas" — clicar numa malha abre popover para batizá-la.
@@ -1039,6 +1041,18 @@ export function Map3DView() {
                 )}
               </Button>
             )}
+            {isAdmin && modelData?.type === "ifc" && projectId && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIfcSuggestionsOpen(true)}
+                disabled={isLoading}
+                title="Revisar sugestões IFC persistidas"
+              >
+                <ScanSearch className="h-4 w-4 mr-1.5" />
+                Sugestões IFC
+              </Button>
+            )}
             {modelData && (
               <ToggleGroup
                 type="single"
@@ -1219,6 +1233,14 @@ export function Map3DView() {
           projectId={projectId}
           onSaveLink={layerManager.saveLink}
           onRemoveLink={layerManager.removeLink}
+        />
+      )}
+      {projectId && (
+        <IfcSuggestionsPanel
+          open={ifcSuggestionsOpen}
+          onOpenChange={setIfcSuggestionsOpen}
+          projectId={projectId}
+          modelUrl={modelData?.type === "ifc" ? modelData.url : null}
         />
       )}
     </div>
