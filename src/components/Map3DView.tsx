@@ -28,6 +28,7 @@ import { useProjectModelMeshes, type ProjectModelMesh } from "@/hooks/useProject
 import { MeshReviewPanel, type ServiceOption } from "./map3d/MeshReviewPanel";
 import { parseHouseNumberFromMesh } from "./map3d/parseHouseFromMeshName";
 import { HouseFotoHistoryDrawer } from "@/components/diario/HouseFotoHistoryDrawer";
+import { canDelete3DAssets, canManage3DMap } from "@/lib/accessControl";
 
 interface ModelData {
   url: string;
@@ -429,9 +430,11 @@ function HouseDetailsPanel({ marker, onClose, customLegendItems, onOpenPhotoHist
 
 export function Map3DView() {
   const { currentProject, refreshHousesFromDB } = useConstruction();
-  const { isAdmin, profile } = useAuth();
+  const { profile } = useAuth();
   const projectId = currentProject?.id;
   const companyId = (currentProject as any)?.company_id || profile?.company_id || null;
+  const canManage3D = canManage3DMap(profile);
+  const canDelete3D = canDelete3DAssets(profile);
   
   const [modelData, setModelData] = useState<ModelData | null>(null);
   const [markers, setMarkers] = useState<HouseMarker[]>([]);
@@ -492,6 +495,16 @@ export function Map3DView() {
   const handleCameraChange = useCallback((p: [number, number, number], t: [number, number, number]) => {
     setPendingPos(p); setPendingTgt(t);
   }, []);
+
+  useEffect(() => {
+    if (canManage3D) return;
+    setAssignMode(false);
+    setReviewMode(false);
+    setIfcSuggestionsOpen(false);
+    setPickedMesh(null);
+    setSelectedMeshKey(null);
+    setIsolatedKeys(null);
+  }, [canManage3D]);
 
   const handleModelLoaded = useCallback(() => {
     console.log('[3D] Model geometry loaded in scene');
@@ -621,6 +634,7 @@ export function Map3DView() {
 
   // Sincronização 3D Real
   const handleSync3DReal = useCallback(async () => {
+    if (!canManage3D) { toast.error("Sem permissão para sincronizar o 3D Real."); return; }
     if (!projectId) return;
     setIsSyncing(true);
     try {
@@ -663,7 +677,7 @@ export function Map3DView() {
       console.error("[Sync3D]", err);
       toast.error("Erro ao sincronizar");
     } finally { setIsSyncing(false); }
-  }, [projectId, meshHooks, currentProject, applyViewMode, viewMode]);
+  }, [canManage3D, projectId, meshHooks, currentProject, applyViewMode, viewMode]);
 
   // Auto-sync após realtime, debounced (somente se já sincronizou ao menos 1x)
   const autoSync = useCallback(() => {
@@ -711,6 +725,7 @@ export function Map3DView() {
   }, [assignMode]);
 
   const confirmAssignment = useCallback(async (houseNumber: number, includeChildren: boolean) => {
+    if (!canManage3D) { toast.error("Sem permissão para atribuir casas no Mapa 3D."); return; }
     if (!pickedMesh) return;
     setAssignSaving(true);
     const targets = includeChildren
@@ -726,16 +741,18 @@ export function Map3DView() {
       `${targets.length} mesh(es) atribuído(s) à Casa ${String(houseNumber).padStart(2, "0")}`
     );
     setPickedMesh(null);
-  }, [pickedMesh, meshAssignments]);
+  }, [canManage3D, pickedMesh, meshAssignments]);
 
   const clearAssignment = useCallback(async () => {
+    if (!canDelete3D) { toast.error("Sem permissão para remover atribuições do Mapa 3D."); return; }
     if (!pickedMesh) return;
+    if (!window.confirm("Remover esta atribuição de casa? Esta ação não poderá ser desfeita.")) return;
     setAssignSaving(true);
     await meshAssignments.clearMesh(pickedMesh.name);
     setAssignSaving(false);
     toast.success("Atribuição removida");
     setPickedMesh(null);
-  }, [pickedMesh, meshAssignments]);
+  }, [canDelete3D, pickedMesh, meshAssignments]);
 
   // ============================================================
   // Integração 3D ⇄ Produção em tempo real
@@ -902,6 +919,7 @@ export function Map3DView() {
   useEffect(() => { loadSaved3DMap(); }, [loadSaved3DMap]);
 
   const save3DMap = async () => {
+    if (!canManage3D) { toast.error("Sem permissão para salvar o Mapa 3D."); return; }
     if (!projectId) { toast.error("Selecione um projeto"); return; }
     setIsSaving(true);
     try {
@@ -936,6 +954,11 @@ export function Map3DView() {
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canManage3D) {
+      toast.error("Sem permissão para importar modelo 3D.");
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
     const file = e.target.files?.[0]; if (!file) return;
     const name = file.name.toLowerCase();
     if (name.endsWith(".gltf") || name.endsWith(".glb")) {
@@ -957,6 +980,7 @@ export function Map3DView() {
   };
 
   const handleMtlUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canManage3D) { toast.error("Sem permissão para importar modelo 3D."); return; }
     const file = e.target.files?.[0]; if (!pendingObjFile) return;
     setIsLoading(true); setSceneReady(false);
     try {
@@ -967,6 +991,7 @@ export function Map3DView() {
   };
 
   const loadObjWithoutMtl = async () => {
+    if (!canManage3D) { toast.error("Sem permissão para importar modelo 3D."); return; }
     if (!pendingObjFile) return;
     setIsLoading(true); setSceneReady(false);
     try {
@@ -976,6 +1001,7 @@ export function Map3DView() {
   };
 
   const resetView = () => {
+    if (!canDelete3D) { toast.error("Sem permissão para resetar o Mapa 3D."); return; }
     if (!projectId) return;
     setModelData(null); setMarkers([]); setSelectedMarker(null); setPendingObjFile(null);
     setSavedPos(null); setSavedTgt(null); setPendingPos(null); setPendingTgt(null);
@@ -988,23 +1014,27 @@ export function Map3DView() {
       <Card>
         <CardContent className="p-3">
           <div className="flex flex-wrap items-center gap-2">
-            <Input ref={fileInputRef} type="file" accept=".gltf,.glb,.obj,.ifc" onChange={handleFileUpload} className="hidden" disabled={isLoading} />
-            <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isLoading}>
-              {isLoading ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Upload className="h-4 w-4 mr-1.5" />}Importar 3D
-            </Button>
-            {pendingObjFile && (<>
+            {canManage3D && (
+              <>
+                <Input ref={fileInputRef} type="file" accept=".gltf,.glb,.obj,.ifc" onChange={handleFileUpload} className="hidden" disabled={isLoading} />
+                <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isLoading}>
+                  {isLoading ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Upload className="h-4 w-4 mr-1.5" />}Importar 3D
+                </Button>
+              </>
+            )}
+            {canManage3D && pendingObjFile && (<>
               <Input ref={mtlInputRef} type="file" accept=".mtl" onChange={handleMtlUpload} className="hidden" />
               <Button variant="outline" size="sm" onClick={() => mtlInputRef.current?.click()} disabled={isLoading}>MTL</Button>
               <Button variant="secondary" size="sm" onClick={loadObjWithoutMtl} disabled={isLoading}>Sem MTL</Button>
             </>)}
             <Button variant="outline" size="sm" onClick={centerCamera} disabled={isLoading}><Target className="h-4 w-4 mr-1.5" />Centralizar</Button>
             <Button variant="outline" size="sm" onClick={resetCameraView} disabled={isLoading}><Home className="h-4 w-4 mr-1.5" />Resetar Visão</Button>
-            {layerManager.layers.length > 0 && (
+            {canManage3D && layerManager.layers.length > 0 && (
               <Button variant={showLayers ? "default" : "outline"} size="sm" onClick={() => setShowLayers(p => !p)} disabled={isLoading}>
                 <Layers className="h-4 w-4 mr-1.5" />Camadas ({layerManager.layers.length})
               </Button>
             )}
-            {isAdmin && layerManager.layers.length > 0 && (currentProject?.houses?.length ?? 0) > 0 && (
+            {canManage3D && layerManager.layers.length > 0 && (currentProject?.houses?.length ?? 0) > 0 && (
               <Button
                 variant={assignMode ? "default" : "outline"}
                 size="sm"
@@ -1018,8 +1048,10 @@ export function Map3DView() {
                   <Badge variant="secondary" className="ml-1.5 h-4 text-[10px] px-1">
                     {meshAssignments.assignments.length}
                   </Badge>
+                )}
+              </Button>
             )}
-            {isAdmin && modelData && (
+            {canManage3D && modelData && (
               <Button
                 variant={reviewMode ? "default" : "outline"}
                 size="sm"
@@ -1041,7 +1073,7 @@ export function Map3DView() {
                 )}
               </Button>
             )}
-            {isAdmin && modelData?.type === "ifc" && projectId && (
+            {canManage3D && modelData?.type === "ifc" && projectId && (
               <Button
                 variant="outline"
                 size="sm"
@@ -1072,7 +1104,7 @@ export function Map3DView() {
                 </ToggleGroupItem>
               </ToggleGroup>
             )}
-            {isAdmin && modelData && (
+            {canManage3D && modelData && (
               <Button
                 variant="outline"
                 size="sm"
@@ -1089,9 +1121,7 @@ export function Map3DView() {
                 )}
               </Button>
             )}
-              </Button>
-            )}
-            {isAdmin && (
+            {canDelete3D && (
               <AlertDialog>
                 <AlertDialogTrigger asChild><Button variant="outline" size="sm" disabled={isLoading}><RotateCcw className="h-4 w-4 mr-1.5" />Resetar Mapa</Button></AlertDialogTrigger>
                 <AlertDialogContent>
@@ -1106,7 +1136,7 @@ export function Map3DView() {
                 </AlertDialogContent>
               </AlertDialog>
             )}
-            {isAdmin && (
+            {canManage3D && (
               <Button variant={hasChanges ? "default" : "outline"} size="sm" onClick={save3DMap} disabled={isSaving || isLoading}>
                 {isSaving ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}Salvar
               </Button>
@@ -1152,22 +1182,24 @@ export function Map3DView() {
             Clique numa parte do modelo para atribuir a uma casa
           </div>
         )}
-        <AssignHousePopover
-          picked={pickedMesh}
-          totalHouses={currentProject?.houses?.length ?? 0}
-          currentHouse={pickedMesh ? meshAssignments.assignmentMap.get(pickedMesh.name) ?? null : null}
-          saving={assignSaving}
-          onConfirm={confirmAssignment}
-          onClear={clearAssignment}
-          onClose={() => setPickedMesh(null)}
-        />
+        {canManage3D && (
+          <AssignHousePopover
+            picked={pickedMesh}
+            totalHouses={currentProject?.houses?.length ?? 0}
+            currentHouse={pickedMesh ? meshAssignments.assignmentMap.get(pickedMesh.name) ?? null : null}
+            saving={assignSaving}
+            onConfirm={confirmAssignment}
+            onClear={clearAssignment}
+            onClose={() => setPickedMesh(null)}
+          />
+        )}
         {reviewMode && (
           <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-primary text-primary-foreground px-3 py-1.5 rounded-full text-xs font-medium shadow-lg flex items-center gap-1.5 pointer-events-none">
             <ScanSearch className="h-3.5 w-3.5" />
             Modo Revisão — clique em qualquer mesh do modelo
           </div>
         )}
-        {reviewMode && selectedMeshKey && (
+        {canManage3D && reviewMode && selectedMeshKey && (
           <MeshReviewPanel
             meshKey={selectedMeshKey}
             meshData={meshHooks.meshMap.get(selectedMeshKey) ?? null}
@@ -1177,8 +1209,12 @@ export function Map3DView() {
             isolated={!!isolatedKeys?.has(selectedMeshKey)}
             onClose={() => { setSelectedMeshKey(null); setIsolatedKeys(null); }}
             onIsolate={handleIsolate}
-            onUpdate={async (key, data) => { await meshHooks.upsertMesh({ layer_key: key, ...data }); }}
+            onUpdate={async (key, data) => {
+              if (!canManage3D) { toast.error("Sem permissão para revisar o modelo 3D."); return; }
+              await meshHooks.upsertMesh({ layer_key: key, ...data });
+            }}
             onIgnore={async (key) => {
+              if (!canDelete3D) { toast.error("Sem permissão para remover ou ignorar itens do Mapa 3D."); return; }
               await meshHooks.setIgnored(key, true);
               setSelectedMeshKey(null);
               setIsolatedKeys(null);
@@ -1186,7 +1222,7 @@ export function Map3DView() {
             }}
           />
         )}
-        {showLayers && layerManager.layers.length > 0 && (
+        {canManage3D && showLayers && layerManager.layers.length > 0 && (
           <LayersPanel
             layers={layerManager.layers}
             links={layerManager.links}
@@ -1224,7 +1260,7 @@ export function Map3DView() {
         )}
       </Card>
 
-      {projectId && (
+      {canManage3D && projectId && (
         <LinkLayersDialog
           open={linkDialogOpen}
           onOpenChange={setLinkDialogOpen}
@@ -1235,7 +1271,7 @@ export function Map3DView() {
           onRemoveLink={layerManager.removeLink}
         />
       )}
-      {projectId && (
+      {canManage3D && projectId && (
         <IfcSuggestionsPanel
           open={ifcSuggestionsOpen}
           onOpenChange={setIfcSuggestionsOpen}
