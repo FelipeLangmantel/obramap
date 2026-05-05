@@ -453,11 +453,19 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         setSaveStatus("saved");
         setSaveMessage("Inventário salvo como sugestões");
       } catch (err: any) {
-        console.error("[IFC] Falha ao salvar inventário", err);
+        const code = err?.code ? ` [${err.code}]` : "";
+        const detail = err?.message || err?.details || err?.hint || "erro desconhecido";
+        console.error("[IFC] Falha ao salvar inventário", {
+          message: err?.message,
+          code: err?.code,
+          details: err?.details,
+          hint: err?.hint,
+          raw: err,
+        });
         if (cancelled) return;
         persistedKeyRef.current = null;
         setSaveStatus("error");
-        setSaveMessage("Falha ao salvar inventário");
+        setSaveMessage(`Falha ao salvar inventário${code}: ${detail}`);
       }
     };
 
