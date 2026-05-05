@@ -8722,6 +8722,57 @@ export type Database = {
         }
         Relationships: []
       }
+      project_3d_models: {
+        Row: {
+          company_id: string
+          created_at: string
+          file_name: string | null
+          id: string
+          model_type: string
+          project_id: string
+          status: string
+          storage_path: string | null
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          file_name?: string | null
+          id?: string
+          model_type: string
+          project_id: string
+          status?: string
+          storage_path?: string | null
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          file_name?: string | null
+          id?: string
+          model_type?: string
+          project_id?: string
+          status?: string
+          storage_path?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_3d_models_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_3d_models_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_contract_services: {
         Row: {
           company_id: string
@@ -8863,6 +8914,241 @@ export type Database = {
           },
           {
             foreignKeyName: "project_contracts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_ifc_activation_rules: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          match_type: string
+          match_value: string
+          model_id: string | null
+          project_id: string
+          trigger_service_key: string
+          trigger_service_label: string
+          updated_at: string
+          visual_category: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          match_type: string
+          match_value: string
+          model_id?: string | null
+          project_id: string
+          trigger_service_key: string
+          trigger_service_label: string
+          updated_at?: string
+          visual_category?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          match_type?: string
+          match_value?: string
+          model_id?: string | null
+          project_id?: string
+          trigger_service_key?: string
+          trigger_service_label?: string
+          updated_at?: string
+          visual_category?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_ifc_activation_rules_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ifc_activation_rules_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: false
+            referencedRelation: "project_3d_models"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ifc_activation_rules_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_ifc_element_links: {
+        Row: {
+          company_id: string
+          confirmed_at: string
+          confirmed_by: string | null
+          created_at: string
+          house_id: string | null
+          house_number: number | null
+          id: string
+          ifc_element_id: string
+          model_id: string
+          project_id: string
+          status: string
+          trigger_service_key: string
+          trigger_service_label: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          confirmed_at?: string
+          confirmed_by?: string | null
+          created_at?: string
+          house_id?: string | null
+          house_number?: number | null
+          id?: string
+          ifc_element_id: string
+          model_id: string
+          project_id: string
+          status?: string
+          trigger_service_key: string
+          trigger_service_label: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          confirmed_at?: string
+          confirmed_by?: string | null
+          created_at?: string
+          house_id?: string | null
+          house_number?: number | null
+          id?: string
+          ifc_element_id?: string
+          model_id?: string
+          project_id?: string
+          status?: string
+          trigger_service_key?: string
+          trigger_service_label?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_ifc_element_links_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ifc_element_links_ifc_element_id_fkey"
+            columns: ["ifc_element_id"]
+            isOneToOne: false
+            referencedRelation: "project_ifc_elements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ifc_element_links_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: false
+            referencedRelation: "project_3d_models"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ifc_element_links_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_ifc_elements: {
+        Row: {
+          category: string | null
+          company_id: string
+          confidence: string | null
+          created_at: string
+          detected_house_number: number | null
+          detected_service_key: string | null
+          detected_service_label: string | null
+          id: string
+          ifc_entity_id: string | null
+          ifc_global_id: string | null
+          ifc_layer_name: string | null
+          ifc_type: string | null
+          model_id: string
+          name: string | null
+          needs_review: boolean
+          project_id: string
+          raw_properties: Json | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          company_id: string
+          confidence?: string | null
+          created_at?: string
+          detected_house_number?: number | null
+          detected_service_key?: string | null
+          detected_service_label?: string | null
+          id?: string
+          ifc_entity_id?: string | null
+          ifc_global_id?: string | null
+          ifc_layer_name?: string | null
+          ifc_type?: string | null
+          model_id: string
+          name?: string | null
+          needs_review?: boolean
+          project_id: string
+          raw_properties?: Json | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          company_id?: string
+          confidence?: string | null
+          created_at?: string
+          detected_house_number?: number | null
+          detected_service_key?: string | null
+          detected_service_label?: string | null
+          id?: string
+          ifc_entity_id?: string | null
+          ifc_global_id?: string | null
+          ifc_layer_name?: string | null
+          ifc_type?: string | null
+          model_id?: string
+          name?: string | null
+          needs_review?: boolean
+          project_id?: string
+          raw_properties?: Json | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_ifc_elements_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ifc_elements_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: false
+            referencedRelation: "project_3d_models"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ifc_elements_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
