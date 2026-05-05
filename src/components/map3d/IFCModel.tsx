@@ -383,7 +383,6 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
           .eq("project_id", projectId)
           .eq("storage_path", url)
           .eq("model_type", "ifc")
-          .order("created_at", { ascending: true })
           .limit(1)
           .maybeSingle();
         if (findModelError) throw findModelError;
