@@ -313,6 +313,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
   const [loaded, setLoaded] = useState(false);
   const [saveStatus, setSaveStatus] = useState<IfcInventorySaveStatus>("idle");
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [minimized, setMinimized] = useState(false);
   const calledRef = useRef(false);
   const persistedKeyRef = useRef<string | null>(null);
 
@@ -453,11 +454,19 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         setSaveStatus("saved");
         setSaveMessage("Inventário salvo como sugestões");
       } catch (err: any) {
-        console.error("[IFC] Falha ao salvar inventário", err);
+        const code = err?.code ? ` [${err.code}]` : "";
+        const detail = err?.message || err?.details || err?.hint || "erro desconhecido";
+        console.error("[IFC] Falha ao salvar inventário", {
+          message: err?.message,
+          code: err?.code,
+          details: err?.details,
+          hint: err?.hint,
+          raw: err,
+        });
         if (cancelled) return;
         persistedKeyRef.current = null;
         setSaveStatus("error");
-        setSaveMessage("Falha ao salvar inventário");
+        setSaveMessage(`Falha ao salvar inventário${code}: ${detail}`);
       }
     };
 
@@ -570,14 +579,35 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
   return (
     <Html fullscreen>
       <div className="pointer-events-none absolute right-4 top-4 bottom-24 w-[min(760px,calc(100vw-2rem))]">
-        <div className="pointer-events-auto flex h-full flex-col overflow-hidden rounded-lg border border-border bg-background/95 shadow-2xl">
+        <div
+          className="pointer-events-auto flex h-full max-h-[calc(100vh-160px)] flex-col overflow-hidden overscroll-contain rounded-lg border border-border bg-background/95 shadow-2xl"
+          onWheel={(e) => e.stopPropagation()}
+          onWheelCapture={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          onPointerDownCapture={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onContextMenu={(e) => e.stopPropagation()}
+          style={minimized ? { height: "auto", maxHeight: "auto" } : undefined}
+        >
           <div className="flex-shrink-0 border-b border-border px-4 py-3">
-            <h3 className="text-base font-semibold">Inventário IFC</h3>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Renderização IFC 3D será ativada em etapa futura. Nesta etapa o arquivo foi lido para validar entidades e nomes.
-            </p>
+            <div className="flex items-start justify-between gap-2">
+              <h3 className="text-base font-semibold">Inventário IFC</h3>
+              <button
+                type="button"
+                onClick={() => setMinimized(prev => !prev)}
+                className="rounded border border-border bg-background px-2 py-0.5 text-[11px] font-medium hover:bg-muted"
+              >
+                {minimized ? "Expandir" : "Minimizar"}
+              </button>
+            </div>
+            {!minimized && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Renderização IFC 3D será ativada em etapa futura. Nesta etapa o arquivo foi lido para validar entidades e nomes.
+              </p>
+            )}
             {saveMessage && (
-              <p className={`mt-2 rounded-md px-2 py-1 text-xs ${
+              <p className={`mt-2 rounded-md px-2 py-1 text-xs break-words ${
                 saveStatus === "saved"
                   ? "bg-emerald-100 text-emerald-800"
                   : saveStatus === "error"
@@ -589,7 +619,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
             )}
           </div>
 
-          {error ? (
+          {minimized ? null : error ? (
             <div className="m-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {error}
             </div>

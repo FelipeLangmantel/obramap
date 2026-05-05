@@ -82,7 +82,7 @@ interface LinkDiagnosticSummary {
 }
 
 interface HouseLookupRow {
-  id?: string | null;
+  id?: string | number | null;
   houseNumber?: number | null;
   house_number?: number | null;
   number?: number | null;
