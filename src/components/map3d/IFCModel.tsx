@@ -42,6 +42,23 @@ type IfcInventoryFilter = "all" | "production" | "text" | "unnamed";
 type IfcInventorySaveStatus = "idle" | "saving" | "saved" | "error";
 type Project3DModelIdRow = { id: string };
 type ProtectedIfcElementRow = { ifc_global_id: string | null; ifc_entity_id: string | null };
+type PersistDiagnostics = {
+  authUserId: string | null;
+  authUserEmail: string | null;
+  projectId: string | null;
+  companyId: string | null;
+  profileCompanyId: string | null;
+  projectCompanyId: string | null;
+  companyMatches: boolean | null;
+  modelPayloadCompanyId: string | null;
+  modelPayloadProjectId: string | null;
+  stage: string;
+  errorCode: string | null;
+  errorMessage: string | null;
+  errorDetails: string | null;
+  errorHint: string | null;
+  nonFatal: boolean;
+};
 
 function asProject3DModelIdRow(data: unknown): Project3DModelIdRow | null {
   if (!data || typeof data !== "object") return null;
@@ -313,6 +330,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
   const [loaded, setLoaded] = useState(false);
   const [saveStatus, setSaveStatus] = useState<IfcInventorySaveStatus>("idle");
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [persistDiagnostics, setPersistDiagnostics] = useState<PersistDiagnostics | null>(null);
   const [minimized, setMinimized] = useState(false);
   const calledRef = useRef(false);
   const persistedKeyRef = useRef<string | null>(null);
@@ -329,6 +347,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
     setExpandedRawLines(new Set());
     setSaveStatus("idle");
     setSaveMessage(null);
+    setPersistDiagnostics(null);
     calledRef.current = false;
     persistedKeyRef.current = null;
 
@@ -373,7 +392,25 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
     const persistInventory = async () => {
       setSaveStatus("saving");
       setSaveMessage("Salvando inventário como sugestões...");
+      setPersistDiagnostics(null);
       let persistStage = "initial";
+      const diagnostics: PersistDiagnostics = {
+        authUserId: null,
+        authUserEmail: null,
+        projectId: projectId || null,
+        companyId: companyId || null,
+        profileCompanyId: null,
+        projectCompanyId: null,
+        companyMatches: null,
+        modelPayloadCompanyId: null,
+        modelPayloadProjectId: null,
+        stage: persistStage,
+        errorCode: null,
+        errorMessage: null,
+        errorDetails: null,
+        errorHint: null,
+        nonFatal: false,
+      };
 
       try {
         const modelTable = supabase.from("project_3d_models" as any);
@@ -383,6 +420,9 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         const { data: authData, error: authError } = await supabase.auth.getUser();
         if (authError) throw authError;
         const authUser = authData.user;
+        diagnostics.authUserId = authUser?.id || null;
+        diagnostics.authUserEmail = authUser?.email || null;
+        diagnostics.stage = persistStage;
 
         console.info("[IFC][RLS diagnostics] Auth user", {
           authUserId: authUser?.id || null,
@@ -399,6 +439,8 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
           .eq("user_id", authUser?.id || "")
           .maybeSingle();
         if (profileError) throw profileError;
+        diagnostics.profileCompanyId = profileData?.company_id || null;
+        diagnostics.stage = persistStage;
 
         persistStage = "load_project";
         const { data: projectData, error: projectError } = await supabase
@@ -407,6 +449,9 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
           .eq("id", projectId)
           .maybeSingle();
         if (projectError) throw projectError;
+        diagnostics.projectCompanyId = projectData?.company_id || null;
+        diagnostics.companyMatches = Boolean(profileData?.company_id && projectData?.company_id && profileData.company_id === projectData.company_id);
+        diagnostics.stage = persistStage;
 
         console.info("[IFC][RLS diagnostics] Profile/project company check", {
           profileCompanyId: profileData?.company_id || null,
@@ -437,8 +482,11 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
             model_type: "ifc",
             storage_path: url,
             file_name: getIfcFileName(url),
-            status: "uploaded",
+            status: "inventory_ready",
           };
+          diagnostics.modelPayloadCompanyId = modelPayload.company_id || null;
+          diagnostics.modelPayloadProjectId = modelPayload.project_id || null;
+          diagnostics.stage = persistStage;
 
           console.info("[IFC][RLS diagnostics] project_3d_models insert payload", modelPayload);
 
@@ -495,14 +543,43 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         const { error: updateModelError } = await modelTable
           .update({ status: "inventory_ready" })
           .eq("id", modelId);
-        if (updateModelError) throw updateModelError;
+        if (updateModelError) {
+          diagnostics.stage = persistStage;
+          diagnostics.errorCode = updateModelError?.code || null;
+          diagnostics.errorMessage = updateModelError?.message || null;
+          diagnostics.errorDetails = updateModelError?.details || null;
+          diagnostics.errorHint = updateModelError?.hint || null;
+          diagnostics.nonFatal = true;
+
+          console.warn("[IFC] Inventário salvo, mas não foi possível atualizar status do modelo", {
+            stage: persistStage,
+            message: updateModelError?.message,
+            code: updateModelError?.code,
+            details: updateModelError?.details,
+            hint: updateModelError?.hint,
+            raw: updateModelError,
+          });
+
+          if (!cancelled) {
+            setPersistDiagnostics(diagnostics);
+          }
+        }
 
         if (cancelled) return;
         setSaveStatus("saved");
-        setSaveMessage("Inventário salvo como sugestões");
+        setSaveMessage(updateModelError
+          ? "Inventário salvo como sugestões. Não foi possível atualizar o status do modelo."
+          : "Inventário salvo como sugestões"
+        );
+        if (!updateModelError) setPersistDiagnostics(null);
       } catch (err: any) {
         const code = err?.code ? ` [${err.code}]` : "";
         const detail = err?.message || err?.details || err?.hint || "erro desconhecido";
+        diagnostics.stage = persistStage;
+        diagnostics.errorCode = err?.code || null;
+        diagnostics.errorMessage = err?.message || null;
+        diagnostics.errorDetails = err?.details || null;
+        diagnostics.errorHint = err?.hint || null;
         console.error("[IFC] Falha ao salvar inventário", {
           stage: persistStage,
           message: err?.message,
@@ -515,6 +592,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         persistedKeyRef.current = null;
         setSaveStatus("error");
         setSaveMessage(`Falha ao salvar inventário${code}: ${detail}`);
+        setPersistDiagnostics(diagnostics);
       }
     };
 
@@ -665,6 +743,37 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
                 {saveMessage}
               </p>
             )}
+            {persistDiagnostics && (saveStatus === "error" || persistDiagnostics.nonFatal) && (
+              <div className={`mt-2 rounded-md border p-2 text-xs ${
+                persistDiagnostics.nonFatal
+                  ? "border-amber-300 bg-amber-50 text-amber-900"
+                  : "border-destructive/30 bg-destructive/5"
+              }`}>
+                <div className="flex items-center justify-between gap-2">
+                  <p className={`font-medium ${persistDiagnostics.nonFatal ? "text-amber-900" : "text-destructive"}`}>
+                    {persistDiagnostics.nonFatal ? "Diagnóstico técnico não fatal" : "Diagnóstico técnico do salvamento"}
+                  </p>
+                  <CopyButton onClick={() => copyText(JSON.stringify(persistDiagnostics, null, 2))}>Copiar diagnóstico</CopyButton>
+                </div>
+                <dl className="mt-2 grid grid-cols-1 gap-x-3 gap-y-1 sm:grid-cols-2">
+                  <DiagnosticItem label="authUserId" value={persistDiagnostics.authUserId} />
+                  <DiagnosticItem label="authUserEmail" value={persistDiagnostics.authUserEmail} />
+                  <DiagnosticItem label="projectId" value={persistDiagnostics.projectId} />
+                  <DiagnosticItem label="companyId recebido" value={persistDiagnostics.companyId} />
+                  <DiagnosticItem label="profile.company_id" value={persistDiagnostics.profileCompanyId} />
+                  <DiagnosticItem label="project.company_id" value={persistDiagnostics.projectCompanyId} />
+                  <DiagnosticItem label="companyMatches" value={persistDiagnostics.companyMatches == null ? null : String(persistDiagnostics.companyMatches)} />
+                  <DiagnosticItem label="payload.company_id" value={persistDiagnostics.modelPayloadCompanyId} />
+                  <DiagnosticItem label="payload.project_id" value={persistDiagnostics.modelPayloadProjectId} />
+                  <DiagnosticItem label="stage" value={persistDiagnostics.stage} />
+                  <DiagnosticItem label="error code" value={persistDiagnostics.errorCode} />
+                  <DiagnosticItem label="error message" value={persistDiagnostics.errorMessage} />
+                  <DiagnosticItem label="error details" value={persistDiagnostics.errorDetails} />
+                  <DiagnosticItem label="error hint" value={persistDiagnostics.errorHint} />
+                  <DiagnosticItem label="não fatal" value={String(persistDiagnostics.nonFatal)} />
+                </dl>
+              </div>
+            )}
           </div>
 
           {minimized ? null : error ? (
@@ -773,6 +882,17 @@ function InventoryMetric({ label, value }: { label: string; value: number }) {
     <div className="rounded-md bg-muted/50 px-2 py-1.5">
       <p className="truncate text-[10px] text-muted-foreground">{label}</p>
       <p className="text-base font-bold leading-tight">{value}</p>
+    </div>
+  );
+}
+
+function DiagnosticItem({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[10px] font-medium text-muted-foreground">{label}</dt>
+      <dd className="truncate font-mono text-[11px]" title={value || "-"}>
+        {value || "-"}
+      </dd>
     </div>
   );
 }
