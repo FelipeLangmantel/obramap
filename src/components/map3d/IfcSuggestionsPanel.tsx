@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useIfcActivationReadModel, type IfcActivationLink } from "@/hooks/useIfcActivationReadModel";
+import { useIfcProductionActivationDiagnostics } from "@/hooks/useIfcProductionActivationDiagnostics";
 import { supabase } from "@/integrations/supabase/client";
 
 type IfcSuggestionStatus = "suggested" | "confirmed" | "ignored";
@@ -218,6 +219,13 @@ function statusBadgeClass(status: IfcSuggestionStatus) {
   return "bg-amber-100 text-amber-800";
 }
 
+function productionActivationStatusLabel(status: string) {
+  if (status === "would_activate") return "ativaria";
+  if (status === "not_activated") return "não ativaria";
+  if (status === "pending_link_data") return "pendente";
+  return "fonte desconhecida";
+}
+
 function summarizeLinkDiagnostics(links: IfcLinkDiagnosticRow[]): LinkDiagnosticSummary {
   const houseKeys = new Set<string>();
   const serviceKeys = new Set<string>();
@@ -276,6 +284,7 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
   const [loadingDiagnostics, setLoadingDiagnostics] = useState(false);
   const [linkDiagnostics, setLinkDiagnostics] = useState<LinkDiagnosticSummary | null>(null);
   const activationReadModel = useIfcActivationReadModel({ projectId, modelId, enabled: open });
+  const productionActivationDiagnostics = useIfcProductionActivationDiagnostics({ projectId, modelId, enabled: open });
 
   const houseIdByNumber = useMemo(() => {
     const map = new Map<number, string>();
@@ -724,6 +733,53 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
                       <span><span className="font-medium">Vínculos:</span> {item.total}</span>
                       <Badge variant={item.status === "pronto" ? "default" : "outline"} className="text-[10px]">
                         {item.status}
+                      </Badge>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="rounded-md border border-border bg-background p-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h3 className="text-sm font-semibold">Diagnóstico com produção real</h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Este diagnóstico ainda não altera a visibilidade do 3D Real. Ele apenas indica o que ativaria com a produção atual.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void productionActivationDiagnostics.refetch()}
+                disabled={productionActivationDiagnostics.loading}
+              >
+                {productionActivationDiagnostics.loading ? "Atualizando..." : "Atualizar diagnóstico"}
+              </Button>
+            </div>
+            <div className="mt-3 space-y-3">
+              <div className="grid gap-2 text-xs sm:grid-cols-3 lg:grid-cols-5">
+                <Counter label="Total" value={productionActivationDiagnostics.summary.total_links} />
+                <Counter label="Ativariam" value={productionActivationDiagnostics.summary.would_activate} />
+                <Counter label="Não ativariam" value={productionActivationDiagnostics.summary.not_activated} />
+                <Counter label="Pendentes" value={productionActivationDiagnostics.summary.pending_link_data} />
+                <Counter label="Fonte desconhecida" value={productionActivationDiagnostics.summary.unknown_production_source} />
+              </div>
+              {productionActivationDiagnostics.error && (
+                <p className="text-xs text-destructive">Falha ao carregar diagnóstico IFC com produção real.</p>
+              )}
+              <div className="space-y-1.5">
+                {productionActivationDiagnostics.items.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Nenhum vínculo IFC disponível para cruzar com produção real.</p>
+                ) : (
+                  productionActivationDiagnostics.items.map(item => (
+                    <div key={item.link_id} className="flex flex-wrap items-center gap-2 rounded border border-border bg-muted/30 px-3 py-2 text-xs">
+                      <span><span className="font-medium">Serviço:</span> {item.trigger_service_label || item.trigger_service_key || "sem serviço"}</span>
+                      <span><span className="font-medium">Casa:</span> {item.house_number ?? (item.house_id ? "house_id" : "sem casa")}</span>
+                      <span><span className="font-medium">Status:</span> {productionActivationStatusLabel(item.production_activation_status)}</span>
+                      <Badge variant={item.production_activation_status === "would_activate" ? "default" : "outline"} className="text-[10px]">
+                        {productionActivationStatusLabel(item.production_activation_status)}
                       </Badge>
                     </div>
                   ))
