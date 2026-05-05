@@ -28,6 +28,13 @@ interface IfcInventoryItem {
   semanticConfidence: "high" | "medium" | "low";
   semanticNeedsReview: boolean;
   category: "production" | "text" | "unnamed";
+  position: IfcPoint | null;
+  positionPointCount: number;
+  anchorHouseNumber: number | null;
+  anchorElementId: string | null;
+  anchorElementName: string | null;
+  anchorDistance: number | null;
+  houseDetectionSource: "layer" | "3dtext_proximity" | "none";
   rawLine: string;
 }
 
@@ -36,6 +43,12 @@ interface IfcLayerAssignment {
   name: string;
   refs: string[];
   rawLine: string;
+}
+
+interface IfcPoint {
+  x: number;
+  y: number;
+  z: number;
 }
 
 type IfcInventoryFilter = "all" | "production" | "text" | "unnamed";
@@ -158,8 +171,67 @@ function classifyIfcElement(name: string, primaryLayerName: string | null): IfcI
   return "unnamed";
 }
 
+function extract3dTextHouseNumber(name: string | null | undefined) {
+  const match = (name || "").match(/3dtext\s*0*(\d+)/i);
+  return match ? Number(match[1]) : null;
+}
+
 function extractRefs(line: string) {
   return Array.from(new Set(line.match(/#\d+/g) || []));
+}
+
+function parseIfcNumber(value: string) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function extractCartesianPoint(line: string): IfcPoint | null {
+  const match = line.match(/IFCCARTESIANPOINT\s*\(\s*\(\s*([-+]?\d*\.?\d+(?:[Ee][-+]?\d+)?)\s*,\s*([-+]?\d*\.?\d+(?:[Ee][-+]?\d+)?)(?:\s*,\s*([-+]?\d*\.?\d+(?:[Ee][-+]?\d+)?))?/i);
+  if (!match) return null;
+
+  const x = parseIfcNumber(match[1]);
+  const y = parseIfcNumber(match[2]);
+  const z = match[3] ? parseIfcNumber(match[3]) : 0;
+  if (x == null || y == null || z == null) return null;
+  return { x, y, z };
+}
+
+function extractPositionFromRefs(refs: Set<string>, lineById: Map<string, string>) {
+  const points: IfcPoint[] = [];
+
+  for (const ref of refs) {
+    const line = lineById.get(ref);
+    if (!line) continue;
+    const point = extractCartesianPoint(line);
+    if (point) points.push(point);
+  }
+
+  if (points.length === 0) return { position: null, pointCount: 0 };
+
+  const total = points.reduce(
+    (acc, point) => ({
+      x: acc.x + point.x,
+      y: acc.y + point.y,
+      z: acc.z + point.z,
+    }),
+    { x: 0, y: 0, z: 0 }
+  );
+
+  return {
+    position: {
+      x: total.x / points.length,
+      y: total.y / points.length,
+      z: total.z / points.length,
+    },
+    pointCount: points.length,
+  };
+}
+
+function distanceBetweenPoints(a: IfcPoint, b: IfcPoint) {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  const dz = a.z - b.z;
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
 
 function parseIfcLineMap(text: string) {
@@ -206,6 +278,21 @@ function buildRefToLayerNames(layers: IfcLayerAssignment[]) {
   return refToLayerNames;
 }
 
+function buildReverseRefMap(lineById: Map<string, string>) {
+  const reverseRefMap = new Map<string, string[]>();
+
+  lineById.forEach((line, id) => {
+    for (const ref of extractRefs(line)) {
+      if (ref === id) continue;
+      const existing = reverseRefMap.get(ref) || [];
+      if (!existing.includes(id)) existing.push(id);
+      reverseRefMap.set(ref, existing);
+    }
+  });
+
+  return reverseRefMap;
+}
+
 function collectReachableRefs(startId: string, lineById: Map<string, string>, maxDepth = 5) {
   const visited = new Set<string>();
   const queue: Array<{ id: string; depth: number }> = [{ id: startId, depth: 0 }];
@@ -236,10 +323,89 @@ function findLayerNamesForRefs(reachableRefs: Set<string>, refToLayerNames: Map<
   return Array.from(found);
 }
 
+function findLayerNamesByReverseRefs(
+  elementId: string,
+  refToLayerNames: Map<string, string[]>,
+  reverseRefMap: Map<string, string[]>,
+  maxDepth = 5
+) {
+  const found = new Set<string>();
+
+  refToLayerNames.forEach((layerNames, layerRef) => {
+    const visited = new Set<string>();
+    const queue: Array<{ id: string; depth: number }> = [{ id: layerRef, depth: 0 }];
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      if (visited.has(current.id) || current.depth > maxDepth) continue;
+      if (current.id === elementId) {
+        layerNames.forEach(name => found.add(name));
+        return;
+      }
+
+      visited.add(current.id);
+      if (current.depth === maxDepth) continue;
+
+      for (const parentRef of reverseRefMap.get(current.id) || []) {
+        if (!visited.has(parentRef)) queue.push({ id: parentRef, depth: current.depth + 1 });
+      }
+    }
+  });
+
+  return Array.from(found);
+}
+
+function apply3dTextHouseAnchors(items: IfcInventoryItem[]) {
+  const anchors = items.filter(item => (
+    item.category === "text" &&
+    item.anchorHouseNumber != null &&
+    item.position
+  ));
+
+  if (anchors.length === 0) return items;
+
+  return items.map(item => {
+    if (
+      item.category !== "production" ||
+      !item.detectedServiceKey ||
+      item.detectedHouseNumber != null ||
+      !item.position
+    ) {
+      return item;
+    }
+
+    const rankedAnchors = anchors
+      .map(anchor => ({
+        anchor,
+        distance: distanceBetweenPoints(item.position!, anchor.position!),
+      }))
+      .sort((a, b) => a.distance - b.distance);
+
+    const nearest = rankedAnchors[0];
+    if (!nearest) return item;
+
+    const second = rankedAnchors[1];
+    const confidence: IfcInventoryItem["semanticConfidence"] =
+      second && nearest.distance <= second.distance * 0.6 ? "high" : "medium";
+
+    return {
+      ...item,
+      detectedHouseNumber: nearest.anchor.anchorHouseNumber,
+      semanticConfidence: confidence,
+      semanticNeedsReview: confidence !== "high",
+      anchorElementId: nearest.anchor.id,
+      anchorElementName: nearest.anchor.name,
+      anchorDistance: nearest.distance,
+      houseDetectionSource: "3dtext_proximity",
+    };
+  });
+}
+
 function parseIfcText(text: string): IfcInventoryItem[] {
   const lineById = parseIfcLineMap(text);
   const layerAssignments = parseLayerAssignments(text);
   const refToLayerNames = buildRefToLayerNames(layerAssignments);
+  const reverseRefMap = buildReverseRefMap(lineById);
   const entityPattern = new RegExp(
     `(#\\d+)\\s*=\\s*(${IFC_ENTITY_TYPES.join("|")})\\s*\\(([^;]*)\\);`,
     "gi"
@@ -254,8 +420,16 @@ function parseIfcText(text: string): IfcInventoryItem[] {
     const rawLine = match[0];
     const reachableRefs = collectReachableRefs(id, lineById, 5);
     const layerNames = findLayerNamesForRefs(reachableRefs, refToLayerNames);
+    if (layerNames.length === 0) {
+      findLayerNamesByReverseRefs(id, refToLayerNames, reverseRefMap, 5).forEach(layerName => {
+        if (!layerNames.includes(layerName)) layerNames.push(layerName);
+      });
+    }
     const primaryLayerName = layerNames[0] || null;
     const semantic = parseIfcLayerSemantic(primaryLayerName);
+    const category = classifyIfcElement(name, primaryLayerName);
+    const anchorHouseNumber = category === "text" ? extract3dTextHouseNumber(name) : null;
+    const { position, pointCount } = extractPositionFromRefs(reachableRefs, lineById);
 
     items.push({
       id,
@@ -271,12 +445,19 @@ function parseIfcText(text: string): IfcInventoryItem[] {
       detectedHouseNumber: semantic.houseNumber,
       semanticConfidence: semantic.confidence,
       semanticNeedsReview: semantic.needsReview,
-      category: classifyIfcElement(name, primaryLayerName),
+      category,
+      position,
+      positionPointCount: pointCount,
+      anchorHouseNumber,
+      anchorElementId: null,
+      anchorElementName: null,
+      anchorDistance: null,
+      houseDetectionSource: semantic.houseNumber != null ? "layer" : "none",
       rawLine: summarizeLine(rawLine),
     });
   }
 
-  return items;
+  return apply3dTextHouseAnchors(items);
 }
 
 function getIfcFileName(url: string) {
@@ -317,6 +498,13 @@ function buildIfcElementPayload(item: IfcInventoryItem, projectId: string, compa
       quotedValues: item.quotedValues,
       rawLine: item.rawLine,
       reachableRefsCount: item.reachableRefs.length,
+      position: item.position,
+      positionPointCount: item.positionPointCount,
+      anchorHouseNumber: item.anchorHouseNumber,
+      anchorElementId: item.anchorElementId,
+      anchorElementName: item.anchorElementName,
+      anchorDistance: item.anchorDistance,
+      houseDetectionSource: item.houseDetectionSource,
     },
   };
 }
@@ -636,6 +824,28 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
     );
   }, [items]);
 
+  const anchorCounts = useMemo(() => {
+    return items.reduce(
+      (acc, item) => {
+        if (item.category === "text" && contains3dText(item.name)) acc.threeDTexts += 1;
+        if (item.category === "text" && item.anchorHouseNumber != null) acc.numberedAnchors += 1;
+        if (item.category === "production" && item.detectedServiceKey) acc.productionWithService += 1;
+        if (item.houseDetectionSource === "3dtext_proximity") acc.productionWithHouseByAnchor += 1;
+        if (item.category === "production" && item.position) acc.productionWithCoordinates += 1;
+        if (item.category === "text" && item.position) acc.textsWithCoordinates += 1;
+        return acc;
+      },
+      {
+        threeDTexts: 0,
+        numberedAnchors: 0,
+        productionWithService: 0,
+        productionWithHouseByAnchor: 0,
+        productionWithCoordinates: 0,
+        textsWithCoordinates: 0,
+      }
+    );
+  }, [items]);
+
   const filteredItems = useMemo(() => {
     const base = filter === "all" ? items : items.filter(item => item.category === filter);
     const query = search.trim().toLowerCase();
@@ -652,6 +862,9 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         item.detectedServiceLabel,
         item.detectedServiceKey,
         item.detectedHouseNumber != null ? String(item.detectedHouseNumber) : "",
+        item.anchorHouseNumber != null ? String(item.anchorHouseNumber) : "",
+        item.anchorElementName,
+        item.houseDetectionSource,
       ].join(" ").toLowerCase();
       return haystack.includes(query);
     });
@@ -682,6 +895,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
       `Camada: ${item.primaryLayerName || "-"}`,
       `Serviço: ${item.detectedServiceLabel || "-"}`,
       `Casa: ${item.detectedHouseNumber ?? "-"}`,
+      `Origem da casa: ${item.houseDetectionSource}`,
       `Confiança: ${item.semanticConfidence}`,
     ].join(" | ");
   };
@@ -697,6 +911,10 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
       `Com serviço sem casa: ${semanticCounts.withServiceWithoutHouse}`,
       `Sem serviço detectado: ${semanticCounts.withoutService}`,
       `Referência/lote: ${semanticCounts.referencesOrLots}`,
+      `Textos 3D detectados: ${anchorCounts.threeDTexts}`,
+      `Âncoras com número: ${anchorCounts.numberedAnchors}`,
+      `Produtivos com serviço: ${anchorCounts.productionWithService}`,
+      `Produtivos com casa por proximidade: ${anchorCounts.productionWithHouseByAnchor}`,
       "",
       ...list.map(formatItemLine),
     ].join("\n");
@@ -792,7 +1010,17 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
                 <InventoryMetric label="Com serviço sem casa" value={semanticCounts.withServiceWithoutHouse} />
                 <InventoryMetric label="Sem serviço detectado" value={semanticCounts.withoutService} />
                 <InventoryMetric label="Referência/lote" value={semanticCounts.referencesOrLots} />
+                <InventoryMetric label="Textos 3D" value={anchorCounts.threeDTexts} />
+                <InventoryMetric label="Âncoras numeradas" value={anchorCounts.numberedAnchors} />
+                <InventoryMetric label="Produtivos com coordenadas" value={anchorCounts.productionWithCoordinates} />
+                <InventoryMetric label="Textos com coordenadas" value={anchorCounts.textsWithCoordinates} />
+                <InventoryMetric label="Casa por proximidade" value={anchorCounts.productionWithHouseByAnchor} />
               </div>
+              {anchorCounts.numberedAnchors > 0 && anchorCounts.productionWithHouseByAnchor === 0 && (
+                <p className="mx-3 mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  Textos 3D numerados foram detectados, mas ainda não há coordenadas suficientes para associar elementos produtivos por proximidade.
+                </p>
+              )}
 
               {items.length === 0 ? (
                 <div className="mx-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -967,11 +1195,22 @@ function IfcItemCard({
           <p className="truncate"><span className="text-muted-foreground">Serviço detectado: </span>{item.detectedServiceLabel || "-"}</p>
           <p><span className="text-muted-foreground">Casa detectada: </span>{item.detectedHouseNumber != null ? item.detectedHouseNumber : "-"}</p>
           <p><span className="text-muted-foreground">Confiança: </span>{item.semanticConfidence}</p>
+          <p><span className="text-muted-foreground">Origem da casa: </span>{item.houseDetectionSource === "3dtext_proximity" ? "3Dtext próximo" : item.houseDetectionSource}</p>
+          <p><span className="text-muted-foreground">Âncora: </span>{item.anchorElementName || "-"}</p>
+          <p><span className="text-muted-foreground">Distância: </span>{item.anchorDistance != null ? item.anchorDistance.toFixed(2) : "-"}</p>
           {item.semanticNeedsReview && (
             <span className="inline-flex w-fit rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
               Revisar
             </span>
           )}
+        </div>
+      )}
+
+      {item.category === "text" && (
+        <div className="mt-1 grid gap-1 rounded bg-amber-50 px-2 py-1 text-[11px] md:grid-cols-3">
+          <p><span className="text-muted-foreground">Número da âncora: </span>{item.anchorHouseNumber != null ? item.anchorHouseNumber : "-"}</p>
+          <p><span className="text-muted-foreground">Coordenada: </span>{item.position ? `${item.position.x.toFixed(2)}, ${item.position.y.toFixed(2)}, ${item.position.z.toFixed(2)}` : "-"}</p>
+          <p><span className="text-muted-foreground">Pontos lidos: </span>{item.positionPointCount}</p>
         </div>
       )}
 

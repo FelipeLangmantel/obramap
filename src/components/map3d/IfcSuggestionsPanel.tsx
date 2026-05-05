@@ -35,6 +35,17 @@ interface IfcSuggestionRow {
   confidence: string | null;
   needs_review: boolean | null;
   status: IfcSuggestionStatus;
+  raw_properties: IfcSuggestionRawProperties | null;
+}
+
+interface IfcSuggestionRawProperties {
+  anchorHouseNumber: number | null;
+  anchorElementId: string | null;
+  anchorElementName: string | null;
+  anchorDistance: number | null;
+  houseDetectionSource: string | null;
+  position: { x: number; y: number; z: number } | null;
+  positionPointCount: number | null;
 }
 
 interface IfcModelIdRow {
@@ -125,6 +136,30 @@ function normalizeNullableNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function normalizeIfcPoint(value: unknown): { x: number; y: number; z: number } | null {
+  if (!value || typeof value !== "object") return null;
+  const point = value as Record<string, unknown>;
+  const x = normalizeNullableNumber(point.x);
+  const y = normalizeNullableNumber(point.y);
+  const z = normalizeNullableNumber(point.z);
+  return x != null && y != null && z != null ? { x, y, z } : null;
+}
+
+function asIfcSuggestionRawProperties(value: unknown): IfcSuggestionRawProperties | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Record<string, unknown>;
+
+  return {
+    anchorHouseNumber: normalizeNullableNumber(raw.anchorHouseNumber),
+    anchorElementId: normalizeNullableString(raw.anchorElementId),
+    anchorElementName: normalizeNullableString(raw.anchorElementName),
+    anchorDistance: normalizeNullableNumber(raw.anchorDistance),
+    houseDetectionSource: normalizeNullableString(raw.houseDetectionSource),
+    position: normalizeIfcPoint(raw.position),
+    positionPointCount: normalizeNullableNumber(raw.positionPointCount),
+  };
+}
+
 function normalizeSuggestionStatus(value: unknown): IfcSuggestionStatus {
   return value === "confirmed" || value === "ignored" ? value : "suggested";
 }
@@ -155,6 +190,7 @@ function asIfcSuggestionRows(data: unknown): IfcSuggestionRow[] {
       confidence: normalizeNullableString(item.confidence),
       needs_review: typeof item.needs_review === "boolean" ? item.needs_review : null,
       status: normalizeSuggestionStatus(item.status),
+      raw_properties: asIfcSuggestionRawProperties(item.raw_properties),
     }))
     .filter(item => item.id);
 }
@@ -348,7 +384,8 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
           category,
           confidence,
           needs_review,
-          status
+          status,
+          raw_properties
         `)
         .eq("project_id", projectId)
         .order("ifc_layer_name", { ascending: true })
@@ -405,6 +442,31 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
         return acc;
       },
       { total: 0, suggested: 0, confirmed: 0, ignored: 0, needsReview: 0 }
+    );
+  }, [items]);
+
+  const anchorDiagnostics = useMemo(() => {
+    return items.reduce(
+      (acc, item) => {
+        const is3dText = item.category === "text_annotation" && (item.name || "").toLowerCase().includes("3dtext");
+        if (is3dText) acc.threeDTexts += 1;
+        if (is3dText && (item.detected_house_number != null || item.raw_properties?.anchorHouseNumber != null)) {
+          acc.numberedAnchors += 1;
+        }
+        if (item.category === "production" && item.detected_service_key) acc.productionWithService += 1;
+        if (item.category === "production" && item.raw_properties?.houseDetectionSource === "3dtext_proximity") {
+          acc.productionWithHouseByProximity += 1;
+        }
+        if (item.needs_review) acc.pendingReview += 1;
+        return acc;
+      },
+      {
+        threeDTexts: 0,
+        numberedAnchors: 0,
+        productionWithService: 0,
+        productionWithHouseByProximity: 0,
+        pendingReview: 0,
+      }
     );
   }, [items]);
 
@@ -597,6 +659,18 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
             <Counter label="Ignorados" value={counts.ignored} />
             <Counter label="Revisão" value={counts.needsReview} />
           </div>
+          <div className="grid gap-2 text-xs sm:grid-cols-5">
+            <Counter label="Textos 3D" value={anchorDiagnostics.threeDTexts} />
+            <Counter label="Âncoras numeradas" value={anchorDiagnostics.numberedAnchors} />
+            <Counter label="Produtivos com serviço" value={anchorDiagnostics.productionWithService} />
+            <Counter label="Casa por proximidade" value={anchorDiagnostics.productionWithHouseByProximity} />
+            <Counter label="Pendentes de revisão" value={anchorDiagnostics.pendingReview} />
+          </div>
+          {anchorDiagnostics.numberedAnchors > 0 && anchorDiagnostics.productionWithHouseByProximity === 0 && (
+            <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Textos 3D numerados foram detectados, mas as sugestões salvas ainda não têm casa por proximidade. Reimporte o IFC após esta correção para recalcular as sugestões.
+            </p>
+          )}
 
           <div className="grid gap-2 md:grid-cols-[180px_220px_1fr_auto_auto]">
             <select
@@ -925,6 +999,10 @@ function SuggestionCard({
             <p><span className="font-medium text-foreground">Casa: </span>{item.detected_house_number ?? "-"}</p>
             <p><span className="font-medium text-foreground">Confiança: </span>{item.confidence || "-"}</p>
             <p className="truncate"><span className="font-medium text-foreground">Nome IFC: </span>{item.name || "-"}</p>
+            <p><span className="font-medium text-foreground">Origem casa: </span>{item.raw_properties?.houseDetectionSource === "3dtext_proximity" ? "3Dtext próximo" : item.raw_properties?.houseDetectionSource || "-"}</p>
+            <p><span className="font-medium text-foreground">Âncora 3Dtext: </span>{item.raw_properties?.anchorElementName || "-"}</p>
+            <p><span className="font-medium text-foreground">Distância: </span>{item.raw_properties?.anchorDistance != null ? item.raw_properties.anchorDistance.toFixed(2) : "-"}</p>
+            <p><span className="font-medium text-foreground">Pontos posição: </span>{item.raw_properties?.positionPointCount ?? "-"}</p>
           </div>
         </div>
 
