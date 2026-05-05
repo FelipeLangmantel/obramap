@@ -726,6 +726,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
 
         const existingModel = asProject3DModelIdRow(existingModelData as unknown);
         let modelId = existingModel?.id as string | undefined;
+        let createdNewModel = false;
 
         if (!modelId) {
           persistStage = "insert_project_3d_model";
@@ -751,6 +752,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
           const insertedModel = asProject3DModelIdRow(insertedModelData as unknown);
           if (!insertedModel?.id) throw new Error("Modelo IFC criado sem id retornado.");
           modelId = insertedModel.id;
+          createdNewModel = true;
         }
 
         persistStage = "delete_old_suggestions";
@@ -792,60 +794,19 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
           if (insertElementsError) throw insertElementsError;
         }
 
-        persistStage = "update_model_status";
-        let updateModelError: any = null;
-        console.info("[IFC][RLS diagnostics] project_3d_models status update", {
+        console.info("[IFC][RLS diagnostics] update_model_status ignorado; status do modelo é definido no insert", {
           modelId,
           projectId,
           companyId,
           effectiveCompanyId,
+          createdNewModel,
           status: "inventory_ready",
         });
 
-        if (!effectiveCompanyId) {
-          updateModelError = {
-            code: "missing_company_id",
-            message: "Empresa efetiva não identificada para atualizar status do modelo IFC.",
-            details: null,
-            hint: "Verifique project.company_id, profile.company_id e companyId recebido pelo IFCModel.",
-          };
-        } else {
-          const { error } = await modelTable
-            .update({ status: "inventory_ready" })
-            .eq("id", modelId)
-            .eq("project_id", projectId)
-            .eq("company_id", effectiveCompanyId);
-          updateModelError = error;
-        }
-        if (updateModelError) {
-          diagnostics.stage = persistStage;
-          diagnostics.errorCode = updateModelError?.code || null;
-          diagnostics.errorMessage = updateModelError?.message || null;
-          diagnostics.errorDetails = updateModelError?.details || null;
-          diagnostics.errorHint = updateModelError?.hint || null;
-          diagnostics.nonFatal = true;
-
-          console.warn("[IFC] Inventário salvo, mas não foi possível atualizar status do modelo", {
-            stage: persistStage,
-            message: updateModelError?.message,
-            code: updateModelError?.code,
-            details: updateModelError?.details,
-            hint: updateModelError?.hint,
-            raw: updateModelError,
-          });
-
-          if (!cancelled) {
-            setPersistDiagnostics(diagnostics);
-          }
-        }
-
         if (cancelled) return;
         setSaveStatus("saved");
-        setSaveMessage(updateModelError
-          ? "Inventário salvo como sugestões. Não foi possível atualizar o status do modelo."
-          : "Inventário salvo como sugestões"
-        );
-        if (!updateModelError) setPersistDiagnostics(null);
+        setSaveMessage("Inventário salvo como sugestões");
+        setPersistDiagnostics(null);
       } catch (err: any) {
         const code = err?.code ? ` [${err.code}]` : "";
         const detail = err?.message || err?.details || err?.hint || "erro desconhecido";
