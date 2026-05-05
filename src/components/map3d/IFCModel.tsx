@@ -313,6 +313,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
   const [loaded, setLoaded] = useState(false);
   const [saveStatus, setSaveStatus] = useState<IfcInventorySaveStatus>("idle");
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [minimized, setMinimized] = useState(false);
   const calledRef = useRef(false);
   const persistedKeyRef = useRef<string | null>(null);
 
