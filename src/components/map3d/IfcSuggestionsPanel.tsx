@@ -39,6 +39,13 @@ interface IfcSuggestionRow {
 }
 
 interface IfcSuggestionRawProperties {
+  reachableRefsCount: number | null;
+  cartesianPointCount: number | null;
+  hasLocalPlacement: boolean | null;
+  hasAxis2Placement3D: boolean | null;
+  hasProductDefinitionShape: boolean | null;
+  hasExtrudedAreaSolid: boolean | null;
+  firstReachedTypes: string[];
   anchorHouseNumber: number | null;
   anchorElementId: string | null;
   anchorElementName: string | null;
@@ -145,11 +152,23 @@ function normalizeIfcPoint(value: unknown): { x: number; y: number; z: number } 
   return x != null && y != null && z != null ? { x, y, z } : null;
 }
 
+function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string");
+}
+
 function asIfcSuggestionRawProperties(value: unknown): IfcSuggestionRawProperties | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as Record<string, unknown>;
 
   return {
+    reachableRefsCount: normalizeNullableNumber(raw.reachableRefsCount),
+    cartesianPointCount: normalizeNullableNumber(raw.cartesianPointCount),
+    hasLocalPlacement: typeof raw.hasLocalPlacement === "boolean" ? raw.hasLocalPlacement : null,
+    hasAxis2Placement3D: typeof raw.hasAxis2Placement3D === "boolean" ? raw.hasAxis2Placement3D : null,
+    hasProductDefinitionShape: typeof raw.hasProductDefinitionShape === "boolean" ? raw.hasProductDefinitionShape : null,
+    hasExtrudedAreaSolid: typeof raw.hasExtrudedAreaSolid === "boolean" ? raw.hasExtrudedAreaSolid : null,
+    firstReachedTypes: normalizeStringArray(raw.firstReachedTypes),
     anchorHouseNumber: normalizeNullableNumber(raw.anchorHouseNumber),
     anchorElementId: normalizeNullableString(raw.anchorElementId),
     anchorElementName: normalizeNullableString(raw.anchorElementName),
@@ -457,6 +476,12 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
         if (item.category === "production" && item.raw_properties?.houseDetectionSource === "3dtext_proximity") {
           acc.productionWithHouseByProximity += 1;
         }
+        if (item.category === "production" && (item.raw_properties?.reachableRefsCount || 0) > 0) acc.productionWithRefs += 1;
+        if (item.category === "production" && (item.raw_properties?.cartesianPointCount || 0) > 0) acc.productionWithCartesianPoint += 1;
+        if (item.category === "production" && item.raw_properties?.hasLocalPlacement) acc.productionWithLocalPlacement += 1;
+        if (item.category === "production" && item.raw_properties?.hasAxis2Placement3D) acc.productionWithAxisPlacement += 1;
+        if (item.category === "production" && item.raw_properties?.hasProductDefinitionShape) acc.productionWithProductShape += 1;
+        if (item.category === "production" && item.raw_properties?.hasExtrudedAreaSolid) acc.productionWithExtrudedSolid += 1;
         if (item.needs_review) acc.pendingReview += 1;
         return acc;
       },
@@ -465,6 +490,12 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
         numberedAnchors: 0,
         productionWithService: 0,
         productionWithHouseByProximity: 0,
+        productionWithRefs: 0,
+        productionWithCartesianPoint: 0,
+        productionWithLocalPlacement: 0,
+        productionWithAxisPlacement: 0,
+        productionWithProductShape: 0,
+        productionWithExtrudedSolid: 0,
         pendingReview: 0,
       }
     );
@@ -671,6 +702,14 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
               Textos 3D numerados foram detectados, mas as sugestões salvas ainda não têm casa por proximidade. Reimporte o IFC após esta correção para recalcular as sugestões.
             </p>
           )}
+          <div className="grid gap-2 text-xs sm:grid-cols-3 lg:grid-cols-6">
+            <Counter label="Produtivos com refs" value={anchorDiagnostics.productionWithRefs} />
+            <Counter label="Com IFCCARTESIANPOINT" value={anchorDiagnostics.productionWithCartesianPoint} />
+            <Counter label="Com IFCLOCALPLACEMENT" value={anchorDiagnostics.productionWithLocalPlacement} />
+            <Counter label="Com IFCAXIS2PLACEMENT3D" value={anchorDiagnostics.productionWithAxisPlacement} />
+            <Counter label="Com IFCPRODUCTDEFINITIONSHAPE" value={anchorDiagnostics.productionWithProductShape} />
+            <Counter label="Com IFCEXTRUDEDAREASOLID" value={anchorDiagnostics.productionWithExtrudedSolid} />
+          </div>
 
           <div className="grid gap-2 md:grid-cols-[180px_220px_1fr_auto_auto]">
             <select
@@ -1003,6 +1042,13 @@ function SuggestionCard({
             <p><span className="font-medium text-foreground">Âncora 3Dtext: </span>{item.raw_properties?.anchorElementName || "-"}</p>
             <p><span className="font-medium text-foreground">Distância: </span>{item.raw_properties?.anchorDistance != null ? item.raw_properties.anchorDistance.toFixed(2) : "-"}</p>
             <p><span className="font-medium text-foreground">Pontos posição: </span>{item.raw_properties?.positionPointCount ?? "-"}</p>
+            <p><span className="font-medium text-foreground">Refs: </span>{item.raw_properties?.reachableRefsCount ?? "-"}</p>
+            <p><span className="font-medium text-foreground">IFCCARTESIANPOINT: </span>{item.raw_properties?.cartesianPointCount ?? "-"}</p>
+            <p><span className="font-medium text-foreground">IFCLOCALPLACEMENT: </span>{item.raw_properties?.hasLocalPlacement ? "sim" : "não"}</p>
+            <p><span className="font-medium text-foreground">IFCAXIS2PLACEMENT3D: </span>{item.raw_properties?.hasAxis2Placement3D ? "sim" : "não"}</p>
+            <p><span className="font-medium text-foreground">IFCPRODUCTDEFINITIONSHAPE: </span>{item.raw_properties?.hasProductDefinitionShape ? "sim" : "não"}</p>
+            <p><span className="font-medium text-foreground">IFCEXTRUDEDAREASOLID: </span>{item.raw_properties?.hasExtrudedAreaSolid ? "sim" : "não"}</p>
+            <p className="truncate xl:col-span-2"><span className="font-medium text-foreground">Tipos alcançados: </span>{item.raw_properties?.firstReachedTypes.join(", ") || "-"}</p>
           </div>
         </div>
 
