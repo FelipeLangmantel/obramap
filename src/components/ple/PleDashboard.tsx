@@ -12,6 +12,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/contexts/AuthContext";
+import { canCreatePleProject, canDeletePleProject } from "@/lib/accessControl";
 
 interface Props {
   projects: PleProject[];
@@ -22,7 +23,9 @@ interface Props {
 
 export function PleDashboard({ projects, onSelectProject, onCreateProject, onDeleteProject }: Props) {
   const navigate = useNavigate();
-  const { canEdit } = useAuth();
+  const { profile } = useAuth();
+  const canCreateProject = canCreatePleProject(profile);
+  const canDeleteProject = canDeletePleProject(profile);
   const [toDelete, setToDelete] = useState<PleProject | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -34,6 +37,11 @@ export function PleDashboard({ projects, onSelectProject, onCreateProject, onDel
 
   const formatCurrency = (v: number) =>
     v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+  const handleCreateProject = () => {
+    if (!canCreateProject) return;
+    onCreateProject();
+  };
 
   return (
     <div className="h-full flex flex-col gap-4 sm:gap-6 p-4 sm:p-6">
@@ -107,9 +115,11 @@ export function PleDashboard({ projects, onSelectProject, onCreateProject, onDel
             <Building2 className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
             Suas Obras
           </h2>
-          <Button size="sm" onClick={onCreateProject} className="gap-1.5 text-xs sm:text-sm">
-            <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nova Obra</span><span className="sm:hidden">Nova</span>
-          </Button>
+          {canCreateProject && (
+            <Button size="sm" onClick={handleCreateProject} className="gap-1.5 text-xs sm:text-sm">
+              <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nova Obra</span><span className="sm:hidden">Nova</span>
+            </Button>
+          )}
         </div>
 
         {projects.length === 0 ? (
@@ -117,9 +127,11 @@ export function PleDashboard({ projects, onSelectProject, onCreateProject, onDel
             <CardContent className="text-center py-8 sm:py-12">
               <Building2 className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground/40 mx-auto mb-3" />
               <p className="text-muted-foreground text-xs sm:text-sm">Nenhuma obra cadastrada ainda.</p>
-              <Button size="sm" className="mt-4 gap-1.5" onClick={onCreateProject}>
-                <Plus className="h-4 w-4" /> Cadastrar primeira obra
-              </Button>
+              {canCreateProject && (
+                <Button size="sm" className="mt-4 gap-1.5" onClick={handleCreateProject}>
+                  <Plus className="h-4 w-4" /> Cadastrar primeira obra
+                </Button>
+              )}
             </CardContent>
           </Card>
         ) : (
@@ -140,7 +152,7 @@ export function PleDashboard({ projects, onSelectProject, onCreateProject, onDel
                       {(p as any).obras_portfolio_id && (
                         <Badge className="text-[9px] bg-amber-500/90 hover:bg-amber-500 px-1.5 py-0">Holding</Badge>
                       )}
-                      {canEdit && onDeleteProject && (
+                      {canDeleteProject && onDeleteProject && (
                         <Button
                           variant="ghost"
                           size="icon"

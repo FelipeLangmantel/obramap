@@ -1,5 +1,6 @@
 import { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import { useConstruction, DEFAULT_LEGEND_ITEMS, LegendItem } from "@/contexts/ConstructionContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { calculateHouseProgress } from "@/data/constructionData";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -49,6 +50,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { Json } from "@/integrations/supabase/types";
 import { toast } from "sonner";
 import { HouseFotoHistoryDrawer } from "@/components/diario/HouseFotoHistoryDrawer";
+import {
+  canDeleteInteractiveMap,
+  canEditInteractiveMap,
+  canImportInteractiveMap,
+} from "@/lib/accessControl";
 
 interface HousePosition {
   id: number;
@@ -221,6 +227,7 @@ function HouseDetailsDialogContent({
 
 export function InteractiveMapView() {
   const { currentProject, selectedHouse, setSelectedHouse } = useConstruction();
+  const { profile } = useAuth();
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -265,6 +272,9 @@ export function InteractiveMapView() {
   const legendItems = currentProject?.customLegendItems || DEFAULT_LEGEND_ITEMS;
   const legendFollowMacros = currentProject?.legendFollowMacros || false;
   const macrosTemplate = currentProject?.macrosTemplate || [];
+  const canImportMap = canImportInteractiveMap(profile);
+  const canEditMap = canEditInteractiveMap(profile);
+  const canDeleteMap = canDeleteInteractiveMap(profile);
 
   // Map dimensions
   const MAP_WIDTH = 1600;
@@ -411,6 +421,17 @@ export function InteractiveMapView() {
       resizeObserver.disconnect();
     };
   }, [fitToContainer, currentProject?.id, isLayoutLoaded]);
+
+  useEffect(() => {
+    if (!isLayoutLoaded || !mapImage) return;
+
+    const frame = requestAnimationFrame(() => {
+      fitToContainer();
+      setTimeout(fitToContainer, 80);
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [fitToContainer, isLayoutLoaded, mapImage, customLayout?.imageUrl]);
 
   // Generate default layout with absolute house positions
   const generateDefaultLayout = useCallback((quadras: any[], allHouses: any[]): { quadras: QuadraLayout[], houses: HousePosition[] } => {
@@ -822,6 +843,10 @@ export function InteractiveMapView() {
   // Save the edited layout to database
   const saveLayout = async () => {
     if (!currentProject) return;
+    if (!canEditMap) {
+      toast.error("Sem permissão para editar o mapa interativo.");
+      return;
+    }
 
     const layout: MapLayout = {
       imageUrl: mapImage,
@@ -863,7 +888,17 @@ export function InteractiveMapView() {
     setSelectedHouseIds(new Set());
   };
 
+  useEffect(() => {
+    if (!canEditMap && isEditMode) {
+      cancelEdit();
+    }
+  }, [canEditMap, isEditMode]);
+
   const enterEditMode = () => {
+    if (!canEditMap) {
+      toast.error("Sem permissão para editar o mapa interativo.");
+      return;
+    }
     setIsEditMode(true);
     setSelectedHouseIds(new Set());
   };
@@ -919,6 +954,10 @@ export function InteractiveMapView() {
 
   // Auto-align all quadras and houses in a grid
   const autoAlignLayout = useCallback(() => {
+    if (!canEditMap) {
+      toast.error("Sem permissão para editar o mapa interativo.");
+      return;
+    }
     saveToHistory();
     
     const GRID_SIZE = 20; // Align to 20px grid
@@ -999,10 +1038,14 @@ export function InteractiveMapView() {
     setEditingHouses(alignedHouses);
     setSelectedHouseIds(new Set());
     toast.success("Layout alinhado automaticamente!");
-  }, [editingQuadras, editingHouses, currentProject, saveToHistory]);
+  }, [canEditMap, editingQuadras, editingHouses, currentProject, saveToHistory]);
 
   // Reorganizar casas para layout inicial
   const reorganizeHouses = () => {
+    if (!canEditMap) {
+      toast.error("Sem permissão para editar o mapa interativo.");
+      return;
+    }
     saveToHistory();
     if (!currentProject) return;
     const projectQuadras = currentProject.quadras || [];
@@ -1091,6 +1134,11 @@ export function InteractiveMapView() {
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canImportMap) {
+      toast.error("Sem permissão para importar mapa interativo.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
     const file = e.target.files?.[0];
     if (file && currentProject) {
       const reader = new FileReader();
@@ -1104,6 +1152,11 @@ export function InteractiveMapView() {
   };
 
   const handleRemoveImage = () => {
+    if (!canDeleteMap) {
+      toast.error("Sem permissão para excluir o mapa interativo.");
+      return;
+    }
+    if (!window.confirm("Excluir a imagem do mapa interativo? Esta ação não poderá ser desfeita.")) return;
     if (currentProject) {
       setMapImage(null);
       setCustomLayout(null);
@@ -1351,19 +1404,29 @@ export function InteractiveMapView() {
 
   // Delete selected houses from editing
   const deleteSelectedHouses = useCallback(() => {
+    if (!canDeleteMap) {
+      toast.error("Sem permissão para excluir itens do mapa interativo.");
+      return;
+    }
     if (selectedHouseIds.size === 0) return;
+    if (!window.confirm("Excluir as casas selecionadas do mapa? Esta ação não poderá ser desfeita.")) return;
     saveToHistory();
     setEditingHouses(prev => prev.filter(h => !selectedHouseIds.has(h.id)));
     toast.success(`${selectedHouseIds.size} casa(s) removida(s) do mapa`);
     setSelectedHouseIds(new Set());
-  }, [selectedHouseIds, saveToHistory]);
+  }, [canDeleteMap, selectedHouseIds, saveToHistory]);
 
   // Delete a specific quadra from editing
   const deleteQuadra = useCallback((quadraId: string) => {
+    if (!canDeleteMap) {
+      toast.error("Sem permissão para excluir itens do mapa interativo.");
+      return;
+    }
+    if (!window.confirm("Excluir esta quadra do mapa? Esta ação não poderá ser desfeita.")) return;
     saveToHistory();
     setEditingQuadras(prev => prev.filter(q => q.id !== quadraId));
     toast.success("Quadra removida do mapa");
-  }, [saveToHistory]);
+  }, [canDeleteMap, saveToHistory]);
 
   // Get display data
   const displayData = useMemo(() => {
@@ -1436,17 +1499,23 @@ export function InteractiveMapView() {
         </div>
 
         <div className="flex items-center gap-2">
-          <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" disabled={isAnalyzing || isEditMode} />
+          {canImportMap && (
+            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" disabled={isAnalyzing || isEditMode} />
+          )}
           
           {!isEditMode ? (
             <>
-              <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="gap-1.5 h-8 text-xs" disabled={isAnalyzing}>
-                {isAnalyzing ? <><Loader2 className="h-3 w-3 animate-spin" />Analisando...</> : <><Upload className="h-3 w-3" />Importar</>}
-              </Button>
-              <Button variant="default" size="sm" onClick={enterEditMode} className="gap-1.5 h-8 text-xs">
-                <Edit3 className="h-3 w-3" />Editar
-              </Button>
-              {mapImage && (
+              {canImportMap && (
+                <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="gap-1.5 h-8 text-xs" disabled={isAnalyzing}>
+                  {isAnalyzing ? <><Loader2 className="h-3 w-3 animate-spin" />Analisando...</> : <><Upload className="h-3 w-3" />Importar</>}
+                </Button>
+              )}
+              {canEditMap && (
+                <Button variant="default" size="sm" onClick={enterEditMode} className="gap-1.5 h-8 text-xs">
+                  <Edit3 className="h-3 w-3" />Editar
+                </Button>
+              )}
+              {mapImage && canDeleteMap && (
                 <Button variant="ghost" size="sm" onClick={handleRemoveImage} className="gap-1.5 h-8 text-xs text-destructive hover:text-destructive">
                   <Trash2 className="h-3 w-3" />
                 </Button>
@@ -1472,15 +1541,17 @@ export function InteractiveMapView() {
                   <Button variant="ghost" size="sm" onClick={clearSelection} className="gap-1.5 h-8 text-xs">
                     Limpar seleção ({selectedHouseIds.size})
                   </Button>
-                  <Button variant="destructive" size="sm" onClick={deleteSelectedHouses} className="gap-1.5 h-8 text-xs" title="Remover casas selecionadas do mapa">
-                    <Trash className="h-3 w-3" />Excluir
-                  </Button>
+                  {canDeleteMap && (
+                    <Button variant="destructive" size="sm" onClick={deleteSelectedHouses} className="gap-1.5 h-8 text-xs" title="Remover casas selecionadas do mapa">
+                      <Trash className="h-3 w-3" />Excluir
+                    </Button>
+                  )}
                 </>
               )}
               <Button variant="outline" size="sm" onClick={reorganizeHouses} className="gap-1.5 h-8 text-xs">
                 <RotateCcw className="h-3 w-3" />Reorganizar
               </Button>
-              <Button variant="default" size="sm" onClick={saveLayout} className="gap-1.5 h-8 text-xs">
+              <Button variant="default" size="sm" onClick={saveLayout} className="gap-1.5 h-8 text-xs" disabled={!canEditMap}>
                 <Save className="h-3 w-3" />Salvar
               </Button>
               <Button variant="ghost" size="sm" onClick={cancelEdit} className="gap-1.5 h-8 text-xs text-destructive hover:text-destructive">
@@ -1601,15 +1672,17 @@ export function InteractiveMapView() {
                   <Grid3X3 className="h-3 w-3" />
                 </Button>
               )}
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-6 w-6 p-0 text-destructive hover:text-destructive hover:bg-destructive/10" 
-                onClick={() => deleteQuadra(q.id)} 
-                title="Remover quadra do mapa"
-              >
-                <Trash className="h-3 w-3" />
-              </Button>
+              {canDeleteMap && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                  onClick={() => deleteQuadra(q.id)}
+                  title="Remover quadra do mapa"
+                >
+                  <Trash className="h-3 w-3" />
+                </Button>
+              )}
             </div>
           ))}
         </div>
@@ -1647,6 +1720,7 @@ export function InteractiveMapView() {
               src={mapImage} 
               alt="Planta"
               className="absolute inset-0 pointer-events-none"
+              onLoad={fitToContainer}
               style={{ 
                 maxWidth: 'none',
                 width: svgDimensions.width,
