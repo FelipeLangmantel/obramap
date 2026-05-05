@@ -13,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useIfcActivationReadModel, type IfcActivationLink } from "@/hooks/useIfcActivationReadModel";
 import { useIfcProductionActivationDiagnostics } from "@/hooks/useIfcProductionActivationDiagnostics";
+import { useIfcServiceKeyMappingDiagnostics } from "@/hooks/useIfcServiceKeyMappingDiagnostics";
 import { supabase } from "@/integrations/supabase/client";
 
 type IfcSuggestionStatus = "suggested" | "confirmed" | "ignored";
@@ -226,6 +227,13 @@ function productionActivationStatusLabel(status: string) {
   return "fonte desconhecida";
 }
 
+function serviceKeyMappingStatusLabel(status: string) {
+  if (status === "exact_scope_match") return "match exato";
+  if (status === "label_suggestion") return "sugestão por nome";
+  if (status === "unknown_service_catalog") return "catálogo desconhecido";
+  return "sem correspondência";
+}
+
 function summarizeLinkDiagnostics(links: IfcLinkDiagnosticRow[]): LinkDiagnosticSummary {
   const houseKeys = new Set<string>();
   const serviceKeys = new Set<string>();
@@ -285,6 +293,7 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
   const [linkDiagnostics, setLinkDiagnostics] = useState<LinkDiagnosticSummary | null>(null);
   const activationReadModel = useIfcActivationReadModel({ projectId, modelId, enabled: open });
   const productionActivationDiagnostics = useIfcProductionActivationDiagnostics({ projectId, modelId, enabled: open });
+  const serviceKeyMappingDiagnostics = useIfcServiceKeyMappingDiagnostics({ projectId, modelId, enabled: open });
 
   const houseIdByNumber = useMemo(() => {
     const map = new Map<number, string>();
@@ -781,6 +790,56 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
                       <Badge variant={item.production_activation_status === "would_activate" ? "default" : "outline"} className="text-[10px]">
                         {productionActivationStatusLabel(item.production_activation_status)}
                       </Badge>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="rounded-md border border-border bg-background p-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h3 className="text-sm font-semibold">Diagnóstico de mapeamento de serviços IFC</h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Este diagnóstico apenas identifica possíveis correspondências. Ele ainda não altera vínculos, produção ou ativação visual.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void serviceKeyMappingDiagnostics.refetch()}
+                disabled={serviceKeyMappingDiagnostics.loading}
+              >
+                {serviceKeyMappingDiagnostics.loading ? "Atualizando..." : "Atualizar diagnóstico"}
+              </Button>
+            </div>
+            <div className="mt-3 space-y-3">
+              <div className="grid gap-2 text-xs sm:grid-cols-3 lg:grid-cols-5">
+                <Counter label="Total chaves IFC" value={serviceKeyMappingDiagnostics.summary.total_ifc_service_keys} />
+                <Counter label="Matches exatos" value={serviceKeyMappingDiagnostics.summary.exact_scope_matches} />
+                <Counter label="Sugestões por nome" value={serviceKeyMappingDiagnostics.summary.label_suggestions} />
+                <Counter label="Sem correspondência" value={serviceKeyMappingDiagnostics.summary.no_matches} />
+                <Counter label="Catálogo desconhecido" value={serviceKeyMappingDiagnostics.summary.unknown_service_catalog} />
+              </div>
+              {serviceKeyMappingDiagnostics.error && (
+                <p className="text-xs text-destructive">Falha ao carregar diagnóstico de mapeamento de serviços IFC.</p>
+              )}
+              <div className="space-y-1.5">
+                {serviceKeyMappingDiagnostics.items.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Nenhuma chave de serviço IFC encontrada para diagnóstico.</p>
+                ) : (
+                  serviceKeyMappingDiagnostics.items.map(item => (
+                    <div key={item.ifc_service_key} className="rounded border border-border bg-muted/30 px-3 py-2 text-xs">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span><span className="font-medium">IFC key:</span> {item.ifc_service_key}</span>
+                        <span><span className="font-medium">IFC label:</span> {item.ifc_service_label || "-"}</span>
+                        <span><span className="font-medium">Scope/serviço sugerido:</span> {item.matched_scope_id || "-"}{item.matched_service_label ? ` - ${item.matched_service_label}` : ""}</span>
+                        <span><span className="font-medium">Status:</span> {serviceKeyMappingStatusLabel(item.match_status)}</span>
+                        <Badge variant={item.confidence === "high" ? "default" : "outline"} className="text-[10px]">
+                          {item.confidence}
+                        </Badge>
+                      </div>
                     </div>
                   ))
                 )}
