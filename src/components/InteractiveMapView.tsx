@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useCallback, useEffect } from "react";
+import { useState, useRef, useMemo, useCallback, useEffect, type SyntheticEvent } from "react";
 import { useConstruction, DEFAULT_LEGEND_ITEMS, LegendItem } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { calculateHouseProgress } from "@/data/constructionData";
@@ -239,6 +239,7 @@ export function InteractiveMapView() {
   const [mapImage, setMapImage] = useState<string | null>(null);
   const [customLayout, setCustomLayout] = useState<MapLayout | null>(null);
   const [isLayoutLoaded, setIsLayoutLoaded] = useState(true);
+  const [isMapImageLoading, setIsMapImageLoading] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
   const [photoHistoryOpen, setPhotoHistoryOpen] = useState(false);
@@ -381,6 +382,14 @@ export function InteractiveMapView() {
     }
   }, []);
 
+  const fitAfterImageReady = useCallback(() => {
+    requestAnimationFrame(() => {
+      fitToContainer();
+      requestAnimationFrame(fitToContainer);
+    });
+    setTimeout(fitToContainer, 80);
+  }, [fitToContainer]);
+
   // Fit to container when layout is loaded
   useEffect(() => {
     if (isLayoutLoaded) {
@@ -391,7 +400,7 @@ export function InteractiveMapView() {
         requestAnimationFrame(() => {
           const container = containerRef.current;
           if (container && container.clientWidth > 0 && container.clientHeight > 0) {
-            fitToContainer();
+            fitAfterImageReady();
           } else {
             // Container not ready yet, retry
             setTimeout(() => tryFit(attempts + 1), 50);
@@ -400,7 +409,7 @@ export function InteractiveMapView() {
       };
       tryFit();
     }
-  }, [isLayoutLoaded, fitToContainer, currentProject?.id]);
+  }, [isLayoutLoaded, fitAfterImageReady, currentProject?.id]);
 
   // Re-fit when container becomes visible (e.g., tab change)
   useEffect(() => {
@@ -410,7 +419,7 @@ export function InteractiveMapView() {
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         if (entry.contentRect.width > 0 && entry.contentRect.height > 0) {
-          fitToContainer();
+          fitAfterImageReady();
         }
       }
     });
@@ -420,18 +429,53 @@ export function InteractiveMapView() {
     return () => {
       resizeObserver.disconnect();
     };
-  }, [fitToContainer, currentProject?.id, isLayoutLoaded]);
+  }, [fitAfterImageReady, currentProject?.id, isLayoutLoaded]);
 
   useEffect(() => {
-    if (!isLayoutLoaded || !mapImage) return;
+    if (!isLayoutLoaded || !mapImage) {
+      setIsMapImageLoading(false);
+      return;
+    }
 
-    const frame = requestAnimationFrame(() => {
-      fitToContainer();
-      setTimeout(fitToContainer, 80);
-    });
+    let cancelled = false;
+    const image = new Image();
+    setIsMapImageLoading(true);
 
-    return () => cancelAnimationFrame(frame);
-  }, [fitToContainer, isLayoutLoaded, mapImage, customLayout?.imageUrl]);
+    const finish = () => {
+      if (cancelled) return;
+      setIsMapImageLoading(false);
+      fitAfterImageReady();
+    };
+
+    image.onload = () => {
+      if (typeof image.decode === "function") {
+        image.decode().then(finish).catch(finish);
+      } else {
+        finish();
+      }
+    };
+    image.onerror = finish;
+    image.src = mapImage;
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fitAfterImageReady, isLayoutLoaded, mapImage, customLayout?.imageUrl]);
+
+  const handleMapImageLoad = useCallback((event: SyntheticEvent<HTMLImageElement>) => {
+    const image = event.currentTarget;
+    const finish = () => {
+      setIsMapImageLoading(false);
+      fitAfterImageReady();
+    };
+
+    if (typeof image.decode === "function") {
+      image.decode().then(finish).catch(finish);
+      return;
+    }
+
+    finish();
+  }, [fitAfterImageReady]);
 
   // Generate default layout with absolute house positions
   const generateDefaultLayout = useCallback((quadras: any[], allHouses: any[]): { quadras: QuadraLayout[], houses: HousePosition[] } => {
@@ -1706,6 +1750,14 @@ export function InteractiveMapView() {
             </div>
           </div>
         )}
+        {isMapImageLoading && !isAnalyzing && (
+          <div className="absolute inset-0 bg-background/70 flex items-center justify-center z-40">
+            <div className="flex items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm shadow-sm">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              <span>Carregando planta de implantação...</span>
+            </div>
+          </div>
+        )}
         
         <div
           className="absolute inset-0"
@@ -1720,13 +1772,13 @@ export function InteractiveMapView() {
               src={mapImage} 
               alt="Planta"
               className="absolute inset-0 pointer-events-none"
-              onLoad={fitToContainer}
+              onLoad={handleMapImageLoad}
               style={{ 
                 maxWidth: 'none',
                 width: svgDimensions.width,
                 height: svgDimensions.height,
                 objectFit: 'contain',
-                opacity: isEditMode ? 0.6 : 0.4,
+                opacity: isMapImageLoading ? 0 : isEditMode ? 0.6 : 0.4,
               }}
             />
           )}
