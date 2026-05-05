@@ -373,11 +373,50 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
     const persistInventory = async () => {
       setSaveStatus("saving");
       setSaveMessage("Salvando inventário como sugestões...");
+      let persistStage = "initial";
 
       try {
         const modelTable = supabase.from("project_3d_models" as any);
         const elementsTable = supabase.from("project_ifc_elements" as any);
 
+        persistStage = "get_auth_user";
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+        if (authError) throw authError;
+        const authUser = authData.user;
+
+        console.info("[IFC][RLS diagnostics] Auth user", {
+          authUserId: authUser?.id || null,
+          authUserEmail: authUser?.email || null,
+          projectId,
+          companyId,
+          url,
+        });
+
+        persistStage = "load_profile";
+        const { data: profileData, error: profileError } = await supabase
+          .from("profiles")
+          .select("id, user_id, email, company_id, system_role")
+          .eq("user_id", authUser?.id || "")
+          .maybeSingle();
+        if (profileError) throw profileError;
+
+        persistStage = "load_project";
+        const { data: projectData, error: projectError } = await supabase
+          .from("projects")
+          .select("id, name, company_id")
+          .eq("id", projectId)
+          .maybeSingle();
+        if (projectError) throw projectError;
+
+        console.info("[IFC][RLS diagnostics] Profile/project company check", {
+          profileCompanyId: profileData?.company_id || null,
+          projectCompanyId: projectData?.company_id || null,
+          companyMatches: Boolean(profileData?.company_id && projectData?.company_id && profileData.company_id === projectData.company_id),
+          profile: profileData,
+          project: projectData,
+        });
+
+        persistStage = "find_existing_model";
         const { data: existingModelData, error: findModelError } = await modelTable
           .select("id")
           .eq("project_id", projectId)
@@ -391,15 +430,20 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         let modelId = existingModel?.id as string | undefined;
 
         if (!modelId) {
+          persistStage = "insert_project_3d_model";
+          const modelPayload = {
+            company_id: companyId,
+            project_id: projectId,
+            model_type: "ifc",
+            storage_path: url,
+            file_name: getIfcFileName(url),
+            status: "uploaded",
+          };
+
+          console.info("[IFC][RLS diagnostics] project_3d_models insert payload", modelPayload);
+
           const { data: insertedModelData, error: insertModelError } = await modelTable
-            .insert([{
-              company_id: companyId,
-              project_id: projectId,
-              model_type: "ifc",
-              storage_path: url,
-              file_name: getIfcFileName(url),
-              status: "uploaded",
-            }])
+            .insert([modelPayload])
             .select("id")
             .single();
           if (insertModelError) throw insertModelError;
@@ -408,12 +452,14 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
           modelId = insertedModel.id;
         }
 
+        persistStage = "delete_old_suggestions";
         const { error: deleteSuggestedError } = await elementsTable
           .delete()
           .eq("model_id", modelId)
           .eq("status", "suggested");
         if (deleteSuggestedError) throw deleteSuggestedError;
 
+        persistStage = "load_protected_elements";
         const { data: protectedElementsData, error: protectedError } = await elementsTable
           .select("ifc_global_id, ifc_entity_id")
           .eq("model_id", modelId)
@@ -440,10 +486,12 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
           .map(item => buildIfcElementPayload(item, projectId, companyId, modelId!));
 
         if (rows.length > 0) {
+          persistStage = "insert_ifc_elements";
           const { error: insertElementsError } = await elementsTable.insert(rows);
           if (insertElementsError) throw insertElementsError;
         }
 
+        persistStage = "update_model_status";
         const { error: updateModelError } = await modelTable
           .update({ status: "inventory_ready" })
           .eq("id", modelId);
@@ -456,6 +504,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         const code = err?.code ? ` [${err.code}]` : "";
         const detail = err?.message || err?.details || err?.hint || "erro desconhecido";
         console.error("[IFC] Falha ao salvar inventário", {
+          stage: persistStage,
           message: err?.message,
           code: err?.code,
           details: err?.details,
