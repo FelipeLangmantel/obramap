@@ -63,6 +63,7 @@ type PersistDiagnostics = {
   profileCompanyId: string | null;
   projectCompanyId: string | null;
   companyMatches: boolean | null;
+  effectiveCompanyId: string | null;
   modelPayloadCompanyId: string | null;
   modelPayloadProjectId: string | null;
   stage: string;
@@ -590,6 +591,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         profileCompanyId: null,
         projectCompanyId: null,
         companyMatches: null,
+        effectiveCompanyId: null,
         modelPayloadCompanyId: null,
         modelPayloadProjectId: null,
         stage: persistStage,
@@ -639,24 +641,28 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         if (projectError) throw projectError;
         diagnostics.projectCompanyId = projectData?.company_id || null;
         diagnostics.companyMatches = Boolean(profileData?.company_id && projectData?.company_id && profileData.company_id === projectData.company_id);
+        const effectiveCompanyId = projectData?.company_id || profileData?.company_id || companyId;
+        diagnostics.effectiveCompanyId = effectiveCompanyId || null;
         diagnostics.stage = persistStage;
 
         console.info("[IFC][RLS diagnostics] Profile/project company check", {
           profileCompanyId: profileData?.company_id || null,
           projectCompanyId: projectData?.company_id || null,
+          effectiveCompanyId,
           companyMatches: Boolean(profileData?.company_id && projectData?.company_id && profileData.company_id === projectData.company_id),
           profile: profileData,
           project: projectData,
         });
 
         persistStage = "find_existing_model";
-        const { data: existingModelData, error: findModelError } = await modelTable
+        let existingModelQuery = modelTable
           .select("id")
           .eq("project_id", projectId)
           .eq("storage_path", url)
           .eq("model_type", "ifc")
-          .limit(1)
-          .maybeSingle();
+          .limit(1);
+        if (effectiveCompanyId) existingModelQuery = existingModelQuery.eq("company_id", effectiveCompanyId);
+        const { data: existingModelData, error: findModelError } = await existingModelQuery.maybeSingle();
         if (findModelError) throw findModelError;
 
         const existingModel = asProject3DModelIdRow(existingModelData as unknown);
@@ -728,9 +734,30 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         }
 
         persistStage = "update_model_status";
-        const { error: updateModelError } = await modelTable
-          .update({ status: "inventory_ready" })
-          .eq("id", modelId);
+        let updateModelError: any = null;
+        console.info("[IFC][RLS diagnostics] project_3d_models status update", {
+          modelId,
+          projectId,
+          companyId,
+          effectiveCompanyId,
+          status: "inventory_ready",
+        });
+
+        if (!effectiveCompanyId) {
+          updateModelError = {
+            code: "missing_company_id",
+            message: "Empresa efetiva não identificada para atualizar status do modelo IFC.",
+            details: null,
+            hint: "Verifique project.company_id, profile.company_id e companyId recebido pelo IFCModel.",
+          };
+        } else {
+          const { error } = await modelTable
+            .update({ status: "inventory_ready" })
+            .eq("id", modelId)
+            .eq("project_id", projectId)
+            .eq("company_id", effectiveCompanyId);
+          updateModelError = error;
+        }
         if (updateModelError) {
           diagnostics.stage = persistStage;
           diagnostics.errorCode = updateModelError?.code || null;
@@ -981,6 +1008,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
                   <DiagnosticItem label="profile.company_id" value={persistDiagnostics.profileCompanyId} />
                   <DiagnosticItem label="project.company_id" value={persistDiagnostics.projectCompanyId} />
                   <DiagnosticItem label="companyMatches" value={persistDiagnostics.companyMatches == null ? null : String(persistDiagnostics.companyMatches)} />
+                  <DiagnosticItem label="effectiveCompanyId" value={persistDiagnostics.effectiveCompanyId} />
                   <DiagnosticItem label="payload.company_id" value={persistDiagnostics.modelPayloadCompanyId} />
                   <DiagnosticItem label="payload.project_id" value={persistDiagnostics.modelPayloadProjectId} />
                   <DiagnosticItem label="stage" value={persistDiagnostics.stage} />
