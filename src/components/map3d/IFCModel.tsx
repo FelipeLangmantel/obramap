@@ -80,6 +80,12 @@ type Project3DModelIdRow = { id: string };
 type ProtectedIfcElementRow = { ifc_global_id: string | null; ifc_entity_id: string | null };
 type IfcPersistedStatus = "suggested" | "confirmed" | "ignored";
 type IfcInspectGroupMode = "none" | "house" | "service";
+type Ifc3DTestControlKey = "91-radier" | "91-paredes" | "92-radier" | "92-paredes";
+type Ifc3DTestOverlay = {
+  key: Ifc3DTestControlKey;
+  label: string;
+  entityId: string;
+};
 type IfcPersistedElementRow = {
   id: string;
   ifc_global_id: string | null;
@@ -975,6 +981,18 @@ const IFC_PAINT_TEXTURE_OPTIONS: Array<{ kind: IfcVisualTextureKind; label: stri
   { kind: "concreto_liso", label: "Concreto liso" },
 ];
 
+const IFC_3D_TEST_CONTROLS: Array<{
+  key: Ifc3DTestControlKey;
+  houseNumber: number;
+  serviceKey: "radier" | "paredes";
+  label: string;
+}> = [
+  { key: "91-radier", houseNumber: 91, serviceKey: "radier", label: "Casa 91 | Radier" },
+  { key: "91-paredes", houseNumber: 91, serviceKey: "paredes", label: "Casa 91 | Paredes" },
+  { key: "92-radier", houseNumber: 92, serviceKey: "radier", label: "Casa 92 | Radier" },
+  { key: "92-paredes", houseNumber: 92, serviceKey: "paredes", label: "Casa 92 | Paredes" },
+];
+
 function disposeIfcVisualMaterial(material: THREE.Material, disposedTextures?: Set<THREE.Texture>) {
   const materialWithTextures = material as THREE.Material & Record<string, unknown>;
   const textureKeys = [
@@ -1631,6 +1649,21 @@ function createIfcEntityHighlightMesh(mesh: THREE.Mesh, entityId: string): {
   };
 }
 
+function disposeIfcHighlightOverlay(overlay: { highlight: THREE.Mesh; boxHelper: THREE.Box3Helper | null }) {
+  overlay.highlight.parent?.remove(overlay.highlight);
+  overlay.boxHelper?.parent?.remove(overlay.boxHelper);
+  disposeIfcVisualObject(overlay.highlight);
+  if (overlay.boxHelper) {
+    overlay.boxHelper.geometry?.dispose();
+    const material = overlay.boxHelper.material as THREE.Material | THREE.Material[];
+    if (Array.isArray(material)) {
+      material.forEach(item => item.dispose());
+    } else {
+      material.dispose();
+    }
+  }
+}
+
 function isIfcVisualRootOrWholeModel(object: THREE.Object3D | null, root: THREE.Object3D | null) {
   if (!object) return true;
   return object === root || object.name === "IFC visual diagnostic model" || object.type === "Group" || object.type === "Scene";
@@ -1815,6 +1848,7 @@ function IFCVisualModel({
   undoPaintSignal,
   clearPaintSignal,
   clearInspectSignal,
+  testOverlays,
   onInspectSelection,
   onStatusChange,
 }: {
@@ -1826,6 +1860,7 @@ function IFCVisualModel({
   undoPaintSignal: number;
   clearPaintSignal: number;
   clearInspectSignal: number;
+  testOverlays: Ifc3DTestOverlay[];
   onInspectSelection: (selection: IfcVisualInspectSelection | null) => void;
   onStatusChange: (status: IfcVisualStatus, message?: string | null) => void;
 }) {
@@ -1847,6 +1882,12 @@ function IFCVisualModel({
     highlight: THREE.Mesh;
     boxHelper: THREE.Box3Helper | null;
   } | null>(null);
+  const testOverlayRef = useRef<Array<{
+    key: Ifc3DTestControlKey;
+    entityId: string;
+    highlight: THREE.Mesh;
+    boxHelper: THREE.Box3Helper | null;
+  }>>([]);
 
   const restorePaintEntry = useCallback((entry: {
     mesh: THREE.Mesh;
@@ -1885,18 +1926,7 @@ function IFCVisualModel({
     const current = inspectHighlightRef.current;
     if (!current) return;
 
-    current.highlight.parent?.remove(current.highlight);
-    current.boxHelper?.parent?.remove(current.boxHelper);
-    disposeIfcVisualObject(current.highlight);
-    if (current.boxHelper) {
-      current.boxHelper.geometry?.dispose();
-      const material = current.boxHelper.material as THREE.Material | THREE.Material[];
-      if (Array.isArray(material)) {
-        material.forEach(item => item.dispose());
-      } else {
-        material.dispose();
-      }
-    }
+    disposeIfcHighlightOverlay(current);
     inspectHighlightRef.current = null;
   }, []);
 
@@ -1934,6 +1964,70 @@ function IFCVisualModel({
     }
     return result;
   }, [clearInspectHighlight]);
+
+  const clearTestOverlays = useCallback(() => {
+    testOverlayRef.current.forEach(disposeIfcHighlightOverlay);
+    testOverlayRef.current = [];
+  }, []);
+
+  const testOverlayKey = useMemo(() => {
+    return testOverlays.map(item => `${item.key}:${item.entityId}`).sort().join("|");
+  }, [testOverlays]);
+
+  useEffect(() => {
+    clearTestOverlays();
+    if (!visible || !objectRef.current || testOverlays.length === 0) return;
+
+    const meshes: THREE.Mesh[] = [];
+    objectRef.current.traverse(child => {
+      const mesh = child as THREE.Mesh;
+      if (mesh.isMesh && mesh.geometry) meshes.push(mesh);
+    });
+
+    console.info("[IFC 3D Test] entity ids used", testOverlays.map(item => ({
+      key: item.key,
+      label: item.label,
+      entityId: item.entityId,
+    })));
+
+    testOverlays.forEach(item => {
+      let created = false;
+      for (const mesh of meshes) {
+        const result = createIfcEntityHighlightMesh(mesh, item.entityId);
+        if (!result.highlight) continue;
+
+        testOverlayRef.current.push({
+          key: item.key,
+          entityId: item.entityId,
+          highlight: result.highlight,
+          boxHelper: result.boxHelper,
+        });
+        console.info("[IFC 3D Test] overlay created", {
+          key: item.key,
+          label: item.label,
+          entityId: item.entityId,
+          matchingFaces: result.matchingFaces,
+          vertexCount: result.highlightVertexCount,
+          bounds: result.boundsRaw,
+        });
+        created = true;
+        break;
+      }
+
+      if (!created) {
+        console.info("[IFC 3D Test] unable to create overlay", {
+          key: item.key,
+          label: item.label,
+          entityId: item.entityId,
+          meshCount: meshes.length,
+        });
+      }
+    });
+
+    return () => {
+      clearTestOverlays();
+    };
+  }, [clearTestOverlays, object, testOverlayKey, testOverlays, visible]);
 
   const inspectMesh = useCallback((event: any, hit: THREE.Object3D) => {
     logIfcInspectIntersections(event);
@@ -2274,6 +2368,13 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
   const [inspectSelection, setInspectSelection] = useState<IfcVisualInspectSelection | null>(null);
   const [inspectGroupMode, setInspectGroupMode] = useState<IfcInspectGroupMode>("none");
   const [persistedElements, setPersistedElements] = useState<IfcPersistedElementRow[]>([]);
+  const [ifc3dTestEnabled, setIfc3dTestEnabled] = useState(false);
+  const [ifc3dTestToggles, setIfc3dTestToggles] = useState<Record<Ifc3DTestControlKey, boolean>>({
+    "91-radier": false,
+    "91-paredes": false,
+    "92-radier": false,
+    "92-paredes": false,
+  });
   const [selectedPaintTexture, setSelectedPaintTexture] = useState<IfcVisualTextureKind>("paver");
   const [undoPaintSignal, setUndoPaintSignal] = useState(0);
   const [clearPaintSignal, setClearPaintSignal] = useState(0);
@@ -2373,6 +2474,13 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
     setToolsOpen(true);
     setIfcPanelOpen(true);
     setInspectPanelCollapsed(false);
+    setIfc3dTestEnabled(false);
+    setIfc3dTestToggles({
+      "91-radier": false,
+      "91-paredes": false,
+      "92-radier": false,
+      "92-paredes": false,
+    });
     calledRef.current = false;
     persistedKeyRef.current = null;
     autoMinimizedInventoryRef.current = false;
@@ -2779,6 +2887,82 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
     return persistedElements.filter(element => element.detected_service_key === serviceKey);
   }, [inspectedPersistedElement, persistedElements]);
 
+  const ifc3dTestElementsByControl = useMemo(() => {
+    const map = new Map<Ifc3DTestControlKey, IfcPersistedElementRow[]>();
+    IFC_3D_TEST_CONTROLS.forEach(control => {
+      map.set(control.key, persistedElements.filter(element => (
+        element.status === "confirmed" &&
+        element.category === "production" &&
+        element.detected_house_number === control.houseNumber &&
+        element.detected_service_key === control.serviceKey &&
+        !!element.ifc_entity_id
+      )));
+    });
+    return map;
+  }, [persistedElements]);
+
+  const ifc3dTestConfirmedTotal = useMemo(() => {
+    return IFC_3D_TEST_CONTROLS.reduce((total, control) => total + (ifc3dTestElementsByControl.get(control.key)?.length || 0), 0);
+  }, [ifc3dTestElementsByControl]);
+
+  const activeIfc3dTestOverlays = useMemo<Ifc3DTestOverlay[]>(() => {
+    if (!ifc3dTestEnabled) return [];
+    return IFC_3D_TEST_CONTROLS.flatMap(control => {
+      if (!ifc3dTestToggles[control.key]) return [];
+      return (ifc3dTestElementsByControl.get(control.key) || []).flatMap(element => (
+        element.ifc_entity_id
+          ? [{
+              key: control.key,
+              label: control.label,
+              entityId: element.ifc_entity_id,
+            }]
+          : []
+      ));
+    });
+  }, [ifc3dTestElementsByControl, ifc3dTestEnabled, ifc3dTestToggles]);
+
+  const handleToggleIfc3dTestMode = useCallback(() => {
+    setIfc3dTestEnabled(prev => {
+      const next = !prev;
+      if (next) {
+        setPaintModeEnabled(false);
+        setInspectModeEnabled(false);
+        setInspectSelection(null);
+        setInspectGroupMode("none");
+        setClearInspectSignal(value => value + 1);
+        setIfc3dTestToggles(current => {
+          const nextToggles = { ...current };
+          IFC_3D_TEST_CONTROLS.forEach(control => {
+            nextToggles[control.key] = (ifc3dTestElementsByControl.get(control.key)?.length || 0) > 0;
+          });
+          return nextToggles;
+        });
+      } else {
+        setIfc3dTestToggles({
+          "91-radier": false,
+          "91-paredes": false,
+          "92-radier": false,
+          "92-paredes": false,
+        });
+      }
+      return next;
+    });
+  }, [ifc3dTestElementsByControl]);
+
+  const handleToggleIfc3dTestControl = useCallback((control: typeof IFC_3D_TEST_CONTROLS[number]) => {
+    setIfc3dTestToggles(prev => {
+      const next = { ...prev, [control.key]: !prev[control.key] };
+      console.info("[IFC 3D Test] toggle house/service", {
+        key: control.key,
+        houseNumber: control.houseNumber,
+        serviceKey: control.serviceKey,
+        enabled: next[control.key],
+        entityIds: (ifc3dTestElementsByControl.get(control.key) || []).map(element => element.ifc_entity_id),
+      });
+      return next;
+    });
+  }, [ifc3dTestElementsByControl]);
+
   const inspectGroupElements = inspectGroupMode === "house"
     ? sameHouseElements
     : inspectGroupMode === "service"
@@ -2809,6 +2993,19 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
       console.info("[IFC Inspect] same house elements count", { count: sameHouseElements.length });
     }
   }, [inspectGroupMode, sameHouseElements.length]);
+
+  useEffect(() => {
+    if (!ifc3dTestEnabled) return;
+    console.info("[IFC 3D Test] confirmed elements loaded", {
+      total: ifc3dTestConfirmedTotal,
+      controls: IFC_3D_TEST_CONTROLS.map(control => ({
+        key: control.key,
+        label: control.label,
+        count: ifc3dTestElementsByControl.get(control.key)?.length || 0,
+        entityIds: (ifc3dTestElementsByControl.get(control.key) || []).map(element => element.ifc_entity_id),
+      })),
+    });
+  }, [ifc3dTestConfirmedTotal, ifc3dTestElementsByControl, ifc3dTestEnabled]);
 
   useEffect(() => {
     if (!inspectSelection) {
@@ -2899,6 +3096,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         undoPaintSignal={undoPaintSignal}
         clearPaintSignal={clearPaintSignal}
         clearInspectSignal={clearInspectSignal}
+        testOverlays={activeIfc3dTestOverlays}
         onInspectSelection={handleInspectSelection}
         onStatusChange={handleVisualStatusChange}
       />
@@ -2930,6 +3128,11 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
             {paintModeEnabled && (
               <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-medium text-primary">
                 Pintura IFC ativa
+              </span>
+            )}
+            {ifc3dTestEnabled && (
+              <span className="rounded-full bg-amber-100 px-2 py-1 text-[10px] font-medium text-amber-800">
+                Teste 3D Real IFC
               </span>
             )}
           </div>
@@ -3276,6 +3479,56 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
                   Limpar pinturas
                 </button>
               </div>
+            </div>
+
+            <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-2 text-amber-950">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-xs font-semibold">Teste 3D Real IFC</p>
+                  <p className="text-[10px] text-amber-800">
+                    Usa somente elementos confirmed das casas 91/92 para teste visual local.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleToggleIfc3dTestMode}
+                  disabled={ifc3dTestConfirmedTotal === 0}
+                  className={`rounded border px-2.5 py-1 text-[11px] font-medium disabled:cursor-not-allowed disabled:opacity-50 ${
+                    ifc3dTestEnabled
+                      ? "border-amber-700 bg-amber-600 text-white"
+                      : "border-amber-400 bg-background hover:bg-amber-100"
+                  }`}
+                >
+                  {ifc3dTestEnabled ? "Desligar teste" : "Teste 3D Real IFC"}
+                </button>
+              </div>
+              <p className="mt-2 text-[10px] text-amber-800">
+                Confirmados encontrados: {ifc3dTestConfirmedTotal}. ON cria overlay forte; OFF remove apenas o overlay.
+              </p>
+              {ifc3dTestEnabled && (
+                <div className="mt-2 grid gap-1.5">
+                  {IFC_3D_TEST_CONTROLS.map(control => {
+                    const count = ifc3dTestElementsByControl.get(control.key)?.length || 0;
+                    const enabled = ifc3dTestToggles[control.key];
+                    return (
+                      <button
+                        key={control.key}
+                        type="button"
+                        onClick={() => handleToggleIfc3dTestControl(control)}
+                        disabled={count === 0}
+                        className={`flex items-center justify-between rounded border px-2 py-1 text-[11px] disabled:cursor-not-allowed disabled:opacity-50 ${
+                          enabled
+                            ? "border-emerald-600 bg-emerald-100 text-emerald-900"
+                            : "border-border bg-background hover:bg-muted"
+                        }`}
+                      >
+                        <span>{control.label}</span>
+                        <span className="font-semibold">{enabled ? "ON" : "OFF"} · {count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             <div className="mt-3 grid grid-cols-2 gap-2">
