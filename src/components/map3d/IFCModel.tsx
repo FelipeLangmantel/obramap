@@ -30,7 +30,7 @@ interface IfcInventoryItem {
   category: "production" | "text" | "unnamed";
   position: IfcPoint | null;
   positionPointCount: number;
-  positionSource: "local_placement" | "reachable_points" | "none";
+  positionSource: "local_placement" | "reachable_points" | "global_placement_ignored" | "none";
   placementPosition: IfcPoint | null;
   placementRefId: string | null;
   axisPlacementRefId: string | null;
@@ -38,6 +38,9 @@ interface IfcInventoryItem {
   cartesianPointLinePreview: string | null;
   parsedCartesianPoint: IfcPoint | null;
   cartesianPointParseFailed: boolean;
+  placementPositionIgnored: boolean;
+  placementPositionIgnoreReason: string | null;
+  sharedPlacementKey: string | null;
   anchorHouseNumber: number | null;
   anchorElementId: string | null;
   anchorElementName: string | null;
@@ -334,6 +337,16 @@ function distanceBetweenPoints(a: IfcPoint, b: IfcPoint) {
   return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
 
+function isOriginPoint(point: IfcPoint | null) {
+  if (!point) return false;
+  return Math.abs(point.x) < 1e-9 && Math.abs(point.y) < 1e-9 && Math.abs(point.z) < 1e-9;
+}
+
+function buildSharedPlacementKey(item: Pick<IfcInventoryItem, "placementRefId" | "cartesianPointRefId">) {
+  if (!item.placementRefId || !item.cartesianPointRefId) return null;
+  return `${item.placementRefId}->${item.cartesianPointRefId}`;
+}
+
 function parseIfcLineMap(text: string) {
   const lineById = new Map<string, string>();
   const linePattern = /(#\d+)\s*=\s*[^;]+;/g;
@@ -536,6 +549,47 @@ function apply3dTextHouseAnchors(items: IfcInventoryItem[]) {
   });
 }
 
+function ignoreSharedGlobalPlacements(items: IfcInventoryItem[]) {
+  const sharedOriginCounts = new Map<string, number>();
+
+  items.forEach(item => {
+    if (item.category !== "production" || item.positionSource !== "local_placement" || !isOriginPoint(item.placementPosition)) {
+      return;
+    }
+
+    const sharedPlacementKey = buildSharedPlacementKey(item);
+    if (!sharedPlacementKey) return;
+    sharedOriginCounts.set(sharedPlacementKey, (sharedOriginCounts.get(sharedPlacementKey) || 0) + 1);
+  });
+
+  return items.map(item => {
+    const sharedPlacementKey = buildSharedPlacementKey(item);
+    const sharedCount = sharedPlacementKey ? sharedOriginCounts.get(sharedPlacementKey) || 0 : 0;
+    const shouldIgnore = (
+      item.category === "production" &&
+      item.positionSource === "local_placement" &&
+      isOriginPoint(item.placementPosition) &&
+      sharedCount >= 3
+    );
+
+    if (!shouldIgnore) {
+      return {
+        ...item,
+        sharedPlacementKey,
+      };
+    }
+
+    return {
+      ...item,
+      position: null,
+      positionSource: "global_placement_ignored" as const,
+      placementPositionIgnored: true,
+      placementPositionIgnoreReason: "shared_global_origin",
+      sharedPlacementKey,
+    };
+  });
+}
+
 function parseIfcText(text: string): IfcInventoryItem[] {
   const lineById = parseIfcLineMap(text);
   const layerAssignments = parseLayerAssignments(text);
@@ -603,6 +657,9 @@ function parseIfcText(text: string): IfcInventoryItem[] {
       cartesianPointLinePreview,
       parsedCartesianPoint,
       cartesianPointParseFailed,
+      placementPositionIgnored: false,
+      placementPositionIgnoreReason: null,
+      sharedPlacementKey: buildSharedPlacementKey({ placementRefId, cartesianPointRefId }),
       anchorHouseNumber,
       anchorElementId: null,
       anchorElementName: null,
@@ -613,7 +670,7 @@ function parseIfcText(text: string): IfcInventoryItem[] {
     });
   }
 
-  return apply3dTextHouseAnchors(items);
+  return apply3dTextHouseAnchors(ignoreSharedGlobalPlacements(items));
 }
 
 function getIfcFileName(url: string) {
@@ -670,6 +727,9 @@ function buildIfcElementPayload(item: IfcInventoryItem, projectId: string, compa
       cartesianPointLinePreview: item.cartesianPointLinePreview,
       parsedCartesianPoint: item.parsedCartesianPoint,
       cartesianPointParseFailed: item.cartesianPointParseFailed,
+      placementPositionIgnored: item.placementPositionIgnored,
+      placementPositionIgnoreReason: item.placementPositionIgnoreReason,
+      sharedPlacementKey: item.sharedPlacementKey,
       anchorHouseNumber: item.anchorHouseNumber,
       anchorElementId: item.anchorElementId,
       anchorElementName: item.anchorElementName,
@@ -996,6 +1056,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         if (item.category === "production" && item.refDiagnostics.hasExtrudedAreaSolid) acc.productionWithExtrudedSolid += 1;
         if (item.category === "production" && item.position) acc.productionWithCoordinates += 1;
         if (item.category === "production" && item.placementPosition) acc.productionWithPlacementPosition += 1;
+        if (item.category === "production" && item.placementPositionIgnored) acc.productionWithIgnoredGlobalPlacement += 1;
         if (item.category === "text" && item.position) acc.textsWithCoordinates += 1;
         return acc;
       },
@@ -1012,6 +1073,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         productionWithExtrudedSolid: 0,
         productionWithCoordinates: 0,
         productionWithPlacementPosition: 0,
+        productionWithIgnoredGlobalPlacement: 0,
         textsWithCoordinates: 0,
       }
     );
@@ -1088,6 +1150,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
       `Produtivos com casa por proximidade: ${anchorCounts.productionWithHouseByAnchor}`,
       `Produtivos com refs: ${anchorCounts.productionWithRefs}`,
       `Produtivos com placementPosition: ${anchorCounts.productionWithPlacementPosition}`,
+      `Produtivos com placement global ignorado: ${anchorCounts.productionWithIgnoredGlobalPlacement}`,
       `Produtivos com IFCCARTESIANPOINT: ${anchorCounts.productionWithCartesianPoint}`,
       `Produtivos com IFCLOCALPLACEMENT: ${anchorCounts.productionWithLocalPlacement}`,
       `Produtivos com IFCAXIS2PLACEMENT3D: ${anchorCounts.productionWithAxisPlacement}`,
@@ -1192,6 +1255,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
                 <InventoryMetric label="Textos 3D" value={anchorCounts.threeDTexts} />
                 <InventoryMetric label="Âncoras numeradas" value={anchorCounts.numberedAnchors} />
                 <InventoryMetric label="Produtivos com placementPosition" value={anchorCounts.productionWithPlacementPosition} />
+                <InventoryMetric label="Placement global ignorado" value={anchorCounts.productionWithIgnoredGlobalPlacement} />
                 <InventoryMetric label="Produtivos com coordenadas" value={anchorCounts.productionWithCoordinates} />
                 <InventoryMetric label="Textos com coordenadas" value={anchorCounts.textsWithCoordinates} />
                 <InventoryMetric label="Casa por proximidade" value={anchorCounts.productionWithHouseByAnchor} />
@@ -1385,6 +1449,9 @@ function IfcItemCard({
           <p><span className="text-muted-foreground">Âncora: </span>{item.anchorElementName || "-"}</p>
           <p><span className="text-muted-foreground">Distância: </span>{item.anchorDistance != null ? item.anchorDistance.toFixed(2) : "-"}</p>
           <p><span className="text-muted-foreground">positionSource: </span>{item.positionSource}</p>
+          <p><span className="text-muted-foreground">placement ignorado: </span>{item.placementPositionIgnored ? "sim" : "nÃ£o"}</p>
+          <p><span className="text-muted-foreground">motivo: </span>{item.placementPositionIgnoreReason || "-"}</p>
+          <p><span className="text-muted-foreground">sharedPlacementKey: </span>{item.sharedPlacementKey || "-"}</p>
           <p><span className="text-muted-foreground">placementPosition: </span>{item.placementPosition ? `${item.placementPosition.x.toFixed(2)}, ${item.placementPosition.y.toFixed(2)}, ${item.placementPosition.z.toFixed(2)}` : "-"}</p>
           <p><span className="text-muted-foreground">placement refs: </span>{[item.placementRefId, item.axisPlacementRefId, item.cartesianPointRefId].filter(Boolean).join(" -> ") || "-"}</p>
           <p><span className="text-muted-foreground">parse IFCCARTESIANPOINT: </span>{item.cartesianPointParseFailed ? "falhou" : item.parsedCartesianPoint ? "ok" : "-"}</p>
