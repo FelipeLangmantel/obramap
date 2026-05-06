@@ -107,6 +107,9 @@ type IfcVisualInspectSelection = {
   center: IfcPoint | null;
   size: IfcPoint | null;
   hitRootOrGroup: boolean;
+  identificationError: string | null;
+  geometryAttributes: string[];
+  faceIndex: number | null;
 };
 type PersistDiagnostics = {
   authUserId: string | null;
@@ -1354,27 +1357,58 @@ function getIfcEntityIdVariants(value: string | null | undefined) {
   return new Set([normalized, normalized.replace(/^#/, "")]);
 }
 
-function getIfcVisualSelectionEntityId(event: any, mesh: THREE.Mesh | null) {
-  const directValue = mesh?.userData?.expressID ?? event?.object?.userData?.expressID;
-  const directNumber = normalizeNullableNumber(directValue);
-  if (directNumber != null) return `#${directNumber}`;
-
-  const geometry = mesh?.geometry;
-  const expressAttribute = geometry?.getAttribute?.("expressID") as { getX?: (index: number) => number } | undefined;
-  const vertexIndex = event?.face?.a ?? (typeof event?.faceIndex === "number" ? event.faceIndex * 3 : null);
-  if (expressAttribute?.getX && typeof vertexIndex === "number") {
-    const value = normalizeNullableNumber(expressAttribute.getX(vertexIndex));
-    if (value != null) return `#${value}`;
-  }
-
-  return null;
+function getIfcGeometryAttributeNames(geometry: THREE.BufferGeometry | undefined) {
+  return geometry?.attributes ? Object.keys(geometry.attributes) : [];
 }
 
-function getIfcVisualSelectionGlobalId(event: any, mesh: THREE.Mesh | null) {
+function getIfcAttributeValue(attribute: THREE.BufferAttribute | THREE.InterleavedBufferAttribute | undefined, index: number) {
+  const maybeAttribute = attribute as { getX?: (index: number) => number } | undefined;
+  if (!maybeAttribute?.getX) return null;
+  return normalizeNullableNumber(maybeAttribute.getX(index));
+}
+
+function getIfcExpressIdFromIntersection(intersection: any): {
+  entityId: string | null;
+  reason: string | null;
+  attributeName: string | null;
+} {
+  const mesh = findIfcVisualMesh(intersection?.object || null);
+  const geometry = mesh?.geometry;
+  if (!mesh || !geometry) return { entityId: null, reason: "missing_mesh_or_geometry", attributeName: null };
+
+  const faceIndex = typeof intersection?.faceIndex === "number" ? intersection.faceIndex : null;
+  if (faceIndex == null) return { entityId: null, reason: "missing_face_index", attributeName: null };
+
+  const attributeNames = ["expressID", "expressId", "ifcExpressID", "ifcExpressId"];
+  const index = geometry.index;
+  const candidateVertexIndices = [
+    intersection?.face?.a,
+    faceIndex * 3,
+    index?.getX?.(faceIndex * 3),
+  ].filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+
+  for (const attributeName of attributeNames) {
+    const attribute = geometry.getAttribute(attributeName) as THREE.BufferAttribute | THREE.InterleavedBufferAttribute | undefined;
+    if (!attribute) continue;
+
+    for (const vertexIndex of candidateVertexIndices) {
+      const expressId = getIfcAttributeValue(attribute, vertexIndex);
+      if (expressId != null) return { entityId: `#${expressId}`, reason: null, attributeName };
+    }
+  }
+
+  const directValue = mesh.userData?.expressID ?? mesh.userData?.expressId ?? intersection?.object?.userData?.expressID ?? intersection?.object?.userData?.expressId;
+  const directNumber = normalizeNullableNumber(directValue);
+  if (directNumber != null) return { entityId: `#${directNumber}`, reason: "used_user_data_fallback", attributeName: null };
+
+  return { entityId: null, reason: "missing_express_id_attribute", attributeName: null };
+}
+
+function getIfcVisualSelectionGlobalId(intersection: any, mesh: THREE.Mesh | null) {
   return normalizeNullableString(mesh?.userData?.GlobalId)
     || normalizeNullableString(mesh?.userData?.globalId)
-    || normalizeNullableString(event?.object?.userData?.GlobalId)
-    || normalizeNullableString(event?.object?.userData?.globalId);
+    || normalizeNullableString(intersection?.object?.userData?.GlobalId)
+    || normalizeNullableString(intersection?.object?.userData?.globalId);
 }
 
 function getIfcVisualObjectBounds(object: THREE.Object3D | null) {
@@ -1441,6 +1475,47 @@ function createIfcInspectHighlightMaterial() {
     side: THREE.DoubleSide,
     depthTest: true,
   });
+}
+
+function isIfcVisualRootOrWholeModel(object: THREE.Object3D | null, root: THREE.Object3D | null) {
+  if (!object) return true;
+  return object === root || object.name === "IFC visual diagnostic model" || object.type === "Group" || object.type === "Scene";
+}
+
+function findIfcInspectableIntersection(event: any) {
+  const intersections = Array.isArray(event?.intersections) && event.intersections.length > 0
+    ? event.intersections
+    : [event];
+
+  return intersections.find((intersection: any) => {
+    const mesh = findIfcVisualMesh(intersection?.object || null);
+    return !!mesh?.geometry && typeof intersection?.faceIndex === "number";
+  }) || null;
+}
+
+function logIfcInspectIntersections(event: any) {
+  const intersections = Array.isArray(event?.intersections) && event.intersections.length > 0
+    ? event.intersections
+    : [event];
+
+  console.info("[IFC Inspect] raycast intersections", intersections.slice(0, 5).map((intersection: any) => {
+    const object = intersection?.object as THREE.Object3D | undefined;
+    const mesh = findIfcVisualMesh(object || null);
+    const expressId = getIfcExpressIdFromIntersection(intersection);
+    return {
+      objectName: object?.name || null,
+      objectUuid: object?.uuid || null,
+      objectType: object?.type || null,
+      isMesh: !!(object as THREE.Mesh | undefined)?.isMesh,
+      faceIndex: typeof intersection?.faceIndex === "number" ? intersection.faceIndex : null,
+      geometryAttributes: getIfcGeometryAttributeNames(mesh?.geometry),
+      geometryGroupsCount: mesh?.geometry?.groups?.length ?? 0,
+      parentName: object?.parent?.name || null,
+      extractedExpressID: expressId.entityId,
+      expressIDReason: expressId.reason,
+      expressIDAttribute: expressId.attributeName,
+    };
+  }));
 }
 
 function findIfcVisualMesh(object: THREE.Object3D | null): THREE.Mesh | null {
@@ -1673,28 +1748,53 @@ function IFCVisualModel({
   }, [clearInspectHighlight]);
 
   const inspectMesh = useCallback((event: any, hit: THREE.Object3D) => {
-    const mesh = findIfcVisualMesh(hit);
+    logIfcInspectIntersections(event);
+
+    const intersection = findIfcInspectableIntersection(event);
+    const mesh = findIfcVisualMesh(intersection?.object || null);
     if (!mesh) {
       console.info("[IFC Inspect] no inventory match", { reason: "no mesh", uuid: hit.uuid, name: hit.name, type: hit.type });
       onInspectSelection(null);
       return;
     }
 
+    const expressIdResult = getIfcExpressIdFromIntersection(intersection);
     const bounds = getIfcVisualObjectBounds(mesh);
+    const hitRootOrGroup = isIfcVisualRootOrWholeModel(intersection?.object || hit, objectRef.current);
+    const identificationError = expressIdResult.entityId
+      ? null
+      : "Não foi possível identificar o elemento IFC individual neste clique";
+
     const selection: IfcVisualInspectSelection = {
       uuid: mesh.uuid,
-      objectName: mesh.name || null,
+      objectName: hitRootOrGroup && !expressIdResult.entityId ? null : mesh.name || null,
       objectType: mesh.type,
       parentName: mesh.parent?.name || null,
       parentUuid: mesh.parent?.uuid || null,
-      entityId: getIfcVisualSelectionEntityId(event, mesh),
-      globalId: getIfcVisualSelectionGlobalId(event, mesh),
+      entityId: expressIdResult.entityId,
+      globalId: getIfcVisualSelectionGlobalId(intersection, mesh),
       center: bounds.center,
       size: bounds.size,
-      hitRootOrGroup: hit === objectRef.current || hit.type === "Group" || hit.type === "Scene",
+      hitRootOrGroup,
+      identificationError,
+      geometryAttributes: getIfcGeometryAttributeNames(mesh.geometry),
+      faceIndex: typeof intersection?.faceIndex === "number" ? intersection.faceIndex : null,
     };
 
-    highlightInspectMesh(mesh);
+    if (selection.entityId && !isIfcVisualRootOrWholeModel(mesh, objectRef.current)) {
+      highlightInspectMesh(mesh);
+    } else {
+      clearInspectHighlight();
+      if (!selection.entityId) {
+        console.info("[IFC Inspect] no inventory match", {
+          reason: expressIdResult.reason,
+          uuid: mesh.uuid,
+          name: mesh.name,
+          attributes: selection.geometryAttributes,
+        });
+      }
+    }
+
     onInspectSelection(selection);
     console.info("[IFC Inspect] selected mesh", selection);
     if (selection.hitRootOrGroup) {
@@ -1705,7 +1805,7 @@ function IFCVisualModel({
         meshUuid: mesh.uuid,
       });
     }
-  }, [highlightInspectMesh, onInspectSelection]);
+  }, [clearInspectHighlight, highlightInspectMesh, onInspectSelection]);
 
   useEffect(() => {
     if (undoPaintSignal <= 0) return;
@@ -2894,10 +2994,18 @@ function IfcInspectPanel({
         <DiagnosticItem label="Objeto" value={selection.objectName || "(sem nome)"} />
         <DiagnosticItem label="UUID" value={selection.uuid} />
         <DiagnosticItem label="Parent" value={selection.parentName || selection.parentUuid} />
+        <DiagnosticItem label="Face index" value={selection.faceIndex == null ? null : String(selection.faceIndex)} />
+        <DiagnosticItem label="Atributos geometry" value={selection.geometryAttributes.length > 0 ? selection.geometryAttributes.join(", ") : null} />
         <DiagnosticItem label="Centro" value={formatIfcPoint(selection.center)} />
         <DiagnosticItem label="Tamanho" value={formatIfcPoint(selection.size)} />
         <DiagnosticItem label="Hit root/group" value={String(selection.hitRootOrGroup)} />
       </div>
+
+      {selection.identificationError && (
+        <p className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-900">
+          {selection.identificationError}
+        </p>
+      )}
 
       {element ? (
         <div className="mt-2 rounded-md bg-muted/40 p-2">
