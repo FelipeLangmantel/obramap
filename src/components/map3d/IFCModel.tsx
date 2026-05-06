@@ -2659,9 +2659,9 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         onStatusChange={handleVisualStatusChange}
       />
       <Html fullscreen>
-      <div className="pointer-events-none absolute right-4 top-4 bottom-24 w-[min(760px,calc(100vw-2rem))]">
+      <div className="pointer-events-none absolute left-4 top-4 bottom-24 z-20 w-[min(420px,calc(100vw-2rem))]">
         <div
-          className="pointer-events-auto flex h-full max-h-[calc(100vh-160px)] flex-col overflow-hidden overscroll-contain rounded-lg border border-border bg-background/95 shadow-2xl"
+          className="pointer-events-auto flex max-h-[calc(100vh-160px)] flex-col overflow-hidden overscroll-contain rounded-lg border border-border bg-background/95 shadow-xl"
           onWheel={(e) => e.stopPropagation()}
           onWheelCapture={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
@@ -2767,22 +2767,9 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
                   </p>
                 )}
                 {inspectModeEnabled && (
-                  <p className="mt-2 text-[11px] text-muted-foreground">
-                    Clique em um elemento IFC para validar Casa + Servico. Nada sera salvo automaticamente.
+                  <p className="mt-2 inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                    Modo inspeção ativo - clique em um elemento
                   </p>
-                )}
-                {inspectSelection && (
-                  <IfcInspectPanel
-                    selection={inspectSelection}
-                    element={inspectedPersistedElement}
-                    groupMode={inspectGroupMode}
-                    groupElements={inspectGroupElements}
-                    sameHouseCount={sameHouseElements.length}
-                    sameServiceCount={sameServiceElements.length}
-                    onShowHouse={() => setInspectGroupMode("house")}
-                    onShowService={() => setInspectGroupMode("service")}
-                    onClear={handleClearInspectSelection}
-                  />
                 )}
               </div>
             )}
@@ -2946,8 +2933,171 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
           )}
         </div>
       </div>
+      {showVisualIfc && visualStatus === "ready" && inspectSelection && (
+        <IfcInspectPanelCompact
+          selection={inspectSelection}
+          element={inspectedPersistedElement}
+          groupMode={inspectGroupMode}
+          groupElements={inspectGroupElements}
+          sameHouseCount={sameHouseElements.length}
+          sameServiceCount={sameServiceElements.length}
+          onShowHouse={() => setInspectGroupMode("house")}
+          onShowService={() => setInspectGroupMode("service")}
+          onClear={handleClearInspectSelection}
+        />
+      )}
       </Html>
     </>
+  );
+}
+
+function IfcInspectPanelCompact({
+  selection,
+  element,
+  groupMode,
+  groupElements,
+  sameHouseCount,
+  sameServiceCount,
+  onShowHouse,
+  onShowService,
+  onClear,
+}: {
+  selection: IfcVisualInspectSelection;
+  element: IfcPersistedElementRow | null;
+  groupMode: IfcInspectGroupMode;
+  groupElements: IfcPersistedElementRow[];
+  sameHouseCount: number;
+  sameServiceCount: number;
+  onShowHouse: () => void;
+  onShowService: () => void;
+  onClear: () => void;
+}) {
+  const houseSource = getPersistedHouseDetectionSource(element);
+  const groupTitle = groupMode === "house"
+    ? "Elementos da mesma casa"
+    : groupMode === "service"
+      ? "Elementos do mesmo serviço"
+      : null;
+
+  return (
+    <div className="pointer-events-auto fixed bottom-4 left-4 right-4 z-40 flex max-h-[46vh] flex-col overflow-hidden rounded-lg border border-primary/30 bg-background/95 text-[11px] shadow-2xl backdrop-blur md:left-auto md:top-20 md:bottom-6 md:w-[380px] md:max-h-none">
+      <div className="flex flex-shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold">Elemento selecionado</p>
+          <p className="truncate font-mono text-[10px] text-muted-foreground">{selection.entityId || "Elemento individual não identificado"}</p>
+        </div>
+        <button type="button" onClick={onClear} className="shrink-0 rounded border border-border bg-background px-2 py-1 text-[10px] font-medium hover:bg-muted">
+          Limpar seleção
+        </button>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        <div className="grid grid-cols-2 gap-2">
+          <InspectPrimaryField label="Entity ID" value={selection.entityId || "-"} />
+          <InspectPrimaryField label="Casa" value={element?.detected_house_number == null ? "-" : String(element.detected_house_number)} />
+          <InspectPrimaryField label="Serviço" value={element?.detected_service_label || element?.detected_service_key || "-"} />
+          <InspectPrimaryField label="Status" value={element?.status || "-"} />
+          <InspectPrimaryField label="Origem" value={element ? getPersistedHouseDetectionLabel(houseSource) : "-"} />
+          <InspectPrimaryField label="Confidence" value={element?.confidence || "-"} />
+        </div>
+
+        {selection.identificationError && (
+          <p className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-900">
+            {selection.identificationError}
+          </p>
+        )}
+
+        {element ? (
+          <div className="mt-3 rounded-md bg-muted/40 p-2">
+            <p className="mb-1 text-xs font-semibold">Sugestão encontrada</p>
+            <div className="grid grid-cols-2 gap-2">
+              <InspectPrimaryField label="Casa atribuída" value={element.detected_house_number == null ? "-" : String(element.detected_house_number)} />
+              <InspectPrimaryField label="Serviço detectado" value={element.detected_service_label || element.detected_service_key || "-"} />
+              <InspectPrimaryField label="Needs review" value={element.needs_review == null ? "-" : String(element.needs_review)} />
+              <InspectPrimaryField label="Categoria" value={element.category || "-"} />
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={onShowHouse}
+                disabled={element.detected_house_number == null}
+                className="rounded border border-border bg-background px-2 py-1 text-[10px] font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Mesma casa ({sameHouseCount})
+              </button>
+              <button
+                type="button"
+                onClick={onShowService}
+                disabled={!element.detected_service_key}
+                className="rounded border border-border bg-background px-2 py-1 text-[10px] font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Mesmo serviço ({sameServiceCount})
+              </button>
+            </div>
+          </div>
+        ) : (
+          <p className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-900">
+            Elemento visual identificado, mas sem correspondência no inventário IFC.
+          </p>
+        )}
+
+        <details className="mt-3 rounded-md border border-border bg-muted/20 p-2">
+          <summary className="cursor-pointer text-xs font-semibold">Detalhes técnicos</summary>
+          <div className="mt-2 grid grid-cols-1 gap-x-3 gap-y-1 sm:grid-cols-2">
+            <DiagnosticItem label="GlobalId visual" value={selection.globalId} />
+            <DiagnosticItem label="Object name" value={selection.objectName || "(sem nome)"} />
+            <DiagnosticItem label="UUID" value={selection.uuid} />
+            <DiagnosticItem label="Parent" value={selection.parentName || selection.parentUuid} />
+            <DiagnosticItem label="Face index" value={selection.faceIndex == null ? null : String(selection.faceIndex)} />
+            <DiagnosticItem label="Geometry attrs" value={selection.geometryAttributes.length > 0 ? selection.geometryAttributes.join(", ") : null} />
+            <DiagnosticItem label="Centro" value={formatIfcPoint(selection.center)} />
+            <DiagnosticItem label="Tamanho" value={formatIfcPoint(selection.size)} />
+            <DiagnosticItem label="Hit root/group" value={String(selection.hitRootOrGroup)} />
+            {element && (
+              <>
+                <DiagnosticItem label="Entity ID salvo" value={element.ifc_entity_id} />
+                <DiagnosticItem label="GlobalId salvo" value={element.ifc_global_id} />
+                <DiagnosticItem label="Camada" value={element.ifc_layer_name} />
+                <DiagnosticItem label="Nome" value={element.name} />
+              </>
+            )}
+          </div>
+        </details>
+
+        {groupTitle && (
+          <div className="mt-3 rounded-md border border-border bg-muted/20 p-2">
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <p className="font-medium">{groupTitle}</p>
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                {groupElements.length} elemento(s)
+              </span>
+            </div>
+            <div className="max-h-40 space-y-1 overflow-y-auto pr-1">
+              {groupElements.slice(0, 40).map(item => (
+                <div key={item.id} className="rounded bg-background px-2 py-1">
+                  <p className="truncate font-mono text-[10px]">{item.ifc_entity_id || "-"} | {item.ifc_global_id || "-"}</p>
+                  <p className="truncate text-[10px] text-muted-foreground">
+                    Casa {item.detected_house_number ?? "-"} | {item.detected_service_label || item.detected_service_key || "-"} | {item.status}
+                  </p>
+                </div>
+              ))}
+              {groupElements.length > 40 && (
+                <p className="text-[10px] text-muted-foreground">Mostrando 40 de {groupElements.length} elementos.</p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function InspectPrimaryField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 rounded-md bg-muted/50 px-2 py-1.5">
+      <p className="truncate text-[10px] text-muted-foreground">{label}</p>
+      <p className="truncate text-xs font-semibold" title={value}>{value}</p>
+    </div>
   );
 }
 
