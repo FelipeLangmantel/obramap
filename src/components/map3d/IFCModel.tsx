@@ -2075,6 +2075,9 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
   const [visualMessage, setVisualMessage] = useState<string | null>(null);
   const [paintModeEnabled, setPaintModeEnabled] = useState(false);
   const [inspectModeEnabled, setInspectModeEnabled] = useState(false);
+  const [focusModeEnabled, setFocusModeEnabled] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(true);
+  const [inspectPanelCollapsed, setInspectPanelCollapsed] = useState(false);
   const [inspectSelection, setInspectSelection] = useState<IfcVisualInspectSelection | null>(null);
   const [inspectGroupMode, setInspectGroupMode] = useState<IfcInspectGroupMode>("none");
   const [persistedElements, setPersistedElements] = useState<IfcPersistedElementRow[]>([]);
@@ -2132,12 +2135,28 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
   const handleInspectSelection = useCallback((selection: IfcVisualInspectSelection | null) => {
     setInspectSelection(selection);
     setInspectGroupMode("none");
+    if (selection) setInspectPanelCollapsed(false);
   }, []);
 
   const handleClearInspectSelection = useCallback(() => {
     setInspectSelection(null);
     setInspectGroupMode("none");
+    setInspectPanelCollapsed(false);
     setClearInspectSignal(value => value + 1);
+  }, []);
+
+  const handleToggleFocusMode = useCallback(() => {
+    setFocusModeEnabled(prev => {
+      const next = !prev;
+      if (next) {
+        setMinimized(true);
+        setToolsOpen(false);
+        console.info("[IFC UI] inventory compact mode");
+      } else {
+        setToolsOpen(true);
+      }
+      return next;
+    });
   }, []);
 
   useEffect(() => {
@@ -2152,6 +2171,9 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
     setPersistedElements([]);
     setInspectSelection(null);
     setInspectGroupMode("none");
+    setFocusModeEnabled(false);
+    setToolsOpen(true);
+    setInspectPanelCollapsed(false);
     calledRef.current = false;
     persistedKeyRef.current = null;
     autoMinimizedInventoryRef.current = false;
@@ -2683,67 +2705,92 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
       />
       <Html fullscreen>
       {showVisualIfc && visualStatus === "ready" && (
-        <div className="pointer-events-none absolute left-4 right-4 top-3 z-30">
+        <div className="pointer-events-none absolute left-4 top-3 z-30">
           <div
-            className="pointer-events-auto flex max-w-[min(920px,calc(100vw-2rem))] flex-wrap items-center gap-2 rounded-lg border border-border bg-background/90 px-2 py-2 text-xs shadow-xl backdrop-blur"
+            className="pointer-events-auto max-w-[min(360px,calc(100vw-2rem))] rounded-lg border border-border bg-background/90 px-2 py-2 text-xs shadow-xl backdrop-blur"
             onWheel={(e) => e.stopPropagation()}
             onPointerDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
           >
-            <button
-              type="button"
-              onClick={handleToggleInspectMode}
-              className={`rounded border px-2.5 py-1 text-[11px] font-medium ${
-                inspectModeEnabled
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border bg-background hover:bg-muted"
-              }`}
-            >
-              Inspecionar IFC
-            </button>
-            <button
-              type="button"
-              onClick={handleTogglePaintMode}
-              className={`rounded border px-2.5 py-1 text-[11px] font-medium ${
-                paintModeEnabled
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border bg-background hover:bg-muted"
-              }`}
-            >
-              Pintar Textura
-            </button>
-            <select
-              value={selectedPaintTexture}
-              onChange={(event) => handleSelectPaintTexture(event.target.value as IfcVisualTextureKind)}
-              className="rounded border border-border bg-background px-2 py-1 text-[11px]"
-              disabled={!paintModeEnabled}
-            >
-              {IFC_PAINT_TEXTURE_OPTIONS.map(option => (
-                <option key={option.kind} value={option.kind}>{option.label}</option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={() => setUndoPaintSignal(value => value + 1)}
-              className="rounded border border-border bg-background px-2.5 py-1 text-[11px] font-medium hover:bg-muted"
-            >
-              Desfazer
-            </button>
-            <button
-              type="button"
-              onClick={() => setClearPaintSignal(value => value + 1)}
-              className="rounded border border-border bg-background px-2.5 py-1 text-[11px] font-medium hover:bg-muted"
-            >
-              Limpar pinturas
-            </button>
-            {inspectModeEnabled && (
-              <span className="rounded-full bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary">
-                Modo inspeção ativo - clique em um elemento
-              </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setToolsOpen(prev => !prev)}
+                className="rounded border border-border bg-background px-2.5 py-1 text-[11px] font-semibold hover:bg-muted"
+              >
+                IFC
+              </button>
+              <button
+                type="button"
+                onClick={handleToggleFocusMode}
+                className={`rounded border px-2.5 py-1 text-[11px] font-medium ${
+                  focusModeEnabled
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-background hover:bg-muted"
+                }`}
+              >
+                Tela limpa
+              </button>
+              {inspectModeEnabled && (
+                <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-medium text-primary">
+                  Inspeção ativa
+                </span>
+              )}
+            </div>
+            {toolsOpen && (
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleToggleInspectMode}
+                  className={`rounded border px-2.5 py-1 text-[11px] font-medium ${
+                    inspectModeEnabled
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-background hover:bg-muted"
+                  }`}
+                >
+                  Inspecionar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleTogglePaintMode}
+                  className={`rounded border px-2.5 py-1 text-[11px] font-medium ${
+                    paintModeEnabled
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-background hover:bg-muted"
+                  }`}
+                >
+                  Pintar
+                </button>
+                <select
+                  value={selectedPaintTexture}
+                  onChange={(event) => handleSelectPaintTexture(event.target.value as IfcVisualTextureKind)}
+                  className="min-w-0 flex-1 rounded border border-border bg-background px-2 py-1 text-[11px]"
+                  disabled={!paintModeEnabled}
+                >
+                  {IFC_PAINT_TEXTURE_OPTIONS.map(option => (
+                    <option key={option.kind} value={option.kind}>{option.label}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setUndoPaintSignal(value => value + 1)}
+                  className="rounded border border-border bg-background px-2.5 py-1 text-[11px] font-medium hover:bg-muted"
+                >
+                  Desfazer
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setClearPaintSignal(value => value + 1)}
+                  className="rounded border border-border bg-background px-2.5 py-1 text-[11px] font-medium hover:bg-muted"
+                >
+                  Limpar
+                </button>
+              </div>
             )}
           </div>
         </div>
       )}
+      {!focusModeEnabled && (
       <div className="pointer-events-none absolute left-4 bottom-4 z-20 w-[min(340px,calc(100vw-2rem))]">
         <div
           className="pointer-events-auto flex max-h-[min(360px,calc(100vh-160px))] flex-col overflow-hidden overscroll-contain rounded-lg border border-border bg-background/95 shadow-xl"
@@ -3018,18 +3065,26 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
           )}
         </div>
       </div>
+      )}
       {showVisualIfc && visualStatus === "ready" && inspectSelection && (
         <IfcInspectPanelCompact
           selection={inspectSelection}
           element={inspectedPersistedElement}
+          collapsed={inspectPanelCollapsed}
           groupMode={inspectGroupMode}
           groupElements={inspectGroupElements}
           sameHouseCount={sameHouseElements.length}
           sameServiceCount={sameServiceElements.length}
+          onToggleCollapsed={() => setInspectPanelCollapsed(prev => !prev)}
           onShowHouse={() => setInspectGroupMode("house")}
           onShowService={() => setInspectGroupMode("service")}
           onClear={handleClearInspectSelection}
         />
+      )}
+      {showVisualIfc && visualStatus === "ready" && inspectModeEnabled && !inspectSelection && (
+        <div className="pointer-events-none absolute right-4 bottom-4 z-30 rounded-full border border-border bg-background/90 px-3 py-1.5 text-[11px] font-medium text-primary shadow-lg">
+          Inspeção IFC ativa
+        </div>
       )}
       </Html>
     </>
@@ -3039,20 +3094,24 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
 function IfcInspectPanelCompact({
   selection,
   element,
+  collapsed,
   groupMode,
   groupElements,
   sameHouseCount,
   sameServiceCount,
+  onToggleCollapsed,
   onShowHouse,
   onShowService,
   onClear,
 }: {
   selection: IfcVisualInspectSelection;
   element: IfcPersistedElementRow | null;
+  collapsed: boolean;
   groupMode: IfcInspectGroupMode;
   groupElements: IfcPersistedElementRow[];
   sameHouseCount: number;
   sameServiceCount: number;
+  onToggleCollapsed: () => void;
   onShowHouse: () => void;
   onShowService: () => void;
   onClear: () => void;
@@ -3064,6 +3123,21 @@ function IfcInspectPanelCompact({
       ? "Elementos do mesmo serviço"
       : null;
 
+  if (collapsed) {
+    return (
+      <button
+        type="button"
+        onClick={onToggleCollapsed}
+        className="pointer-events-auto absolute bottom-4 right-4 z-30 max-w-[min(360px,calc(100vw-2rem))] rounded-lg border border-primary/30 bg-background/95 px-3 py-2 text-left text-[11px] shadow-2xl backdrop-blur"
+      >
+        <span className="block text-xs font-semibold">{selection.entityId || "Elemento IFC"}</span>
+        <span className="block truncate text-muted-foreground">
+          Casa {element?.detected_house_number ?? "-"} | {element?.detected_service_label || element?.detected_service_key || "-"}
+        </span>
+      </button>
+    );
+  }
+
   return (
     <div className="pointer-events-auto absolute bottom-4 left-4 right-4 z-30 flex max-h-[45vh] flex-col overflow-hidden rounded-lg border border-primary/30 bg-background/95 text-[11px] shadow-2xl backdrop-blur md:left-auto md:right-4 md:top-16 md:bottom-4 md:w-[390px] md:max-h-none">
       <div className="flex flex-shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2">
@@ -3071,9 +3145,14 @@ function IfcInspectPanelCompact({
           <p className="text-sm font-semibold">Elemento selecionado</p>
           <p className="truncate font-mono text-[10px] text-muted-foreground">{selection.entityId || "Elemento individual não identificado"}</p>
         </div>
-        <button type="button" onClick={onClear} className="shrink-0 rounded border border-border bg-background px-2 py-1 text-[10px] font-medium hover:bg-muted">
-          Limpar seleção
-        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          <button type="button" onClick={onToggleCollapsed} className="rounded border border-border bg-background px-2 py-1 text-[10px] font-medium hover:bg-muted">
+            Recolher
+          </button>
+          <button type="button" onClick={onClear} className="rounded border border-border bg-background px-2 py-1 text-[10px] font-medium hover:bg-muted">
+            Limpar
+          </button>
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
