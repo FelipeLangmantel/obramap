@@ -811,11 +811,12 @@ type IfcVisualTextureKind =
 
 const IFC_VISUAL_TEXTURES: Record<
   IfcVisualTextureKind,
-  { path: string; repeat: [number, number]; color: string; opacity: number; roughness: number }
+  { path: string; repeat: [number, number]; tileSize: number; color: string; opacity: number; roughness: number }
 > = {
   concreto_agregado: {
     path: "/textures/ifc/Concrete_12_1K.png",
     repeat: [7, 7],
+    tileSize: 3,
     color: "#d3d1ca",
     opacity: 0.94,
     roughness: 0.82,
@@ -823,6 +824,7 @@ const IFC_VISUAL_TEXTURES: Record<
   concreto_liso: {
     path: "/textures/ifc/Concrete_16_1K.png",
     repeat: [6, 6],
+    tileSize: 3,
     color: "#c8c6be",
     opacity: 0.94,
     roughness: 0.78,
@@ -830,6 +832,7 @@ const IFC_VISUAL_TEXTURES: Record<
   grama: {
     path: "/textures/ifc/Vegetation_Grass.jpg",
     repeat: [16, 16],
+    tileSize: 6,
     color: "#7fa66b",
     opacity: 0.92,
     roughness: 0.88,
@@ -837,6 +840,7 @@ const IFC_VISUAL_TEXTURES: Record<
   vegetacao: {
     path: "/textures/ifc/Vegetation_Juniper.jpg",
     repeat: [14, 14],
+    tileSize: 6,
     color: "#496f3d",
     opacity: 0.92,
     roughness: 0.9,
@@ -844,6 +848,7 @@ const IFC_VISUAL_TEXTURES: Record<
   asfalto: {
     path: "/textures/ifc/Asphalt_06_1K.png",
     repeat: [8, 8],
+    tileSize: 5,
     color: "#575b58",
     opacity: 0.92,
     roughness: 0.8,
@@ -851,6 +856,7 @@ const IFC_VISUAL_TEXTURES: Record<
   paver: {
     path: "/textures/ifc/Concrete_Block_8x8_Gray.jpg",
     repeat: [8, 8],
+    tileSize: 2,
     color: "#b9aea2",
     opacity: 0.94,
     roughness: 0.78,
@@ -858,6 +864,7 @@ const IFC_VISUAL_TEXTURES: Record<
   parede_revestida: {
     path: "/textures/ifc/Concrete_Scored_Jointless.jpg",
     repeat: [5, 5],
+    tileSize: 2.5,
     color: "#d8d2c8",
     opacity: 0.95,
     roughness: 0.8,
@@ -865,11 +872,14 @@ const IFC_VISUAL_TEXTURES: Record<
   solo: {
     path: "/textures/ifc/Soil_04_1K.png",
     repeat: [12, 12],
+    tileSize: 6,
     color: "#8b6f4e",
     opacity: 0.9,
     roughness: 0.9,
   },
 };
+
+type IfcVisualMaterialKind = IfcVisualTextureKind | "simple_text" | "neutral";
 
 function disposeIfcVisualMaterial(material: THREE.Material, disposedTextures?: Set<THREE.Texture>) {
   const materialWithTextures = material as THREE.Material & Record<string, unknown>;
@@ -954,34 +964,75 @@ function getIfcVisualMaterials(mesh: THREE.Mesh) {
   return material ? [material] : [];
 }
 
+function getIfcVisualMeshBounds(mesh: THREE.Mesh) {
+  const geometry = mesh.geometry;
+  if (!geometry || !geometry.getAttribute("position")) return null;
+
+  geometry.computeBoundingBox();
+  const box = geometry.boundingBox;
+  if (!box) return null;
+
+  const size = new THREE.Vector3();
+  box.getSize(size);
+  const isHorizontalPlane = size.y <= Math.max(size.x, size.z) * 0.08 && size.x > 4 && size.z > 4;
+  const isLargeHorizontalPlane = isHorizontalPlane && size.x * size.z >= 400;
+  return { box, size, isHorizontalPlane, isLargeHorizontalPlane };
+}
+
+function getIfcVisualUvAxes(size: THREE.Vector3) {
+  const isHorizontal = size.y <= Math.max(size.x, size.z) * 0.12;
+  if (isHorizontal) return { uAxis: "x" as const, vAxis: "z" as const, uLength: size.x, vLength: size.z };
+
+  return size.x >= size.z
+    ? { uAxis: "x" as const, vAxis: "y" as const, uLength: size.x, vLength: size.y }
+    : { uAxis: "z" as const, vAxis: "y" as const, uLength: size.z, vLength: size.y };
+}
+
 function ensureIfcVisualPlanarUv(mesh: THREE.Mesh) {
   const geometry = mesh.geometry;
   if (!geometry || geometry.getAttribute("uv") || !geometry.getAttribute("position")) return false;
 
-  geometry.computeBoundingBox();
-  const box = geometry.boundingBox;
+  const bounds = getIfcVisualMeshBounds(mesh);
   const position = geometry.getAttribute("position") as THREE.BufferAttribute;
-  if (!box || !position) return false;
+  if (!bounds || !position) return false;
 
-  const size = new THREE.Vector3();
-  box.getSize(size);
-  const useXZ = size.x >= size.y && size.z >= size.y;
-  const useXY = size.x >= size.z && size.y >= size.z;
-  const uSize = Math.max(useXZ || useXY ? size.x : size.z, 1);
-  const vSize = Math.max(useXZ ? size.z : useXY ? size.y : size.y, 1);
+  const { box, size } = bounds;
+  const axes = getIfcVisualUvAxes(size);
+  const uSize = Math.max(axes.uLength, 1);
+  const vSize = Math.max(axes.vLength, 1);
   const uv = new Float32Array(position.count * 2);
 
+  const readAxis = (index: number, axis: "x" | "y" | "z") => {
+    if (axis === "x") return position.getX(index);
+    if (axis === "y") return position.getY(index);
+    return position.getZ(index);
+  };
+  const minAxis = (axis: "x" | "y" | "z") => {
+    if (axis === "x") return box.min.x;
+    if (axis === "y") return box.min.y;
+    return box.min.z;
+  };
+
   for (let index = 0; index < position.count; index += 1) {
-    const x = position.getX(index);
-    const y = position.getY(index);
-    const z = position.getZ(index);
-    uv[index * 2] = useXZ || useXY ? (x - box.min.x) / uSize : (z - box.min.z) / uSize;
-    uv[index * 2 + 1] = useXZ ? (z - box.min.z) / vSize : (y - box.min.y) / vSize;
+    uv[index * 2] = (readAxis(index, axes.uAxis) - minAxis(axes.uAxis)) / uSize;
+    uv[index * 2 + 1] = (readAxis(index, axes.vAxis) - minAxis(axes.vAxis)) / vSize;
   }
 
   geometry.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
   geometry.attributes.uv.needsUpdate = true;
   return true;
+}
+
+function getIfcVisualTextureRepeat(kind: IfcVisualTextureKind, mesh: THREE.Mesh): [number, number] {
+  const bounds = getIfcVisualMeshBounds(mesh);
+  const config = IFC_VISUAL_TEXTURES[kind];
+  if (!bounds) return config.repeat;
+
+  const axes = getIfcVisualUvAxes(bounds.size);
+  return [
+    Math.max(1, Math.min(80, axes.uLength / config.tileSize)),
+    Math.max(1, Math.min(80, axes.vLength / config.tileSize)),
+  ];
 }
 
 function getIfcVisualClassificationSource(mesh: THREE.Mesh) {
@@ -1001,27 +1052,18 @@ function getIfcVisualClassificationSource(mesh: THREE.Mesh) {
     .toLowerCase();
 }
 
-function getIfcVisualTextureKind(mesh: THREE.Mesh): IfcVisualTextureKind | "simple_text" {
+function getIfcVisualTextureKind(mesh: THREE.Mesh): IfcVisualMaterialKind {
   const source = getIfcVisualClassificationSource(mesh);
+  const bounds = getIfcVisualMeshBounds(mesh);
 
   if (source.includes("3dtext") || source.includes("texto") || source.includes("text")) return "simple_text";
-  if (source.includes("laje") || source.includes("slab") || source.includes("piso concreto") || source.includes("concreto liso")) {
-    return "concreto_liso";
-  }
-  if (
-    source.includes("radier") ||
-    source.includes("fundacao") ||
-    source.includes("base") ||
-    source.includes("concreto")
-  ) {
-    return "concreto_agregado";
-  }
   if (
     source.includes("rua") ||
     source.includes("via") ||
     source.includes("asfalto") ||
     source.includes("pavimento") ||
-    source.includes("acesso")
+    source.includes("acesso") ||
+    source.includes("estrada")
   ) {
     return "asfalto";
   }
@@ -1035,9 +1077,33 @@ function getIfcVisualTextureKind(mesh: THREE.Mesh): IfcVisualTextureKind | "simp
   }
   if (source.includes("vegetacao")) return "vegetacao";
   if (source.includes("grama") || source.includes("jardim") || source.includes("area verde")) return "grama";
-  if (source.includes("lote") || source.includes("terreno") || source.includes("solo")) return "solo";
-  if (source.includes("parede") || source.includes("paredes") || source.includes("oitao")) return "parede_revestida";
-  return "concreto_agregado";
+  if (
+    source.includes("lote") ||
+    source.includes("terreno") ||
+    source.includes("solo") ||
+    source.includes("ground") ||
+    source.includes("site") ||
+    source.includes("topografia")
+  ) {
+    return "solo";
+  }
+  if (source.includes("parede") || source.includes("paredes") || source.includes("oitao") || source.includes("wall")) {
+    return "parede_revestida";
+  }
+  if (source.includes("laje") || source.includes("slab") || source.includes("piso concreto") || source.includes("concreto liso")) {
+    return "concreto_liso";
+  }
+  if (
+    source.includes("radier") ||
+    source.includes("fundacao") ||
+    source.includes("base estrutural") ||
+    source.includes("concreto")
+  ) {
+    if (bounds?.isLargeHorizontalPlane && !source.includes("radier") && !source.includes("fundacao")) return "solo";
+    return "concreto_agregado";
+  }
+  if (bounds?.isLargeHorizontalPlane) return "solo";
+  return "neutral";
 }
 
 function createIfcVisualTexture(
@@ -1084,14 +1150,31 @@ function createIfcVisualTextMaterial() {
   });
 }
 
+function createIfcVisualNeutralMaterial() {
+  return new THREE.MeshStandardMaterial({
+    color: "#d6d3ca",
+    roughness: 0.78,
+    metalness: 0.02,
+    transparent: true,
+    opacity: 0.86,
+    side: THREE.DoubleSide,
+  });
+}
+
 function createIfcVisualTexturedMaterial(
   kind: IfcVisualTextureKind,
   textureLoader: THREE.TextureLoader,
   textureCache: Map<IfcVisualTextureKind, THREE.Texture>,
-  textureLoadStatus: Map<IfcVisualTextureKind, "loading" | "loaded" | "error">
+  textureLoadStatus: Map<IfcVisualTextureKind, "loading" | "loaded" | "error">,
+  repeat: [number, number]
 ) {
   const config = IFC_VISUAL_TEXTURES[kind];
-  const texture = createIfcVisualTexture(kind, textureLoader, textureCache, textureLoadStatus);
+  const texture = createIfcVisualTexture(kind, textureLoader, textureCache, textureLoadStatus).clone();
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(repeat[0], repeat[1]);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.needsUpdate = true;
 
   return new THREE.MeshStandardMaterial({
     color: config.color,
@@ -1108,7 +1191,7 @@ function configureIfcVisualMaterials(model: THREE.Object3D) {
   const textureLoader = new THREE.TextureLoader();
   const textureCache = new Map<IfcVisualTextureKind, THREE.Texture>();
   const textureLoadStatus = new Map<IfcVisualTextureKind, "loading" | "loaded" | "error">();
-  const fallbackMaterials = new Map<string, THREE.Material>();
+  const sharedFallbackMaterials = new Map<"simple_text" | "neutral", THREE.Material>();
   const materialKeys = new Set<string>();
   const materialDiagnostics: Array<{
     meshName: string;
@@ -1128,6 +1211,23 @@ function configureIfcVisualMaterials(model: THREE.Object3D) {
   let unnamedMaterials = 0;
   let generatedUvMeshes = 0;
   let meshesWithMaterialMap = 0;
+  const classificationCounts: Record<IfcVisualMaterialKind, number> = {
+    concreto_agregado: 0,
+    concreto_liso: 0,
+    grama: 0,
+    vegetacao: 0,
+    asfalto: 0,
+    paver: 0,
+    parede_revestida: 0,
+    solo: 0,
+    simple_text: 0,
+    neutral: 0,
+  };
+  const largeMeshDiagnostics: Array<{
+    meshName: string;
+    kind: IfcVisualMaterialKind;
+    size: [number, number, number];
+  }> = [];
 
   console.info("[IFC Textures] files/check", {
     expectedPaths: Object.fromEntries(
@@ -1177,16 +1277,35 @@ function configureIfcVisualMaterials(model: THREE.Object3D) {
 
     const textureKind = getIfcVisualTextureKind(mesh);
     const hasUv = Boolean(mesh.geometry?.getAttribute("uv"));
-    let fallbackMaterial = fallbackMaterials.get(textureKind);
-    if (!fallbackMaterial) {
-      fallbackMaterial =
-        textureKind === "simple_text"
-          ? createIfcVisualTextMaterial()
-          : createIfcVisualTexturedMaterial(textureKind, textureLoader, textureCache, textureLoadStatus);
-      fallbackMaterials.set(textureKind, fallbackMaterial);
+    classificationCounts[textureKind] += 1;
+    const bounds = getIfcVisualMeshBounds(mesh);
+    if (bounds?.isLargeHorizontalPlane) {
+      largeMeshDiagnostics.push({
+        meshName: mesh.name || "(sem nome)",
+        kind: textureKind,
+        size: [bounds.size.x, bounds.size.y, bounds.size.z],
+      });
     }
 
-    if (textureKind === "simple_text") colorFallbackMaterials += 1;
+    let fallbackMaterial: THREE.Material;
+    if (textureKind === "simple_text" || textureKind === "neutral") {
+      let sharedMaterial = sharedFallbackMaterials.get(textureKind);
+      if (!sharedMaterial) {
+        sharedMaterial = textureKind === "simple_text" ? createIfcVisualTextMaterial() : createIfcVisualNeutralMaterial();
+        sharedFallbackMaterials.set(textureKind, sharedMaterial);
+      }
+      fallbackMaterial = sharedMaterial;
+    } else {
+      fallbackMaterial = createIfcVisualTexturedMaterial(
+        textureKind,
+        textureLoader,
+        textureCache,
+        textureLoadStatus,
+        getIfcVisualTextureRepeat(textureKind, mesh)
+      );
+    }
+
+    if (textureKind === "simple_text" || textureKind === "neutral") colorFallbackMaterials += 1;
     else texturedFallbackMaterials += 1;
 
     mesh.material = fallbackMaterial;
@@ -1202,6 +1321,19 @@ function configureIfcVisualMaterials(model: THREE.Object3D) {
   console.info("[IFC Textures] applied count", texturedFallbackMaterials);
   console.info("[IFC Textures] fallback color count", colorFallbackMaterials);
   console.info("[IFC Textures] preserved original material count", preservedOriginalMaterials);
+  console.info("[IFC Textures] classification summary", {
+    terrainSoilCount: classificationCounts.solo,
+    grassCount: classificationCounts.grama,
+    vegetationCount: classificationCounts.vegetacao,
+    asphaltCount: classificationCounts.asfalto,
+    paverCount: classificationCounts.paver,
+    concreteCount: classificationCounts.concreto_agregado + classificationCounts.concreto_liso,
+    wallCount: classificationCounts.parede_revestida,
+    neutralFallbackCount: classificationCounts.neutral,
+    textCount: classificationCounts.simple_text,
+    unnamedOrUnclassifiedCount: unnamedMaterials,
+    largeMeshDiagnostics: largeMeshDiagnostics.slice(0, 20),
+  });
   console.info("[IFC Textures] summary", {
     totalMeshes: meshCount,
     meshesWithMaterialMap,
