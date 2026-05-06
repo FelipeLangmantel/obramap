@@ -19,8 +19,9 @@ import { supabase } from "@/integrations/supabase/client";
 type IfcSuggestionStatus = "suggested" | "confirmed" | "ignored";
 type StatusFilter = IfcSuggestionStatus | "all";
 type CategoryFilter = "production" | "text_annotation" | "unknown" | "all";
-type QuickFilter = "all" | "valid" | "3dtext" | "layer" | "no_service" | "no_house" | "confirmed" | "ignored";
+type QuickFilter = "all" | "valid" | "3dtext" | "layer" | "no_service" | "no_house" | "confirmed" | "ignored" | "manual";
 type BatchAction = "confirm_valid" | "ignore_no_service";
+type ManualHouseAction = "assign" | "clear";
 
 interface IfcSuggestionRow {
   id: string;
@@ -63,6 +64,12 @@ interface IfcSuggestionRawProperties {
   cartesianPointLinePreview: string | null;
   parsedCartesianPoint: { x: number; y: number; z: number } | null;
   cartesianPointParseFailed: boolean | null;
+  placementPositionIgnored: boolean | null;
+  placementPositionIgnoreReason: string | null;
+  sharedPlacementKey: string | null;
+  manualHouseAssignment: boolean | null;
+  manualAssignedAt: string | null;
+  previousHouseDetectionSource: string | null;
 }
 
 interface IfcModelIdRow {
@@ -194,6 +201,12 @@ function asIfcSuggestionRawProperties(value: unknown): IfcSuggestionRawPropertie
     cartesianPointLinePreview: normalizeNullableString(raw.cartesianPointLinePreview),
     parsedCartesianPoint: normalizeIfcPoint(raw.parsedCartesianPoint),
     cartesianPointParseFailed: typeof raw.cartesianPointParseFailed === "boolean" ? raw.cartesianPointParseFailed : null,
+    placementPositionIgnored: typeof raw.placementPositionIgnored === "boolean" ? raw.placementPositionIgnored : null,
+    placementPositionIgnoreReason: normalizeNullableString(raw.placementPositionIgnoreReason),
+    sharedPlacementKey: normalizeNullableString(raw.sharedPlacementKey),
+    manualHouseAssignment: typeof raw.manualHouseAssignment === "boolean" ? raw.manualHouseAssignment : null,
+    manualAssignedAt: normalizeNullableString(raw.manualAssignedAt),
+    previousHouseDetectionSource: normalizeNullableString(raw.previousHouseDetectionSource),
   };
 }
 
@@ -298,7 +311,35 @@ function getHouseDetectionSourceLabel(item: IfcSuggestionRow) {
   const source = getHouseDetectionSource(item);
   if (source === "3dtext_proximity") return "3Dtext próximo";
   if (source === "layer") return "Camada";
+  if (source === "manual_review") return "Manual/revisao";
   return source || "-";
+}
+
+function isManualHouseAssignment(item: IfcSuggestionRow) {
+  return item.raw_properties?.manualHouseAssignment === true || getHouseDetectionSource(item) === "manual_review";
+}
+
+function isManualHouseAssignmentCandidate(item: IfcSuggestionRow) {
+  return (
+    item.category === "production" &&
+    !!item.detected_service_key &&
+    item.detected_house_number == null &&
+    item.status === "suggested" &&
+    (
+      item.raw_properties?.positionSource === "global_placement_ignored" ||
+      getHouseDetectionSource(item) === "none" ||
+      !getHouseDetectionSource(item)
+    )
+  );
+}
+
+function isManualHouseAssignmentPanelItem(item: IfcSuggestionRow) {
+  return isManualHouseAssignmentCandidate(item) || (
+    item.category === "production" &&
+    !!item.detected_service_key &&
+    item.status === "suggested" &&
+    isManualHouseAssignment(item)
+  );
 }
 
 function getHouseNumber(house: HouseLookupRow) {
@@ -382,6 +423,12 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
   const [savingId, setSavingId] = useState<string | null>(null);
   const [batchAction, setBatchAction] = useState<BatchAction | null>(null);
   const [batchSaving, setBatchSaving] = useState(false);
+  const [manualServiceFilter, setManualServiceFilter] = useState<string>("all");
+  const [selectedManualIds, setSelectedManualIds] = useState<Set<string>>(new Set());
+  const [manualHouseSelectValue, setManualHouseSelectValue] = useState<string>("");
+  const [manualHouseInputValue, setManualHouseInputValue] = useState<string>("");
+  const [manualHouseAction, setManualHouseAction] = useState<ManualHouseAction | null>(null);
+  const [manualSaving, setManualSaving] = useState(false);
   const [syncingLinks, setSyncingLinks] = useState(false);
   const [linkSyncResult, setLinkSyncResult] = useState<LinkSyncResult | null>(null);
   const [loadingDiagnostics, setLoadingDiagnostics] = useState(false);
@@ -397,6 +444,11 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
       if (houseNumber != null && typeof house.id === "string") map.set(houseNumber, house.id);
     });
     return map;
+  }, [houses]);
+
+  const houseOptions = useMemo(() => {
+    return Array.from(new Set(houses.map(getHouseNumber).filter((value): value is number => value != null)))
+      .sort((a, b) => a - b);
   }, [houses]);
 
   const loadSuggestions = useCallback(async () => {
@@ -470,6 +522,14 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
     void loadSuggestions();
   }, [loadSuggestions, open]);
 
+  useEffect(() => {
+    const validIds = new Set(items.map(item => item.id));
+    setSelectedManualIds(prev => {
+      const next = new Set(Array.from(prev).filter(id => validIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [items]);
+
   const filteredItems = useMemo(() => {
     const quickFiltered = items.filter(item => {
       if (quickFilter === "valid") return isValidHouseServiceSuggestion(item);
@@ -479,6 +539,7 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
       if (quickFilter === "no_house") return item.detected_house_number == null;
       if (quickFilter === "confirmed") return item.status === "confirmed";
       if (quickFilter === "ignored") return item.status === "ignored";
+      if (quickFilter === "manual") return isManualHouseAssignment(item);
       return true;
     });
     const query = search.trim().toLowerCase();
@@ -521,6 +582,40 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
     confirmValid: items.filter(isSuggestedValidHouseServiceSuggestion),
     ignoreNoService: items.filter(item => item.status === "suggested" && !item.detected_service_key),
   }), [items]);
+
+  const manualCandidates = useMemo(() => items.filter(isManualHouseAssignmentCandidate), [items]);
+  const manualPanelItems = useMemo(() => items.filter(isManualHouseAssignmentPanelItem), [items]);
+
+  const manualServiceSummaries = useMemo(() => {
+    const summaries = new Map<string, { key: string; label: string; total: number }>();
+    manualCandidates.forEach(item => {
+      const key = item.detected_service_key || "sem-servico";
+      const existing = summaries.get(key) || {
+        key,
+        label: item.detected_service_label || item.detected_service_key || "Sem servico",
+        total: 0,
+      };
+      existing.total += 1;
+      summaries.set(key, existing);
+    });
+    return Array.from(summaries.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [manualCandidates]);
+
+  const visibleManualCandidates = useMemo(() => {
+    return manualPanelItems.filter(item => manualServiceFilter === "all" || item.detected_service_key === manualServiceFilter);
+  }, [manualPanelItems, manualServiceFilter]);
+
+  const selectedManualItems = useMemo(() => {
+    return items.filter(item => selectedManualIds.has(item.id));
+  }, [items, selectedManualIds]);
+
+  const selectedManualHouseNumber = useMemo(() => {
+    const value = manualHouseSelectValue === "manual" || !manualHouseSelectValue
+      ? manualHouseInputValue
+      : manualHouseSelectValue;
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  }, [manualHouseInputValue, manualHouseSelectValue]);
 
   const anchorDiagnostics = useMemo(() => {
     return items.reduce(
@@ -637,6 +732,96 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
       toast.error("Falha ao atualizar sugestÃµes IFC em lote");
     } finally {
       setBatchSaving(false);
+    }
+  };
+
+  const toggleManualSelection = (id: string) => {
+    setSelectedManualIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAllVisibleManualCandidates = () => {
+    const visibleIds = visibleManualCandidates.map(item => item.id);
+    const allSelected = visibleIds.length > 0 && visibleIds.every(id => selectedManualIds.has(id));
+    setSelectedManualIds(prev => {
+      const next = new Set(prev);
+      visibleIds.forEach(id => {
+        if (allSelected) next.delete(id);
+        else next.add(id);
+      });
+      return next;
+    });
+  };
+
+  const runManualHouseAction = async () => {
+    if (!manualHouseAction) return;
+    if (!projectId) {
+      toast.error("Projeto nao identificado para atribuir casa IFC");
+      setManualHouseAction(null);
+      return;
+    }
+    if (selectedManualItems.length === 0) {
+      toast.info("Selecione ao menos um elemento IFC");
+      setManualHouseAction(null);
+      return;
+    }
+    if (manualHouseAction === "assign" && selectedManualHouseNumber == null) {
+      toast.error("Informe uma casa valida para atribuir");
+      return;
+    }
+
+    setManualSaving(true);
+    try {
+      const elementsTable = supabase.from("project_ifc_elements" as any) as any;
+      const now = new Date().toISOString();
+
+      await Promise.all(selectedManualItems.map(async item => {
+        const previousHouseDetectionSource = item.raw_properties?.previousHouseDetectionSource || getHouseDetectionSource(item) || "none";
+        const rawProperties = {
+          ...(item.raw_properties || {}),
+          houseDetectionSource: manualHouseAction === "assign" ? "manual_review" : previousHouseDetectionSource,
+          manualHouseAssignment: manualHouseAction === "assign",
+          previousHouseDetectionSource,
+          manualAssignedAt: manualHouseAction === "assign" ? now : item.raw_properties?.manualAssignedAt || null,
+          manualClearedAt: manualHouseAction === "clear" ? now : null,
+        };
+
+        const updatePayload = manualHouseAction === "assign"
+          ? {
+              detected_house_number: selectedManualHouseNumber,
+              raw_properties: rawProperties,
+              needs_review: true,
+              confidence: "manual",
+              status: "suggested",
+            }
+          : {
+              detected_house_number: null,
+              raw_properties: rawProperties,
+              needs_review: true,
+              status: "suggested",
+            };
+
+        const { error } = await elementsTable
+          .update(updatePayload)
+          .eq("id", item.id)
+          .eq("project_id", projectId);
+
+        if (error) throw error;
+      }));
+
+      toast.success(`${selectedManualItems.length} elemento(s) IFC atualizado(s)`);
+      setManualHouseAction(null);
+      setSelectedManualIds(new Set());
+      void loadSuggestions();
+    } catch (err: any) {
+      console.error("[IFC] Falha na atribuicao manual de casas", err);
+      toast.error("Falha ao atualizar atribuicao manual IFC");
+    } finally {
+      setManualSaving(false);
     }
   };
 
@@ -887,6 +1072,7 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
               ["layer", "Por camada"],
               ["no_service", "Sem servico"],
               ["no_house", "Sem casa"],
+              ["manual", "Atribuidas manualmente"],
               ["confirmed", "Confirmadas"],
               ["ignored", "Ignoradas"],
             ].map(([value, label]) => (
@@ -983,6 +1169,134 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
           <p className="text-xs text-muted-foreground">
             Este vínculo ainda não ativa o 3D Real automaticamente. A ativação será feita em etapa futura.
           </p>
+          {manualPanelItems.length > 0 && (
+            <div className="rounded-md border border-border bg-background p-3">
+              <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold">Atribuicao manual de casas</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Para produtivos com servico detectado e sem casa confiavel. A acao mantem status suggested e exige revisao antes da confirmacao.
+                  </p>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {selectedManualItems.length} selecionado(s) de {visibleManualCandidates.length} visivel(is)
+                </div>
+              </div>
+
+              <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
+                {manualServiceSummaries.map(service => (
+                  <Counter key={service.key} label={service.label} value={service.total} />
+                ))}
+              </div>
+
+              <div className="mt-3 grid gap-2 lg:grid-cols-[180px_1fr_auto_auto]">
+                <select
+                  value={manualServiceFilter}
+                  onChange={event => {
+                    setManualServiceFilter(event.target.value);
+                    setSelectedManualIds(new Set());
+                  }}
+                  className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                >
+                  <option value="all">Todos os servicos</option>
+                  {manualServiceSummaries.map(service => (
+                    <option key={service.key} value={service.key}>{service.label}</option>
+                  ))}
+                </select>
+
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <select
+                    value={manualHouseSelectValue}
+                    onChange={event => setManualHouseSelectValue(event.target.value)}
+                    className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                  >
+                    <option value="">Selecionar casa...</option>
+                    {houseOptions.map(houseNumber => (
+                      <option key={houseNumber} value={houseNumber}>Casa {houseNumber}</option>
+                    ))}
+                    <option value="manual">Digitar numero manualmente</option>
+                  </select>
+                  {(houseOptions.length === 0 || manualHouseSelectValue === "manual") && (
+                    <Input
+                      type="number"
+                      min={1}
+                      value={manualHouseInputValue}
+                      onChange={event => setManualHouseInputValue(event.target.value)}
+                      placeholder="Numero da casa"
+                      className="h-9"
+                    />
+                  )}
+                </div>
+
+                <Button type="button" variant="outline" size="sm" onClick={toggleAllVisibleManualCandidates} disabled={visibleManualCandidates.length === 0}>
+                  {visibleManualCandidates.length > 0 && visibleManualCandidates.every(item => selectedManualIds.has(item.id))
+                    ? "Limpar visiveis"
+                    : "Selecionar visiveis"}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => setManualHouseAction("assign")}
+                  disabled={selectedManualItems.length === 0 || selectedManualHouseNumber == null || manualSaving}
+                >
+                  Atribuir casa aos selecionados
+                </Button>
+              </div>
+
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setManualHouseAction("clear")}
+                  disabled={selectedManualItems.length === 0 || manualSaving}
+                >
+                  Limpar atribuicao manual dos selecionados
+                </Button>
+              </div>
+
+              {manualHouseAction && (
+                <div className="mt-3 flex flex-col gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+                  <span>
+                    {manualHouseAction === "assign"
+                      ? `Atribuir Casa ${selectedManualHouseNumber || "-"} a ${selectedManualItems.length} elemento(s) IFC selecionado(s)?`
+                      : `Limpar atribuicao manual de ${selectedManualItems.length} elemento(s) IFC selecionado(s)?`}
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    <Button type="button" size="sm" onClick={() => void runManualHouseAction()} disabled={manualSaving}>
+                      {manualSaving ? "Aplicando..." : "Confirmar acao"}
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setManualHouseAction(null)} disabled={manualSaving}>
+                      Cancelar
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-3 max-h-48 space-y-1.5 overflow-y-auto rounded-md border border-border bg-muted/20 p-2">
+                {visibleManualCandidates.length === 0 ? (
+                  <p className="py-3 text-center text-xs text-muted-foreground">Nenhum elemento sem casa neste filtro.</p>
+                ) : (
+                  visibleManualCandidates.map(item => (
+                    <label key={item.id} className="flex cursor-pointer items-start gap-2 rounded border border-border bg-background px-2 py-1.5 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={selectedManualIds.has(item.id)}
+                        onChange={() => toggleManualSelection(item.id)}
+                        className="mt-0.5"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="font-medium">{item.detected_service_label || item.detected_service_key}</span>
+                        <span className="ml-2 text-muted-foreground">{item.ifc_entity_id || item.ifc_global_id || item.id}</span>
+                        <span className="ml-2 text-muted-foreground">{item.ifc_layer_name || item.name || "-"}</span>
+                      </span>
+                      <span className="text-muted-foreground">{item.raw_properties?.positionSource || "-"}</span>
+                    </label>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
           {linkSyncResult && (
             <div className="grid gap-2 text-xs sm:grid-cols-5">
               <Counter label="Confirmados" value={linkSyncResult.totalConfirmed} />
@@ -1266,6 +1580,9 @@ function SuggestionCard({
             {validHouseService && (
               <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">Casa + Servico</Badge>
             )}
+            {isManualHouseAssignment(item) && (
+              <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">Manual</Badge>
+            )}
           </div>
 
           <div className="mt-2 grid gap-1 text-[11px] text-muted-foreground md:grid-cols-2 xl:grid-cols-4">
@@ -1276,6 +1593,9 @@ function SuggestionCard({
             <p className="truncate"><span className="font-medium text-foreground">Serviço: </span>{item.detected_service_label || item.detected_service_key || "-"}</p>
             <p><span className="font-medium text-foreground">Casa: </span>{item.detected_house_number ?? "-"}</p>
             <p><span className="font-medium text-foreground">Casa detectada: </span>{item.detected_house_number ?? "-"}</p>
+            {isManualHouseAssignment(item) && (
+              <p><span className="font-medium text-foreground">Casa manual: </span>{item.detected_house_number ?? "-"}</p>
+            )}
             <p className="truncate"><span className="font-medium text-foreground">Servico detectado: </span>{item.detected_service_label || item.detected_service_key || "-"}</p>
             <p><span className="font-medium text-foreground">Origem revisao: </span>{getHouseDetectionSourceLabel(item)}</p>
             <p><span className="font-medium text-foreground">Confiança: </span>{item.confidence || "-"}</p>
