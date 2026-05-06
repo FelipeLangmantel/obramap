@@ -58,6 +58,9 @@ interface IfcSuggestionRawProperties {
   placementRefId: string | null;
   axisPlacementRefId: string | null;
   cartesianPointRefId: string | null;
+  cartesianPointLinePreview: string | null;
+  parsedCartesianPoint: { x: number; y: number; z: number } | null;
+  cartesianPointParseFailed: boolean | null;
 }
 
 interface IfcModelIdRow {
@@ -186,6 +189,9 @@ function asIfcSuggestionRawProperties(value: unknown): IfcSuggestionRawPropertie
     placementRefId: normalizeNullableString(raw.placementRefId),
     axisPlacementRefId: normalizeNullableString(raw.axisPlacementRefId),
     cartesianPointRefId: normalizeNullableString(raw.cartesianPointRefId),
+    cartesianPointLinePreview: normalizeNullableString(raw.cartesianPointLinePreview),
+    parsedCartesianPoint: normalizeIfcPoint(raw.parsedCartesianPoint),
+    cartesianPointParseFailed: typeof raw.cartesianPointParseFailed === "boolean" ? raw.cartesianPointParseFailed : null,
   };
 }
 
@@ -1057,6 +1063,8 @@ function SuggestionCard({
             <p><span className="font-medium text-foreground">positionSource: </span>{item.raw_properties?.positionSource || "-"}</p>
             <p><span className="font-medium text-foreground">placementPosition: </span>{item.raw_properties?.placementPosition ? `${item.raw_properties.placementPosition.x.toFixed(2)}, ${item.raw_properties.placementPosition.y.toFixed(2)}, ${item.raw_properties.placementPosition.z.toFixed(2)}` : "-"}</p>
             <p className="truncate"><span className="font-medium text-foreground">placement refs: </span>{[item.raw_properties?.placementRefId, item.raw_properties?.axisPlacementRefId, item.raw_properties?.cartesianPointRefId].filter(Boolean).join(" -> ") || "-"}</p>
+            <p><span className="font-medium text-foreground">parse IFCCARTESIANPOINT: </span>{item.raw_properties?.cartesianPointParseFailed ? "falhou" : item.raw_properties?.parsedCartesianPoint ? "ok" : "-"}</p>
+            <p className="truncate xl:col-span-2"><span className="font-medium text-foreground">Linha IFCCARTESIANPOINT: </span>{item.raw_properties?.cartesianPointLinePreview || "-"}</p>
             <p><span className="font-medium text-foreground">Pontos posição: </span>{item.raw_properties?.positionPointCount ?? "-"}</p>
             <p><span className="font-medium text-foreground">Refs: </span>{item.raw_properties?.reachableRefsCount ?? "-"}</p>
             <p><span className="font-medium text-foreground">IFCCARTESIANPOINT: </span>{item.raw_properties?.cartesianPointCount ?? "-"}</p>

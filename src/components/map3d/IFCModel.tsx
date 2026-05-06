@@ -35,6 +35,9 @@ interface IfcInventoryItem {
   placementRefId: string | null;
   axisPlacementRefId: string | null;
   cartesianPointRefId: string | null;
+  cartesianPointLinePreview: string | null;
+  parsedCartesianPoint: IfcPoint | null;
+  cartesianPointParseFailed: boolean;
   anchorHouseNumber: number | null;
   anchorElementId: string | null;
   anchorElementName: string | null;
@@ -202,18 +205,25 @@ function getIfcLineType(line: string | undefined) {
   return match ? match[1].toUpperCase() : null;
 }
 
-function parseIfcNumber(value: string) {
-  const parsed = Number(value);
+function parseIfcCoordinateNumber(value: string | undefined) {
+  if (value == null) return null;
+  const normalized = value.trim();
+  if (!normalized || normalized === "$") return null;
+  const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
 function extractCartesianPoint(line: string): IfcPoint | null {
-  const match = line.match(/IFCCARTESIANPOINT\s*\(\s*\(\s*([-+]?\d*\.?\d+(?:[Ee][-+]?\d+)?)\s*,\s*([-+]?\d*\.?\d+(?:[Ee][-+]?\d+)?)(?:\s*,\s*([-+]?\d*\.?\d+(?:[Ee][-+]?\d+)?))?/i);
-  if (!match) return null;
+  if (!/IFCCARTESIANPOINT/i.test(line)) return null;
 
-  const x = parseIfcNumber(match[1]);
-  const y = parseIfcNumber(match[2]);
-  const z = match[3] ? parseIfcNumber(match[3]) : 0;
+  const tupleMatch = line.match(/IFCCARTESIANPOINT\s*\(\s*\(\s*([\s\S]*?)\s*\)\s*\)/i);
+  if (!tupleMatch) return null;
+
+  const values = tupleMatch[1].split(",").map(value => value.trim());
+  const x = parseIfcCoordinateNumber(values[0]);
+  const y = parseIfcCoordinateNumber(values[1]);
+  const z = values.length >= 3 ? parseIfcCoordinateNumber(values[2]) : 0;
+
   if (x == null || y == null || z == null) return null;
   return { x, y, z };
 }
@@ -265,6 +275,9 @@ function extractPlacementPositionFromRefs(refs: Set<string>, lineById: Map<strin
       placementRefId: null,
       axisPlacementRefId: null,
       cartesianPointRefId: null,
+      cartesianPointLinePreview: null,
+      parsedCartesianPoint: null,
+      cartesianPointParseFailed: false,
     };
   }
 
@@ -283,6 +296,9 @@ function extractPlacementPositionFromRefs(refs: Set<string>, lineById: Map<strin
       placementRefId,
       axisPlacementRefId: null,
       cartesianPointRefId: null,
+      cartesianPointLinePreview: null,
+      parsedCartesianPoint: null,
+      cartesianPointParseFailed: false,
     };
   }
 
@@ -295,15 +311,19 @@ function extractPlacementPositionFromRefs(refs: Set<string>, lineById: Map<strin
     cartesianPointRefId = findFirstRefByType(axisReachableRefs, lineById, "IFCCARTESIANPOINT");
   }
 
-  const placementPosition = cartesianPointRefId
-    ? extractCartesianPoint(lineById.get(cartesianPointRefId) || "")
-    : null;
+  const cartesianPointLine = cartesianPointRefId ? lineById.get(cartesianPointRefId) || "" : "";
+  const parsedCartesianPoint = cartesianPointLine ? extractCartesianPoint(cartesianPointLine) : null;
+  const cartesianPointLinePreview = cartesianPointLine ? summarizeLine(cartesianPointLine) : null;
+  const cartesianPointParseFailed = Boolean(cartesianPointRefId && !parsedCartesianPoint);
 
   return {
-    placementPosition,
+    placementPosition: parsedCartesianPoint,
     placementRefId,
     axisPlacementRefId,
     cartesianPointRefId,
+    cartesianPointLinePreview,
+    parsedCartesianPoint,
+    cartesianPointParseFailed,
   };
 }
 
@@ -550,6 +570,9 @@ function parseIfcText(text: string): IfcInventoryItem[] {
       placementRefId,
       axisPlacementRefId,
       cartesianPointRefId,
+      cartesianPointLinePreview,
+      parsedCartesianPoint,
+      cartesianPointParseFailed,
     } = extractPlacementPositionFromRefs(reachableRefs, lineById);
     const { position: fallbackPosition, pointCount } = extractPositionFromRefs(reachableRefs, lineById);
     const position = placementPosition || fallbackPosition;
@@ -577,6 +600,9 @@ function parseIfcText(text: string): IfcInventoryItem[] {
       placementRefId,
       axisPlacementRefId,
       cartesianPointRefId,
+      cartesianPointLinePreview,
+      parsedCartesianPoint,
+      cartesianPointParseFailed,
       anchorHouseNumber,
       anchorElementId: null,
       anchorElementName: null,
@@ -641,6 +667,9 @@ function buildIfcElementPayload(item: IfcInventoryItem, projectId: string, compa
       placementRefId: item.placementRefId,
       axisPlacementRefId: item.axisPlacementRefId,
       cartesianPointRefId: item.cartesianPointRefId,
+      cartesianPointLinePreview: item.cartesianPointLinePreview,
+      parsedCartesianPoint: item.parsedCartesianPoint,
+      cartesianPointParseFailed: item.cartesianPointParseFailed,
       anchorHouseNumber: item.anchorHouseNumber,
       anchorElementId: item.anchorElementId,
       anchorElementName: item.anchorElementName,
@@ -1358,6 +1387,8 @@ function IfcItemCard({
           <p><span className="text-muted-foreground">positionSource: </span>{item.positionSource}</p>
           <p><span className="text-muted-foreground">placementPosition: </span>{item.placementPosition ? `${item.placementPosition.x.toFixed(2)}, ${item.placementPosition.y.toFixed(2)}, ${item.placementPosition.z.toFixed(2)}` : "-"}</p>
           <p><span className="text-muted-foreground">placement refs: </span>{[item.placementRefId, item.axisPlacementRefId, item.cartesianPointRefId].filter(Boolean).join(" -> ") || "-"}</p>
+          <p><span className="text-muted-foreground">parse IFCCARTESIANPOINT: </span>{item.cartesianPointParseFailed ? "falhou" : item.parsedCartesianPoint ? "ok" : "-"}</p>
+          <p className="md:col-span-3"><span className="text-muted-foreground">Linha IFCCARTESIANPOINT: </span>{item.cartesianPointLinePreview || "-"}</p>
           <p><span className="text-muted-foreground">IFCCARTESIANPOINT: </span>{item.refDiagnostics.cartesianPointCount}</p>
           <p><span className="text-muted-foreground">IFCLOCALPLACEMENT: </span>{item.refDiagnostics.hasLocalPlacement ? "sim" : "não"}</p>
           <p><span className="text-muted-foreground">IFCAXIS2PLACEMENT3D: </span>{item.refDiagnostics.hasAxis2Placement3D ? "sim" : "não"}</p>
