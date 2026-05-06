@@ -2077,6 +2077,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
   const [inspectModeEnabled, setInspectModeEnabled] = useState(false);
   const [focusModeEnabled, setFocusModeEnabled] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(true);
+  const [ifcPanelOpen, setIfcPanelOpen] = useState(true);
   const [inspectPanelCollapsed, setInspectPanelCollapsed] = useState(false);
   const [inspectSelection, setInspectSelection] = useState<IfcVisualInspectSelection | null>(null);
   const [inspectGroupMode, setInspectGroupMode] = useState<IfcInspectGroupMode>("none");
@@ -2135,8 +2136,11 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
   const handleInspectSelection = useCallback((selection: IfcVisualInspectSelection | null) => {
     setInspectSelection(selection);
     setInspectGroupMode("none");
-    if (selection) setInspectPanelCollapsed(false);
-  }, []);
+    if (selection) {
+      setInspectPanelCollapsed(false);
+      if (!focusModeEnabled) setIfcPanelOpen(true);
+    }
+  }, [focusModeEnabled]);
 
   const handleClearInspectSelection = useCallback(() => {
     setInspectSelection(null);
@@ -2151,9 +2155,11 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
       if (next) {
         setMinimized(true);
         setToolsOpen(false);
+        setIfcPanelOpen(false);
         console.info("[IFC UI] inventory compact mode");
       } else {
         setToolsOpen(true);
+        setIfcPanelOpen(true);
       }
       return next;
     });
@@ -2173,6 +2179,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
     setInspectGroupMode("none");
     setFocusModeEnabled(false);
     setToolsOpen(true);
+    setIfcPanelOpen(true);
     setInspectPanelCollapsed(false);
     calledRef.current = false;
     persistedKeyRef.current = null;
@@ -2707,90 +2714,36 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
       {showVisualIfc && visualStatus === "ready" && (
         <div className="pointer-events-none absolute left-4 top-3 z-30">
           <div
-            className="pointer-events-auto max-w-[min(360px,calc(100vw-2rem))] rounded-lg border border-border bg-background/90 px-2 py-2 text-xs shadow-xl backdrop-blur"
+            className="pointer-events-auto flex max-w-[min(320px,calc(100vw-2rem))] items-center gap-1.5 rounded-full border border-border bg-background/90 px-2 py-1.5 text-xs shadow-lg backdrop-blur"
             onWheel={(e) => e.stopPropagation()}
             onPointerDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setToolsOpen(prev => !prev)}
-                className="rounded border border-border bg-background px-2.5 py-1 text-[11px] font-semibold hover:bg-muted"
-              >
-                IFC
-              </button>
-              <button
-                type="button"
-                onClick={handleToggleFocusMode}
-                className={`rounded border px-2.5 py-1 text-[11px] font-medium ${
-                  focusModeEnabled
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-background hover:bg-muted"
-                }`}
-              >
-                Tela limpa
-              </button>
-              {inspectModeEnabled && (
-                <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-medium text-primary">
-                  Inspeção ativa
-                </span>
-              )}
-            </div>
-            {toolsOpen && (
-              <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={handleToggleInspectMode}
-                  className={`rounded border px-2.5 py-1 text-[11px] font-medium ${
-                    inspectModeEnabled
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border bg-background hover:bg-muted"
-                  }`}
-                >
-                  Inspecionar
-                </button>
-                <button
-                  type="button"
-                  onClick={handleTogglePaintMode}
-                  className={`rounded border px-2.5 py-1 text-[11px] font-medium ${
-                    paintModeEnabled
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border bg-background hover:bg-muted"
-                  }`}
-                >
-                  Pintar
-                </button>
-                <select
-                  value={selectedPaintTexture}
-                  onChange={(event) => handleSelectPaintTexture(event.target.value as IfcVisualTextureKind)}
-                  className="min-w-0 flex-1 rounded border border-border bg-background px-2 py-1 text-[11px]"
-                  disabled={!paintModeEnabled}
-                >
-                  {IFC_PAINT_TEXTURE_OPTIONS.map(option => (
-                    <option key={option.kind} value={option.kind}>{option.label}</option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={() => setUndoPaintSignal(value => value + 1)}
-                  className="rounded border border-border bg-background px-2.5 py-1 text-[11px] font-medium hover:bg-muted"
-                >
-                  Desfazer
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setClearPaintSignal(value => value + 1)}
-                  className="rounded border border-border bg-background px-2.5 py-1 text-[11px] font-medium hover:bg-muted"
-                >
-                  Limpar
-                </button>
-              </div>
+            <button
+              type="button"
+              onClick={() => {
+                setIfcPanelOpen(true);
+                setFocusModeEnabled(false);
+                setToolsOpen(true);
+              }}
+              className="rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-semibold hover:bg-muted"
+            >
+              IFC
+            </button>
+            {inspectModeEnabled && (
+              <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-medium text-primary">
+                Inspeção IFC ativa
+              </span>
+            )}
+            {paintModeEnabled && (
+              <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-medium text-primary">
+                Pintura IFC ativa
+              </span>
             )}
           </div>
         </div>
       )}
-      {!focusModeEnabled && (
+      {false && !focusModeEnabled && (
       <div className="pointer-events-none absolute left-4 bottom-4 z-20 w-[min(340px,calc(100vw-2rem))]">
         <div
           className="pointer-events-auto flex max-h-[min(360px,calc(100vh-160px))] flex-col overflow-hidden overscroll-contain rounded-lg border border-border bg-background/95 shadow-xl"
@@ -3066,7 +3019,112 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         </div>
       </div>
       )}
-      {showVisualIfc && visualStatus === "ready" && inspectSelection && (
+      {showVisualIfc && visualStatus === "ready" && ifcPanelOpen && !focusModeEnabled && (
+        <div
+          className="pointer-events-auto absolute bottom-0 right-0 top-0 z-30 flex w-[min(380px,calc(100vw-1rem))] flex-col overflow-hidden border-l border-border bg-background/95 text-xs shadow-2xl backdrop-blur max-md:left-2 max-md:right-2 max-md:top-auto max-md:bottom-2 max-md:h-[48vh] max-md:w-auto max-md:rounded-lg max-md:border"
+          onWheel={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-start justify-between gap-2 border-b border-border px-3 py-2">
+            <div>
+              <p className="text-sm font-semibold">IFC</p>
+              <p className="text-[10px] text-muted-foreground">
+                {visualStatus === "ready" ? "Visual carregado" : visualStatus}
+              </p>
+            </div>
+            <div className="flex shrink-0 gap-1">
+              <button type="button" onClick={handleToggleFocusMode} className="rounded border border-border bg-background px-2 py-1 text-[10px] font-medium hover:bg-muted">
+                Tela limpa
+              </button>
+              <button type="button" onClick={() => setIfcPanelOpen(false)} className="rounded border border-border bg-background px-2 py-1 text-[10px] font-medium hover:bg-muted">
+                Fechar painel
+              </button>
+            </div>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-3">
+            <div className="rounded-md border border-border bg-muted/20 p-2">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleToggleInspectMode}
+                  className={`rounded border px-2.5 py-1 text-[11px] font-medium ${
+                    inspectModeEnabled
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-background hover:bg-muted"
+                  }`}
+                >
+                  Inspecionar IFC
+                </button>
+                <button
+                  type="button"
+                  onClick={handleTogglePaintMode}
+                  className={`rounded border px-2.5 py-1 text-[11px] font-medium ${
+                    paintModeEnabled
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-background hover:bg-muted"
+                  }`}
+                >
+                  Pintar Textura
+                </button>
+                <select
+                  value={selectedPaintTexture}
+                  onChange={(event) => handleSelectPaintTexture(event.target.value as IfcVisualTextureKind)}
+                  className="min-w-0 flex-1 rounded border border-border bg-background px-2 py-1 text-[11px]"
+                  disabled={!paintModeEnabled}
+                >
+                  {IFC_PAINT_TEXTURE_OPTIONS.map(option => (
+                    <option key={option.kind} value={option.kind}>{option.label}</option>
+                  ))}
+                </select>
+                <button type="button" onClick={() => setUndoPaintSignal(value => value + 1)} className="rounded border border-border bg-background px-2.5 py-1 text-[11px] font-medium hover:bg-muted">
+                  Desfazer
+                </button>
+                <button type="button" onClick={() => setClearPaintSignal(value => value + 1)} className="rounded border border-border bg-background px-2.5 py-1 text-[11px] font-medium hover:bg-muted">
+                  Limpar pinturas
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <InventoryMetric label="Elementos" value={inventoryCounts.totalElements} />
+              <InventoryMetric label="Produtivos" value={inventoryCounts.productionElements} />
+              <InventoryMetric label="Com casa/serviço" value={semanticCounts.withServiceAndHouse} />
+              <InventoryMetric label="Sem casa" value={semanticCounts.withServiceWithoutHouse} />
+            </div>
+            {saveMessage && (
+              <p className={`mt-3 rounded-md px-2 py-1 text-xs break-words ${
+                saveStatus === "saved"
+                  ? "bg-emerald-100 text-emerald-800"
+                  : saveStatus === "error"
+                    ? "bg-destructive/10 text-destructive"
+                    : "bg-muted text-muted-foreground"
+              }`}>
+                {saveMessage}
+              </p>
+            )}
+
+            {inspectSelection ? (
+              <IfcInspectPanelEmbedded
+                selection={inspectSelection}
+                element={inspectedPersistedElement}
+                groupMode={inspectGroupMode}
+                groupElements={inspectGroupElements}
+                sameHouseCount={sameHouseElements.length}
+                sameServiceCount={sameServiceElements.length}
+                onShowHouse={() => setInspectGroupMode("house")}
+                onShowService={() => setInspectGroupMode("service")}
+                onClear={handleClearInspectSelection}
+              />
+            ) : (
+              <p className="mt-3 rounded-md border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                Clique em um elemento IFC para inspecionar Casa, Serviço e status.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+      {false && showVisualIfc && visualStatus === "ready" && inspectSelection && (
         <IfcInspectPanelCompact
           selection={inspectSelection}
           element={inspectedPersistedElement}
@@ -3088,6 +3146,123 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
       )}
       </Html>
     </>
+  );
+}
+
+function IfcInspectPanelEmbedded({
+  selection,
+  element,
+  groupMode,
+  groupElements,
+  sameHouseCount,
+  sameServiceCount,
+  onShowHouse,
+  onShowService,
+  onClear,
+}: {
+  selection: IfcVisualInspectSelection;
+  element: IfcPersistedElementRow | null;
+  groupMode: IfcInspectGroupMode;
+  groupElements: IfcPersistedElementRow[];
+  sameHouseCount: number;
+  sameServiceCount: number;
+  onShowHouse: () => void;
+  onShowService: () => void;
+  onClear: () => void;
+}) {
+  const houseSource = getPersistedHouseDetectionSource(element);
+  const groupTitle = groupMode === "house"
+    ? "Elementos da mesma casa"
+    : groupMode === "service"
+      ? "Elementos do mesmo serviço"
+      : null;
+
+  return (
+    <div className="mt-3 rounded-md border border-primary/30 bg-background p-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold">Elemento IFC selecionado</p>
+          <p className="truncate font-mono text-[10px] text-muted-foreground">{selection.entityId || "Elemento individual não identificado"}</p>
+        </div>
+        <button type="button" onClick={onClear} className="shrink-0 rounded border border-border bg-background px-2 py-1 text-[10px] font-medium hover:bg-muted">
+          Limpar
+        </button>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <InspectPrimaryField label="Entity ID" value={selection.entityId || "-"} />
+        <InspectPrimaryField label="Casa" value={element?.detected_house_number == null ? "-" : String(element.detected_house_number)} />
+        <InspectPrimaryField label="Serviço" value={element?.detected_service_label || element?.detected_service_key || "-"} />
+        <InspectPrimaryField label="Status" value={element?.status || "-"} />
+        <InspectPrimaryField label="Origem" value={element ? getPersistedHouseDetectionLabel(houseSource) : "-"} />
+        <InspectPrimaryField label="Confidence" value={element?.confidence || "-"} />
+      </div>
+
+      {selection.identificationError && (
+        <p className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-900">
+          {selection.identificationError}
+        </p>
+      )}
+
+      {element ? (
+        <div className="mt-3 rounded-md bg-muted/40 p-2">
+          <p className="mb-1 text-xs font-semibold">Sugestão encontrada</p>
+          <div className="grid grid-cols-2 gap-2">
+            <InspectPrimaryField label="Casa atribuída" value={element.detected_house_number == null ? "-" : String(element.detected_house_number)} />
+            <InspectPrimaryField label="Serviço detectado" value={element.detected_service_label || element.detected_service_key || "-"} />
+            <InspectPrimaryField label="Needs review" value={element.needs_review == null ? "-" : String(element.needs_review)} />
+            <InspectPrimaryField label="Categoria" value={element.category || "-"} />
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <button type="button" onClick={onShowHouse} disabled={element.detected_house_number == null} className="rounded border border-border bg-background px-2 py-1 text-[10px] font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50">
+              Mesma casa ({sameHouseCount})
+            </button>
+            <button type="button" onClick={onShowService} disabled={!element.detected_service_key} className="rounded border border-border bg-background px-2 py-1 text-[10px] font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50">
+              Mesmo serviço ({sameServiceCount})
+            </button>
+          </div>
+        </div>
+      ) : (
+        <p className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-900">
+          Elemento visual identificado, mas sem correspondência no inventário IFC.
+        </p>
+      )}
+
+      <details className="mt-3 rounded-md border border-border bg-muted/20 p-2">
+        <summary className="cursor-pointer text-xs font-semibold">Detalhes técnicos</summary>
+        <div className="mt-2 grid grid-cols-1 gap-x-3 gap-y-1 sm:grid-cols-2">
+          <DiagnosticItem label="GlobalId visual" value={selection.globalId} />
+          <DiagnosticItem label="Object name" value={selection.objectName || "(sem nome)"} />
+          <DiagnosticItem label="UUID" value={selection.uuid} />
+          <DiagnosticItem label="Parent" value={selection.parentName || selection.parentUuid} />
+          <DiagnosticItem label="Face index" value={selection.faceIndex == null ? null : String(selection.faceIndex)} />
+          <DiagnosticItem label="Geometry attrs" value={selection.geometryAttributes.length > 0 ? selection.geometryAttributes.join(", ") : null} />
+          <DiagnosticItem label="Centro" value={formatIfcPoint(selection.center)} />
+          <DiagnosticItem label="Tamanho" value={formatIfcPoint(selection.size)} />
+        </div>
+      </details>
+
+      {groupTitle && (
+        <div className="mt-3 rounded-md border border-border bg-muted/20 p-2">
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <p className="font-medium">{groupTitle}</p>
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+              {groupElements.length} elemento(s)
+            </span>
+          </div>
+          <div className="max-h-40 space-y-1 overflow-y-auto pr-1">
+            {groupElements.slice(0, 40).map(item => (
+              <div key={item.id} className="rounded bg-background px-2 py-1">
+                <p className="truncate font-mono text-[10px]">{item.ifc_entity_id || "-"} | {item.ifc_global_id || "-"}</p>
+                <p className="truncate text-[10px] text-muted-foreground">
+                  Casa {item.detected_house_number ?? "-"} | {item.detected_service_label || item.detected_service_key || "-"} | {item.status}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
