@@ -30,6 +30,11 @@ interface IfcInventoryItem {
   category: "production" | "text" | "unnamed";
   position: IfcPoint | null;
   positionPointCount: number;
+  positionSource: "local_placement" | "reachable_points" | "none";
+  placementPosition: IfcPoint | null;
+  placementRefId: string | null;
+  axisPlacementRefId: string | null;
+  cartesianPointRefId: string | null;
   anchorHouseNumber: number | null;
   anchorElementId: string | null;
   anchorElementName: string | null;
@@ -241,6 +246,64 @@ function extractPositionFromRefs(refs: Set<string>, lineById: Map<string, string
       z: total.z / points.length,
     },
     pointCount: points.length,
+  };
+}
+
+function findFirstRefByType(refs: Iterable<string>, lineById: Map<string, string>, type: string) {
+  for (const ref of refs) {
+    if (getIfcLineType(lineById.get(ref)) === type) return ref;
+  }
+
+  return null;
+}
+
+function extractPlacementPositionFromRefs(refs: Set<string>, lineById: Map<string, string>) {
+  const placementRefId = findFirstRefByType(refs, lineById, "IFCLOCALPLACEMENT");
+  if (!placementRefId) {
+    return {
+      placementPosition: null,
+      placementRefId: null,
+      axisPlacementRefId: null,
+      cartesianPointRefId: null,
+    };
+  }
+
+  const placementLine = lineById.get(placementRefId);
+  const placementRefs = extractRefs(placementLine || "");
+  let axisPlacementRefId = findFirstRefByType(placementRefs, lineById, "IFCAXIS2PLACEMENT3D");
+
+  if (!axisPlacementRefId) {
+    const placementReachableRefs = collectReachableRefs(placementRefId, lineById, 3, 80);
+    axisPlacementRefId = findFirstRefByType(placementReachableRefs, lineById, "IFCAXIS2PLACEMENT3D");
+  }
+
+  if (!axisPlacementRefId) {
+    return {
+      placementPosition: null,
+      placementRefId,
+      axisPlacementRefId: null,
+      cartesianPointRefId: null,
+    };
+  }
+
+  const axisLine = lineById.get(axisPlacementRefId);
+  const axisRefs = extractRefs(axisLine || "");
+  let cartesianPointRefId = findFirstRefByType(axisRefs, lineById, "IFCCARTESIANPOINT");
+
+  if (!cartesianPointRefId) {
+    const axisReachableRefs = collectReachableRefs(axisPlacementRefId, lineById, 2, 50);
+    cartesianPointRefId = findFirstRefByType(axisReachableRefs, lineById, "IFCCARTESIANPOINT");
+  }
+
+  const placementPosition = cartesianPointRefId
+    ? extractCartesianPoint(lineById.get(cartesianPointRefId) || "")
+    : null;
+
+  return {
+    placementPosition,
+    placementRefId,
+    axisPlacementRefId,
+    cartesianPointRefId,
   };
 }
 
@@ -482,7 +545,15 @@ function parseIfcText(text: string): IfcInventoryItem[] {
     const category = classifyIfcElement(name, primaryLayerName);
     const anchorHouseNumber = category === "text" ? extract3dTextHouseNumber(name) : null;
     const refDiagnostics = buildRefDiagnostics(reachableRefs, lineById);
-    const { position, pointCount } = extractPositionFromRefs(reachableRefs, lineById);
+    const {
+      placementPosition,
+      placementRefId,
+      axisPlacementRefId,
+      cartesianPointRefId,
+    } = extractPlacementPositionFromRefs(reachableRefs, lineById);
+    const { position: fallbackPosition, pointCount } = extractPositionFromRefs(reachableRefs, lineById);
+    const position = placementPosition || fallbackPosition;
+    const positionSource = placementPosition ? "local_placement" : fallbackPosition ? "reachable_points" : "none";
 
     items.push({
       id,
@@ -501,6 +572,11 @@ function parseIfcText(text: string): IfcInventoryItem[] {
       category,
       position,
       positionPointCount: pointCount,
+      positionSource,
+      placementPosition,
+      placementRefId,
+      axisPlacementRefId,
+      cartesianPointRefId,
       anchorHouseNumber,
       anchorElementId: null,
       anchorElementName: null,
@@ -560,6 +636,11 @@ function buildIfcElementPayload(item: IfcInventoryItem, projectId: string, compa
       firstReachedTypes: item.refDiagnostics.firstReachedTypes,
       position: item.position,
       positionPointCount: item.positionPointCount,
+      positionSource: item.positionSource,
+      placementPosition: item.placementPosition,
+      placementRefId: item.placementRefId,
+      axisPlacementRefId: item.axisPlacementRefId,
+      cartesianPointRefId: item.cartesianPointRefId,
       anchorHouseNumber: item.anchorHouseNumber,
       anchorElementId: item.anchorElementId,
       anchorElementName: item.anchorElementName,
@@ -885,6 +966,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         if (item.category === "production" && item.refDiagnostics.hasProductDefinitionShape) acc.productionWithProductShape += 1;
         if (item.category === "production" && item.refDiagnostics.hasExtrudedAreaSolid) acc.productionWithExtrudedSolid += 1;
         if (item.category === "production" && item.position) acc.productionWithCoordinates += 1;
+        if (item.category === "production" && item.placementPosition) acc.productionWithPlacementPosition += 1;
         if (item.category === "text" && item.position) acc.textsWithCoordinates += 1;
         return acc;
       },
@@ -900,6 +982,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         productionWithProductShape: 0,
         productionWithExtrudedSolid: 0,
         productionWithCoordinates: 0,
+        productionWithPlacementPosition: 0,
         textsWithCoordinates: 0,
       }
     );
@@ -975,6 +1058,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
       `Produtivos com serviço: ${anchorCounts.productionWithService}`,
       `Produtivos com casa por proximidade: ${anchorCounts.productionWithHouseByAnchor}`,
       `Produtivos com refs: ${anchorCounts.productionWithRefs}`,
+      `Produtivos com placementPosition: ${anchorCounts.productionWithPlacementPosition}`,
       `Produtivos com IFCCARTESIANPOINT: ${anchorCounts.productionWithCartesianPoint}`,
       `Produtivos com IFCLOCALPLACEMENT: ${anchorCounts.productionWithLocalPlacement}`,
       `Produtivos com IFCAXIS2PLACEMENT3D: ${anchorCounts.productionWithAxisPlacement}`,
@@ -1078,6 +1162,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
                 <InventoryMetric label="Referência/lote" value={semanticCounts.referencesOrLots} />
                 <InventoryMetric label="Textos 3D" value={anchorCounts.threeDTexts} />
                 <InventoryMetric label="Âncoras numeradas" value={anchorCounts.numberedAnchors} />
+                <InventoryMetric label="Produtivos com placementPosition" value={anchorCounts.productionWithPlacementPosition} />
                 <InventoryMetric label="Produtivos com coordenadas" value={anchorCounts.productionWithCoordinates} />
                 <InventoryMetric label="Textos com coordenadas" value={anchorCounts.textsWithCoordinates} />
                 <InventoryMetric label="Casa por proximidade" value={anchorCounts.productionWithHouseByAnchor} />
@@ -1270,6 +1355,9 @@ function IfcItemCard({
           <p><span className="text-muted-foreground">Origem da casa: </span>{item.houseDetectionSource === "3dtext_proximity" ? "3Dtext próximo" : item.houseDetectionSource}</p>
           <p><span className="text-muted-foreground">Âncora: </span>{item.anchorElementName || "-"}</p>
           <p><span className="text-muted-foreground">Distância: </span>{item.anchorDistance != null ? item.anchorDistance.toFixed(2) : "-"}</p>
+          <p><span className="text-muted-foreground">positionSource: </span>{item.positionSource}</p>
+          <p><span className="text-muted-foreground">placementPosition: </span>{item.placementPosition ? `${item.placementPosition.x.toFixed(2)}, ${item.placementPosition.y.toFixed(2)}, ${item.placementPosition.z.toFixed(2)}` : "-"}</p>
+          <p><span className="text-muted-foreground">placement refs: </span>{[item.placementRefId, item.axisPlacementRefId, item.cartesianPointRefId].filter(Boolean).join(" -> ") || "-"}</p>
           <p><span className="text-muted-foreground">IFCCARTESIANPOINT: </span>{item.refDiagnostics.cartesianPointCount}</p>
           <p><span className="text-muted-foreground">IFCLOCALPLACEMENT: </span>{item.refDiagnostics.hasLocalPlacement ? "sim" : "não"}</p>
           <p><span className="text-muted-foreground">IFCAXIS2PLACEMENT3D: </span>{item.refDiagnostics.hasAxis2Placement3D ? "sim" : "não"}</p>
@@ -1288,6 +1376,7 @@ function IfcItemCard({
         <div className="mt-1 grid gap-1 rounded bg-amber-50 px-2 py-1 text-[11px] md:grid-cols-3">
           <p><span className="text-muted-foreground">Número da âncora: </span>{item.anchorHouseNumber != null ? item.anchorHouseNumber : "-"}</p>
           <p><span className="text-muted-foreground">Coordenada: </span>{item.position ? `${item.position.x.toFixed(2)}, ${item.position.y.toFixed(2)}, ${item.position.z.toFixed(2)}` : "-"}</p>
+          <p><span className="text-muted-foreground">positionSource: </span>{item.positionSource}</p>
           <p><span className="text-muted-foreground">Pontos lidos: </span>{item.positionPointCount}</p>
           <p className="md:col-span-3"><span className="text-muted-foreground">Tipos alcançados: </span>{item.refDiagnostics.firstReachedTypes.join(", ") || "-"}</p>
         </div>
