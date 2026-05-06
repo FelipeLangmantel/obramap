@@ -1178,8 +1178,8 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
               {error}
             </div>
           ) : (
-            <>
-              <div className="grid flex-shrink-0 grid-cols-2 gap-2 p-3 text-sm md:grid-cols-4">
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+              <div className="grid grid-cols-2 gap-2 p-3 text-sm md:grid-cols-4">
                 <InventoryMetric label="Elementos detectados" value={inventoryCounts.totalElements} />
                 <InventoryMetric label="Produtivos" value={inventoryCounts.productionElements} />
                 <InventoryMetric label="Textos/anotações" value={inventoryCounts.textElements} />
@@ -1214,7 +1214,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
                 </div>
               ) : (
                 <>
-                  <div className="flex-shrink-0 space-y-2 border-y border-border bg-muted/20 px-3 py-2">
+                  <div className="space-y-2 border-y border-border bg-muted/20 px-3 py-2">
                     <div className="flex flex-wrap gap-1.5">
                       {Object.entries(countsByType).map(([type, count]) => (
                         <span key={type} className="rounded-full bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary">
@@ -1261,7 +1261,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
                     </div>
                   </div>
 
-                  <div className="min-h-0 flex-1 overflow-y-auto p-3">
+                  <div className="p-3">
                     <div className="space-y-2">
                       {filteredItems.map(item => (
                         <IfcItemCard
@@ -1283,7 +1283,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
                   </div>
                 </>
               )}
-            </>
+            </div>
           )}
         </div>
       </div>
