@@ -78,6 +78,36 @@ type IfcInventorySaveStatus = "idle" | "saving" | "saved" | "error";
 type IfcVisualStatus = "idle" | "loading" | "ready" | "error";
 type Project3DModelIdRow = { id: string };
 type ProtectedIfcElementRow = { ifc_global_id: string | null; ifc_entity_id: string | null };
+type IfcPersistedStatus = "suggested" | "confirmed" | "ignored";
+type IfcInspectGroupMode = "none" | "house" | "service";
+type IfcPersistedElementRow = {
+  id: string;
+  ifc_global_id: string | null;
+  ifc_entity_id: string | null;
+  ifc_type: string | null;
+  ifc_layer_name: string | null;
+  name: string | null;
+  detected_service_key: string | null;
+  detected_service_label: string | null;
+  detected_house_number: number | null;
+  category: string | null;
+  confidence: string | null;
+  needs_review: boolean | null;
+  status: IfcPersistedStatus;
+  raw_properties: Record<string, unknown> | null;
+};
+type IfcVisualInspectSelection = {
+  uuid: string;
+  objectName: string | null;
+  objectType: string;
+  parentName: string | null;
+  parentUuid: string | null;
+  entityId: string | null;
+  globalId: string | null;
+  center: IfcPoint | null;
+  size: IfcPoint | null;
+  hitRootOrGroup: boolean;
+};
 type PersistDiagnostics = {
   authUserId: string | null;
   authUserEmail: string | null;
@@ -108,6 +138,27 @@ function normalizeNullableString(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
 
+function normalizeNullableNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function normalizeBoolean(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
+}
+
+function normalizeIfcPersistedStatus(value: unknown): IfcPersistedStatus {
+  return value === "confirmed" || value === "ignored" ? value : "suggested";
+}
+
+function normalizeRawProperties(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
 function asProtectedIfcElementRows(data: unknown): ProtectedIfcElementRow[] {
   if (!Array.isArray(data)) return [];
 
@@ -117,6 +168,35 @@ function asProtectedIfcElementRows(data: unknown): ProtectedIfcElementRow[] {
       ifc_global_id: normalizeNullableString(row.ifc_global_id),
       ifc_entity_id: normalizeNullableString(row.ifc_entity_id),
     }));
+}
+
+function asIfcPersistedElementRows(data: unknown): IfcPersistedElementRow[] {
+  if (!Array.isArray(data)) return [];
+
+  return data
+    .filter((row): row is Record<string, unknown> => !!row && typeof row === "object")
+    .map((row): IfcPersistedElementRow | null => {
+      const id = normalizeNullableString(row.id);
+      if (!id) return null;
+
+      return {
+        id,
+        ifc_global_id: normalizeNullableString(row.ifc_global_id),
+        ifc_entity_id: normalizeNullableString(row.ifc_entity_id),
+        ifc_type: normalizeNullableString(row.ifc_type),
+        ifc_layer_name: normalizeNullableString(row.ifc_layer_name),
+        name: normalizeNullableString(row.name),
+        detected_service_key: normalizeNullableString(row.detected_service_key),
+        detected_service_label: normalizeNullableString(row.detected_service_label),
+        detected_house_number: normalizeNullableNumber(row.detected_house_number),
+        category: normalizeNullableString(row.category),
+        confidence: normalizeNullableString(row.confidence),
+        needs_review: normalizeBoolean(row.needs_review),
+        status: normalizeIfcPersistedStatus(row.status),
+        raw_properties: normalizeRawProperties(row.raw_properties),
+      };
+    })
+    .filter((row): row is IfcPersistedElementRow => !!row);
 }
 
 const IFC_ENTITY_TYPES = [
@@ -1257,6 +1337,112 @@ function disposeIfcVisualTextureCache(textureCache: Map<IfcVisualTextureKind, TH
   textureCache.clear();
 }
 
+function formatIfcPoint(point: IfcPoint | null) {
+  if (!point) return "-";
+  return `${point.x.toFixed(2)}, ${point.y.toFixed(2)}, ${point.z.toFixed(2)}`;
+}
+
+function normalizeIfcEntityId(value: string | null | undefined) {
+  const trimmed = (value || "").trim();
+  if (!trimmed) return null;
+  return trimmed.startsWith("#") ? trimmed : `#${trimmed}`;
+}
+
+function getIfcEntityIdVariants(value: string | null | undefined) {
+  const normalized = normalizeIfcEntityId(value);
+  if (!normalized) return new Set<string>();
+  return new Set([normalized, normalized.replace(/^#/, "")]);
+}
+
+function getIfcVisualSelectionEntityId(event: any, mesh: THREE.Mesh | null) {
+  const directValue = mesh?.userData?.expressID ?? event?.object?.userData?.expressID;
+  const directNumber = normalizeNullableNumber(directValue);
+  if (directNumber != null) return `#${directNumber}`;
+
+  const geometry = mesh?.geometry;
+  const expressAttribute = geometry?.getAttribute?.("expressID") as { getX?: (index: number) => number } | undefined;
+  const vertexIndex = event?.face?.a ?? (typeof event?.faceIndex === "number" ? event.faceIndex * 3 : null);
+  if (expressAttribute?.getX && typeof vertexIndex === "number") {
+    const value = normalizeNullableNumber(expressAttribute.getX(vertexIndex));
+    if (value != null) return `#${value}`;
+  }
+
+  return null;
+}
+
+function getIfcVisualSelectionGlobalId(event: any, mesh: THREE.Mesh | null) {
+  return normalizeNullableString(mesh?.userData?.GlobalId)
+    || normalizeNullableString(mesh?.userData?.globalId)
+    || normalizeNullableString(event?.object?.userData?.GlobalId)
+    || normalizeNullableString(event?.object?.userData?.globalId);
+}
+
+function getIfcVisualObjectBounds(object: THREE.Object3D | null) {
+  if (!object) return { center: null, size: null };
+
+  const box = new THREE.Box3().setFromObject(object);
+  if (box.isEmpty()) return { center: null, size: null };
+
+  const center = new THREE.Vector3();
+  const size = new THREE.Vector3();
+  box.getCenter(center);
+  box.getSize(size);
+  return {
+    center: { x: center.x, y: center.y, z: center.z },
+    size: { x: size.x, y: size.y, z: size.z },
+  };
+}
+
+function findIfcPersistedElementMatch(selection: IfcVisualInspectSelection | null, elements: IfcPersistedElementRow[]) {
+  if (!selection) return null;
+
+  const entityVariants = getIfcEntityIdVariants(selection.entityId);
+  if (entityVariants.size > 0) {
+    const byEntity = elements.find(element => {
+      const persistedVariants = getIfcEntityIdVariants(element.ifc_entity_id);
+      return Array.from(entityVariants).some(value => persistedVariants.has(value));
+    });
+    if (byEntity) return byEntity;
+  }
+
+  if (selection.globalId) {
+    const byGlobalId = elements.find(element => element.ifc_global_id === selection.globalId);
+    if (byGlobalId) return byGlobalId;
+  }
+
+  return null;
+}
+
+function getPersistedHouseDetectionSource(element: IfcPersistedElementRow | null) {
+  if (!element?.raw_properties) return "none";
+  return normalizeNullableString(element.raw_properties.houseDetectionSource)
+    || normalizeNullableString(element.raw_properties.previousHouseDetectionSource)
+    || (element.raw_properties.manualSequenceAssignment ? "manual_sequence" : null)
+    || (element.raw_properties.manualHouseAssignment ? "manual_review" : null)
+    || "none";
+}
+
+function getPersistedHouseDetectionLabel(source: string) {
+  if (source === "3dtext_proximity") return "3Dtext próximo";
+  if (source === "layer") return "Camada/nome";
+  if (source === "manual_review") return "Manual/revisão";
+  if (source === "manual_sequence") return "Sequência manual";
+  return "Sem origem";
+}
+
+function createIfcInspectHighlightMaterial() {
+  return new THREE.MeshStandardMaterial({
+    color: "#facc15",
+    emissive: "#854d0e",
+    roughness: 0.45,
+    metalness: 0.02,
+    transparent: true,
+    opacity: 0.78,
+    side: THREE.DoubleSide,
+    depthTest: true,
+  });
+}
+
 function findIfcVisualMesh(object: THREE.Object3D | null): THREE.Mesh | null {
   let current: THREE.Object3D | null = object;
   while (current) {
@@ -1395,17 +1581,23 @@ function IFCVisualModel({
   url,
   visible,
   paintEnabled,
+  inspectEnabled,
   selectedPaintTexture,
   undoPaintSignal,
   clearPaintSignal,
+  clearInspectSignal,
+  onInspectSelection,
   onStatusChange,
 }: {
   url: string;
   visible: boolean;
   paintEnabled: boolean;
+  inspectEnabled: boolean;
   selectedPaintTexture: IfcVisualTextureKind;
   undoPaintSignal: number;
   clearPaintSignal: number;
+  clearInspectSignal: number;
+  onInspectSelection: (selection: IfcVisualInspectSelection | null) => void;
   onStatusChange: (status: IfcVisualStatus, message?: string | null) => void;
 }) {
   const [object, setObject] = useState<THREE.Object3D | null>(null);
@@ -1422,6 +1614,11 @@ function IFCVisualModel({
     previousMaterial: THREE.Material | THREE.Material[];
     paintedMaterial: THREE.Material;
   }>>([]);
+  const inspectHighlightRef = useRef<{
+    mesh: THREE.Mesh;
+    previousMaterial: THREE.Material | THREE.Material[];
+    highlightMaterial: THREE.Material;
+  } | null>(null);
 
   const restorePaintEntry = useCallback((entry: {
     mesh: THREE.Mesh;
@@ -1456,6 +1653,60 @@ function IFCVisualModel({
     });
   }, [selectedPaintTexture]);
 
+  const clearInspectHighlight = useCallback(() => {
+    const current = inspectHighlightRef.current;
+    if (!current) return;
+
+    if (current.mesh.material === current.highlightMaterial) {
+      current.mesh.material = current.previousMaterial;
+    }
+    disposeIfcVisualMaterial(current.highlightMaterial);
+    inspectHighlightRef.current = null;
+  }, []);
+
+  const highlightInspectMesh = useCallback((mesh: THREE.Mesh) => {
+    clearInspectHighlight();
+    const previousMaterial = mesh.material as THREE.Material | THREE.Material[];
+    const highlightMaterial = createIfcInspectHighlightMaterial();
+    mesh.material = highlightMaterial;
+    inspectHighlightRef.current = { mesh, previousMaterial, highlightMaterial };
+  }, [clearInspectHighlight]);
+
+  const inspectMesh = useCallback((event: any, hit: THREE.Object3D) => {
+    const mesh = findIfcVisualMesh(hit);
+    if (!mesh) {
+      console.info("[IFC Inspect] no inventory match", { reason: "no mesh", uuid: hit.uuid, name: hit.name, type: hit.type });
+      onInspectSelection(null);
+      return;
+    }
+
+    const bounds = getIfcVisualObjectBounds(mesh);
+    const selection: IfcVisualInspectSelection = {
+      uuid: mesh.uuid,
+      objectName: mesh.name || null,
+      objectType: mesh.type,
+      parentName: mesh.parent?.name || null,
+      parentUuid: mesh.parent?.uuid || null,
+      entityId: getIfcVisualSelectionEntityId(event, mesh),
+      globalId: getIfcVisualSelectionGlobalId(event, mesh),
+      center: bounds.center,
+      size: bounds.size,
+      hitRootOrGroup: hit === objectRef.current || hit.type === "Group" || hit.type === "Scene",
+    };
+
+    highlightInspectMesh(mesh);
+    onInspectSelection(selection);
+    console.info("[IFC Inspect] selected mesh", selection);
+    if (selection.hitRootOrGroup) {
+      console.info("[IFC Inspect] click hit root/group before mesh", {
+        hitUuid: hit.uuid,
+        hitName: hit.name,
+        hitType: hit.type,
+        meshUuid: mesh.uuid,
+      });
+    }
+  }, [highlightInspectMesh, onInspectSelection]);
+
   useEffect(() => {
     if (undoPaintSignal <= 0) return;
     const entry = paintHistoryRef.current.pop();
@@ -1477,6 +1728,11 @@ function IFCVisualModel({
   }, [clearPaintSignal, restorePaintEntry]);
 
   useEffect(() => {
+    if (clearInspectSignal <= 0) return;
+    clearInspectHighlight();
+  }, [clearInspectHighlight, clearInspectSignal]);
+
+  useEffect(() => {
     if (!visible) {
       loadTokenRef.current += 1;
       loadingUrlRef.current = null;
@@ -1490,6 +1746,7 @@ function IFCVisualModel({
       }
       paintHistoryRef.current = [];
       disposeIfcVisualTextureCache(paintTextureCacheRef.current);
+      clearInspectHighlight();
 
       return;
     }
@@ -1517,6 +1774,7 @@ function IFCVisualModel({
         console.info("[IFC Visual] disposed");
       }
       paintHistoryRef.current = [];
+      clearInspectHighlight();
 
       setObject(null);
       setLoadError(null);
@@ -1593,8 +1851,9 @@ function IFCVisualModel({
         console.info("[IFC Visual] disposed");
       }
       paintHistoryRef.current = [];
+      clearInspectHighlight();
     };
-  }, [onStatusChange, url, visible]);
+  }, [clearInspectHighlight, onStatusChange, url, visible]);
 
   if (!visible) return null;
 
@@ -1621,6 +1880,10 @@ function IFCVisualModel({
             event.stopPropagation();
             const hit = event.object as THREE.Object3D;
             const mesh = findIfcVisualMesh(hit);
+            if (inspectEnabled) {
+              inspectMesh(event, hit);
+              return;
+            }
             if (paintEnabled) {
               if (!mesh) {
                 console.info("[IFC Paint] no object hit");
@@ -1637,6 +1900,7 @@ function IFCVisualModel({
             });
           }}
           onPointerMissed={() => {
+            if (inspectEnabled) console.info("[IFC Inspect] no object hit");
             if (paintEnabled) console.info("[IFC Paint] no object hit");
           }}
         />
@@ -1710,9 +1974,14 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
   const [visualStatus, setVisualStatus] = useState<IfcVisualStatus>("idle");
   const [visualMessage, setVisualMessage] = useState<string | null>(null);
   const [paintModeEnabled, setPaintModeEnabled] = useState(false);
+  const [inspectModeEnabled, setInspectModeEnabled] = useState(false);
+  const [inspectSelection, setInspectSelection] = useState<IfcVisualInspectSelection | null>(null);
+  const [inspectGroupMode, setInspectGroupMode] = useState<IfcInspectGroupMode>("none");
+  const [persistedElements, setPersistedElements] = useState<IfcPersistedElementRow[]>([]);
   const [selectedPaintTexture, setSelectedPaintTexture] = useState<IfcVisualTextureKind>("paver");
   const [undoPaintSignal, setUndoPaintSignal] = useState(0);
   const [clearPaintSignal, setClearPaintSignal] = useState(0);
+  const [clearInspectSignal, setClearInspectSignal] = useState(0);
   const calledRef = useRef(false);
   const persistedKeyRef = useRef<string | null>(null);
 
@@ -1733,6 +2002,42 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
     });
   }, []);
 
+  const handleTogglePaintMode = useCallback(() => {
+    setPaintModeEnabled(prev => {
+      const next = !prev;
+      if (next) {
+        setInspectModeEnabled(false);
+        setInspectGroupMode("none");
+      }
+      return next;
+    });
+  }, []);
+
+  const handleToggleInspectMode = useCallback(() => {
+    setInspectModeEnabled(prev => {
+      const next = !prev;
+      if (next) {
+        setPaintModeEnabled(false);
+      } else {
+        setInspectSelection(null);
+        setInspectGroupMode("none");
+        setClearInspectSignal(value => value + 1);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleInspectSelection = useCallback((selection: IfcVisualInspectSelection | null) => {
+    setInspectSelection(selection);
+    setInspectGroupMode("none");
+  }, []);
+
+  const handleClearInspectSelection = useCallback(() => {
+    setInspectSelection(null);
+    setInspectGroupMode("none");
+    setClearInspectSignal(value => value + 1);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     setLoaded(false);
@@ -1742,6 +2047,9 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
     setSaveStatus("idle");
     setSaveMessage(null);
     setPersistDiagnostics(null);
+    setPersistedElements([]);
+    setInspectSelection(null);
+    setInspectGroupMode("none");
     calledRef.current = false;
     persistedKeyRef.current = null;
 
@@ -1984,6 +2292,58 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
     };
   }, [companyId, error, items, loaded, projectId, url]);
 
+  useEffect(() => {
+    if (!loaded || error || !projectId) {
+      setPersistedElements([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadPersistedElements = async () => {
+      try {
+        const modelTable = supabase.from("project_3d_models" as any);
+        const elementsTable = supabase.from("project_ifc_elements" as any);
+
+        let existingModelQuery = modelTable
+          .select("id")
+          .eq("project_id", projectId)
+          .eq("storage_path", url)
+          .eq("model_type", "ifc");
+
+        if (companyId) {
+          existingModelQuery = existingModelQuery.eq("company_id", companyId);
+        }
+
+        const { data: modelData, error: modelError } = await existingModelQuery.limit(1).maybeSingle();
+        if (modelError) throw modelError;
+
+        const model = asProject3DModelIdRow(modelData as unknown);
+        if (!model?.id) {
+          if (!cancelled) setPersistedElements([]);
+          return;
+        }
+
+        const { data: elementsData, error: elementsError } = await elementsTable
+          .select("id, ifc_global_id, ifc_entity_id, ifc_type, ifc_layer_name, name, detected_service_key, detected_service_label, detected_house_number, category, confidence, needs_review, status, raw_properties")
+          .eq("project_id", projectId)
+          .eq("model_id", model.id);
+
+        if (elementsError) throw elementsError;
+        if (!cancelled) setPersistedElements(asIfcPersistedElementRows(elementsData as unknown));
+      } catch (err) {
+        console.warn("[IFC Inspect] Falha ao carregar inventario persistido", err);
+        if (!cancelled) setPersistedElements([]);
+      }
+    };
+
+    void loadPersistedElements();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [companyId, error, loaded, projectId, saveStatus, url]);
+
   const countsByType = useMemo(() => {
     return items.reduce<Record<string, number>>((acc, item) => {
       acc[item.type] = (acc[item.type] || 0) + 1;
@@ -2079,6 +2439,53 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
     });
   }, [filter, items, search]);
 
+  const inspectedPersistedElement = useMemo(() => {
+    return findIfcPersistedElementMatch(inspectSelection, persistedElements);
+  }, [inspectSelection, persistedElements]);
+
+  const sameHouseElements = useMemo(() => {
+    const houseNumber = inspectedPersistedElement?.detected_house_number;
+    if (houseNumber == null) return [];
+    return persistedElements.filter(element => element.detected_house_number === houseNumber);
+  }, [inspectedPersistedElement, persistedElements]);
+
+  const sameServiceElements = useMemo(() => {
+    const serviceKey = inspectedPersistedElement?.detected_service_key;
+    if (!serviceKey) return [];
+    return persistedElements.filter(element => element.detected_service_key === serviceKey);
+  }, [inspectedPersistedElement, persistedElements]);
+
+  const inspectGroupElements = inspectGroupMode === "house"
+    ? sameHouseElements
+    : inspectGroupMode === "service"
+      ? sameServiceElements
+      : [];
+
+  useEffect(() => {
+    if (!inspectSelection) return;
+    if (inspectedPersistedElement) {
+      console.info("[IFC Inspect] matched inventory element", {
+        entityId: inspectedPersistedElement.ifc_entity_id,
+        globalId: inspectedPersistedElement.ifc_global_id,
+        houseNumber: inspectedPersistedElement.detected_house_number,
+        serviceKey: inspectedPersistedElement.detected_service_key,
+        status: inspectedPersistedElement.status,
+      });
+    } else {
+      console.info("[IFC Inspect] no inventory match", {
+        entityId: inspectSelection.entityId,
+        globalId: inspectSelection.globalId,
+        uuid: inspectSelection.uuid,
+      });
+    }
+  }, [inspectSelection, inspectedPersistedElement]);
+
+  useEffect(() => {
+    if (inspectGroupMode === "house") {
+      console.info("[IFC Inspect] same house elements count", { count: sameHouseElements.length });
+    }
+  }, [inspectGroupMode, sameHouseElements.length]);
+
   const toggleRawLine = (id: string) => {
     setExpandedRawLines(prev => {
       const next = new Set(prev);
@@ -2143,9 +2550,12 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         url={url}
         visible={showVisualIfc}
         paintEnabled={paintModeEnabled}
+        inspectEnabled={inspectModeEnabled}
         selectedPaintTexture={selectedPaintTexture}
         undoPaintSignal={undoPaintSignal}
         clearPaintSignal={clearPaintSignal}
+        clearInspectSignal={clearInspectSignal}
+        onInspectSelection={handleInspectSelection}
         onStatusChange={handleVisualStatusChange}
       />
       <Html fullscreen>
@@ -2206,7 +2616,18 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setPaintModeEnabled(prev => !prev)}
+                    onClick={handleToggleInspectMode}
+                    className={`rounded border px-2 py-1 text-[11px] font-medium ${
+                      inspectModeEnabled
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-background hover:bg-muted"
+                    }`}
+                  >
+                    Inspecionar IFC
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleTogglePaintMode}
                     className={`rounded border px-2 py-1 text-[11px] font-medium ${
                       paintModeEnabled
                         ? "border-primary bg-primary text-primary-foreground"
@@ -2244,6 +2665,24 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
                   <p className="mt-2 text-[11px] text-muted-foreground">
                     Escolha uma textura e clique em um elemento IFC para aplicar localmente. Esta pintura nao e salva no banco.
                   </p>
+                )}
+                {inspectModeEnabled && (
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    Clique em um elemento IFC para validar Casa + Servico. Nada sera salvo automaticamente.
+                  </p>
+                )}
+                {inspectSelection && (
+                  <IfcInspectPanel
+                    selection={inspectSelection}
+                    element={inspectedPersistedElement}
+                    groupMode={inspectGroupMode}
+                    groupElements={inspectGroupElements}
+                    sameHouseCount={sameHouseElements.length}
+                    sameServiceCount={sameServiceElements.length}
+                    onShowHouse={() => setInspectGroupMode("house")}
+                    onShowService={() => setInspectGroupMode("service")}
+                    onClear={handleClearInspectSelection}
+                  />
                 )}
               </div>
             )}
@@ -2409,6 +2848,118 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
       </div>
       </Html>
     </>
+  );
+}
+
+function IfcInspectPanel({
+  selection,
+  element,
+  groupMode,
+  groupElements,
+  sameHouseCount,
+  sameServiceCount,
+  onShowHouse,
+  onShowService,
+  onClear,
+}: {
+  selection: IfcVisualInspectSelection;
+  element: IfcPersistedElementRow | null;
+  groupMode: IfcInspectGroupMode;
+  groupElements: IfcPersistedElementRow[];
+  sameHouseCount: number;
+  sameServiceCount: number;
+  onShowHouse: () => void;
+  onShowService: () => void;
+  onClear: () => void;
+}) {
+  const houseSource = getPersistedHouseDetectionSource(element);
+  const groupTitle = groupMode === "house"
+    ? "Elementos da mesma casa"
+    : groupMode === "service"
+      ? "Elementos do mesmo serviço"
+      : null;
+
+  return (
+    <div className="mt-2 rounded-md border border-primary/30 bg-background p-2 text-[11px] shadow-sm">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold">Elemento IFC selecionado</p>
+        <button type="button" onClick={onClear} className="rounded border border-border bg-background px-2 py-0.5 text-[10px] font-medium hover:bg-muted">
+          Limpar seleção
+        </button>
+      </div>
+
+      <div className="mt-2 grid grid-cols-1 gap-x-3 gap-y-1 sm:grid-cols-2">
+        <DiagnosticItem label="Entity ID" value={selection.entityId} />
+        <DiagnosticItem label="GlobalId visual" value={selection.globalId} />
+        <DiagnosticItem label="Objeto" value={selection.objectName || "(sem nome)"} />
+        <DiagnosticItem label="UUID" value={selection.uuid} />
+        <DiagnosticItem label="Parent" value={selection.parentName || selection.parentUuid} />
+        <DiagnosticItem label="Centro" value={formatIfcPoint(selection.center)} />
+        <DiagnosticItem label="Tamanho" value={formatIfcPoint(selection.size)} />
+        <DiagnosticItem label="Hit root/group" value={String(selection.hitRootOrGroup)} />
+      </div>
+
+      {element ? (
+        <div className="mt-2 rounded-md bg-muted/40 p-2">
+          <div className="grid grid-cols-1 gap-x-3 gap-y-1 sm:grid-cols-2">
+            <DiagnosticItem label="Entity ID salvo" value={element.ifc_entity_id} />
+            <DiagnosticItem label="GlobalId salvo" value={element.ifc_global_id} />
+            <DiagnosticItem label="Camada" value={element.ifc_layer_name} />
+            <DiagnosticItem label="Nome" value={element.name} />
+            <DiagnosticItem label="Serviço" value={element.detected_service_label || element.detected_service_key} />
+            <DiagnosticItem label="Casa" value={element.detected_house_number == null ? null : String(element.detected_house_number)} />
+            <DiagnosticItem label="Origem da casa" value={getPersistedHouseDetectionLabel(houseSource)} />
+            <DiagnosticItem label="Status" value={element.status} />
+            <DiagnosticItem label="Confidence" value={element.confidence} />
+            <DiagnosticItem label="Needs review" value={element.needs_review == null ? null : String(element.needs_review)} />
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={onShowHouse}
+              disabled={element.detected_house_number == null}
+              className="rounded border border-border bg-background px-2 py-1 text-[10px] font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Ver elementos da mesma casa ({sameHouseCount})
+            </button>
+            <button
+              type="button"
+              onClick={onShowService}
+              disabled={!element.detected_service_key}
+              className="rounded border border-border bg-background px-2 py-1 text-[10px] font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Ver elementos do mesmo serviço ({sameServiceCount})
+            </button>
+          </div>
+        </div>
+      ) : (
+        <p className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-900">
+          Sem correspondência no inventário salvo. O clique foi registrado, mas não houve match por Entity ID ou GlobalId.
+        </p>
+      )}
+
+      {groupTitle && (
+        <div className="mt-2 rounded-md border border-border bg-muted/20 p-2">
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <p className="font-medium">{groupTitle}</p>
+            <span className="text-muted-foreground">{groupElements.length} elemento(s)</span>
+          </div>
+          <div className="max-h-36 space-y-1 overflow-y-auto pr-1">
+            {groupElements.slice(0, 40).map(item => (
+              <div key={item.id} className="rounded bg-background px-2 py-1">
+                <p className="truncate font-mono text-[10px]">{item.ifc_entity_id || "-"} | {item.ifc_global_id || "-"}</p>
+                <p className="truncate text-[10px] text-muted-foreground">
+                  Casa {item.detected_house_number ?? "-"} | {item.detected_service_label || item.detected_service_key || "-"} | {item.status}
+                </p>
+              </div>
+            ))}
+            {groupElements.length > 40 && (
+              <p className="text-[10px] text-muted-foreground">Mostrando 40 de {groupElements.length} elementos.</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
