@@ -692,7 +692,9 @@ function mapIfcCategory(category: IfcInventoryItem["category"]) {
 
 type IfcLoaderConstructor = new () => {
   ifcManager?: {
-    setWasmPath?: (path: string) => void;
+    applyWebIfcConfig?: (settings: Record<string, unknown>) => void | Promise<void>;
+    setWasmPath?: (path: string) => void | Promise<void>;
+    useWebWorkers?: (active: boolean, path?: string) => void | Promise<void>;
   };
   load: (
     url: string,
@@ -711,6 +713,13 @@ const ifcLoaderModules = import.meta.glob<IfcLoaderModule>([
   "/node_modules/web-ifc-three/**/IFCLoader*.js",
   "/node_modules/web-ifc-three/**/IFCLoader*.mjs",
 ]);
+
+const IFC_VISUAL_WASM_PATH = "/wasm/";
+const IFC_VISUAL_PACKAGE_VERSIONS = {
+  three: "0.160.1",
+  webIfc: "0.0.44",
+  webIfcThree: "0.0.126",
+};
 
 async function loadIfcLoaderConstructor() {
   const candidates = Object.entries(ifcLoaderModules).sort(([left], [right]) => {
@@ -740,6 +749,56 @@ async function loadIfcLoaderConstructor() {
   );
 }
 
+async function inspectIfcVisualWasmFiles() {
+  const files = ["web-ifc.wasm", "web-ifc-mt.wasm"];
+  const results = await Promise.all(
+    files.map(async fileName => {
+      const path = `${IFC_VISUAL_WASM_PATH}${fileName}`;
+      try {
+        const response = await fetch(path, { method: "HEAD" });
+        return {
+          path,
+          ok: response.ok,
+          status: response.status,
+          contentType: response.headers.get("content-type"),
+          contentLength: response.headers.get("content-length"),
+        };
+      } catch (error: any) {
+        return {
+          path,
+          ok: false,
+          error: error?.message || "Falha ao verificar arquivo WASM",
+        };
+      }
+    })
+  );
+
+  return {
+    wasmPath: IFC_VISUAL_WASM_PATH,
+    packageVersions: IFC_VISUAL_PACKAGE_VERSIONS,
+    files: results,
+  };
+}
+
+function describeIfcVisualError(error: any, wasmDiagnostics: unknown) {
+  const message = error?.message || "Falha ao renderizar IFC visual";
+  const stack = error?.stack;
+  const isOpenModelMismatch = message.includes("OpenModel is not a function");
+
+  console.warn("[IFC] Diagnostico da renderizacao visual", {
+    errorMessage: message,
+    stack,
+    wasmDiagnostics,
+    packageVersions: IFC_VISUAL_PACKAGE_VERSIONS,
+  });
+
+  if (isOpenModelMismatch) {
+    return "Falha de compatibilidade entre web-ifc/web-ifc-three e os arquivos WASM em /wasm/. Inventario textual mantido.";
+  }
+
+  return message;
+}
+
 function IFCVisualModel({
   url,
   visible,
@@ -761,12 +820,28 @@ function IFCVisualModel({
       setLoadError(null);
       onStatusChange("loading", null);
 
+      let wasmDiagnostics: Awaited<ReturnType<typeof inspectIfcVisualWasmFiles>> | null = null;
+
       try {
+        wasmDiagnostics = await inspectIfcVisualWasmFiles();
+        console.info("[IFC] Diagnostico WASM visual", wasmDiagnostics);
+
         const IFCLoader = await loadIfcLoaderConstructor();
         const loader = new IFCLoader();
 
+        if (loader.ifcManager?.useWebWorkers) {
+          await loader.ifcManager.useWebWorkers(false);
+        }
+
         if (loader.ifcManager?.setWasmPath) {
-          loader.ifcManager.setWasmPath("/wasm/");
+          await loader.ifcManager.setWasmPath(IFC_VISUAL_WASM_PATH);
+        }
+
+        if (loader.ifcManager?.applyWebIfcConfig) {
+          await loader.ifcManager.applyWebIfcConfig({
+            COORDINATE_TO_ORIGIN: true,
+            USE_FAST_BOOLS: true,
+          });
         }
 
         const model = await new Promise<THREE.Object3D>((resolve, reject) => {
@@ -798,8 +873,9 @@ function IFCVisualModel({
       } catch (err: any) {
         if (cancelled) return;
         console.warn("[IFC] Falha na renderizacao visual IFC", err);
-        onStatusChange("error", err?.message || "Falha ao renderizar IFC visual");
-        setLoadError(err?.message || "Falha ao renderizar IFC visual");
+        const message = describeIfcVisualError(err, wasmDiagnostics);
+        onStatusChange("error", message);
+        setLoadError(message);
       }
     };
 
