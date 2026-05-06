@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Html } from "@react-three/drei";
 import * as THREE from "three";
 import { supabase } from "@/integrations/supabase/client";
@@ -75,6 +75,7 @@ interface IfcRefDiagnostics {
 
 type IfcInventoryFilter = "all" | "production" | "text" | "unnamed";
 type IfcInventorySaveStatus = "idle" | "saving" | "saved" | "error";
+type IfcVisualStatus = "idle" | "loading" | "ready" | "error";
 type Project3DModelIdRow = { id: string };
 type ProtectedIfcElementRow = { ifc_global_id: string | null; ifc_entity_id: string | null };
 type PersistDiagnostics = {
@@ -689,6 +690,124 @@ function mapIfcCategory(category: IfcInventoryItem["category"]) {
   return "unknown";
 }
 
+function IFCVisualModel({
+  url,
+  visible,
+  onStatusChange,
+}: {
+  url: string;
+  visible: boolean;
+  onStatusChange: (status: IfcVisualStatus, message?: string | null) => void;
+}) {
+  const [object, setObject] = useState<THREE.Object3D | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let loadedObject: THREE.Object3D | null = null;
+
+    const loadVisualIfc = async () => {
+      setObject(null);
+      setLoadError(null);
+      onStatusChange("loading", null);
+
+      try {
+        const loaderSpecifier = "web-ifc-three/IFCLoader";
+        const module = await import(/* @vite-ignore */ loaderSpecifier);
+        const IFCLoader = (module as any).IFCLoader;
+        const loader = new IFCLoader();
+
+        if (loader.ifcManager?.setWasmPath) {
+          loader.ifcManager.setWasmPath("/wasm/");
+        }
+
+        const model = await new Promise<THREE.Object3D>((resolve, reject) => {
+          loader.load(url, resolve, undefined, reject);
+        });
+
+        if (cancelled) return;
+
+        loadedObject = model;
+        model.name = "IFC visual diagnostic model";
+        model.traverse(child => {
+          const mesh = child as THREE.Mesh;
+          if (!mesh.isMesh) return;
+          mesh.userData.ifcVisualOnly = true;
+          mesh.castShadow = false;
+          mesh.receiveShadow = true;
+          mesh.material = new THREE.MeshStandardMaterial({
+            color: "#cbd5e1",
+            roughness: 0.75,
+            metalness: 0.05,
+            transparent: true,
+            opacity: 0.88,
+            side: THREE.DoubleSide,
+          });
+        });
+
+        setObject(model);
+        onStatusChange("ready", null);
+      } catch (err: any) {
+        if (cancelled) return;
+        console.warn("[IFC] Falha na renderizacao visual IFC", err);
+        onStatusChange("error", err?.message || "Falha ao renderizar IFC visual");
+        setLoadError(err?.message || "Falha ao renderizar IFC visual");
+      }
+    };
+
+    void loadVisualIfc();
+
+    return () => {
+      cancelled = true;
+      loadedObject?.traverse(child => {
+        const mesh = child as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        mesh.geometry?.dispose();
+        const material = mesh.material as THREE.Material | THREE.Material[];
+        if (Array.isArray(material)) material.forEach(item => item.dispose());
+        else material?.dispose();
+      });
+      setObject(null);
+    };
+  }, [onStatusChange, url]);
+
+  if (!visible) return null;
+
+  return (
+    <>
+      {visible && !object && !loadError && (
+        <Html center>
+          <div className="rounded-md border border-border bg-background/90 px-3 py-2 text-xs shadow">
+            Carregando IFC visual...
+          </div>
+        </Html>
+      )}
+      {visible && loadError && (
+        <Html center>
+          <div className="max-w-xs rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 shadow">
+            IFC visual indisponivel. Inventario textual mantido.
+          </div>
+        </Html>
+      )}
+      {object && (
+        <primitive
+          object={object}
+          onClick={(event: any) => {
+            event.stopPropagation();
+            const hit = event.object as THREE.Object3D;
+            console.info("[IFC] Clique visual", {
+              uuid: hit.uuid,
+              name: hit.name,
+              type: hit.type,
+              expressID: hit.userData?.expressID,
+            });
+          }}
+        />
+      )}
+    </>
+  );
+}
+
 function buildIfcElementPayload(item: IfcInventoryItem, projectId: string, companyId: string, modelId: string) {
   return {
     company_id: companyId,
@@ -750,12 +869,20 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [persistDiagnostics, setPersistDiagnostics] = useState<PersistDiagnostics | null>(null);
   const [minimized, setMinimized] = useState(false);
+  const [showVisualIfc, setShowVisualIfc] = useState(true);
+  const [visualStatus, setVisualStatus] = useState<IfcVisualStatus>("idle");
+  const [visualMessage, setVisualMessage] = useState<string | null>(null);
   const calledRef = useRef(false);
   const persistedKeyRef = useRef<string | null>(null);
 
   void onSceneReady;
   void onMeshClick;
   void selectedMeshKey;
+
+  const handleVisualStatusChange = useCallback((status: IfcVisualStatus, message?: string | null) => {
+    setVisualStatus(status);
+    setVisualMessage(message || null);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -1162,7 +1289,13 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
   };
 
   return (
-    <Html fullscreen>
+    <>
+      <IFCVisualModel
+        url={url}
+        visible={showVisualIfc}
+        onStatusChange={handleVisualStatusChange}
+      />
+      <Html fullscreen>
       <div className="pointer-events-none absolute right-4 top-4 bottom-24 w-[min(760px,calc(100vw-2rem))]">
         <div
           className="pointer-events-auto flex h-full max-h-[calc(100vh-160px)] flex-col overflow-hidden overscroll-contain rounded-lg border border-border bg-background/95 shadow-2xl"
@@ -1180,6 +1313,13 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
               <h3 className="text-base font-semibold">Inventário IFC</h3>
               <button
                 type="button"
+                onClick={() => setShowVisualIfc(prev => !prev)}
+                className="rounded border border-border bg-background px-2 py-0.5 text-[11px] font-medium hover:bg-muted"
+              >
+                {showVisualIfc ? "Ocultar IFC visual" : "Mostrar IFC visual"}
+              </button>
+              <button
+                type="button"
                 onClick={() => setMinimized(prev => !prev)}
                 className="rounded border border-border bg-background px-2 py-0.5 text-[11px] font-medium hover:bg-muted"
               >
@@ -1189,6 +1329,23 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
             {!minimized && (
               <p className="mt-1 text-xs text-muted-foreground">
                 Renderização IFC 3D será ativada em etapa futura. Nesta etapa o arquivo foi lido para validar entidades e nomes.
+              </p>
+            )}
+            {!minimized && (
+              <p className={`mt-2 rounded-md px-2 py-1 text-xs ${
+                visualStatus === "ready"
+                  ? "bg-emerald-100 text-emerald-800"
+                  : visualStatus === "error"
+                    ? "bg-amber-50 text-amber-900"
+                    : "bg-muted text-muted-foreground"
+              }`}>
+                {showVisualIfc
+                  ? visualStatus === "ready"
+                    ? "IFC visual carregado para inspecao."
+                    : visualStatus === "error"
+                      ? `IFC visual indisponivel: ${visualMessage || "erro ao carregar"}. Inventario textual mantido.`
+                      : "Carregando IFC visual..."
+                  : "IFC visual oculto. Inventario textual mantido."}
               </p>
             )}
             {saveMessage && (
@@ -1351,7 +1508,8 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
           )}
         </div>
       </div>
-    </Html>
+      </Html>
+    </>
   );
 }
 
