@@ -19,6 +19,8 @@ import { supabase } from "@/integrations/supabase/client";
 type IfcSuggestionStatus = "suggested" | "confirmed" | "ignored";
 type StatusFilter = IfcSuggestionStatus | "all";
 type CategoryFilter = "production" | "text_annotation" | "unknown" | "all";
+type QuickFilter = "all" | "valid" | "3dtext" | "layer" | "no_service" | "no_house" | "confirmed" | "ignored";
+type BatchAction = "confirm_valid" | "ignore_no_service";
 
 interface IfcSuggestionRow {
   id: string;
@@ -280,6 +282,25 @@ function buildLinkKey(ifcElementId: string, houseId: string | null, houseNumber:
   return `${ifcElementId}::${houseId || ""}::${houseNumber ?? ""}::${serviceKey}`;
 }
 
+function isValidHouseServiceSuggestion(item: IfcSuggestionRow) {
+  return item.category === "production" && item.detected_house_number != null && !!item.detected_service_key;
+}
+
+function isSuggestedValidHouseServiceSuggestion(item: IfcSuggestionRow) {
+  return isValidHouseServiceSuggestion(item) && item.status === "suggested";
+}
+
+function getHouseDetectionSource(item: IfcSuggestionRow) {
+  return item.raw_properties?.houseDetectionSource || null;
+}
+
+function getHouseDetectionSourceLabel(item: IfcSuggestionRow) {
+  const source = getHouseDetectionSource(item);
+  if (source === "3dtext_proximity") return "3Dtext próximo";
+  if (source === "layer") return "Camada";
+  return source || "-";
+}
+
 function getHouseNumber(house: HouseLookupRow) {
   const value = house.houseNumber ?? house.house_number ?? house.number;
   return typeof value === "number" && Number.isFinite(value) ? value : null;
@@ -353,11 +374,14 @@ function summarizeLinkDiagnostics(links: IfcLinkDiagnosticRow[]): LinkDiagnostic
 export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, houses = [] }: Props) {
   const [items, setItems] = useState<IfcSuggestionRow[]>([]);
   const [modelId, setModelId] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("suggested");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>("all");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [batchAction, setBatchAction] = useState<BatchAction | null>(null);
+  const [batchSaving, setBatchSaving] = useState(false);
   const [syncingLinks, setSyncingLinks] = useState(false);
   const [linkSyncResult, setLinkSyncResult] = useState<LinkSyncResult | null>(null);
   const [loadingDiagnostics, setLoadingDiagnostics] = useState(false);
@@ -447,10 +471,20 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
   }, [loadSuggestions, open]);
 
   const filteredItems = useMemo(() => {
+    const quickFiltered = items.filter(item => {
+      if (quickFilter === "valid") return isValidHouseServiceSuggestion(item);
+      if (quickFilter === "3dtext") return getHouseDetectionSource(item) === "3dtext_proximity";
+      if (quickFilter === "layer") return getHouseDetectionSource(item) === "layer";
+      if (quickFilter === "no_service") return !item.detected_service_key;
+      if (quickFilter === "no_house") return item.detected_house_number == null;
+      if (quickFilter === "confirmed") return item.status === "confirmed";
+      if (quickFilter === "ignored") return item.status === "ignored";
+      return true;
+    });
     const query = search.trim().toLowerCase();
-    if (!query) return items;
+    if (!query) return quickFiltered;
 
-    return items.filter(item => {
+    return quickFiltered.filter(item => {
       const haystack = [
         item.ifc_layer_name,
         item.ifc_global_id,
@@ -464,7 +498,7 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
       ].join(" ").toLowerCase();
       return haystack.includes(query);
     });
-  }, [items, search]);
+  }, [items, quickFilter, search]);
 
   const counts = useMemo(() => {
     return items.reduce(
@@ -474,11 +508,19 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
         if (item.status === "confirmed") acc.confirmed += 1;
         if (item.status === "ignored") acc.ignored += 1;
         if (item.needs_review) acc.needsReview += 1;
+        if (isValidHouseServiceSuggestion(item)) acc.validHouseService += 1;
+        if (getHouseDetectionSource(item) === "3dtext_proximity") acc.by3dText += 1;
+        if (getHouseDetectionSource(item) === "layer") acc.byLayer += 1;
         return acc;
       },
-      { total: 0, suggested: 0, confirmed: 0, ignored: 0, needsReview: 0 }
+      { total: 0, suggested: 0, confirmed: 0, ignored: 0, needsReview: 0, validHouseService: 0, by3dText: 0, byLayer: 0 }
     );
   }, [items]);
+
+  const batchCandidates = useMemo(() => ({
+    confirmValid: items.filter(isSuggestedValidHouseServiceSuggestion),
+    ignoreNoService: items.filter(item => item.status === "suggested" && !item.detected_service_key),
+  }), [items]);
 
   const anchorDiagnostics = useMemo(() => {
     return items.reduce(
@@ -550,6 +592,51 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
       toast.error("Falha ao atualizar sugestão IFC");
     } finally {
       setSavingId(null);
+    }
+  };
+
+  const runBatchAction = async () => {
+    if (!batchAction) return;
+    if (!projectId) {
+      toast.error("Projeto nÃ£o identificado para atualizar sugestÃµes IFC");
+      setBatchAction(null);
+      return;
+    }
+
+    const candidates = batchAction === "confirm_valid" ? batchCandidates.confirmValid : batchCandidates.ignoreNoService;
+    if (candidates.length === 0) {
+      toast.info("Nenhuma sugestÃ£o IFC encontrada para esta aÃ§Ã£o");
+      setBatchAction(null);
+      return;
+    }
+
+    setBatchSaving(true);
+    try {
+      const elementsTable = supabase.from("project_ifc_elements" as any) as any;
+      const targetStatus: IfcSuggestionStatus = batchAction === "confirm_valid" ? "confirmed" : "ignored";
+      const updatePayload: Record<string, unknown> = { status: targetStatus };
+      if (targetStatus === "confirmed") updatePayload.needs_review = false;
+
+      const { error } = await elementsTable
+        .update(updatePayload)
+        .eq("project_id", projectId)
+        .in("id", candidates.map(item => item.id));
+
+      if (error) throw error;
+
+      setItems(prev => prev.map(row => (
+        candidates.some(item => item.id === row.id)
+          ? { ...row, status: targetStatus, needs_review: targetStatus === "confirmed" ? false : row.needs_review }
+          : row
+      )));
+      toast.success(`${candidates.length} sugestÃ£o(Ãµes) IFC atualizada(s)`);
+      setBatchAction(null);
+      void loadSuggestions();
+    } catch (err: any) {
+      console.error("[IFC] Falha ao atualizar sugestÃµes em lote", err);
+      toast.error("Falha ao atualizar sugestÃµes IFC em lote");
+    } finally {
+      setBatchSaving(false);
     }
   };
 
@@ -708,6 +795,12 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
             <Counter label="Ignorados" value={counts.ignored} />
             <Counter label="Revisão" value={counts.needsReview} />
           </div>
+          <div className="grid gap-2 text-xs sm:grid-cols-4">
+            <Counter label="Validas Casa + Servico" value={counts.validHouseService} />
+            <Counter label="Por 3Dtext" value={counts.by3dText} />
+            <Counter label="Por camada" value={counts.byLayer} />
+            <Counter label="Pendentes de revisao" value={counts.needsReview} />
+          </div>
           <div className="grid gap-2 text-xs sm:grid-cols-5">
             <Counter label="Textos 3D" value={anchorDiagnostics.threeDTexts} />
             <Counter label="Âncoras numeradas" value={anchorDiagnostics.numberedAnchors} />
@@ -728,6 +821,29 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
             <Counter label="Com IFCAXIS2PLACEMENT3D" value={anchorDiagnostics.productionWithAxisPlacement} />
             <Counter label="Com IFCPRODUCTDEFINITIONSHAPE" value={anchorDiagnostics.productionWithProductShape} />
             <Counter label="Com IFCEXTRUDEDAREASOLID" value={anchorDiagnostics.productionWithExtrudedSolid} />
+          </div>
+
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              ["all", "Todas"],
+              ["valid", "Validas Casa + Servico"],
+              ["3dtext", "Por 3Dtext"],
+              ["layer", "Por camada"],
+              ["no_service", "Sem servico"],
+              ["no_house", "Sem casa"],
+              ["confirmed", "Confirmadas"],
+              ["ignored", "Ignoradas"],
+            ].map(([value, label]) => (
+              <Button
+                key={value}
+                type="button"
+                variant={quickFilter === value ? "default" : "outline"}
+                size="sm"
+                onClick={() => setQuickFilter(value as QuickFilter)}
+              >
+                {label}
+              </Button>
+            ))}
           </div>
 
           <div className="grid gap-2 md:grid-cols-[180px_220px_1fr_auto_auto]">
@@ -765,6 +881,49 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
               {syncingLinks ? "Gerando..." : "Gerar vínculos confirmados"}
             </Button>
           </div>
+          <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-background p-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium">Revisao em lote</p>
+              <p className="text-xs text-muted-foreground">
+                Estas acoes so alteram o status em project_ifc_elements. Nenhum vinculo definitivo ou ativacao 3D Real e criada aqui.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setBatchAction("confirm_valid")}
+              disabled={loading || batchSaving || batchCandidates.confirmValid.length === 0}
+            >
+              Confirmar validas Casa + Servico ({batchCandidates.confirmValid.length})
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setBatchAction("ignore_no_service")}
+              disabled={loading || batchSaving || batchCandidates.ignoreNoService.length === 0}
+            >
+              Ignorar sem servico detectado ({batchCandidates.ignoreNoService.length})
+            </Button>
+          </div>
+          {batchAction && (
+            <div className="flex flex-col gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+              <span>
+                {batchAction === "confirm_valid"
+                  ? `Confirmar ${batchCandidates.confirmValid.length} sugestao(oes) produtiva(s) com Casa + Servico?`
+                  : `Ignorar ${batchCandidates.ignoreNoService.length} sugestao(oes) sem servico detectado?`}
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                <Button type="button" size="sm" onClick={() => void runBatchAction()} disabled={batchSaving}>
+                  {batchSaving ? "Aplicando..." : "Confirmar acao"}
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => setBatchAction(null)} disabled={batchSaving}>
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          )}
           <p className="text-xs text-muted-foreground">
             Este vínculo ainda não ativa o 3D Real automaticamente. A ativação será feita em etapa futura.
           </p>
@@ -1032,8 +1191,10 @@ function SuggestionCard({
   onIgnore: () => void;
   onSuggest: () => void;
 }) {
+  const validHouseService = isValidHouseServiceSuggestion(item);
+
   return (
-    <div className="rounded-md border border-border bg-background p-3">
+    <div className={`rounded-md border bg-background p-3 ${validHouseService ? "border-emerald-300 ring-1 ring-emerald-100" : "border-border"}`}>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -1046,6 +1207,9 @@ function SuggestionCard({
             {item.needs_review && (
               <Badge variant="outline" className="text-[10px]">needs_review</Badge>
             )}
+            {validHouseService && (
+              <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">Casa + Servico</Badge>
+            )}
           </div>
 
           <div className="mt-2 grid gap-1 text-[11px] text-muted-foreground md:grid-cols-2 xl:grid-cols-4">
@@ -1055,6 +1219,9 @@ function SuggestionCard({
             <p><span className="font-medium text-foreground">Categoria: </span>{categoryLabels[item.category || ""] || item.category || "-"}</p>
             <p className="truncate"><span className="font-medium text-foreground">Serviço: </span>{item.detected_service_label || item.detected_service_key || "-"}</p>
             <p><span className="font-medium text-foreground">Casa: </span>{item.detected_house_number ?? "-"}</p>
+            <p><span className="font-medium text-foreground">Casa detectada: </span>{item.detected_house_number ?? "-"}</p>
+            <p className="truncate"><span className="font-medium text-foreground">Servico detectado: </span>{item.detected_service_label || item.detected_service_key || "-"}</p>
+            <p><span className="font-medium text-foreground">Origem revisao: </span>{getHouseDetectionSourceLabel(item)}</p>
             <p><span className="font-medium text-foreground">Confiança: </span>{item.confidence || "-"}</p>
             <p className="truncate"><span className="font-medium text-foreground">Nome IFC: </span>{item.name || "-"}</p>
             <p><span className="font-medium text-foreground">Origem casa: </span>{item.raw_properties?.houseDetectionSource === "3dtext_proximity" ? "3Dtext próximo" : item.raw_properties?.houseDetectionSource || "-"}</p>
