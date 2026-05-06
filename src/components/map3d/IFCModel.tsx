@@ -881,6 +881,17 @@ const IFC_VISUAL_TEXTURES: Record<
 
 type IfcVisualMaterialKind = IfcVisualTextureKind | "simple_text" | "neutral";
 
+const IFC_PAINT_TEXTURE_OPTIONS: Array<{ kind: IfcVisualTextureKind; label: string }> = [
+  { kind: "paver", label: "Paver" },
+  { kind: "parede_revestida", label: "Parede/Revestimento" },
+  { kind: "solo", label: "Solo" },
+  { kind: "grama", label: "Grama" },
+  { kind: "vegetacao", label: "Vegetação" },
+  { kind: "asfalto", label: "Asfalto" },
+  { kind: "concreto_agregado", label: "Concreto agregado" },
+  { kind: "concreto_liso", label: "Concreto liso" },
+];
+
 function disposeIfcVisualMaterial(material: THREE.Material, disposedTextures?: Set<THREE.Texture>) {
   const materialWithTextures = material as THREE.Material & Record<string, unknown>;
   const textureKeys = [
@@ -962,6 +973,16 @@ function getIfcVisualMaterials(mesh: THREE.Mesh) {
   const material = mesh.material as THREE.Material | THREE.Material[];
   if (Array.isArray(material)) return material.filter(Boolean);
   return material ? [material] : [];
+}
+
+function isIfcVisualMaterialUseful(material: THREE.Material) {
+  if (hasIfcVisualUsableTextureMap(material)) return true;
+  const color = getIfcVisualMaterialColor(material);
+  const isDefaultGray = !color || ["#cccccc", "#bfbfbf", "#ffffff"].includes(color.toLowerCase());
+  const hasSpecificName = Boolean(material.name?.trim() && !material.name.toLowerCase().includes("default"));
+  const hasDistinctColor = Boolean(color && !isDefaultGray);
+  const hasTransparency = material.transparent || material.opacity < 0.99;
+  return hasSpecificName || hasDistinctColor || hasTransparency;
 }
 
 function getIfcVisualMeshBounds(mesh: THREE.Mesh) {
@@ -1161,6 +1182,30 @@ function createIfcVisualNeutralMaterial() {
   });
 }
 
+function createIfcVisualColorFallbackMaterial(kind: IfcVisualMaterialKind) {
+  const palette: Record<IfcVisualMaterialKind, { color: string; opacity: number; roughness: number }> = {
+    concreto_agregado: { color: "#c9c7bf", opacity: 0.94, roughness: 0.78 },
+    concreto_liso: { color: "#d8d6ce", opacity: 0.94, roughness: 0.74 },
+    grama: { color: "#7f9f6a", opacity: 0.88, roughness: 0.86 },
+    vegetacao: { color: "#5d7f4f", opacity: 0.88, roughness: 0.9 },
+    asfalto: { color: "#6a6d6a", opacity: 0.9, roughness: 0.8 },
+    paver: { color: "#b8b4ab", opacity: 0.92, roughness: 0.78 },
+    parede_revestida: { color: "#e1ded6", opacity: 0.95, roughness: 0.78 },
+    solo: { color: "#8b785d", opacity: 0.88, roughness: 0.9 },
+    simple_text: { color: "#64748b", opacity: 0.5, roughness: 0.65 },
+    neutral: { color: "#d6d3ca", opacity: 0.86, roughness: 0.78 },
+  };
+  const config = palette[kind];
+  return new THREE.MeshStandardMaterial({
+    color: config.color,
+    roughness: config.roughness,
+    metalness: 0.02,
+    transparent: config.opacity < 1,
+    opacity: config.opacity,
+    side: THREE.DoubleSide,
+  });
+}
+
 function createIfcVisualTexturedMaterial(
   kind: IfcVisualTextureKind,
   textureLoader: THREE.TextureLoader,
@@ -1187,11 +1232,43 @@ function createIfcVisualTexturedMaterial(
   });
 }
 
+function createIfcPaintMaterial(
+  kind: IfcVisualTextureKind,
+  mesh: THREE.Mesh,
+  textureLoader: THREE.TextureLoader,
+  textureCache: Map<IfcVisualTextureKind, THREE.Texture>,
+  textureLoadStatus: Map<IfcVisualTextureKind, "loading" | "loaded" | "error">
+) {
+  if (!mesh.geometry?.getAttribute("uv")) {
+    ensureIfcVisualPlanarUv(mesh);
+  }
+
+  return createIfcVisualTexturedMaterial(
+    kind,
+    textureLoader,
+    textureCache,
+    textureLoadStatus,
+    getIfcVisualTextureRepeat(kind, mesh)
+  );
+}
+
+function disposeIfcVisualTextureCache(textureCache: Map<IfcVisualTextureKind, THREE.Texture>) {
+  textureCache.forEach(texture => texture.dispose());
+  textureCache.clear();
+}
+
+function findIfcVisualMesh(object: THREE.Object3D | null): THREE.Mesh | null {
+  let current: THREE.Object3D | null = object;
+  while (current) {
+    const mesh = current as THREE.Mesh;
+    if (mesh.isMesh) return mesh;
+    current = current.parent;
+  }
+  return null;
+}
+
 function configureIfcVisualMaterials(model: THREE.Object3D) {
-  const textureLoader = new THREE.TextureLoader();
-  const textureCache = new Map<IfcVisualTextureKind, THREE.Texture>();
-  const textureLoadStatus = new Map<IfcVisualTextureKind, "loading" | "loaded" | "error">();
-  const sharedFallbackMaterials = new Map<"simple_text" | "neutral", THREE.Material>();
+  const sharedFallbackMaterials = new Map<IfcVisualMaterialKind, THREE.Material>();
   const materialKeys = new Set<string>();
   const materialDiagnostics: Array<{
     meshName: string;
@@ -1205,12 +1282,9 @@ function configureIfcVisualMaterials(model: THREE.Object3D) {
   let meshCount = 0;
   let originalMaterialsWithMap = 0;
   let preservedOriginalMaterials = 0;
-  let texturedFallbackMaterials = 0;
   let colorFallbackMaterials = 0;
   let materialsWithColor = 0;
   let unnamedMaterials = 0;
-  let generatedUvMeshes = 0;
-  let meshesWithMaterialMap = 0;
   const classificationCounts: Record<IfcVisualMaterialKind, number> = {
     concreto_agregado: 0,
     concreto_liso: 0,
@@ -1229,12 +1303,6 @@ function configureIfcVisualMaterials(model: THREE.Object3D) {
     size: [number, number, number];
   }> = [];
 
-  console.info("[IFC Textures] files/check", {
-    expectedPaths: Object.fromEntries(
-      Object.entries(IFC_VISUAL_TEXTURES).map(([kind, config]) => [kind, config.path])
-    ),
-  });
-
   model.traverse(child => {
     const mesh = child as THREE.Mesh;
     if (!mesh.isMesh) return;
@@ -1245,7 +1313,7 @@ function configureIfcVisualMaterials(model: THREE.Object3D) {
     mesh.receiveShadow = true;
 
     const originalMaterials = getIfcVisualMaterials(mesh);
-    const hasOriginalMap = originalMaterials.some(hasIfcVisualUsableTextureMap);
+    const hasUsefulOriginalMaterial = originalMaterials.some(isIfcVisualMaterialUseful);
 
     originalMaterials.forEach(material => {
       const materialColor = getIfcVisualMaterialColor(material);
@@ -1266,7 +1334,7 @@ function configureIfcVisualMaterials(model: THREE.Object3D) {
       });
     });
 
-    if (hasOriginalMap) {
+    if (hasUsefulOriginalMaterial) {
       preservedOriginalMaterials += 1;
       originalMaterials.forEach(material => {
         material.side = THREE.DoubleSide;
@@ -1276,7 +1344,6 @@ function configureIfcVisualMaterials(model: THREE.Object3D) {
     }
 
     const textureKind = getIfcVisualTextureKind(mesh);
-    const hasUv = Boolean(mesh.geometry?.getAttribute("uv"));
     classificationCounts[textureKind] += 1;
     const bounds = getIfcVisualMeshBounds(mesh);
     if (bounds?.isLargeHorizontalPlane) {
@@ -1287,41 +1354,17 @@ function configureIfcVisualMaterials(model: THREE.Object3D) {
       });
     }
 
-    let fallbackMaterial: THREE.Material;
-    if (textureKind === "simple_text" || textureKind === "neutral") {
-      let sharedMaterial = sharedFallbackMaterials.get(textureKind);
-      if (!sharedMaterial) {
-        sharedMaterial = textureKind === "simple_text" ? createIfcVisualTextMaterial() : createIfcVisualNeutralMaterial();
-        sharedFallbackMaterials.set(textureKind, sharedMaterial);
-      }
-      fallbackMaterial = sharedMaterial;
-    } else {
-      fallbackMaterial = createIfcVisualTexturedMaterial(
-        textureKind,
-        textureLoader,
-        textureCache,
-        textureLoadStatus,
-        getIfcVisualTextureRepeat(textureKind, mesh)
-      );
+    let fallbackMaterial = sharedFallbackMaterials.get(textureKind);
+    if (!fallbackMaterial) {
+      fallbackMaterial = createIfcVisualColorFallbackMaterial(textureKind);
+      sharedFallbackMaterials.set(textureKind, fallbackMaterial);
     }
 
-    if (textureKind === "simple_text" || textureKind === "neutral") colorFallbackMaterials += 1;
-    else texturedFallbackMaterials += 1;
-
+    colorFallbackMaterials += 1;
     mesh.material = fallbackMaterial;
-    if (textureKind !== "simple_text" && !hasUv && ensureIfcVisualPlanarUv(mesh)) {
-      generatedUvMeshes += 1;
-    }
-    if (getIfcVisualMaterials(mesh).some(hasIfcVisualTextureMap)) {
-      meshesWithMaterialMap += 1;
-    }
   });
 
-  console.info("[IFC Textures] loaded texture keys", Array.from(textureCache.keys()));
-  console.info("[IFC Textures] applied count", texturedFallbackMaterials);
-  console.info("[IFC Textures] fallback color count", colorFallbackMaterials);
-  console.info("[IFC Textures] preserved original material count", preservedOriginalMaterials);
-  console.info("[IFC Textures] classification summary", {
+  console.info("[IFC Visual] base material summary", {
     terrainSoilCount: classificationCounts.solo,
     grassCount: classificationCounts.grama,
     vegetationCount: classificationCounts.vegetacao,
@@ -1332,20 +1375,16 @@ function configureIfcVisualMaterials(model: THREE.Object3D) {
     neutralFallbackCount: classificationCounts.neutral,
     textCount: classificationCounts.simple_text,
     unnamedOrUnclassifiedCount: unnamedMaterials,
+    preservedOriginalMaterials,
+    colorFallbackMaterials,
     largeMeshDiagnostics: largeMeshDiagnostics.slice(0, 20),
   });
-  console.info("[IFC Textures] summary", {
+  console.info("[IFC Visual] material diagnostics", {
     totalMeshes: meshCount,
-    meshesWithMaterialMap,
-    generatedUvMeshes,
     uniqueOriginalMaterials: materialKeys.size,
     originalMaterialsWithMap,
     preservedOriginalMaterials,
-    texturedFallbackMaterials,
     colorFallbackMaterials,
-    textureKinds: Array.from(textureCache.keys()),
-    texturePaths: Array.from(textureCache.keys()).map(kind => IFC_VISUAL_TEXTURES[kind].path),
-    textureLoadStatus: Object.fromEntries(textureLoadStatus.entries()),
     materialsWithColor,
     unnamedMaterials,
     sample: materialDiagnostics.slice(0, 20),
@@ -1355,10 +1394,18 @@ function configureIfcVisualMaterials(model: THREE.Object3D) {
 function IFCVisualModel({
   url,
   visible,
+  paintEnabled,
+  selectedPaintTexture,
+  undoPaintSignal,
+  clearPaintSignal,
   onStatusChange,
 }: {
   url: string;
   visible: boolean;
+  paintEnabled: boolean;
+  selectedPaintTexture: IfcVisualTextureKind;
+  undoPaintSignal: number;
+  clearPaintSignal: number;
   onStatusChange: (status: IfcVisualStatus, message?: string | null) => void;
 }) {
   const [object, setObject] = useState<THREE.Object3D | null>(null);
@@ -1367,6 +1414,67 @@ function IFCVisualModel({
   const objectUrlRef = useRef<string | null>(null);
   const loadingUrlRef = useRef<string | null>(null);
   const loadTokenRef = useRef(0);
+  const paintTextureLoaderRef = useRef<THREE.TextureLoader | null>(null);
+  const paintTextureCacheRef = useRef(new Map<IfcVisualTextureKind, THREE.Texture>());
+  const paintTextureStatusRef = useRef(new Map<IfcVisualTextureKind, "loading" | "loaded" | "error">());
+  const paintHistoryRef = useRef<Array<{
+    mesh: THREE.Mesh;
+    previousMaterial: THREE.Material | THREE.Material[];
+    paintedMaterial: THREE.Material;
+  }>>([]);
+
+  const restorePaintEntry = useCallback((entry: {
+    mesh: THREE.Mesh;
+    previousMaterial: THREE.Material | THREE.Material[];
+    paintedMaterial: THREE.Material;
+  }) => {
+    if (entry.mesh.material === entry.paintedMaterial) {
+      entry.mesh.material = entry.previousMaterial;
+    }
+    disposeIfcVisualMaterial(entry.paintedMaterial);
+  }, []);
+
+  const applyPaintToMesh = useCallback((mesh: THREE.Mesh) => {
+    const textureLoader = paintTextureLoaderRef.current || new THREE.TextureLoader();
+    paintTextureLoaderRef.current = textureLoader;
+    const previousMaterial = mesh.material as THREE.Material | THREE.Material[];
+    const paintedMaterial = createIfcPaintMaterial(
+      selectedPaintTexture,
+      mesh,
+      textureLoader,
+      paintTextureCacheRef.current,
+      paintTextureStatusRef.current
+    );
+
+    mesh.material = paintedMaterial;
+    paintHistoryRef.current.push({ mesh, previousMaterial, paintedMaterial });
+    console.info("[IFC Paint] painted object", {
+      texture: selectedPaintTexture,
+      texturePath: IFC_VISUAL_TEXTURES[selectedPaintTexture].path,
+      uuid: mesh.uuid,
+      name: mesh.name,
+    });
+  }, [selectedPaintTexture]);
+
+  useEffect(() => {
+    if (undoPaintSignal <= 0) return;
+    const entry = paintHistoryRef.current.pop();
+    if (!entry) {
+      console.info("[IFC Paint] undo", { restored: false });
+      return;
+    }
+
+    restorePaintEntry(entry);
+    console.info("[IFC Paint] undo", { restored: true, uuid: entry.mesh.uuid, name: entry.mesh.name });
+  }, [restorePaintEntry, undoPaintSignal]);
+
+  useEffect(() => {
+    if (clearPaintSignal <= 0) return;
+    const entries = [...paintHistoryRef.current].reverse();
+    paintHistoryRef.current = [];
+    entries.forEach(restorePaintEntry);
+    console.info("[IFC Paint] clear local paints", { count: entries.length });
+  }, [clearPaintSignal, restorePaintEntry]);
 
   useEffect(() => {
     if (!visible) {
@@ -1380,6 +1488,8 @@ function IFCVisualModel({
         setObject(null);
         console.info("[IFC Visual] disposed");
       }
+      paintHistoryRef.current = [];
+      disposeIfcVisualTextureCache(paintTextureCacheRef.current);
 
       return;
     }
@@ -1406,6 +1516,7 @@ function IFCVisualModel({
         setObject(null);
         console.info("[IFC Visual] disposed");
       }
+      paintHistoryRef.current = [];
 
       setObject(null);
       setLoadError(null);
@@ -1481,6 +1592,7 @@ function IFCVisualModel({
         setObject(null);
         console.info("[IFC Visual] disposed");
       }
+      paintHistoryRef.current = [];
     };
   }, [onStatusChange, url, visible]);
 
@@ -1508,12 +1620,24 @@ function IFCVisualModel({
           onClick={(event: any) => {
             event.stopPropagation();
             const hit = event.object as THREE.Object3D;
+            const mesh = findIfcVisualMesh(hit);
+            if (paintEnabled) {
+              if (!mesh) {
+                console.info("[IFC Paint] no object hit");
+                return;
+              }
+              applyPaintToMesh(mesh);
+              return;
+            }
             console.info("[IFC] Clique visual", {
               uuid: hit.uuid,
               name: hit.name,
               type: hit.type,
               expressID: hit.userData?.expressID,
             });
+          }}
+          onPointerMissed={() => {
+            if (paintEnabled) console.info("[IFC Paint] no object hit");
           }}
         />
       )}
@@ -1585,6 +1709,10 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
   const [showVisualIfc, setShowVisualIfc] = useState(true);
   const [visualStatus, setVisualStatus] = useState<IfcVisualStatus>("idle");
   const [visualMessage, setVisualMessage] = useState<string | null>(null);
+  const [paintModeEnabled, setPaintModeEnabled] = useState(false);
+  const [selectedPaintTexture, setSelectedPaintTexture] = useState<IfcVisualTextureKind>("paver");
+  const [undoPaintSignal, setUndoPaintSignal] = useState(0);
+  const [clearPaintSignal, setClearPaintSignal] = useState(0);
   const calledRef = useRef(false);
   const persistedKeyRef = useRef<string | null>(null);
 
@@ -1595,6 +1723,14 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
   const handleVisualStatusChange = useCallback((status: IfcVisualStatus, message?: string | null) => {
     setVisualStatus(status);
     setVisualMessage(message || null);
+  }, []);
+
+  const handleSelectPaintTexture = useCallback((kind: IfcVisualTextureKind) => {
+    setSelectedPaintTexture(kind);
+    console.info("[IFC Paint] texture selected", {
+      texture: kind,
+      texturePath: IFC_VISUAL_TEXTURES[kind].path,
+    });
   }, []);
 
   useEffect(() => {
@@ -2006,6 +2142,10 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
       <IFCVisualModel
         url={url}
         visible={showVisualIfc}
+        paintEnabled={paintModeEnabled}
+        selectedPaintTexture={selectedPaintTexture}
+        undoPaintSignal={undoPaintSignal}
+        clearPaintSignal={clearPaintSignal}
         onStatusChange={handleVisualStatusChange}
       />
       <Html fullscreen>
@@ -2060,6 +2200,52 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
                       : "Carregando IFC visual..."
                   : "IFC visual oculto. Inventario textual mantido."}
               </p>
+            )}
+            {!minimized && showVisualIfc && visualStatus === "ready" && (
+              <div className="mt-2 rounded-md border border-border bg-muted/30 p-2 text-xs">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPaintModeEnabled(prev => !prev)}
+                    className={`rounded border px-2 py-1 text-[11px] font-medium ${
+                      paintModeEnabled
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-background hover:bg-muted"
+                    }`}
+                  >
+                    Pintar Textura
+                  </button>
+                  <select
+                    value={selectedPaintTexture}
+                    onChange={(event) => handleSelectPaintTexture(event.target.value as IfcVisualTextureKind)}
+                    className="rounded border border-border bg-background px-2 py-1 text-[11px]"
+                    disabled={!paintModeEnabled}
+                  >
+                    {IFC_PAINT_TEXTURE_OPTIONS.map(option => (
+                      <option key={option.kind} value={option.kind}>{option.label}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setUndoPaintSignal(value => value + 1)}
+                    className="rounded border border-border bg-background px-2 py-1 text-[11px] font-medium hover:bg-muted"
+                  >
+                    Desfazer última pintura
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setClearPaintSignal(value => value + 1)}
+                    className="rounded border border-border bg-background px-2 py-1 text-[11px] font-medium hover:bg-muted"
+                  >
+                    Limpar pinturas locais
+                  </button>
+                </div>
+                {paintModeEnabled && (
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    Escolha uma textura e clique em um elemento IFC para aplicar localmente. Esta pintura nao e salva no banco.
+                  </p>
+                )}
+              </div>
             )}
             {saveMessage && (
               <p className={`mt-2 rounded-md px-2 py-1 text-xs break-words ${
