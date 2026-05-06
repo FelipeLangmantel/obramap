@@ -799,6 +799,50 @@ function describeIfcVisualError(error: any, wasmDiagnostics: unknown) {
   return message;
 }
 
+function disposeIfcVisualMaterial(material: THREE.Material) {
+  const materialWithTextures = material as THREE.Material & Record<string, unknown>;
+  const textureKeys = [
+    "map",
+    "alphaMap",
+    "aoMap",
+    "bumpMap",
+    "displacementMap",
+    "emissiveMap",
+    "envMap",
+    "lightMap",
+    "metalnessMap",
+    "normalMap",
+    "roughnessMap",
+  ];
+
+  textureKeys.forEach(key => {
+    const texture = materialWithTextures[key];
+    if (texture instanceof THREE.Texture) {
+      texture.dispose();
+    }
+  });
+
+  material.dispose();
+}
+
+function disposeIfcVisualObject(object: THREE.Object3D | null) {
+  if (!object) return;
+
+  object.traverse(child => {
+    const mesh = child as THREE.Mesh;
+    if (!mesh.isMesh) return;
+
+    mesh.geometry?.dispose();
+
+    const material = mesh.material as THREE.Material | THREE.Material[];
+    if (Array.isArray(material)) {
+      material.forEach(disposeIfcVisualMaterial);
+    } else {
+      disposeIfcVisualMaterial(material);
+    }
+  });
+}
+
 function IFCVisualModel({
   url,
   visible,
@@ -810,15 +854,54 @@ function IFCVisualModel({
 }) {
   const [object, setObject] = useState<THREE.Object3D | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const objectRef = useRef<THREE.Object3D | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
+  const loadingUrlRef = useRef<string | null>(null);
+  const loadTokenRef = useRef(0);
 
   useEffect(() => {
+    if (!visible) {
+      loadTokenRef.current += 1;
+      loadingUrlRef.current = null;
+
+      if (objectRef.current) {
+        disposeIfcVisualObject(objectRef.current);
+        objectRef.current = null;
+        objectUrlRef.current = null;
+        setObject(null);
+        console.info("[IFC Visual] disposed");
+      }
+
+      return;
+    }
+
+    if (objectRef.current && objectUrlRef.current === url) {
+      onStatusChange("ready", null);
+      return;
+    }
+
+    if (loadingUrlRef.current === url) {
+      return;
+    }
+
     let cancelled = false;
-    let loadedObject: THREE.Object3D | null = null;
+    const loadToken = loadTokenRef.current + 1;
+    loadTokenRef.current = loadToken;
+    loadingUrlRef.current = url;
 
     const loadVisualIfc = async () => {
+      if (objectRef.current) {
+        disposeIfcVisualObject(objectRef.current);
+        objectRef.current = null;
+        objectUrlRef.current = null;
+        setObject(null);
+        console.info("[IFC Visual] disposed");
+      }
+
       setObject(null);
       setLoadError(null);
       onStatusChange("loading", null);
+      console.info("[IFC Visual] loading url...", { url });
 
       let wasmDiagnostics: Awaited<ReturnType<typeof inspectIfcVisualWasmFiles>> | null = null;
 
@@ -848,9 +931,12 @@ function IFCVisualModel({
           loader.load(url, resolve, undefined, reject);
         });
 
-        if (cancelled) return;
+        if (cancelled || loadTokenRef.current !== loadToken) {
+          disposeIfcVisualObject(model);
+          console.info("[IFC Visual] disposed");
+          return;
+        }
 
-        loadedObject = model;
         model.name = "IFC visual diagnostic model";
         model.traverse(child => {
           const mesh = child as THREE.Mesh;
@@ -868,12 +954,17 @@ function IFCVisualModel({
           });
         });
 
+        objectRef.current = model;
+        objectUrlRef.current = url;
+        loadingUrlRef.current = null;
         setObject(model);
         onStatusChange("ready", null);
+        console.info("[IFC Visual] loaded");
       } catch (err: any) {
-        if (cancelled) return;
+        if (cancelled || loadTokenRef.current !== loadToken) return;
         console.warn("[IFC] Falha na renderizacao visual IFC", err);
         const message = describeIfcVisualError(err, wasmDiagnostics);
+        loadingUrlRef.current = null;
         onStatusChange("error", message);
         setLoadError(message);
       }
@@ -883,17 +974,20 @@ function IFCVisualModel({
 
     return () => {
       cancelled = true;
-      loadedObject?.traverse(child => {
-        const mesh = child as THREE.Mesh;
-        if (!mesh.isMesh) return;
-        mesh.geometry?.dispose();
-        const material = mesh.material as THREE.Material | THREE.Material[];
-        if (Array.isArray(material)) material.forEach(item => item.dispose());
-        else material?.dispose();
-      });
-      setObject(null);
+      if (loadTokenRef.current === loadToken) {
+        loadTokenRef.current += 1;
+        loadingUrlRef.current = null;
+      }
+
+      if (objectRef.current && objectUrlRef.current === url) {
+        disposeIfcVisualObject(objectRef.current);
+        objectRef.current = null;
+        objectUrlRef.current = null;
+        setObject(null);
+        console.info("[IFC Visual] disposed");
+      }
     };
-  }, [onStatusChange, url]);
+  }, [onStatusChange, url, visible]);
 
   if (!visible) return null;
 
