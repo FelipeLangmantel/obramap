@@ -1487,15 +1487,15 @@ function getPersistedHouseDetectionLabel(source: string) {
 
 function createIfcInspectHighlightMaterial() {
   return new THREE.MeshBasicMaterial({
-    color: "#facc15",
+    color: "#fde047",
     transparent: true,
-    opacity: 0.55,
+    opacity: 0.68,
     side: THREE.DoubleSide,
-    depthTest: true,
+    depthTest: false,
     depthWrite: false,
     polygonOffset: true,
-    polygonOffsetFactor: -4,
-    polygonOffsetUnits: -4,
+    polygonOffsetFactor: -8,
+    polygonOffsetUnits: -8,
   });
 }
 
@@ -1518,26 +1518,29 @@ function getIfcEntityNumericId(entityId: string | null | undefined) {
 
 function createIfcEntityHighlightMesh(mesh: THREE.Mesh, entityId: string): {
   highlight: THREE.Mesh | null;
+  boxHelper: THREE.Box3Helper | null;
   matchingFaces: number;
+  highlightVertexCount: number;
   bounds: { center: IfcPoint | null; size: IfcPoint | null };
+  boundsRaw: { min: IfcPoint; max: IfcPoint; size: IfcPoint } | null;
   reason: string | null;
 } {
   const geometry = mesh.geometry;
   const targetExpressId = getIfcEntityNumericId(entityId);
   if (!geometry || targetExpressId == null) {
-    return { highlight: null, matchingFaces: 0, bounds: { center: null, size: null }, reason: "missing_geometry_or_entity_id" };
+    return { highlight: null, boxHelper: null, matchingFaces: 0, highlightVertexCount: 0, bounds: { center: null, size: null }, boundsRaw: null, reason: "missing_geometry_or_entity_id" };
   }
 
   const position = geometry.getAttribute("position") as THREE.BufferAttribute | THREE.InterleavedBufferAttribute | undefined;
   if (!position) {
-    return { highlight: null, matchingFaces: 0, bounds: { center: null, size: null }, reason: "missing_position_attribute" };
+    return { highlight: null, boxHelper: null, matchingFaces: 0, highlightVertexCount: 0, bounds: { center: null, size: null }, boundsRaw: null, reason: "missing_position_attribute" };
   }
 
   const normal = geometry.getAttribute("normal") as THREE.BufferAttribute | THREE.InterleavedBufferAttribute | undefined;
   const index = geometry.index;
   const { attribute: expressAttribute, attributeName } = getIfcExpressAttribute(geometry);
   if (!expressAttribute) {
-    return { highlight: null, matchingFaces: 0, bounds: { center: null, size: null }, reason: "missing_express_id_attribute" };
+    return { highlight: null, boxHelper: null, matchingFaces: 0, highlightVertexCount: 0, bounds: { center: null, size: null }, boundsRaw: null, reason: "missing_express_id_attribute" };
   }
 
   const triangleCount = index ? Math.floor(index.count / 3) : Math.floor(position.count / 3);
@@ -1564,7 +1567,7 @@ function createIfcEntityHighlightMesh(mesh: THREE.Mesh, entityId: string): {
   }
 
   if (matchingFaces === 0 || positions.length === 0) {
-    return { highlight: null, matchingFaces, bounds: { center: null, size: null }, reason: `no_matching_faces_for_${attributeName || "expressID"}` };
+    return { highlight: null, boxHelper: null, matchingFaces, highlightVertexCount: 0, bounds: { center: null, size: null }, boundsRaw: null, reason: `no_matching_faces_for_${attributeName || "expressID"}` };
   }
 
   const highlightGeometry = new THREE.BufferGeometry();
@@ -1583,9 +1586,24 @@ function createIfcEntityHighlightMesh(mesh: THREE.Mesh, entityId: string): {
   mesh.add(highlight);
   highlight.updateMatrixWorld(true);
 
+  const localBox = highlightGeometry.boundingBox?.clone() || null;
+  const boxHelper = localBox && !localBox.isEmpty() ? new THREE.Box3Helper(localBox, "#38bdf8") : null;
+  if (boxHelper) {
+    boxHelper.name = `IFC selected entity box ${entityId}`;
+    boxHelper.renderOrder = 1000;
+    const material = boxHelper.material as THREE.LineBasicMaterial;
+    material.depthTest = false;
+    material.transparent = true;
+    material.opacity = 0.95;
+    mesh.add(boxHelper);
+    boxHelper.updateMatrixWorld(true);
+  }
+
   const box = new THREE.Box3().setFromObject(highlight);
   const center = new THREE.Vector3();
   const size = new THREE.Vector3();
+  const min = box.min;
+  const max = box.max;
   if (!box.isEmpty()) {
     box.getCenter(center);
     box.getSize(size);
@@ -1593,11 +1611,20 @@ function createIfcEntityHighlightMesh(mesh: THREE.Mesh, entityId: string): {
 
   return {
     highlight,
+    boxHelper,
     matchingFaces,
+    highlightVertexCount: positions.length / 3,
     bounds: box.isEmpty()
       ? { center: null, size: null }
       : {
           center: { x: center.x, y: center.y, z: center.z },
+          size: { x: size.x, y: size.y, z: size.z },
+        },
+    boundsRaw: box.isEmpty()
+      ? null
+      : {
+          min: { x: min.x, y: min.y, z: min.z },
+          max: { x: max.x, y: max.y, z: max.z },
           size: { x: size.x, y: size.y, z: size.z },
         },
     reason: null,
@@ -1818,6 +1845,7 @@ function IFCVisualModel({
   }>>([]);
   const inspectHighlightRef = useRef<{
     highlight: THREE.Mesh;
+    boxHelper: THREE.Box3Helper | null;
   } | null>(null);
 
   const restorePaintEntry = useCallback((entry: {
@@ -1858,7 +1886,17 @@ function IFCVisualModel({
     if (!current) return;
 
     current.highlight.parent?.remove(current.highlight);
+    current.boxHelper?.parent?.remove(current.boxHelper);
     disposeIfcVisualObject(current.highlight);
+    if (current.boxHelper) {
+      current.boxHelper.geometry?.dispose();
+      const material = current.boxHelper.material as THREE.Material | THREE.Material[];
+      if (Array.isArray(material)) {
+        material.forEach(item => item.dispose());
+      } else {
+        material.dispose();
+      }
+    }
     inspectHighlightRef.current = null;
   }, []);
 
@@ -1869,13 +1907,31 @@ function IFCVisualModel({
     console.info("[IFC Select] matching faces count", { entityId, count: result.matchingFaces });
 
     if (!result.highlight) {
-      console.info("[IFC Select] unable to isolate entity", { entityId, reason: result.reason });
+      console.info("[IFC Select] unable to isolate entity", {
+        entityId,
+        reason: result.reason,
+        geometryAttributes: getIfcGeometryAttributeNames(mesh.geometry),
+        indexed: Boolean(mesh.geometry?.index),
+      });
       return result;
     }
 
-    inspectHighlightRef.current = { highlight: result.highlight };
+    inspectHighlightRef.current = { highlight: result.highlight, boxHelper: result.boxHelper };
     console.info("[IFC Select] highlight geometry created", { entityId, faces: result.matchingFaces });
-    console.info("[IFC Select] bounding box", result.bounds);
+    console.info("[IFC Select] highlight added to scene", {
+      entityId,
+      parentUuid: result.highlight.parent?.uuid || null,
+      parentName: result.highlight.parent?.name || null,
+    });
+    console.info("[IFC Select] highlight vertex count", { entityId, count: result.highlightVertexCount });
+    console.info("[IFC Select] bounding box min/max/size", result.boundsRaw);
+    if (result.boxHelper) {
+      console.info("[IFC Select] box helper added", {
+        entityId,
+        parentUuid: result.boxHelper.parent?.uuid || null,
+        parentName: result.boxHelper.parent?.name || null,
+      });
+    }
     return result;
   }, [clearInspectHighlight]);
 
