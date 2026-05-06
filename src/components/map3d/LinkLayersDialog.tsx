@@ -136,7 +136,8 @@ export function LinkLayersDialog({
   const handleSave = async () => {
     const willRemoveLinks = layers.some((layer) => {
       const existingLink = links.find(l => l.layer_name === layer.name);
-      return existingLink && !assignments[layer.name]?.serviceKey;
+      const sel = localLinks[layer.name];
+      return existingLink && (!sel || sel === "_none");
     });
 
     if (willRemoveLinks && !window.confirm("Remover vínculos de camada sem serviço selecionado? Esta ação não poderá ser desfeita.")) {

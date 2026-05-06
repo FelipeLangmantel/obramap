@@ -787,7 +787,63 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-shrink-0 space-y-3 border-b border-border bg-muted/20 p-4">
+        {/* Sticky action bar — sempre visível com as ações principais de revisão em lote */}
+        <div className="sticky top-0 z-20 flex flex-shrink-0 flex-col gap-2 border-b border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+            <span className="font-medium text-emerald-700">
+              {batchCandidates.confirmValid.length} válidas Casa + Serviço
+            </span>
+            <span className="font-medium text-amber-700">
+              {batchCandidates.ignoreNoService.length} sem serviço
+            </span>
+            <span className="text-muted-foreground">
+              Total: {counts.total} • Sugeridos: {counts.suggested}
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => setBatchAction("confirm_valid")}
+              disabled={loading || batchSaving || batchCandidates.confirmValid.length === 0}
+            >
+              <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+              Confirmar {batchCandidates.confirmValid.length} válidas
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setBatchAction("ignore_no_service")}
+              disabled={loading || batchSaving || batchCandidates.ignoreNoService.length === 0}
+            >
+              <XCircle className="mr-1.5 h-3.5 w-3.5" />
+              Ignorar {batchCandidates.ignoreNoService.length} sem serviço
+            </Button>
+          </div>
+        </div>
+
+        {/* Confirmação inline da ação em lote — fica logo abaixo da barra sticky */}
+        {batchAction && (
+          <div className="flex flex-shrink-0 flex-col gap-2 border-b border-amber-300 bg-amber-50 px-4 py-2 text-xs text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+            <span>
+              {batchAction === "confirm_valid"
+                ? `Confirmar ${batchCandidates.confirmValid.length} sugestao(oes) produtiva(s) com Casa + Servico?`
+                : `Ignorar ${batchCandidates.ignoreNoService.length} sugestao(oes) sem servico detectado?`}
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              <Button type="button" size="sm" onClick={() => void runBatchAction()} disabled={batchSaving}>
+                {batchSaving ? "Aplicando..." : "Confirmar acao"}
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => setBatchAction(null)} disabled={batchSaving}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Bloco de filtros + diagnósticos agora é ROLÁVEL para não empurrar a lista nem esconder a barra de ações */}
+        <div className="min-h-0 max-h-[45vh] flex-shrink-0 space-y-3 overflow-y-auto border-b border-border bg-muted/20 p-4">
           <div className="grid gap-2 text-sm sm:grid-cols-5">
             <Counter label="Total" value={counts.total} />
             <Counter label="Sugeridos" value={counts.suggested} />
