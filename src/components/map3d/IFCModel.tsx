@@ -690,6 +690,56 @@ function mapIfcCategory(category: IfcInventoryItem["category"]) {
   return "unknown";
 }
 
+type IfcLoaderConstructor = new () => {
+  ifcManager?: {
+    setWasmPath?: (path: string) => void;
+  };
+  load: (
+    url: string,
+    onLoad: (model: THREE.Object3D) => void,
+    onProgress?: unknown,
+    onError?: (error: unknown) => void
+  ) => void;
+};
+
+type IfcLoaderModule = {
+  IFCLoader?: IfcLoaderConstructor;
+  default?: IfcLoaderConstructor;
+};
+
+const ifcLoaderModules = import.meta.glob<IfcLoaderModule>([
+  "/node_modules/web-ifc-three/**/IFCLoader*.js",
+  "/node_modules/web-ifc-three/**/IFCLoader*.mjs",
+]);
+
+async function loadIfcLoaderConstructor() {
+  const candidates = Object.entries(ifcLoaderModules).sort(([left], [right]) => {
+    const score = (path: string) => {
+      if (path.endsWith("/IFCLoader.js") || path.endsWith("/IFCLoader.mjs")) return 0;
+      if (path.includes("/IFCLoader/")) return 1;
+      return 2;
+    };
+
+    return score(left) - score(right);
+  });
+
+  for (const [, loadModule] of candidates) {
+    const module = await loadModule();
+    const Loader = module.IFCLoader || module.default;
+    if (typeof Loader === "function") return Loader;
+  }
+
+  const candidatePaths = candidates.map(([path]) => path);
+  console.warn("[IFC] IFCLoader nao encontrado no bundle", {
+    candidateCount: candidatePaths.length,
+    candidatePaths,
+  });
+
+  throw new Error(
+    `IFCLoader nao foi encontrado no bundle. Candidatos encontrados: ${candidatePaths.length}. Verifique se web-ifc-three esta instalado e empacotado pelo Vite.`
+  );
+}
+
 function IFCVisualModel({
   url,
   visible,
@@ -712,9 +762,7 @@ function IFCVisualModel({
       onStatusChange("loading", null);
 
       try {
-        const loaderSpecifier = "web-ifc-three/IFCLoader";
-        const module = await import(/* @vite-ignore */ loaderSpecifier);
-        const IFCLoader = (module as any).IFCLoader;
+        const IFCLoader = await loadIfcLoaderConstructor();
         const loader = new IFCLoader();
 
         if (loader.ifcManager?.setWasmPath) {
