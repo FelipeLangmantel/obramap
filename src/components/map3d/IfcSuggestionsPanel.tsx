@@ -19,9 +19,11 @@ import { supabase } from "@/integrations/supabase/client";
 type IfcSuggestionStatus = "suggested" | "confirmed" | "ignored";
 type StatusFilter = IfcSuggestionStatus | "all";
 type CategoryFilter = "production" | "text_annotation" | "unknown" | "all";
-type QuickFilter = "all" | "valid" | "3dtext" | "layer" | "no_service" | "no_house" | "confirmed" | "ignored" | "manual";
+type QuickFilter = "all" | "valid" | "3dtext" | "layer" | "no_service" | "no_house" | "confirmed" | "ignored" | "manual" | "manual_sequence";
 type BatchAction = "confirm_valid" | "ignore_no_service";
-type ManualHouseAction = "assign" | "clear";
+type ManualHouseAction = "assign" | "assign_sequence" | "clear";
+type ManualAssignmentMode = "same_house" | "sequence";
+type ManualSequenceOrder = "current" | "entity_id" | "global_id" | "layer_name";
 
 interface IfcSuggestionRow {
   id: string;
@@ -70,6 +72,10 @@ interface IfcSuggestionRawProperties {
   manualHouseAssignment: boolean | null;
   manualAssignedAt: string | null;
   previousHouseDetectionSource: string | null;
+  manualSequenceAssignment: boolean | null;
+  manualSequenceStart: number | null;
+  manualSequenceIncrement: number | null;
+  manualSequenceOrder: string | null;
 }
 
 interface IfcModelIdRow {
@@ -207,6 +213,10 @@ function asIfcSuggestionRawProperties(value: unknown): IfcSuggestionRawPropertie
     manualHouseAssignment: typeof raw.manualHouseAssignment === "boolean" ? raw.manualHouseAssignment : null,
     manualAssignedAt: normalizeNullableString(raw.manualAssignedAt),
     previousHouseDetectionSource: normalizeNullableString(raw.previousHouseDetectionSource),
+    manualSequenceAssignment: typeof raw.manualSequenceAssignment === "boolean" ? raw.manualSequenceAssignment : null,
+    manualSequenceStart: normalizeNullableNumber(raw.manualSequenceStart),
+    manualSequenceIncrement: normalizeNullableNumber(raw.manualSequenceIncrement),
+    manualSequenceOrder: normalizeNullableString(raw.manualSequenceOrder),
   };
 }
 
@@ -312,11 +322,16 @@ function getHouseDetectionSourceLabel(item: IfcSuggestionRow) {
   if (source === "3dtext_proximity") return "3Dtext próximo";
   if (source === "layer") return "Camada";
   if (source === "manual_review") return "Manual/revisao";
+  if (source === "manual_sequence") return "Sequência manual";
   return source || "-";
 }
 
 function isManualHouseAssignment(item: IfcSuggestionRow) {
-  return item.raw_properties?.manualHouseAssignment === true || getHouseDetectionSource(item) === "manual_review";
+  return item.raw_properties?.manualHouseAssignment === true || getHouseDetectionSource(item) === "manual_review" || getHouseDetectionSource(item) === "manual_sequence";
+}
+
+function isManualSequenceAssignment(item: IfcSuggestionRow) {
+  return item.raw_properties?.manualSequenceAssignment === true || getHouseDetectionSource(item) === "manual_sequence";
 }
 
 function isManualHouseAssignmentCandidate(item: IfcSuggestionRow) {
@@ -345,6 +360,38 @@ function isManualHouseAssignmentPanelItem(item: IfcSuggestionRow) {
 function getHouseNumber(house: HouseLookupRow) {
   const value = house.houseNumber ?? house.house_number ?? house.number;
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function getIfcEntityNumber(item: IfcSuggestionRow) {
+  const value = item.ifc_entity_id || "";
+  const parsed = Number(value.replace(/[^0-9]/g, ""));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getManualSequenceOrderValue(item: IfcSuggestionRow, order: ManualSequenceOrder) {
+  if (order === "entity_id") return getIfcEntityNumber(item);
+  if (order === "global_id") return item.ifc_global_id || null;
+  if (order === "layer_name") return item.ifc_layer_name || item.name || null;
+  return item.id;
+}
+
+function sortManualSequenceItems(
+  selectedItems: IfcSuggestionRow[],
+  currentList: IfcSuggestionRow[],
+  order: ManualSequenceOrder
+) {
+  const currentIndexById = new Map(currentList.map((item, index) => [item.id, index]));
+  if (order === "current") return [...selectedItems].sort((a, b) => (currentIndexById.get(a.id) ?? 0) - (currentIndexById.get(b.id) ?? 0));
+
+  return [...selectedItems].sort((a, b) => {
+    const aValue = getManualSequenceOrderValue(a, order);
+    const bValue = getManualSequenceOrderValue(b, order);
+    if (aValue == null || bValue == null) {
+      return (currentIndexById.get(a.id) ?? 0) - (currentIndexById.get(b.id) ?? 0);
+    }
+    if (typeof aValue === "number" && typeof bValue === "number") return aValue - bValue;
+    return String(aValue).localeCompare(String(bValue), undefined, { numeric: true, sensitivity: "base" });
+  });
 }
 
 function statusBadgeClass(status: IfcSuggestionStatus) {
@@ -427,6 +474,10 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
   const [selectedManualIds, setSelectedManualIds] = useState<Set<string>>(new Set());
   const [manualHouseSelectValue, setManualHouseSelectValue] = useState<string>("");
   const [manualHouseInputValue, setManualHouseInputValue] = useState<string>("");
+  const [manualAssignmentMode, setManualAssignmentMode] = useState<ManualAssignmentMode>("same_house");
+  const [manualSequenceStartValue, setManualSequenceStartValue] = useState<string>("");
+  const [manualSequenceIncrementValue, setManualSequenceIncrementValue] = useState<string>("1");
+  const [manualSequenceOrder, setManualSequenceOrder] = useState<ManualSequenceOrder>("current");
   const [manualHouseAction, setManualHouseAction] = useState<ManualHouseAction | null>(null);
   const [manualSaving, setManualSaving] = useState(false);
   const [syncingLinks, setSyncingLinks] = useState(false);
@@ -540,6 +591,7 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
       if (quickFilter === "confirmed") return item.status === "confirmed";
       if (quickFilter === "ignored") return item.status === "ignored";
       if (quickFilter === "manual") return isManualHouseAssignment(item);
+      if (quickFilter === "manual_sequence") return isManualSequenceAssignment(item);
       return true;
     });
     const query = search.trim().toLowerCase();
@@ -606,8 +658,8 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
   }, [manualPanelItems, manualServiceFilter]);
 
   const selectedManualItems = useMemo(() => {
-    return items.filter(item => selectedManualIds.has(item.id));
-  }, [items, selectedManualIds]);
+    return visibleManualCandidates.filter(item => selectedManualIds.has(item.id));
+  }, [selectedManualIds, visibleManualCandidates]);
 
   const selectedManualHouseNumber = useMemo(() => {
     const value = manualHouseSelectValue === "manual" || !manualHouseSelectValue
@@ -616,6 +668,47 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
     const parsed = Number(value);
     return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
   }, [manualHouseInputValue, manualHouseSelectValue]);
+
+  const manualSequenceStartNumber = useMemo(() => {
+    const parsed = Number(manualSequenceStartValue);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  }, [manualSequenceStartValue]);
+
+  const manualSequenceIncrementNumber = useMemo(() => {
+    const parsed = Number(manualSequenceIncrementValue);
+    return Number.isInteger(parsed) && parsed !== 0 ? parsed : null;
+  }, [manualSequenceIncrementValue]);
+
+  const manualSequenceOrderedItems = useMemo(() => {
+    return sortManualSequenceItems(selectedManualItems, visibleManualCandidates, manualSequenceOrder);
+  }, [manualSequenceOrder, selectedManualItems, visibleManualCandidates]);
+
+  const manualSequencePreview = useMemo(() => {
+    if (manualSequenceStartNumber == null || manualSequenceIncrementNumber == null) return [];
+    return manualSequenceOrderedItems.map((item, index) => ({
+      item,
+      houseNumber: manualSequenceStartNumber + index * manualSequenceIncrementNumber,
+    }));
+  }, [manualSequenceIncrementNumber, manualSequenceOrderedItems, manualSequenceStartNumber]);
+
+  const manualSequenceOrderFallback = useMemo(() => {
+    if (manualSequenceOrder === "current") return false;
+    return selectedManualItems.some(item => getManualSequenceOrderValue(item, manualSequenceOrder) == null);
+  }, [manualSequenceOrder, selectedManualItems]);
+
+  const manualSequenceValidation = useMemo(() => {
+    if (manualSequenceStartNumber == null) return "Informe uma casa inicial valida.";
+    if (manualSequenceIncrementNumber == null) return "Informe incremento valido diferente de zero.";
+    if (manualSequencePreview.some(item => item.houseNumber < 1)) return "A sequencia gera casa menor que 1.";
+    if (houseOptions.length > 0 && manualSequencePreview.length > houseOptions.length) {
+      return "A quantidade selecionada e maior que a quantidade de casas carregadas.";
+    }
+    const houseOptionSet = new Set(houseOptions);
+    if (houseOptions.length > 0 && manualSequencePreview.some(item => !houseOptionSet.has(item.houseNumber))) {
+      return "A sequencia gera casas que nao estao na lista de casas carregada.";
+    }
+    return null;
+  }, [houseOptions, manualSequenceIncrementNumber, manualSequencePreview, manualSequenceStartNumber]);
 
   const anchorDiagnostics = useMemo(() => {
     return items.reduce(
@@ -773,26 +866,36 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
       toast.error("Informe uma casa valida para atribuir");
       return;
     }
+    if (manualHouseAction === "assign_sequence" && manualSequenceValidation) {
+      toast.error(manualSequenceValidation);
+      return;
+    }
 
     setManualSaving(true);
     try {
       const elementsTable = supabase.from("project_ifc_elements" as any) as any;
       const now = new Date().toISOString();
+      const sequenceHouseById = new Map(manualSequencePreview.map(entry => [entry.item.id, entry.houseNumber]));
 
       await Promise.all(selectedManualItems.map(async item => {
         const previousHouseDetectionSource = item.raw_properties?.previousHouseDetectionSource || getHouseDetectionSource(item) || "none";
+        const sequenceHouseNumber = sequenceHouseById.get(item.id) || null;
         const rawProperties = {
           ...(item.raw_properties || {}),
-          houseDetectionSource: manualHouseAction === "assign" ? "manual_review" : previousHouseDetectionSource,
-          manualHouseAssignment: manualHouseAction === "assign",
+          houseDetectionSource: manualHouseAction === "assign" ? "manual_review" : manualHouseAction === "assign_sequence" ? "manual_sequence" : previousHouseDetectionSource,
+          manualHouseAssignment: manualHouseAction !== "clear",
+          manualSequenceAssignment: manualHouseAction === "assign_sequence",
+          manualSequenceStart: manualHouseAction === "assign_sequence" ? manualSequenceStartNumber : null,
+          manualSequenceIncrement: manualHouseAction === "assign_sequence" ? manualSequenceIncrementNumber : null,
+          manualSequenceOrder: manualHouseAction === "assign_sequence" ? manualSequenceOrder : null,
           previousHouseDetectionSource,
-          manualAssignedAt: manualHouseAction === "assign" ? now : item.raw_properties?.manualAssignedAt || null,
+          manualAssignedAt: manualHouseAction !== "clear" ? now : item.raw_properties?.manualAssignedAt || null,
           manualClearedAt: manualHouseAction === "clear" ? now : null,
         };
 
-        const updatePayload = manualHouseAction === "assign"
+        const updatePayload = manualHouseAction === "assign" || manualHouseAction === "assign_sequence"
           ? {
-              detected_house_number: selectedManualHouseNumber,
+              detected_house_number: manualHouseAction === "assign_sequence" ? sequenceHouseNumber : selectedManualHouseNumber,
               raw_properties: rawProperties,
               needs_review: true,
               confidence: "manual",
@@ -1073,6 +1176,7 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
               ["no_service", "Sem servico"],
               ["no_house", "Sem casa"],
               ["manual", "Atribuidas manualmente"],
+              ["manual_sequence", "Atribuidas por sequencia"],
               ["confirmed", "Confirmadas"],
               ["ignored", "Ignoradas"],
             ].map(([value, label]) => (
@@ -1189,6 +1293,26 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
                 ))}
               </div>
 
+              <div className="mt-3 flex flex-wrap gap-2">
+                {[
+                  ["same_house", "Mesma casa para selecionados"],
+                  ["sequence", "Sequencia de casas"],
+                ].map(([value, label]) => (
+                  <Button
+                    key={value}
+                    type="button"
+                    variant={manualAssignmentMode === value ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      setManualAssignmentMode(value as ManualAssignmentMode);
+                      setManualHouseAction(null);
+                    }}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
+
               <div className="mt-3 grid gap-2 lg:grid-cols-[180px_1fr_auto_auto]">
                 <select
                   value={manualServiceFilter}
@@ -1204,29 +1328,59 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
                   ))}
                 </select>
 
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <select
-                    value={manualHouseSelectValue}
-                    onChange={event => setManualHouseSelectValue(event.target.value)}
-                    className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-                  >
-                    <option value="">Selecionar casa...</option>
-                    {houseOptions.map(houseNumber => (
-                      <option key={houseNumber} value={houseNumber}>Casa {houseNumber}</option>
-                    ))}
-                    <option value="manual">Digitar numero manualmente</option>
-                  </select>
-                  {(houseOptions.length === 0 || manualHouseSelectValue === "manual") && (
+                {manualAssignmentMode === "same_house" ? (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <select
+                      value={manualHouseSelectValue}
+                      onChange={event => setManualHouseSelectValue(event.target.value)}
+                      className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                    >
+                      <option value="">Selecionar casa...</option>
+                      {houseOptions.map(houseNumber => (
+                        <option key={houseNumber} value={houseNumber}>Casa {houseNumber}</option>
+                      ))}
+                      <option value="manual">Digitar numero manualmente</option>
+                    </select>
+                    {(houseOptions.length === 0 || manualHouseSelectValue === "manual") && (
+                      <Input
+                        type="number"
+                        min={1}
+                        value={manualHouseInputValue}
+                        onChange={event => setManualHouseInputValue(event.target.value)}
+                        placeholder="Numero da casa"
+                        className="h-9"
+                      />
+                    )}
+                  </div>
+                ) : (
+                  <div className="grid gap-2 md:grid-cols-4">
                     <Input
                       type="number"
                       min={1}
-                      value={manualHouseInputValue}
-                      onChange={event => setManualHouseInputValue(event.target.value)}
-                      placeholder="Numero da casa"
+                      value={manualSequenceStartValue}
+                      onChange={event => setManualSequenceStartValue(event.target.value)}
+                      placeholder="Casa inicial"
                       className="h-9"
                     />
-                  )}
-                </div>
+                    <Input
+                      type="number"
+                      value={manualSequenceIncrementValue}
+                      onChange={event => setManualSequenceIncrementValue(event.target.value)}
+                      placeholder="Incremento"
+                      className="h-9"
+                    />
+                    <select
+                      value={manualSequenceOrder}
+                      onChange={event => setManualSequenceOrder(event.target.value as ManualSequenceOrder)}
+                      className="h-9 rounded-md border border-input bg-background px-2 text-sm md:col-span-2"
+                    >
+                      <option value="current">Ordem atual da lista</option>
+                      <option value="entity_id">Entity ID crescente</option>
+                      <option value="global_id">GlobalId</option>
+                      <option value="layer_name">Camada/nome</option>
+                    </select>
+                  </div>
+                )}
 
                 <Button type="button" variant="outline" size="sm" onClick={toggleAllVisibleManualCandidates} disabled={visibleManualCandidates.length === 0}>
                   {visibleManualCandidates.length > 0 && visibleManualCandidates.every(item => selectedManualIds.has(item.id))
@@ -1236,10 +1390,15 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
                 <Button
                   type="button"
                   size="sm"
-                  onClick={() => setManualHouseAction("assign")}
-                  disabled={selectedManualItems.length === 0 || selectedManualHouseNumber == null || manualSaving}
+                  onClick={() => setManualHouseAction(manualAssignmentMode === "sequence" ? "assign_sequence" : "assign")}
+                  disabled={
+                    selectedManualItems.length === 0 ||
+                    manualSaving ||
+                    (manualAssignmentMode === "same_house" && selectedManualHouseNumber == null) ||
+                    (manualAssignmentMode === "sequence" && !!manualSequenceValidation)
+                  }
                 >
-                  Atribuir casa aos selecionados
+                  {manualAssignmentMode === "sequence" ? "Atribuir sequencia aos selecionados" : "Atribuir casa aos selecionados"}
                 </Button>
               </div>
 
@@ -1255,11 +1414,53 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
                 </Button>
               </div>
 
+              {manualAssignmentMode === "sequence" && (
+                <div className="mt-3 rounded-md border border-border bg-muted/20 p-3 text-xs">
+                  <p className="font-medium">Previa da sequencia</p>
+                  <p className="mt-1 text-muted-foreground">
+                    A sequencia sera gravada como sugestao e ainda precisara de confirmacao.
+                  </p>
+                  {manualSequenceOrderFallback && (
+                    <p className="mt-2 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-amber-900">
+                      Alguns itens nao possuem o campo da ordem escolhida. Para esses casos, sera usado fallback seguro pela ordem atual da lista.
+                    </p>
+                  )}
+                  {manualSequenceValidation && selectedManualItems.length > 0 && (
+                    <p className="mt-2 rounded border border-destructive/30 bg-destructive/10 px-2 py-1 text-destructive">
+                      {manualSequenceValidation}
+                    </p>
+                  )}
+                  {selectedManualItems.length === 0 ? (
+                    <p className="mt-2 text-muted-foreground">Selecione itens para ver a previa.</p>
+                  ) : manualSequencePreview.length === 0 ? (
+                    <p className="mt-2 text-muted-foreground">Informe casa inicial e incremento para gerar a previa.</p>
+                  ) : (
+                    <div className="mt-2 max-h-44 space-y-1 overflow-y-auto rounded border border-border bg-background p-2">
+                      {manualSequencePreview.slice(0, 10).map(entry => (
+                        <div key={entry.item.id} className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium">{entry.item.ifc_entity_id || entry.item.ifc_global_id || entry.item.id}</span>
+                          <span className="text-muted-foreground">-&gt;</span>
+                          <span>Casa {entry.houseNumber}</span>
+                          <span className="truncate text-muted-foreground">{entry.item.ifc_layer_name || entry.item.name || "-"}</span>
+                        </div>
+                      ))}
+                      {manualSequencePreview.length > 10 && (
+                        <p className="pt-1 text-muted-foreground">
+                          Mostrando 10 de {manualSequencePreview.length} itens selecionados.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {manualHouseAction && (
                 <div className="mt-3 flex flex-col gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 sm:flex-row sm:items-center sm:justify-between">
                   <span>
                     {manualHouseAction === "assign"
                       ? `Atribuir Casa ${selectedManualHouseNumber || "-"} a ${selectedManualItems.length} elemento(s) IFC selecionado(s)?`
+                      : manualHouseAction === "assign_sequence"
+                        ? `Atribuir casas em sequencia de Casa ${manualSequencePreview[0]?.houseNumber ?? "-"} ate Casa ${manualSequencePreview[manualSequencePreview.length - 1]?.houseNumber ?? "-"} para ${selectedManualItems.length} elemento(s) IFC selecionado(s)?`
                       : `Limpar atribuicao manual de ${selectedManualItems.length} elemento(s) IFC selecionado(s)?`}
                   </span>
                   <div className="flex flex-wrap gap-1.5">
@@ -1583,6 +1784,9 @@ function SuggestionCard({
             {isManualHouseAssignment(item) && (
               <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">Manual</Badge>
             )}
+            {isManualSequenceAssignment(item) && (
+              <Badge className="bg-violet-100 text-violet-800 hover:bg-violet-100">Sequência</Badge>
+            )}
           </div>
 
           <div className="mt-2 grid gap-1 text-[11px] text-muted-foreground md:grid-cols-2 xl:grid-cols-4">
@@ -1595,6 +1799,9 @@ function SuggestionCard({
             <p><span className="font-medium text-foreground">Casa detectada: </span>{item.detected_house_number ?? "-"}</p>
             {isManualHouseAssignment(item) && (
               <p><span className="font-medium text-foreground">Casa manual: </span>{item.detected_house_number ?? "-"}</p>
+            )}
+            {isManualSequenceAssignment(item) && (
+              <p><span className="font-medium text-foreground">Origem manual: </span>Sequência manual</p>
             )}
             <p className="truncate"><span className="font-medium text-foreground">Servico detectado: </span>{item.detected_service_label || item.detected_service_key || "-"}</p>
             <p><span className="font-medium text-foreground">Origem revisao: </span>{getHouseDetectionSourceLabel(item)}</p>
