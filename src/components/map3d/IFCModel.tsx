@@ -1071,11 +1071,22 @@ function configureIfcVisualMaterials(model: THREE.Object3D) {
   const textureLoadStatus = new Map<IfcVisualTextureKind, "loading" | "loaded" | "error">();
   const fallbackMaterials = new Map<string, THREE.Material>();
   const materialKeys = new Set<string>();
+  const materialDiagnostics: Array<{
+    meshName: string;
+    materialName: string;
+    materialType: string;
+    materialColor: string | null;
+    hasMap: boolean;
+    opacity: number;
+    transparent: boolean;
+  }> = [];
   let meshCount = 0;
   let originalMaterialsWithMap = 0;
   let preservedOriginalMaterials = 0;
   let texturedFallbackMaterials = 0;
   let colorFallbackMaterials = 0;
+  let materialsWithColor = 0;
+  let unnamedMaterials = 0;
 
   model.traverse(child => {
     const mesh = child as THREE.Mesh;
@@ -1093,7 +1104,19 @@ function configureIfcVisualMaterials(model: THREE.Object3D) {
       const materialColor = getIfcVisualMaterialColor(material);
       const hasMap = hasIfcVisualTextureMap(material);
       materialKeys.add(`${material.type}::${material.name || "sem-nome"}::${materialColor || "sem-cor"}::${hasMap}`);
+      if (materialColor) materialsWithColor += 1;
       if (hasMap) originalMaterialsWithMap += 1;
+      if (!material.name?.trim()) unnamedMaterials += 1;
+
+      materialDiagnostics.push({
+        meshName: mesh.name || "(sem nome)",
+        materialName: material.name || "(sem nome)",
+        materialType: material.type,
+        materialColor,
+        hasMap,
+        opacity: material.opacity,
+        transparent: material.transparent,
+      });
     });
 
     if (hasOriginalMap) {
@@ -1131,6 +1154,9 @@ function configureIfcVisualMaterials(model: THREE.Object3D) {
     textureKinds: Array.from(textureCache.keys()),
     texturePaths: Array.from(textureCache.keys()).map(kind => IFC_VISUAL_TEXTURES[kind].path),
     textureLoadStatus: Object.fromEntries(textureLoadStatus.entries()),
+    materialsWithColor,
+    unnamedMaterials,
+    sample: materialDiagnostics.slice(0, 20),
   });
 }
 
