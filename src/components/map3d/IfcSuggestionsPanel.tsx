@@ -19,7 +19,7 @@ import { supabase } from "@/integrations/supabase/client";
 type IfcSuggestionStatus = "suggested" | "confirmed" | "ignored";
 type StatusFilter = IfcSuggestionStatus | "all";
 type CategoryFilter = "production" | "text_annotation" | "unknown" | "all";
-type QuickFilter = "all" | "valid" | "3dtext" | "layer" | "no_service" | "no_house" | "confirmed" | "ignored" | "manual" | "manual_sequence";
+type QuickFilter = "all" | "valid" | "3dtext" | "layer" | "no_service" | "no_house" | "confirmed" | "ignored" | "manual" | "manual_sequence" | "with_final_link" | "without_final_link";
 type BatchAction = "confirm_valid" | "ignore_no_service";
 type ManualHouseAction = "assign" | "assign_sequence" | "clear";
 type ManualAssignmentMode = "same_house" | "sequence";
@@ -99,6 +99,10 @@ interface IfcElementLinkRow {
   trigger_service_key: string;
 }
 
+interface IfcFinalLinkElementRow {
+  ifc_element_id: string;
+}
+
 interface IfcLinkDiagnosticRow {
   id: string;
   house_id: string | null;
@@ -136,6 +140,8 @@ interface LinkSyncResult {
   created: number;
   existing: number;
   ignored: number;
+  missingHouse: number;
+  missingService: number;
 }
 
 interface Props {
@@ -286,6 +292,17 @@ function asIfcElementLinkRows(data: unknown): IfcElementLinkRow[] {
     .filter(item => item.ifc_element_id && item.trigger_service_key);
 }
 
+function asIfcFinalLinkElementRows(data: unknown): IfcFinalLinkElementRow[] {
+  if (!Array.isArray(data)) return [];
+
+  return data
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
+    .map(item => ({
+      ifc_element_id: normalizeNullableString(item.ifc_element_id) || "",
+    }))
+    .filter(item => item.ifc_element_id);
+}
+
 function asIfcLinkDiagnosticRows(data: unknown): IfcLinkDiagnosticRow[] {
   if (!Array.isArray(data)) return [];
 
@@ -311,6 +328,10 @@ function isValidHouseServiceSuggestion(item: IfcSuggestionRow) {
 
 function isSuggestedValidHouseServiceSuggestion(item: IfcSuggestionRow) {
   return isValidHouseServiceSuggestion(item) && item.status === "suggested";
+}
+
+function isConfirmedFinalLinkCandidate(item: IfcSuggestionRow) {
+  return isValidHouseServiceSuggestion(item) && item.status === "confirmed";
 }
 
 function getHouseDetectionSource(item: IfcSuggestionRow) {
@@ -462,6 +483,7 @@ function summarizeLinkDiagnostics(links: IfcLinkDiagnosticRow[]): LinkDiagnostic
 export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, houses = [] }: Props) {
   const [items, setItems] = useState<IfcSuggestionRow[]>([]);
   const [modelId, setModelId] = useState<string | null>(null);
+  const [finalLinkElementIds, setFinalLinkElementIds] = useState<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
   const [quickFilter, setQuickFilter] = useState<QuickFilter>("all");
@@ -506,6 +528,7 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
     if (!projectId) {
       setItems([]);
       setModelId(null);
+      setFinalLinkElementIds(new Set());
       return;
     }
 
@@ -560,6 +583,18 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
       const { data, error } = await query;
       if (error) throw error;
       setItems(asIfcSuggestionRows(data as unknown));
+
+      const linksTable = supabase.from("project_ifc_element_links" as any) as any;
+      let finalLinksQuery = linksTable
+        .select("ifc_element_id")
+        .eq("project_id", projectId)
+        .eq("status", "confirmed");
+
+      if (resolvedModelId) finalLinksQuery = finalLinksQuery.eq("model_id", resolvedModelId);
+
+      const { data: finalLinksData, error: finalLinksError } = await finalLinksQuery;
+      if (finalLinksError) throw finalLinksError;
+      setFinalLinkElementIds(new Set(asIfcFinalLinkElementRows(finalLinksData as unknown).map(link => link.ifc_element_id)));
     } catch (err: any) {
       console.error("[IFC] Falha ao carregar sugestões", err);
       toast.error("Falha ao carregar sugestões IFC");
@@ -592,6 +627,8 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
       if (quickFilter === "ignored") return item.status === "ignored";
       if (quickFilter === "manual") return isManualHouseAssignment(item);
       if (quickFilter === "manual_sequence") return isManualSequenceAssignment(item);
+      if (quickFilter === "with_final_link") return finalLinkElementIds.has(item.id);
+      if (quickFilter === "without_final_link") return isConfirmedFinalLinkCandidate(item) && !finalLinkElementIds.has(item.id);
       return true;
     });
     const query = search.trim().toLowerCase();
@@ -611,7 +648,7 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
       ].join(" ").toLowerCase();
       return haystack.includes(query);
     });
-  }, [items, quickFilter, search]);
+  }, [finalLinkElementIds, items, quickFilter, search]);
 
   const counts = useMemo(() => {
     return items.reduce(
@@ -622,13 +659,15 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
         if (item.status === "ignored") acc.ignored += 1;
         if (item.needs_review) acc.needsReview += 1;
         if (isValidHouseServiceSuggestion(item)) acc.validHouseService += 1;
+        if (finalLinkElementIds.has(item.id)) acc.withFinalLink += 1;
+        if (isConfirmedFinalLinkCandidate(item) && !finalLinkElementIds.has(item.id)) acc.withoutFinalLink += 1;
         if (getHouseDetectionSource(item) === "3dtext_proximity") acc.by3dText += 1;
         if (getHouseDetectionSource(item) === "layer") acc.byLayer += 1;
         return acc;
       },
-      { total: 0, suggested: 0, confirmed: 0, ignored: 0, needsReview: 0, validHouseService: 0, by3dText: 0, byLayer: 0 }
+      { total: 0, suggested: 0, confirmed: 0, ignored: 0, needsReview: 0, validHouseService: 0, withFinalLink: 0, withoutFinalLink: 0, by3dText: 0, byLayer: 0 }
     );
-  }, [items]);
+  }, [finalLinkElementIds, items]);
 
   const batchCandidates = useMemo(() => ({
     confirmValid: items.filter(isSuggestedValidHouseServiceSuggestion),
@@ -930,7 +969,7 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
 
   const syncConfirmedLinks = async () => {
     if (!projectId) {
-      toast.error("Projeto não identificado para gerar vínculos IFC");
+      toast.error("Projeto não identificado para gerar vínculos finais IFC");
       return;
     }
 
@@ -962,6 +1001,8 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
       const validElements = confirmedElements.filter(item => (
         item.detected_house_number != null && !!item.detected_service_key
       ));
+      const missingHouse = confirmedElements.filter(item => item.detected_house_number == null).length;
+      const missingService = confirmedElements.filter(item => !item.detected_service_key).length;
       const ignored = confirmedElements.length - validElements.length;
 
       let existingQuery = linksTable
@@ -1007,12 +1048,21 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
         created: rowsToInsert.length,
         existing: validElements.length - rowsToInsert.length,
         ignored,
+        missingHouse,
+        missingService,
       };
       setLinkSyncResult(result);
-      toast.success(`${result.created} vínculo(s) IFC criado(s)`);
+      if (rowsToInsert.length > 0) {
+        setFinalLinkElementIds(prev => {
+          const next = new Set(prev);
+          rowsToInsert.forEach(row => next.add(row.ifc_element_id));
+          return next;
+        });
+      }
+      toast.success(`${result.created} vínculo(s) final(is) IFC criado(s)`);
     } catch (err: any) {
-      console.error("[IFC] Falha ao gerar vínculos confirmados", err);
-      toast.error("Falha ao gerar vínculos IFC confirmados");
+      console.error("[IFC] Falha ao gerar vínculos finais", err);
+      toast.error("Falha ao gerar vínculos finais IFC");
     } finally {
       setSyncingLinks(false);
     }
@@ -1144,6 +1194,8 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
             <Counter label="Por 3Dtext" value={counts.by3dText} />
             <Counter label="Por camada" value={counts.byLayer} />
             <Counter label="Pendentes de revisao" value={counts.needsReview} />
+            <Counter label="Com vinculo final" value={counts.withFinalLink} />
+            <Counter label="Sem vinculo final" value={counts.withoutFinalLink} />
           </div>
           <div className="grid gap-2 text-xs sm:grid-cols-5">
             <Counter label="Textos 3D" value={anchorDiagnostics.threeDTexts} />
@@ -1177,6 +1229,8 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
               ["no_house", "Sem casa"],
               ["manual", "Atribuidas manualmente"],
               ["manual_sequence", "Atribuidas por sequencia"],
+              ["with_final_link", "Com vinculo final"],
+              ["without_final_link", "Sem vinculo final"],
               ["confirmed", "Confirmadas"],
               ["ignored", "Ignoradas"],
             ].map(([value, label]) => (
@@ -1224,7 +1278,7 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
             </Button>
             <Button type="button" size="sm" onClick={() => void syncConfirmedLinks()} disabled={loading || syncingLinks}>
               <Link2 className="mr-1.5 h-3.5 w-3.5" />
-              {syncingLinks ? "Gerando..." : "Gerar vínculos confirmados"}
+              {syncingLinks ? "Gerando..." : "Gerar vínculos finais"}
             </Button>
           </div>
           <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-background p-3">
@@ -1499,12 +1553,14 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
             </div>
           )}
           {linkSyncResult && (
-            <div className="grid gap-2 text-xs sm:grid-cols-5">
+            <div className="grid gap-2 text-xs sm:grid-cols-4 lg:grid-cols-7">
               <Counter label="Confirmados" value={linkSyncResult.totalConfirmed} />
               <Counter label="Válidos" value={linkSyncResult.valid} />
               <Counter label="Criados" value={linkSyncResult.created} />
               <Counter label="Já existiam" value={linkSyncResult.existing} />
               <Counter label="Ignorados" value={linkSyncResult.ignored} />
+              <Counter label="Sem casa" value={linkSyncResult.missingHouse} />
+              <Counter label="Sem serviÃ§o" value={linkSyncResult.missingService} />
             </div>
           )}
           <div className="rounded-md border border-border bg-background p-3">
@@ -1726,6 +1782,7 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
                 <SuggestionCard
                   key={item.id}
                   item={item}
+                  hasFinalLink={finalLinkElementIds.has(item.id)}
                   saving={savingId === item.id}
                   onConfirm={() => updateStatus(item, "confirmed")}
                   onIgnore={() => updateStatus(item, "ignored")}
@@ -1751,12 +1808,14 @@ function Counter({ label, value }: { label: string; value: number }) {
 
 function SuggestionCard({
   item,
+  hasFinalLink,
   saving,
   onConfirm,
   onIgnore,
   onSuggest,
 }: {
   item: IfcSuggestionRow;
+  hasFinalLink: boolean;
   saving: boolean;
   onConfirm: () => void;
   onIgnore: () => void;
@@ -1781,6 +1840,9 @@ function SuggestionCard({
             {validHouseService && (
               <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">Casa + Servico</Badge>
             )}
+            {hasFinalLink && (
+              <Badge className="bg-cyan-100 text-cyan-800 hover:bg-cyan-100">Vinculo final</Badge>
+            )}
             {isManualHouseAssignment(item) && (
               <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">Manual</Badge>
             )}
@@ -1796,6 +1858,7 @@ function SuggestionCard({
             <p><span className="font-medium text-foreground">Categoria: </span>{categoryLabels[item.category || ""] || item.category || "-"}</p>
             <p className="truncate"><span className="font-medium text-foreground">Serviço: </span>{item.detected_service_label || item.detected_service_key || "-"}</p>
             <p><span className="font-medium text-foreground">Casa: </span>{item.detected_house_number ?? "-"}</p>
+            <p><span className="font-medium text-foreground">VÃ­nculo final: </span>{hasFinalLink ? "sim" : "nÃ£o"}</p>
             <p><span className="font-medium text-foreground">Casa detectada: </span>{item.detected_house_number ?? "-"}</p>
             {isManualHouseAssignment(item) && (
               <p><span className="font-medium text-foreground">Casa manual: </span>{item.detected_house_number ?? "-"}</p>
