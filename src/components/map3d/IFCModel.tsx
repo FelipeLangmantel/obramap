@@ -531,7 +531,7 @@ function apply3dTextHouseAnchors(items: IfcInventoryItem[]) {
       anchorElementId: nearest.anchor.id,
       anchorElementName: nearest.anchor.name,
       anchorDistance: nearest.distance,
-      houseDetectionSource: "3dtext_proximity",
+      houseDetectionSource: "3dtext_proximity" as const,
     };
   });
 }
