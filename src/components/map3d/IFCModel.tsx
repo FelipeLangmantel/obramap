@@ -1367,6 +1367,25 @@ function getIfcAttributeValue(attribute: THREE.BufferAttribute | THREE.Interleav
   return normalizeNullableNumber(maybeAttribute.getX(index));
 }
 
+function getIfcExpressAttributeValue(
+  attribute: THREE.BufferAttribute | THREE.InterleavedBufferAttribute | undefined,
+  vertexIndex: number,
+  faceIndex: number,
+  triangleCount?: number
+) {
+  const count = (attribute as { count?: number } | undefined)?.count;
+  if (
+    typeof count === "number" &&
+    typeof triangleCount === "number" &&
+    count === triangleCount &&
+    faceIndex >= 0 &&
+    faceIndex < count
+  ) {
+    return getIfcAttributeValue(attribute, faceIndex);
+  }
+  return getIfcAttributeValue(attribute, vertexIndex);
+}
+
 function getIfcExpressIdFromIntersection(intersection: any): {
   entityId: string | null;
   reason: string | null;
@@ -1381,6 +1400,8 @@ function getIfcExpressIdFromIntersection(intersection: any): {
 
   const attributeNames = ["expressID", "expressId", "ifcExpressID", "ifcExpressId"];
   const index = geometry.index;
+  const position = geometry.getAttribute("position");
+  const triangleCount = index ? Math.floor(index.count / 3) : Math.floor((position?.count || 0) / 3);
   const candidateVertexIndices = [
     intersection?.face?.a,
     faceIndex * 3,
@@ -1392,7 +1413,7 @@ function getIfcExpressIdFromIntersection(intersection: any): {
     if (!attribute) continue;
 
     for (const vertexIndex of candidateVertexIndices) {
-      const expressId = getIfcAttributeValue(attribute, vertexIndex);
+      const expressId = getIfcExpressAttributeValue(attribute, vertexIndex, faceIndex, triangleCount);
       if (expressId != null) return { entityId: `#${expressId}`, reason: null, attributeName };
     }
   }
@@ -1465,16 +1486,122 @@ function getPersistedHouseDetectionLabel(source: string) {
 }
 
 function createIfcInspectHighlightMaterial() {
-  return new THREE.MeshStandardMaterial({
+  return new THREE.MeshBasicMaterial({
     color: "#facc15",
-    emissive: "#854d0e",
-    roughness: 0.45,
-    metalness: 0.02,
     transparent: true,
-    opacity: 0.78,
+    opacity: 0.55,
     side: THREE.DoubleSide,
     depthTest: true,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -4,
+    polygonOffsetUnits: -4,
   });
+}
+
+function getIfcExpressAttribute(geometry: THREE.BufferGeometry | undefined) {
+  if (!geometry) return { attribute: null as THREE.BufferAttribute | THREE.InterleavedBufferAttribute | null, attributeName: null as string | null };
+  const attributeNames = ["expressID", "expressId", "ifcExpressID", "ifcExpressId"];
+  for (const attributeName of attributeNames) {
+    const attribute = geometry.getAttribute(attributeName) as THREE.BufferAttribute | THREE.InterleavedBufferAttribute | undefined;
+    if (attribute) return { attribute, attributeName };
+  }
+  return { attribute: null, attributeName: null };
+}
+
+function getIfcEntityNumericId(entityId: string | null | undefined) {
+  const normalized = normalizeIfcEntityId(entityId);
+  if (!normalized) return null;
+  const parsed = Number(normalized.replace(/^#/, ""));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function createIfcEntityHighlightMesh(mesh: THREE.Mesh, entityId: string): {
+  highlight: THREE.Mesh | null;
+  matchingFaces: number;
+  bounds: { center: IfcPoint | null; size: IfcPoint | null };
+  reason: string | null;
+} {
+  const geometry = mesh.geometry;
+  const targetExpressId = getIfcEntityNumericId(entityId);
+  if (!geometry || targetExpressId == null) {
+    return { highlight: null, matchingFaces: 0, bounds: { center: null, size: null }, reason: "missing_geometry_or_entity_id" };
+  }
+
+  const position = geometry.getAttribute("position") as THREE.BufferAttribute | THREE.InterleavedBufferAttribute | undefined;
+  if (!position) {
+    return { highlight: null, matchingFaces: 0, bounds: { center: null, size: null }, reason: "missing_position_attribute" };
+  }
+
+  const normal = geometry.getAttribute("normal") as THREE.BufferAttribute | THREE.InterleavedBufferAttribute | undefined;
+  const index = geometry.index;
+  const { attribute: expressAttribute, attributeName } = getIfcExpressAttribute(geometry);
+  if (!expressAttribute) {
+    return { highlight: null, matchingFaces: 0, bounds: { center: null, size: null }, reason: "missing_express_id_attribute" };
+  }
+
+  const triangleCount = index ? Math.floor(index.count / 3) : Math.floor(position.count / 3);
+  const positions: number[] = [];
+  const normals: number[] = [];
+  let matchingFaces = 0;
+
+  for (let faceIndex = 0; faceIndex < triangleCount; faceIndex += 1) {
+    const vertexIndices = [0, 1, 2].map(offset => {
+      const rawIndex = faceIndex * 3 + offset;
+      return index ? index.getX(rawIndex) : rawIndex;
+    });
+    const expressValues = vertexIndices
+      .map(vertexIndex => getIfcExpressAttributeValue(expressAttribute, vertexIndex, faceIndex, triangleCount))
+      .filter((value): value is number => value != null);
+
+    if (!expressValues.some(value => value === targetExpressId)) continue;
+
+    matchingFaces += 1;
+    vertexIndices.forEach(vertexIndex => {
+      positions.push(position.getX(vertexIndex), position.getY(vertexIndex), position.getZ(vertexIndex));
+      if (normal) normals.push(normal.getX(vertexIndex), normal.getY(vertexIndex), normal.getZ(vertexIndex));
+    });
+  }
+
+  if (matchingFaces === 0 || positions.length === 0) {
+    return { highlight: null, matchingFaces, bounds: { center: null, size: null }, reason: `no_matching_faces_for_${attributeName || "expressID"}` };
+  }
+
+  const highlightGeometry = new THREE.BufferGeometry();
+  highlightGeometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  if (normals.length === positions.length) {
+    highlightGeometry.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
+  } else {
+    highlightGeometry.computeVertexNormals();
+  }
+  highlightGeometry.computeBoundingBox();
+  highlightGeometry.computeBoundingSphere();
+
+  const highlight = new THREE.Mesh(highlightGeometry, createIfcInspectHighlightMaterial());
+  highlight.name = `IFC selected entity ${entityId}`;
+  highlight.renderOrder = 999;
+  mesh.add(highlight);
+  highlight.updateMatrixWorld(true);
+
+  const box = new THREE.Box3().setFromObject(highlight);
+  const center = new THREE.Vector3();
+  const size = new THREE.Vector3();
+  if (!box.isEmpty()) {
+    box.getCenter(center);
+    box.getSize(size);
+  }
+
+  return {
+    highlight,
+    matchingFaces,
+    bounds: box.isEmpty()
+      ? { center: null, size: null }
+      : {
+          center: { x: center.x, y: center.y, z: center.z },
+          size: { x: size.x, y: size.y, z: size.z },
+        },
+    reason: null,
+  };
 }
 
 function isIfcVisualRootOrWholeModel(object: THREE.Object3D | null, root: THREE.Object3D | null) {
@@ -1690,9 +1817,7 @@ function IFCVisualModel({
     paintedMaterial: THREE.Material;
   }>>([]);
   const inspectHighlightRef = useRef<{
-    mesh: THREE.Mesh;
-    previousMaterial: THREE.Material | THREE.Material[];
-    highlightMaterial: THREE.Material;
+    highlight: THREE.Mesh;
   } | null>(null);
 
   const restorePaintEntry = useCallback((entry: {
@@ -1732,19 +1857,26 @@ function IFCVisualModel({
     const current = inspectHighlightRef.current;
     if (!current) return;
 
-    if (current.mesh.material === current.highlightMaterial) {
-      current.mesh.material = current.previousMaterial;
-    }
-    disposeIfcVisualMaterial(current.highlightMaterial);
+    current.highlight.parent?.remove(current.highlight);
+    disposeIfcVisualObject(current.highlight);
     inspectHighlightRef.current = null;
   }, []);
 
-  const highlightInspectMesh = useCallback((mesh: THREE.Mesh) => {
+  const selectIfcElementByEntityId = useCallback((mesh: THREE.Mesh, entityId: string) => {
     clearInspectHighlight();
-    const previousMaterial = mesh.material as THREE.Material | THREE.Material[];
-    const highlightMaterial = createIfcInspectHighlightMaterial();
-    mesh.material = highlightMaterial;
-    inspectHighlightRef.current = { mesh, previousMaterial, highlightMaterial };
+    console.info("[IFC Select] selected entityId", { entityId });
+    const result = createIfcEntityHighlightMesh(mesh, entityId);
+    console.info("[IFC Select] matching faces count", { entityId, count: result.matchingFaces });
+
+    if (!result.highlight) {
+      console.info("[IFC Select] unable to isolate entity", { entityId, reason: result.reason });
+      return result;
+    }
+
+    inspectHighlightRef.current = { highlight: result.highlight };
+    console.info("[IFC Select] highlight geometry created", { entityId, faces: result.matchingFaces });
+    console.info("[IFC Select] bounding box", result.bounds);
+    return result;
   }, [clearInspectHighlight]);
 
   const inspectMesh = useCallback((event: any, hit: THREE.Object3D) => {
@@ -1782,7 +1914,11 @@ function IFCVisualModel({
     };
 
     if (selection.entityId && !isIfcVisualRootOrWholeModel(mesh, objectRef.current)) {
-      highlightInspectMesh(mesh);
+      const highlightResult = selectIfcElementByEntityId(mesh, selection.entityId);
+      if (highlightResult?.bounds.center && highlightResult.bounds.size) {
+        selection.center = highlightResult.bounds.center;
+        selection.size = highlightResult.bounds.size;
+      }
     } else {
       clearInspectHighlight();
       if (!selection.entityId) {
@@ -1805,7 +1941,7 @@ function IFCVisualModel({
         meshUuid: mesh.uuid,
       });
     }
-  }, [clearInspectHighlight, highlightInspectMesh, onInspectSelection]);
+  }, [clearInspectHighlight, onInspectSelection, selectIfcElementByEntityId]);
 
   useEffect(() => {
     if (undoPaintSignal <= 0) return;
