@@ -53,6 +53,11 @@ interface IfcSuggestionRawProperties {
   houseDetectionSource: string | null;
   position: { x: number; y: number; z: number } | null;
   positionPointCount: number | null;
+  positionSource: string | null;
+  placementPosition: { x: number; y: number; z: number } | null;
+  placementRefId: string | null;
+  axisPlacementRefId: string | null;
+  cartesianPointRefId: string | null;
 }
 
 interface IfcModelIdRow {
@@ -176,6 +181,11 @@ function asIfcSuggestionRawProperties(value: unknown): IfcSuggestionRawPropertie
     houseDetectionSource: normalizeNullableString(raw.houseDetectionSource),
     position: normalizeIfcPoint(raw.position),
     positionPointCount: normalizeNullableNumber(raw.positionPointCount),
+    positionSource: normalizeNullableString(raw.positionSource),
+    placementPosition: normalizeIfcPoint(raw.placementPosition),
+    placementRefId: normalizeNullableString(raw.placementRefId),
+    axisPlacementRefId: normalizeNullableString(raw.axisPlacementRefId),
+    cartesianPointRefId: normalizeNullableString(raw.cartesianPointRefId),
   };
 }
 
@@ -482,6 +492,7 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
         if (item.category === "production" && item.raw_properties?.hasAxis2Placement3D) acc.productionWithAxisPlacement += 1;
         if (item.category === "production" && item.raw_properties?.hasProductDefinitionShape) acc.productionWithProductShape += 1;
         if (item.category === "production" && item.raw_properties?.hasExtrudedAreaSolid) acc.productionWithExtrudedSolid += 1;
+        if (item.category === "production" && item.raw_properties?.placementPosition) acc.productionWithPlacementPosition += 1;
         if (item.needs_review) acc.pendingReview += 1;
         return acc;
       },
@@ -496,6 +507,7 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
         productionWithAxisPlacement: 0,
         productionWithProductShape: 0,
         productionWithExtrudedSolid: 0,
+        productionWithPlacementPosition: 0,
         pendingReview: 0,
       }
     );
@@ -704,6 +716,7 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
           )}
           <div className="grid gap-2 text-xs sm:grid-cols-3 lg:grid-cols-6">
             <Counter label="Produtivos com refs" value={anchorDiagnostics.productionWithRefs} />
+            <Counter label="Com placementPosition" value={anchorDiagnostics.productionWithPlacementPosition} />
             <Counter label="Com IFCCARTESIANPOINT" value={anchorDiagnostics.productionWithCartesianPoint} />
             <Counter label="Com IFCLOCALPLACEMENT" value={anchorDiagnostics.productionWithLocalPlacement} />
             <Counter label="Com IFCAXIS2PLACEMENT3D" value={anchorDiagnostics.productionWithAxisPlacement} />
@@ -1041,6 +1054,9 @@ function SuggestionCard({
             <p><span className="font-medium text-foreground">Origem casa: </span>{item.raw_properties?.houseDetectionSource === "3dtext_proximity" ? "3Dtext próximo" : item.raw_properties?.houseDetectionSource || "-"}</p>
             <p><span className="font-medium text-foreground">Âncora 3Dtext: </span>{item.raw_properties?.anchorElementName || "-"}</p>
             <p><span className="font-medium text-foreground">Distância: </span>{item.raw_properties?.anchorDistance != null ? item.raw_properties.anchorDistance.toFixed(2) : "-"}</p>
+            <p><span className="font-medium text-foreground">positionSource: </span>{item.raw_properties?.positionSource || "-"}</p>
+            <p><span className="font-medium text-foreground">placementPosition: </span>{item.raw_properties?.placementPosition ? `${item.raw_properties.placementPosition.x.toFixed(2)}, ${item.raw_properties.placementPosition.y.toFixed(2)}, ${item.raw_properties.placementPosition.z.toFixed(2)}` : "-"}</p>
+            <p className="truncate"><span className="font-medium text-foreground">placement refs: </span>{[item.raw_properties?.placementRefId, item.raw_properties?.axisPlacementRefId, item.raw_properties?.cartesianPointRefId].filter(Boolean).join(" -> ") || "-"}</p>
             <p><span className="font-medium text-foreground">Pontos posição: </span>{item.raw_properties?.positionPointCount ?? "-"}</p>
             <p><span className="font-medium text-foreground">Refs: </span>{item.raw_properties?.reachableRefsCount ?? "-"}</p>
             <p><span className="font-medium text-foreground">IFCCARTESIANPOINT: </span>{item.raw_properties?.cartesianPointCount ?? "-"}</p>
