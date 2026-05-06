@@ -939,10 +939,49 @@ function hasIfcVisualTextureMap(material: THREE.Material) {
   return materialWithMap.map instanceof THREE.Texture;
 }
 
+function hasIfcVisualUsableTextureMap(material: THREE.Material) {
+  const materialWithMap = material as THREE.Material & { map?: THREE.Texture | null };
+  const map = materialWithMap.map;
+  if (!(map instanceof THREE.Texture)) return false;
+
+  const image = map.image as { width?: number; height?: number } | undefined;
+  return Boolean(image && Number(image.width || 0) > 0 && Number(image.height || 0) > 0);
+}
+
 function getIfcVisualMaterials(mesh: THREE.Mesh) {
   const material = mesh.material as THREE.Material | THREE.Material[];
   if (Array.isArray(material)) return material.filter(Boolean);
   return material ? [material] : [];
+}
+
+function ensureIfcVisualPlanarUv(mesh: THREE.Mesh) {
+  const geometry = mesh.geometry;
+  if (!geometry || geometry.getAttribute("uv") || !geometry.getAttribute("position")) return false;
+
+  geometry.computeBoundingBox();
+  const box = geometry.boundingBox;
+  const position = geometry.getAttribute("position") as THREE.BufferAttribute;
+  if (!box || !position) return false;
+
+  const size = new THREE.Vector3();
+  box.getSize(size);
+  const useXZ = size.x >= size.y && size.z >= size.y;
+  const useXY = size.x >= size.z && size.y >= size.z;
+  const uSize = Math.max(useXZ || useXY ? size.x : size.z, 1);
+  const vSize = Math.max(useXZ ? size.z : useXY ? size.y : size.y, 1);
+  const uv = new Float32Array(position.count * 2);
+
+  for (let index = 0; index < position.count; index += 1) {
+    const x = position.getX(index);
+    const y = position.getY(index);
+    const z = position.getZ(index);
+    uv[index * 2] = useXZ || useXY ? (x - box.min.x) / uSize : (z - box.min.z) / uSize;
+    uv[index * 2 + 1] = useXZ ? (z - box.min.z) / vSize : (y - box.min.y) / vSize;
+  }
+
+  geometry.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+  geometry.attributes.uv.needsUpdate = true;
+  return true;
 }
 
 function getIfcVisualClassificationSource(mesh: THREE.Mesh) {
@@ -1021,7 +1060,7 @@ function createIfcVisualTexture(
     undefined,
     error => {
       textureLoadStatus.set(kind, "error");
-      console.warn("[IFC Visual] Falha ao carregar textura", { kind, path: config.path, error });
+      console.warn("[IFC Textures] failed texture load", { kind, path: config.path, error });
     }
   );
 
@@ -1087,6 +1126,14 @@ function configureIfcVisualMaterials(model: THREE.Object3D) {
   let colorFallbackMaterials = 0;
   let materialsWithColor = 0;
   let unnamedMaterials = 0;
+  let generatedUvMeshes = 0;
+  let meshesWithMaterialMap = 0;
+
+  console.info("[IFC Textures] files/check", {
+    expectedPaths: Object.fromEntries(
+      Object.entries(IFC_VISUAL_TEXTURES).map(([kind, config]) => [kind, config.path])
+    ),
+  });
 
   model.traverse(child => {
     const mesh = child as THREE.Mesh;
@@ -1098,7 +1145,7 @@ function configureIfcVisualMaterials(model: THREE.Object3D) {
     mesh.receiveShadow = true;
 
     const originalMaterials = getIfcVisualMaterials(mesh);
-    const hasOriginalMap = originalMaterials.some(hasIfcVisualTextureMap);
+    const hasOriginalMap = originalMaterials.some(hasIfcVisualUsableTextureMap);
 
     originalMaterials.forEach(material => {
       const materialColor = getIfcVisualMaterialColor(material);
@@ -1129,6 +1176,7 @@ function configureIfcVisualMaterials(model: THREE.Object3D) {
     }
 
     const textureKind = getIfcVisualTextureKind(mesh);
+    const hasUv = Boolean(mesh.geometry?.getAttribute("uv"));
     let fallbackMaterial = fallbackMaterials.get(textureKind);
     if (!fallbackMaterial) {
       fallbackMaterial =
@@ -1142,10 +1190,22 @@ function configureIfcVisualMaterials(model: THREE.Object3D) {
     else texturedFallbackMaterials += 1;
 
     mesh.material = fallbackMaterial;
+    if (textureKind !== "simple_text" && !hasUv && ensureIfcVisualPlanarUv(mesh)) {
+      generatedUvMeshes += 1;
+    }
+    if (getIfcVisualMaterials(mesh).some(hasIfcVisualTextureMap)) {
+      meshesWithMaterialMap += 1;
+    }
   });
 
-  console.info("[IFC Visual] texture diagnostics", {
+  console.info("[IFC Textures] loaded texture keys", Array.from(textureCache.keys()));
+  console.info("[IFC Textures] applied count", texturedFallbackMaterials);
+  console.info("[IFC Textures] fallback color count", colorFallbackMaterials);
+  console.info("[IFC Textures] preserved original material count", preservedOriginalMaterials);
+  console.info("[IFC Textures] summary", {
     totalMeshes: meshCount,
+    meshesWithMaterialMap,
+    generatedUvMeshes,
     uniqueOriginalMaterials: materialKeys.size,
     originalMaterialsWithMap,
     preservedOriginalMaterials,
