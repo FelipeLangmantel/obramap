@@ -491,6 +491,7 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [batchAction, setBatchAction] = useState<BatchAction | null>(null);
+  const [diagnosticsExpanded, setDiagnosticsExpanded] = useState(false);
   const [batchSaving, setBatchSaving] = useState(false);
   const [manualServiceFilter, setManualServiceFilter] = useState<string>("all");
   const [selectedManualIds, setSelectedManualIds] = useState<Set<string>>(new Set());
@@ -1181,43 +1182,59 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
         )}
 
         {/* Bloco de filtros + diagnósticos agora é ROLÁVEL para não empurrar a lista nem esconder a barra de ações */}
-        <div className="min-h-0 max-h-[45vh] flex-shrink-0 space-y-3 overflow-y-auto border-b border-border bg-muted/20 p-4">
-          <div className="grid gap-2 text-sm sm:grid-cols-5">
-            <Counter label="Total" value={counts.total} />
-            <Counter label="Sugeridos" value={counts.suggested} />
-            <Counter label="Confirmados" value={counts.confirmed} />
-            <Counter label="Ignorados" value={counts.ignored} />
-            <Counter label="Revisão" value={counts.needsReview} />
+        <div className="min-h-0 max-h-[40vh] flex-shrink-0 space-y-3 overflow-y-auto border-b border-border bg-muted/20 p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-muted-foreground">Diagnósticos do inventário</p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-[11px]"
+              onClick={() => setDiagnosticsExpanded(prev => !prev)}
+            >
+              {diagnosticsExpanded ? "Recolher" : "Expandir"}
+            </Button>
           </div>
-          <div className="grid gap-2 text-xs sm:grid-cols-4">
-            <Counter label="Validas Casa + Servico" value={counts.validHouseService} />
-            <Counter label="Por 3Dtext" value={counts.by3dText} />
-            <Counter label="Por camada" value={counts.byLayer} />
-            <Counter label="Pendentes de revisao" value={counts.needsReview} />
-            <Counter label="Com vinculo final" value={counts.withFinalLink} />
-            <Counter label="Sem vinculo final" value={counts.withoutFinalLink} />
-          </div>
-          <div className="grid gap-2 text-xs sm:grid-cols-5">
-            <Counter label="Textos 3D" value={anchorDiagnostics.threeDTexts} />
-            <Counter label="Âncoras numeradas" value={anchorDiagnostics.numberedAnchors} />
-            <Counter label="Produtivos com serviço" value={anchorDiagnostics.productionWithService} />
-            <Counter label="Casa por proximidade" value={anchorDiagnostics.productionWithHouseByProximity} />
-            <Counter label="Pendentes de revisão" value={anchorDiagnostics.pendingReview} />
-          </div>
-          {anchorDiagnostics.numberedAnchors > 0 && anchorDiagnostics.productionWithHouseByProximity === 0 && (
-            <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              Textos 3D numerados foram detectados, mas as sugestões salvas ainda não têm casa por proximidade. Reimporte o IFC após esta correção para recalcular as sugestões.
-            </p>
+          {diagnosticsExpanded && (
+            <>
+              <div className="grid gap-2 text-sm sm:grid-cols-5">
+                <Counter label="Total" value={counts.total} />
+                <Counter label="Sugeridos" value={counts.suggested} />
+                <Counter label="Confirmados" value={counts.confirmed} />
+                <Counter label="Ignorados" value={counts.ignored} />
+                <Counter label="Revisão" value={counts.needsReview} />
+              </div>
+              <div className="grid gap-2 text-xs sm:grid-cols-3 lg:grid-cols-6">
+                <Counter label="Validas Casa + Servico" value={counts.validHouseService} />
+                <Counter label="Por 3Dtext" value={counts.by3dText} />
+                <Counter label="Por camada" value={counts.byLayer} />
+                <Counter label="Pendentes de revisao" value={counts.needsReview} />
+                <Counter label="Com vinculo final" value={counts.withFinalLink} />
+                <Counter label="Sem vinculo final" value={counts.withoutFinalLink} />
+              </div>
+              <div className="grid gap-2 text-xs sm:grid-cols-3 lg:grid-cols-5">
+                <Counter label="Textos 3D" value={anchorDiagnostics.threeDTexts} />
+                <Counter label="Âncoras numeradas" value={anchorDiagnostics.numberedAnchors} />
+                <Counter label="Produtivos com serviço" value={anchorDiagnostics.productionWithService} />
+                <Counter label="Casa por proximidade" value={anchorDiagnostics.productionWithHouseByProximity} />
+                <Counter label="Pendentes de revisão" value={anchorDiagnostics.pendingReview} />
+              </div>
+              {anchorDiagnostics.numberedAnchors > 0 && anchorDiagnostics.productionWithHouseByProximity === 0 && (
+                <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  Textos 3D numerados foram detectados, mas as sugestões salvas ainda não têm casa por proximidade. Reimporte o IFC após esta correção para recalcular as sugestões.
+                </p>
+              )}
+              <div className="grid gap-2 text-xs sm:grid-cols-3 lg:grid-cols-6">
+                <Counter label="Produtivos com refs" value={anchorDiagnostics.productionWithRefs} />
+                <Counter label="Com placementPosition" value={anchorDiagnostics.productionWithPlacementPosition} />
+                <Counter label="Com IFCCARTESIANPOINT" value={anchorDiagnostics.productionWithCartesianPoint} />
+                <Counter label="Com IFCLOCALPLACEMENT" value={anchorDiagnostics.productionWithLocalPlacement} />
+                <Counter label="Com IFCAXIS2PLACEMENT3D" value={anchorDiagnostics.productionWithAxisPlacement} />
+                <Counter label="Com IFCPRODUCTDEFINITIONSHAPE" value={anchorDiagnostics.productionWithProductShape} />
+                <Counter label="Com IFCEXTRUDEDAREASOLID" value={anchorDiagnostics.productionWithExtrudedSolid} />
+              </div>
+            </>
           )}
-          <div className="grid gap-2 text-xs sm:grid-cols-3 lg:grid-cols-6">
-            <Counter label="Produtivos com refs" value={anchorDiagnostics.productionWithRefs} />
-            <Counter label="Com placementPosition" value={anchorDiagnostics.productionWithPlacementPosition} />
-            <Counter label="Com IFCCARTESIANPOINT" value={anchorDiagnostics.productionWithCartesianPoint} />
-            <Counter label="Com IFCLOCALPLACEMENT" value={anchorDiagnostics.productionWithLocalPlacement} />
-            <Counter label="Com IFCAXIS2PLACEMENT3D" value={anchorDiagnostics.productionWithAxisPlacement} />
-            <Counter label="Com IFCPRODUCTDEFINITIONSHAPE" value={anchorDiagnostics.productionWithProductShape} />
-            <Counter label="Com IFCEXTRUDEDAREASOLID" value={anchorDiagnostics.productionWithExtrudedSolid} />
-          </div>
 
           <div className="flex flex-wrap gap-1.5">
             {[
