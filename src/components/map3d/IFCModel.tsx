@@ -3091,6 +3091,10 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
     typeof document !== "undefined"
       ? document.getElementById("map3d-ifc-toolbar-slot")
       : null;
+  const ifcPanelSlot =
+    typeof document !== "undefined"
+      ? document.getElementById("map3d-ifc-panel-slot")
+      : null;
 
   return (
     <>
@@ -3442,12 +3446,16 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         </div>
       </div>
       )}
-      {showVisualIfc && visualStatus === "ready" && ifcPanelOpen && !focusModeEnabled && (
+      {showVisualIfc && visualStatus === "ready" && ifcPanelOpen && !focusModeEnabled && ifcPanelSlot && createPortal(
         <div
-          className="pointer-events-auto absolute bottom-0 right-0 top-0 z-30 flex w-[min(380px,calc(100vw-1rem))] flex-col overflow-hidden border-l border-border bg-background/95 text-xs shadow-2xl backdrop-blur max-md:left-2 max-md:right-2 max-md:top-auto max-md:bottom-2 max-md:h-[48vh] max-md:w-auto max-md:rounded-lg max-md:border"
+          className="pointer-events-auto absolute bottom-0 right-0 top-0 z-40 flex w-[min(420px,calc(100vw-1rem))] flex-col overflow-hidden border-l border-border bg-background/95 text-xs shadow-2xl backdrop-blur max-md:left-2 max-md:right-2 max-md:top-auto max-md:bottom-2 max-md:h-[48vh] max-md:w-auto max-md:rounded-lg max-md:border"
           onWheel={(e) => e.stopPropagation()}
+          onWheelCapture={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
+          onPointerDownCapture={(e) => e.stopPropagation()}
           onTouchStart={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+          onContextMenu={(e) => e.stopPropagation()}
         >
           <div className="flex items-start justify-between gap-2 border-b border-border px-3 py-2">
             <div>
@@ -3595,7 +3603,8 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
               </p>
             )}
           </div>
-        </div>
+        </div>,
+        ifcPanelSlot,
       )}
       {false && showVisualIfc && visualStatus === "ready" && inspectSelection && (
         <IfcInspectPanelCompact

@@ -1177,6 +1177,7 @@ export function Map3DView() {
               companyId={companyId} />
           </Canvas>
         </div>
+        <div id="map3d-ifc-panel-slot" className="pointer-events-none absolute inset-0 z-40" />
         {assignMode && (
           <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-primary text-primary-foreground px-3 py-1.5 rounded-full text-xs font-medium shadow-lg flex items-center gap-1.5 pointer-events-none">
             <MousePointerClick className="h-3.5 w-3.5" />
