@@ -103,6 +103,22 @@ type IfcPersistedElementRow = {
   status: IfcPersistedStatus;
   raw_properties: Record<string, unknown> | null;
 };
+type IfcFinalLinkRow = {
+  ifc_element_id: string;
+  house_number: number | null;
+  trigger_service_key: string | null;
+  trigger_service_label: string | null;
+  status: IfcPersistedStatus;
+};
+type Ifc3DTestLinkedElementRow = {
+  ifc_element_id: string;
+  ifc_entity_id: string | null;
+  ifc_global_id: string | null;
+  house_number: number | null;
+  trigger_service_key: string | null;
+  trigger_service_label: string | null;
+  status: IfcPersistedStatus;
+};
 type IfcVisualInspectSelection = {
   uuid: string;
   objectName: string | null;
@@ -207,6 +223,47 @@ function asIfcPersistedElementRows(data: unknown): IfcPersistedElementRow[] {
       };
     })
     .filter((row): row is IfcPersistedElementRow => !!row);
+}
+
+function asIfcFinalLinkRows(data: unknown): IfcFinalLinkRow[] {
+  if (!Array.isArray(data)) return [];
+
+  return data
+    .filter((row): row is Record<string, unknown> => !!row && typeof row === "object")
+    .map((row): IfcFinalLinkRow | null => {
+      const ifcElementId = normalizeNullableString(row.ifc_element_id);
+      if (!ifcElementId) return null;
+
+      return {
+        ifc_element_id: ifcElementId,
+        house_number: normalizeNullableNumber(row.house_number),
+        trigger_service_key: normalizeNullableString(row.trigger_service_key),
+        trigger_service_label: normalizeNullableString(row.trigger_service_label),
+        status: normalizeIfcPersistedStatus(row.status),
+      };
+    })
+    .filter((row): row is IfcFinalLinkRow => !!row);
+}
+
+function buildIfc3DTestLinkedElements(elements: IfcPersistedElementRow[], links: IfcFinalLinkRow[]): Ifc3DTestLinkedElementRow[] {
+  const elementById = new Map(elements.map(element => [element.id, element]));
+
+  return links
+    .map((link): Ifc3DTestLinkedElementRow | null => {
+      const element = elementById.get(link.ifc_element_id);
+      if (!element) return null;
+
+      return {
+        ifc_element_id: link.ifc_element_id,
+        ifc_entity_id: element.ifc_entity_id,
+        ifc_global_id: element.ifc_global_id,
+        house_number: link.house_number,
+        trigger_service_key: link.trigger_service_key,
+        trigger_service_label: link.trigger_service_label,
+        status: link.status,
+      };
+    })
+    .filter((row): row is Ifc3DTestLinkedElementRow => !!row);
 }
 
 const IFC_ENTITY_TYPES = [
@@ -2369,6 +2426,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
   const [inspectSelection, setInspectSelection] = useState<IfcVisualInspectSelection | null>(null);
   const [inspectGroupMode, setInspectGroupMode] = useState<IfcInspectGroupMode>("none");
   const [persistedElements, setPersistedElements] = useState<IfcPersistedElementRow[]>([]);
+  const [ifc3dTestLinkedElements, setIfc3dTestLinkedElements] = useState<Ifc3DTestLinkedElementRow[]>([]);
   const [ifc3dTestEnabled, setIfc3dTestEnabled] = useState(false);
   const [ifc3dTestToggles, setIfc3dTestToggles] = useState<Record<Ifc3DTestControlKey, boolean>>({
     "91-radier": false,
@@ -2470,6 +2528,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
     setSaveMessage(null);
     setPersistDiagnostics(null);
     setPersistedElements([]);
+    setIfc3dTestLinkedElements([]);
     setInspectSelection(null);
     setInspectGroupMode("none");
     setFocusModeEnabled(false);
@@ -2729,15 +2788,18 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
   useEffect(() => {
     if (!loaded || error || !projectId) {
       setPersistedElements([]);
+      setIfc3dTestLinkedElements([]);
       return;
     }
 
     let cancelled = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
 
     const loadPersistedElements = async () => {
       try {
         const modelTable = supabase.from("project_3d_models" as any);
         const elementsTable = supabase.from("project_ifc_elements" as any);
+        const linksTable = supabase.from("project_ifc_element_links" as any);
 
         let existingModelQuery = modelTable
           .select("id")
@@ -2754,27 +2816,55 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
 
         const model = asProject3DModelIdRow(modelData as unknown);
         if (!model?.id) {
-          if (!cancelled) setPersistedElements([]);
+          if (!cancelled) {
+            setPersistedElements([]);
+            setIfc3dTestLinkedElements([]);
+          }
           return;
         }
 
-        const { data: elementsData, error: elementsError } = await elementsTable
-          .select("id, ifc_global_id, ifc_entity_id, ifc_type, ifc_layer_name, name, detected_service_key, detected_service_label, detected_house_number, category, confidence, needs_review, status, raw_properties")
-          .eq("project_id", projectId)
-          .eq("model_id", model.id);
+        const [{ data: elementsData, error: elementsError }, { data: linksData, error: linksError }] = await Promise.all([
+          elementsTable
+            .select("id, ifc_global_id, ifc_entity_id, ifc_type, ifc_layer_name, name, detected_service_key, detected_service_label, detected_house_number, category, confidence, needs_review, status, raw_properties")
+            .eq("project_id", projectId)
+            .eq("model_id", model.id),
+          linksTable
+            .select("ifc_element_id, house_number, trigger_service_key, trigger_service_label, status")
+            .eq("project_id", projectId)
+            .eq("model_id", model.id)
+            .eq("status", "confirmed"),
+        ]);
 
         if (elementsError) throw elementsError;
-        if (!cancelled) setPersistedElements(asIfcPersistedElementRows(elementsData as unknown));
+        if (linksError) throw linksError;
+        const nextPersistedElements = asIfcPersistedElementRows(elementsData as unknown);
+        const nextFinalLinks = asIfcFinalLinkRows(linksData as unknown);
+        if (!cancelled) {
+          setPersistedElements(nextPersistedElements);
+          setIfc3dTestLinkedElements(buildIfc3DTestLinkedElements(nextPersistedElements, nextFinalLinks));
+        }
       } catch (err) {
         console.warn("[IFC Inspect] Falha ao carregar inventario persistido", err);
-        if (!cancelled) setPersistedElements([]);
+        if (!cancelled) {
+          setPersistedElements([]);
+          setIfc3dTestLinkedElements([]);
+        }
       }
     };
 
     void loadPersistedElements();
+    channel = supabase
+      .channel(`ifc-final-links-${projectId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "project_ifc_element_links", filter: `project_id=eq.${projectId}` },
+        () => { void loadPersistedElements(); },
+      )
+      .subscribe();
 
     return () => {
       cancelled = true;
+      if (channel) supabase.removeChannel(channel);
     };
   }, [companyId, error, loaded, projectId, saveStatus, url]);
 
@@ -2890,18 +2980,17 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
   }, [inspectedPersistedElement, persistedElements]);
 
   const ifc3dTestElementsByControl = useMemo(() => {
-    const map = new Map<Ifc3DTestControlKey, IfcPersistedElementRow[]>();
+    const map = new Map<Ifc3DTestControlKey, Ifc3DTestLinkedElementRow[]>();
     IFC_3D_TEST_CONTROLS.forEach(control => {
-      map.set(control.key, persistedElements.filter(element => (
+      map.set(control.key, ifc3dTestLinkedElements.filter(element => (
         element.status === "confirmed" &&
-        element.category === "production" &&
-        element.detected_house_number === control.houseNumber &&
-        element.detected_service_key === control.serviceKey &&
+        element.house_number === control.houseNumber &&
+        element.trigger_service_key === control.serviceKey &&
         !!element.ifc_entity_id
       )));
     });
     return map;
-  }, [persistedElements]);
+  }, [ifc3dTestLinkedElements]);
 
   const ifc3dTestConfirmedTotal = useMemo(() => {
     return IFC_3D_TEST_CONTROLS.reduce((total, control) => total + (ifc3dTestElementsByControl.get(control.key)?.length || 0), 0);
