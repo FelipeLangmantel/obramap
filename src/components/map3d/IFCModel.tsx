@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Html } from "@react-three/drei";
 import * as THREE from "three";
 import { supabase } from "@/integrations/supabase/client";
@@ -3102,8 +3103,8 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         onStatusChange={handleVisualStatusChange}
       />
       <Html fullscreen>
-      {showVisualIfc && visualStatus === "ready" && (
-        <div className="pointer-events-none absolute left-1/2 top-3 z-30 -translate-x-1/2">
+      {showVisualIfc && visualStatus === "ready" && typeof document !== "undefined" && createPortal(
+        <div className="pointer-events-none fixed left-1/2 top-[140px] z-[60] -translate-x-1/2">
           <div
             className="pointer-events-auto flex flex-wrap items-center justify-center gap-1.5 rounded-full border border-border bg-background/95 px-2 py-1.5 text-xs shadow-lg backdrop-blur"
             onWheel={(e) => e.stopPropagation()}
@@ -3159,7 +3160,8 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
               {ifcPanelOpen ? "Fechar painel" : "Inventário"}
             </button>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
       {false && !focusModeEnabled && (
       <div className="pointer-events-none absolute left-4 bottom-4 z-20 w-[min(340px,calc(100vw-2rem))]">
