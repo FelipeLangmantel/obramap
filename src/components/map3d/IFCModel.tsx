@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Html } from "@react-three/drei";
 import * as THREE from "three";
 import { supabase } from "@/integrations/supabase/client";
