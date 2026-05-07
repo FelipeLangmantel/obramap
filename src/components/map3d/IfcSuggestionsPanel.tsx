@@ -857,7 +857,11 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
           ? { ...row, status: targetStatus, needs_review: targetStatus === "confirmed" ? false : row.needs_review }
           : row
       )));
-      toast.success(`${candidates.length} sugestÃ£o(Ãµes) IFC atualizada(s)`);
+      if (targetStatus === "confirmed") {
+        toast.success("Sugestões confirmadas. Próximo passo: gerar vínculos finais IFC.");
+      } else {
+        toast.success(`${candidates.length} sugestÃ£o(Ãµes) IFC atualizada(s)`);
+      }
       setBatchAction(null);
       void loadSuggestions();
     } catch (err: any) {
@@ -1060,7 +1064,14 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
           return next;
         });
       }
-      toast.success(`${result.created} vínculo(s) final(is) IFC criado(s)`);
+      await loadSuggestions();
+      await loadLinkDiagnostics();
+      await activationReadModel.refetch();
+      if (result.created === 0) {
+        toast.info("Nenhum vínculo final foi criado. Verifique se há sugestões confirmadas com casa e serviço detectados, ou se os vínculos já existem.");
+      } else {
+        toast.success(`${result.created} vínculo(s) final(is) IFC criado(s)`);
+      }
     } catch (err: any) {
       console.error("[IFC] Falha ao gerar vínculos finais", err);
       toast.error("Falha ao gerar vínculos finais IFC");
@@ -1295,7 +1306,7 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
             </Button>
             <Button type="button" size="sm" onClick={() => void syncConfirmedLinks()} disabled={loading || syncingLinks}>
               <Link2 className="mr-1.5 h-3.5 w-3.5" />
-              {syncingLinks ? "Gerando..." : "Gerar vínculos finais"}
+              {syncingLinks ? "Gerando..." : "Gerar vínculos finais das confirmadas"}
             </Button>
           </div>
           <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-background p-3">
