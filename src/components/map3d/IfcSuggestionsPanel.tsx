@@ -1182,7 +1182,20 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
         )}
 
         {/* Bloco de filtros + diagnósticos agora é ROLÁVEL para não empurrar a lista nem esconder a barra de ações */}
-        <div className="min-h-0 max-h-[45vh] flex-shrink-0 space-y-3 overflow-y-auto border-b border-border bg-muted/20 p-4">
+        <div className="min-h-0 max-h-[40vh] flex-shrink-0 space-y-3 overflow-y-auto border-b border-border bg-muted/20 p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-muted-foreground">Diagnósticos do inventário</p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-[11px]"
+              onClick={() => setDiagnosticsExpanded(prev => !prev)}
+            >
+              {diagnosticsExpanded ? "Recolher" : "Expandir"}
+            </Button>
+          </div>
+          {diagnosticsExpanded && (<></>)}
           <div className="grid gap-2 text-sm sm:grid-cols-5">
             <Counter label="Total" value={counts.total} />
             <Counter label="Sugeridos" value={counts.suggested} />
