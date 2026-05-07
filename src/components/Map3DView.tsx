@@ -1085,6 +1085,7 @@ export function Map3DView() {
                 Sugestões IFC
               </Button>
             )}
+            <div id="map3d-ifc-toolbar-slot" className="flex items-center gap-2" />
             {modelData && (
               <ToggleGroup
                 type="single"

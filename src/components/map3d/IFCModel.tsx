@@ -3087,6 +3087,11 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
     ].join("\n");
   };
 
+  const ifcToolbarSlot =
+    typeof document !== "undefined"
+      ? document.getElementById("map3d-ifc-toolbar-slot")
+      : null;
+
   return (
     <>
       <IFCVisualModel
@@ -3103,10 +3108,9 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         onStatusChange={handleVisualStatusChange}
       />
       <Html fullscreen>
-      {showVisualIfc && visualStatus === "ready" && typeof document !== "undefined" && createPortal(
-        <div className="pointer-events-none fixed left-1/2 top-[140px] z-[60] -translate-x-1/2">
+      {showVisualIfc && visualStatus === "ready" && ifcToolbarSlot && createPortal(
           <div
-            className="pointer-events-auto flex flex-wrap items-center justify-center gap-1.5 rounded-full border border-border bg-background/95 px-2 py-1.5 text-xs shadow-lg backdrop-blur"
+            className="pointer-events-auto flex flex-wrap items-center justify-center gap-1.5 rounded-full border border-border bg-background/95 px-2 py-1.5 text-xs shadow-sm backdrop-blur"
             onWheel={(e) => e.stopPropagation()}
             onPointerDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
@@ -3159,9 +3163,8 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
             >
               {ifcPanelOpen ? "Fechar painel" : "Inventário"}
             </button>
-          </div>
-        </div>,
-        document.body,
+          </div>,
+        ifcToolbarSlot,
       )}
       {false && !focusModeEnabled && (
       <div className="pointer-events-none absolute left-4 bottom-4 z-20 w-[min(340px,calc(100vw-2rem))]">
