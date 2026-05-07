@@ -3103,39 +3103,61 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
       />
       <Html fullscreen>
       {showVisualIfc && visualStatus === "ready" && (
-        <div className="pointer-events-none absolute left-4 top-3 z-30">
+        <div className="pointer-events-none absolute left-1/2 top-3 z-30 -translate-x-1/2">
           <div
-            className="pointer-events-auto flex max-w-[min(320px,calc(100vw-2rem))] items-center gap-1.5 rounded-full border border-border bg-background/90 px-2 py-1.5 text-xs shadow-lg backdrop-blur"
+            className="pointer-events-auto flex flex-wrap items-center justify-center gap-1.5 rounded-full border border-border bg-background/95 px-2 py-1.5 text-xs shadow-lg backdrop-blur"
             onWheel={(e) => e.stopPropagation()}
             onPointerDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
           >
+            <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-semibold text-primary">
+              IFC
+            </span>
+            <button
+              type="button"
+              onClick={handleToggleInspectMode}
+              className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${
+                inspectModeEnabled
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-background hover:bg-muted"
+              }`}
+            >
+              Inspecionar
+            </button>
+            <button
+              type="button"
+              onClick={handleTogglePaintMode}
+              className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${
+                paintModeEnabled
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-background hover:bg-muted"
+              }`}
+            >
+              Pintar Textura
+            </button>
+            <button
+              type="button"
+              onClick={handleToggleFocusMode}
+              className="rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium hover:bg-muted"
+              title="Esconde toda a UI do IFC sobre o canvas"
+            >
+              {focusModeEnabled ? "Mostrar UI" : "Tela limpa"}
+            </button>
             <button
               type="button"
               onClick={() => {
-                setIfcPanelOpen(true);
-                setFocusModeEnabled(false);
-                setToolsOpen(true);
+                setIfcPanelOpen(prev => !prev);
+                if (focusModeEnabled) setFocusModeEnabled(false);
               }}
-              className="rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-semibold hover:bg-muted"
+              className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${
+                ifcPanelOpen
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-background hover:bg-muted"
+              }`}
+              title="Painel lateral de inventário e diagnósticos IFC"
             >
-              IFC
+              {ifcPanelOpen ? "Fechar painel" : "Inventário"}
             </button>
-            {inspectModeEnabled && (
-              <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-medium text-primary">
-                Inspeção IFC ativa
-              </span>
-            )}
-            {paintModeEnabled && (
-              <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-medium text-primary">
-                Pintura IFC ativa
-              </span>
-            )}
-            {ifc3dTestEnabled && (
-              <span className="rounded-full bg-amber-100 px-2 py-1 text-[10px] font-medium text-amber-800">
-                Teste 3D Real IFC
-              </span>
-            )}
           </div>
         </div>
       )}
