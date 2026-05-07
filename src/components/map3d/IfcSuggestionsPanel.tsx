@@ -21,8 +21,8 @@ type StatusFilter = IfcSuggestionStatus | "all";
 type CategoryFilter = "production" | "text_annotation" | "unknown" | "all";
 type QuickFilter = "all" | "valid" | "3dtext" | "layer" | "no_service" | "no_house" | "confirmed" | "ignored" | "manual" | "manual_sequence" | "with_final_link" | "without_final_link";
 type BatchAction = "confirm_valid" | "ignore_no_service";
-type ManualHouseAction = "assign" | "assign_sequence" | "clear";
-type ManualAssignmentMode = "same_house" | "sequence";
+type ManualHouseAction = "assign" | "assign_sequence" | "assign_list" | "clear";
+type ManualAssignmentMode = "same_house" | "sequence" | "list";
 type ManualSequenceOrder = "current" | "entity_id" | "global_id" | "layer_name";
 
 interface IfcSuggestionRow {
@@ -94,9 +94,15 @@ interface ConfirmedIfcElementRow {
 
 interface IfcElementLinkRow {
   ifc_element_id: string;
+  model_id: string;
   house_id: string | null;
   house_number: number | null;
   trigger_service_key: string;
+}
+
+interface HouseIdLookupRow {
+  id: string;
+  house_number: number;
 }
 
 interface IfcFinalLinkElementRow {
@@ -142,6 +148,7 @@ interface LinkSyncResult {
   ignored: number;
   missingHouse: number;
   missingService: number;
+  missingHouseId: number;
 }
 
 interface Props {
@@ -285,11 +292,24 @@ function asIfcElementLinkRows(data: unknown): IfcElementLinkRow[] {
     .filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
     .map(item => ({
       ifc_element_id: normalizeNullableString(item.ifc_element_id) || "",
+      model_id: normalizeNullableString(item.model_id) || "",
       house_id: normalizeNullableString(item.house_id),
       house_number: normalizeNullableNumber(item.house_number),
       trigger_service_key: normalizeNullableString(item.trigger_service_key) || "",
     }))
-    .filter(item => item.ifc_element_id && item.trigger_service_key);
+    .filter(item => item.ifc_element_id && item.model_id && item.trigger_service_key);
+}
+
+function asHouseIdLookupRows(data: unknown): HouseIdLookupRow[] {
+  if (!Array.isArray(data)) return [];
+
+  return data
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
+    .map(item => ({
+      id: normalizeNullableString(item.id) || "",
+      house_number: normalizeNullableNumber(item.house_number),
+    }))
+    .filter((item): item is HouseIdLookupRow => !!item.id && item.house_number != null);
 }
 
 function asIfcFinalLinkElementRows(data: unknown): IfcFinalLinkElementRow[] {
@@ -318,8 +338,8 @@ function asIfcLinkDiagnosticRows(data: unknown): IfcLinkDiagnosticRow[] {
     .filter(item => item.id);
 }
 
-function buildLinkKey(ifcElementId: string, houseId: string | null, houseNumber: number | null, serviceKey: string) {
-  return `${ifcElementId}::${houseId || ""}::${houseNumber ?? ""}::${serviceKey}`;
+function buildLinkKey(modelId: string, ifcElementId: string, houseNumber: number | null, serviceKey: string) {
+  return `${modelId}::${ifcElementId}::${houseNumber ?? ""}::${serviceKey}`;
 }
 
 function isValidHouseServiceSuggestion(item: IfcSuggestionRow) {
@@ -501,6 +521,7 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
   const [manualSequenceStartValue, setManualSequenceStartValue] = useState<string>("");
   const [manualSequenceIncrementValue, setManualSequenceIncrementValue] = useState<string>("1");
   const [manualSequenceOrder, setManualSequenceOrder] = useState<ManualSequenceOrder>("current");
+  const [manualHouseListValue, setManualHouseListValue] = useState<string>("");
   const [manualHouseAction, setManualHouseAction] = useState<ManualHouseAction | null>(null);
   const [manualSaving, setManualSaving] = useState(false);
   const [syncingLinks, setSyncingLinks] = useState(false);
@@ -510,15 +531,6 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
   const activationReadModel = useIfcActivationReadModel({ projectId, modelId, enabled: open });
   const productionActivationDiagnostics = useIfcProductionActivationDiagnostics({ projectId, modelId, enabled: open });
   const serviceKeyMappingDiagnostics = useIfcServiceKeyMappingDiagnostics({ projectId, modelId, enabled: open });
-
-  const houseIdByNumber = useMemo(() => {
-    const map = new Map<number, string>();
-    houses.forEach(house => {
-      const houseNumber = getHouseNumber(house);
-      if (houseNumber != null && typeof house.id === "string") map.set(houseNumber, house.id);
-    });
-    return map;
-  }, [houses]);
 
   const houseOptions = useMemo(() => {
     return Array.from(new Set(houses.map(getHouseNumber).filter((value): value is number => value != null)))
@@ -750,6 +762,53 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
     return null;
   }, [houseOptions, manualSequenceIncrementNumber, manualSequencePreview, manualSequenceStartNumber]);
 
+  const manualHouseListParse = useMemo(() => {
+    const trimmed = manualHouseListValue.trim();
+    if (!trimmed) {
+      return { numbers: [] as number[], error: "Informe a lista de casas." };
+    }
+
+    const tokens = trimmed.split(/[,\s;]+/).filter(Boolean);
+    const invalidToken = tokens.find(token => !/^\d+$/.test(token));
+    if (invalidToken) {
+      return { numbers: [] as number[], error: `Item nao numerico na lista: ${invalidToken}` };
+    }
+
+    const numbers = tokens.map(token => Number(token));
+    const duplicate = numbers.find((number, index) => numbers.indexOf(number) !== index);
+    if (duplicate != null) {
+      return { numbers, error: `Casa duplicada na lista: ${duplicate}` };
+    }
+
+    if (houseOptions.length === 0) {
+      return { numbers, error: "Nenhuma casa carregada para validar a lista." };
+    }
+
+    const houseOptionSet = new Set(houseOptions);
+    const missingHouse = numbers.find(number => !houseOptionSet.has(number));
+    if (missingHouse != null) {
+      return { numbers, error: `Casa ${missingHouse} nao existe na lista de casas carregada.` };
+    }
+
+    if (numbers.length !== selectedManualItems.length) {
+      return {
+        numbers,
+        error: `A lista tem ${numbers.length} casa(s), mas ha ${selectedManualItems.length} elemento(s) selecionado(s).`,
+      };
+    }
+
+    return { numbers, error: null as string | null };
+  }, [houseOptions, manualHouseListValue, selectedManualItems.length]);
+
+  const manualHouseListPreview = useMemo(() => {
+    return manualSequenceOrderedItems.map((item, index) => ({
+      item,
+      houseNumber: manualHouseListParse.numbers[index] ?? null,
+    }));
+  }, [manualHouseListParse.numbers, manualSequenceOrderedItems]);
+
+  const manualHouseListValidation = manualHouseListParse.error;
+
   const anchorDiagnostics = useMemo(() => {
     return items.reduce(
       (acc, item) => {
@@ -914,21 +973,36 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
       toast.error(manualSequenceValidation);
       return;
     }
+    if (manualHouseAction === "assign_list" && manualHouseListValidation) {
+      toast.error(manualHouseListValidation);
+      return;
+    }
 
     setManualSaving(true);
     try {
       const elementsTable = supabase.from("project_ifc_elements" as any) as any;
       const now = new Date().toISOString();
       const sequenceHouseById = new Map(manualSequencePreview.map(entry => [entry.item.id, entry.houseNumber]));
+      const listHouseById = new Map(manualHouseListPreview.map(entry => [entry.item.id, entry.houseNumber]));
 
       await Promise.all(selectedManualItems.map(async item => {
         const previousHouseDetectionSource = item.raw_properties?.previousHouseDetectionSource || getHouseDetectionSource(item) || "none";
         const sequenceHouseNumber = sequenceHouseById.get(item.id) || null;
+        const listHouseNumber = listHouseById.get(item.id) || null;
         const rawProperties = {
           ...(item.raw_properties || {}),
-          houseDetectionSource: manualHouseAction === "assign" ? "manual_review" : manualHouseAction === "assign_sequence" ? "manual_sequence" : previousHouseDetectionSource,
+          houseDetectionSource: manualHouseAction === "assign"
+            ? "manual_review"
+            : manualHouseAction === "assign_sequence"
+              ? "manual_sequence"
+              : manualHouseAction === "assign_list"
+                ? "manual_list"
+                : previousHouseDetectionSource,
           manualHouseAssignment: manualHouseAction !== "clear",
           manualSequenceAssignment: manualHouseAction === "assign_sequence",
+          manualListAssignment: manualHouseAction === "assign_list",
+          manualListHouses: manualHouseAction === "assign_list" ? manualHouseListParse.numbers : null,
+          manualListOrder: manualHouseAction === "assign_list" ? manualSequenceOrder : null,
           manualSequenceStart: manualHouseAction === "assign_sequence" ? manualSequenceStartNumber : null,
           manualSequenceIncrement: manualHouseAction === "assign_sequence" ? manualSequenceIncrementNumber : null,
           manualSequenceOrder: manualHouseAction === "assign_sequence" ? manualSequenceOrder : null,
@@ -937,9 +1011,13 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
           manualClearedAt: manualHouseAction === "clear" ? now : null,
         };
 
-        const updatePayload = manualHouseAction === "assign" || manualHouseAction === "assign_sequence"
+        const updatePayload = manualHouseAction === "assign" || manualHouseAction === "assign_sequence" || manualHouseAction === "assign_list"
           ? {
-              detected_house_number: manualHouseAction === "assign_sequence" ? sequenceHouseNumber : selectedManualHouseNumber,
+              detected_house_number: manualHouseAction === "assign_sequence"
+                ? sequenceHouseNumber
+                : manualHouseAction === "assign_list"
+                  ? listHouseNumber
+                  : selectedManualHouseNumber,
               raw_properties: rawProperties,
               needs_review: true,
               confidence: "manual",
@@ -1009,9 +1087,35 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
       const missingHouse = confirmedElements.filter(item => item.detected_house_number == null).length;
       const missingService = confirmedElements.filter(item => !item.detected_service_key).length;
       const ignored = confirmedElements.length - validElements.length;
+      const houseNumbersToResolve = Array.from(new Set(
+        validElements
+          .map(item => item.detected_house_number)
+          .filter((value): value is number => value != null)
+      ));
+
+      const houseIdByNumber = new Map<number, string>();
+      if (houseNumbersToResolve.length > 0) {
+        const { data: housesData, error: housesError } = await supabase
+          .from("houses")
+          .select("id, house_number")
+          .eq("project_id", projectId)
+          .in("house_number", houseNumbersToResolve);
+
+        if (housesError) throw housesError;
+
+        asHouseIdLookupRows(housesData as unknown).forEach(house => {
+          houseIdByNumber.set(house.house_number, house.id);
+        });
+      }
+
+      console.info("[IFC Links] houseIdByNumber loaded", {
+        projectId,
+        requested: houseNumbersToResolve.length,
+        loaded: houseIdByNumber.size,
+      });
 
       let existingQuery = linksTable
-        .select("ifc_element_id, house_id, house_number, trigger_service_key")
+        .select("ifc_element_id, model_id, house_id, house_number, trigger_service_key")
         .eq("project_id", projectId);
 
       if (modelId) existingQuery = existingQuery.eq("model_id", modelId);
@@ -1021,14 +1125,27 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
 
       const existingLinks = asIfcElementLinkRows(existingData as unknown);
       const existingKeys = new Set(
-        existingLinks.map(link => buildLinkKey(link.ifc_element_id, link.house_id, link.house_number, link.trigger_service_key))
+        existingLinks.map(link => buildLinkKey(link.model_id, link.ifc_element_id, link.house_number, link.trigger_service_key))
       );
-      const rowsToInsert = validElements
+      const validElementsWithHouseId = validElements
         .map(item => {
           const houseId = item.detected_house_number != null ? houseIdByNumber.get(item.detected_house_number) || null : null;
           return { item, houseId };
         })
-        .filter(({ item, houseId }) => !existingKeys.has(buildLinkKey(item.id, houseId, item.detected_house_number, item.detected_service_key!)))
+        .filter((entry): entry is { item: ConfirmedIfcElementRow; houseId: string } => !!entry.houseId);
+      const missingHouseId = validElements.length - validElementsWithHouseId.length;
+
+      if (missingHouseId > 0) {
+        console.info("[IFC Links] skipped missing house_id", {
+          count: missingHouseId,
+          houseNumbers: validElements
+            .filter(item => item.detected_house_number != null && !houseIdByNumber.has(item.detected_house_number))
+            .map(item => item.detected_house_number),
+        });
+      }
+
+      const rowsToInsert = validElementsWithHouseId
+        .filter(({ item }) => !existingKeys.has(buildLinkKey(item.model_id, item.id, item.detected_house_number, item.detected_service_key!)))
         .map(({ item, houseId }) => ({
           company_id: item.company_id,
           project_id: item.project_id,
@@ -1042,6 +1159,13 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
           confirmed_at: new Date().toISOString(),
         }));
 
+      console.info("[IFC Links] creating final links", {
+        totalConfirmed: confirmedElements.length,
+        valid: validElements.length,
+        missingHouseId,
+        toInsert: rowsToInsert.length,
+      });
+
       if (rowsToInsert.length > 0) {
         const { error: insertError } = await linksTable.insert(rowsToInsert);
         if (insertError) throw insertError;
@@ -1051,11 +1175,13 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
         totalConfirmed: confirmedElements.length,
         valid: validElements.length,
         created: rowsToInsert.length,
-        existing: validElements.length - rowsToInsert.length,
+        existing: validElementsWithHouseId.length - rowsToInsert.length,
         ignored,
         missingHouse,
         missingService,
+        missingHouseId,
       };
+      console.info("[IFC Links] created", result);
       setLinkSyncResult(result);
       if (rowsToInsert.length > 0) {
         setFinalLinkElementIds(prev => {
@@ -1068,7 +1194,7 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
       await loadLinkDiagnostics();
       await activationReadModel.refetch();
       if (result.created === 0) {
-        toast.info("Nenhum vínculo final foi criado. Verifique se há sugestões confirmadas com casa e serviço detectados, ou se os vínculos já existem.");
+        toast.info("Nenhum vínculo final foi criado. Verifique se há sugestões confirmadas com casa, house_id real e serviço detectados, ou se os vínculos já existem.");
       } else {
         toast.success(`${result.created} vínculo(s) final(is) IFC criado(s)`);
       }
@@ -1379,6 +1505,7 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
                 {[
                   ["same_house", "Mesma casa para selecionados"],
                   ["sequence", "Sequencia de casas"],
+                  ["list", "Lista de casas"],
                 ].map(([value, label]) => (
                   <Button
                     key={value}
@@ -1434,7 +1561,7 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
                       />
                     )}
                   </div>
-                ) : (
+                ) : manualAssignmentMode === "sequence" ? (
                   <div className="grid gap-2 md:grid-cols-4">
                     <Input
                       type="number"
@@ -1462,6 +1589,31 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
                       <option value="layer_name">Camada/nome</option>
                     </select>
                   </div>
+                ) : (
+                  <div className="grid gap-2 md:grid-cols-[1fr_220px]">
+                    <label className="grid gap-1 text-xs">
+                      <span className="font-medium">Lista de casas</span>
+                      <textarea
+                        value={manualHouseListValue}
+                        onChange={event => setManualHouseListValue(event.target.value)}
+                        placeholder="Ex: 57,58,59,60,61,90,91,92"
+                        className="min-h-20 rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+                      />
+                    </label>
+                    <label className="grid content-start gap-1 text-xs">
+                      <span className="font-medium">Ordem de aplicacao</span>
+                      <select
+                        value={manualSequenceOrder}
+                        onChange={event => setManualSequenceOrder(event.target.value as ManualSequenceOrder)}
+                        className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                      >
+                        <option value="current">Ordem atual da lista</option>
+                        <option value="entity_id">Entity ID crescente</option>
+                        <option value="global_id">GlobalId</option>
+                        <option value="layer_name">Camada/nome</option>
+                      </select>
+                    </label>
+                  </div>
                 )}
 
                 <Button type="button" variant="outline" size="sm" onClick={toggleAllVisibleManualCandidates} disabled={visibleManualCandidates.length === 0}>
@@ -1472,15 +1624,22 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
                 <Button
                   type="button"
                   size="sm"
-                  onClick={() => setManualHouseAction(manualAssignmentMode === "sequence" ? "assign_sequence" : "assign")}
+                  onClick={() => setManualHouseAction(
+                    manualAssignmentMode === "sequence" ? "assign_sequence" : manualAssignmentMode === "list" ? "assign_list" : "assign"
+                  )}
                   disabled={
                     selectedManualItems.length === 0 ||
                     manualSaving ||
                     (manualAssignmentMode === "same_house" && selectedManualHouseNumber == null) ||
-                    (manualAssignmentMode === "sequence" && !!manualSequenceValidation)
+                    (manualAssignmentMode === "sequence" && !!manualSequenceValidation) ||
+                    (manualAssignmentMode === "list" && !!manualHouseListValidation)
                   }
                 >
-                  {manualAssignmentMode === "sequence" ? "Atribuir sequencia aos selecionados" : "Atribuir casa aos selecionados"}
+                  {manualAssignmentMode === "sequence"
+                    ? "Atribuir sequencia aos selecionados"
+                    : manualAssignmentMode === "list"
+                      ? "Atribuir lista aos selecionados"
+                      : "Atribuir casa aos selecionados"}
                 </Button>
               </div>
 
@@ -1536,6 +1695,46 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
                 </div>
               )}
 
+              {manualAssignmentMode === "list" && (
+                <div className="mt-3 rounded-md border border-border bg-muted/20 p-3 text-xs">
+                  <p className="font-medium">Previa da lista de casas</p>
+                  <p className="mt-1 text-muted-foreground">
+                    A lista sera gravada como sugestao e ainda precisara de confirmacao.
+                  </p>
+                  {manualSequenceOrderFallback && (
+                    <p className="mt-2 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-amber-900">
+                      Alguns itens nao possuem o campo da ordem escolhida. Para esses casos, sera usado fallback seguro pela ordem atual da lista.
+                    </p>
+                  )}
+                  {manualHouseListValidation && selectedManualItems.length > 0 && (
+                    <p className="mt-2 rounded border border-destructive/30 bg-destructive/10 px-2 py-1 text-destructive">
+                      {manualHouseListValidation}
+                    </p>
+                  )}
+                  {selectedManualItems.length === 0 ? (
+                    <p className="mt-2 text-muted-foreground">Selecione itens para ver a previa.</p>
+                  ) : manualHouseListParse.numbers.length === 0 ? (
+                    <p className="mt-2 text-muted-foreground">Informe a lista de casas para gerar a previa.</p>
+                  ) : (
+                    <div className="mt-2 max-h-44 space-y-1 overflow-y-auto rounded border border-border bg-background p-2">
+                      {manualHouseListPreview.slice(0, 10).map(entry => (
+                        <div key={entry.item.id} className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium">{entry.item.ifc_entity_id || entry.item.ifc_global_id || entry.item.id}</span>
+                          <span className="text-muted-foreground">-&gt;</span>
+                          <span>Casa {entry.houseNumber ?? "-"}</span>
+                          <span className="truncate text-muted-foreground">{entry.item.ifc_layer_name || entry.item.name || "-"}</span>
+                        </div>
+                      ))}
+                      {manualHouseListPreview.length > 10 && (
+                        <p className="pt-1 text-muted-foreground">
+                          Mostrando 10 de {manualHouseListPreview.length} itens selecionados.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {manualHouseAction && (
                 <div className="mt-3 flex flex-col gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 sm:flex-row sm:items-center sm:justify-between">
                   <span>
@@ -1543,6 +1742,8 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
                       ? `Atribuir Casa ${selectedManualHouseNumber || "-"} a ${selectedManualItems.length} elemento(s) IFC selecionado(s)?`
                       : manualHouseAction === "assign_sequence"
                         ? `Atribuir casas em sequencia de Casa ${manualSequencePreview[0]?.houseNumber ?? "-"} ate Casa ${manualSequencePreview[manualSequencePreview.length - 1]?.houseNumber ?? "-"} para ${selectedManualItems.length} elemento(s) IFC selecionado(s)?`
+                        : manualHouseAction === "assign_list"
+                          ? `Atribuir lista de ${manualHouseListParse.numbers.length} casa(s) para ${selectedManualItems.length} elemento(s) IFC selecionado(s)?`
                       : `Limpar atribuicao manual de ${selectedManualItems.length} elemento(s) IFC selecionado(s)?`}
                   </span>
                   <div className="flex flex-wrap gap-1.5">
@@ -1581,13 +1782,14 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
             </div>
           )}
           {linkSyncResult && (
-            <div className="grid gap-2 text-xs sm:grid-cols-4 lg:grid-cols-7">
+            <div className="grid gap-2 text-xs sm:grid-cols-4 lg:grid-cols-8">
               <Counter label="Confirmados" value={linkSyncResult.totalConfirmed} />
               <Counter label="Válidos" value={linkSyncResult.valid} />
               <Counter label="Criados" value={linkSyncResult.created} />
               <Counter label="Já existiam" value={linkSyncResult.existing} />
               <Counter label="Ignorados" value={linkSyncResult.ignored} />
               <Counter label="Sem casa" value={linkSyncResult.missingHouse} />
+              <Counter label="Sem house_id" value={linkSyncResult.missingHouseId} />
               <Counter label="Sem serviÃ§o" value={linkSyncResult.missingService} />
             </div>
           )}
