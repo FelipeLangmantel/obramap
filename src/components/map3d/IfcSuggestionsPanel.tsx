@@ -491,6 +491,7 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [batchAction, setBatchAction] = useState<BatchAction | null>(null);
+  const [diagnosticsExpanded, setDiagnosticsExpanded] = useState(false);
   const [batchSaving, setBatchSaving] = useState(false);
   const [manualServiceFilter, setManualServiceFilter] = useState<string>("all");
   const [selectedManualIds, setSelectedManualIds] = useState<Set<string>>(new Set());
