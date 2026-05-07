@@ -2473,7 +2473,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
     setInspectGroupMode("none");
     setFocusModeEnabled(false);
     setToolsOpen(true);
-    setIfcPanelOpen(true);
+    setIfcPanelOpen(false);
     setInspectPanelCollapsed(false);
     setIfc3dTestEnabled(false);
     setIfc3dTestToggles({
