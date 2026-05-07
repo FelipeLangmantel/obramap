@@ -3448,7 +3448,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
       )}
       {showVisualIfc && visualStatus === "ready" && ifcPanelOpen && !focusModeEnabled && ifcPanelSlot && createPortal(
         <div
-          className="pointer-events-auto absolute bottom-0 right-0 top-0 z-40 flex w-[min(420px,calc(100vw-1rem))] flex-col overflow-hidden border-l border-border bg-background/95 text-xs shadow-2xl backdrop-blur max-md:left-2 max-md:right-2 max-md:top-auto max-md:bottom-2 max-md:h-[48vh] max-md:w-auto max-md:rounded-lg max-md:border"
+          className="pointer-events-auto absolute bottom-0 right-0 top-0 z-40 flex max-h-full w-[min(420px,calc(100vw-1rem))] flex-col overflow-hidden border-l border-border bg-background/95 text-xs shadow-2xl backdrop-blur max-md:left-2 max-md:right-2 max-md:top-auto max-md:bottom-2 max-md:h-[48vh] max-md:w-auto max-md:rounded-lg max-md:border"
           onWheel={(e) => e.stopPropagation()}
           onWheelCapture={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
@@ -3473,7 +3473,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
               </button>
             </div>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto p-3">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">
             <div className="rounded-md border border-border bg-muted/20 p-2">
               <div className="flex flex-wrap items-center gap-1.5">
                 <button
