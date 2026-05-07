@@ -2363,7 +2363,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
   const [inspectModeEnabled, setInspectModeEnabled] = useState(false);
   const [focusModeEnabled, setFocusModeEnabled] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(true);
-  const [ifcPanelOpen, setIfcPanelOpen] = useState(true);
+  const [ifcPanelOpen, setIfcPanelOpen] = useState(false);
   const [inspectPanelCollapsed, setInspectPanelCollapsed] = useState(false);
   const [inspectSelection, setInspectSelection] = useState<IfcVisualInspectSelection | null>(null);
   const [inspectGroupMode, setInspectGroupMode] = useState<IfcInspectGroupMode>("none");
