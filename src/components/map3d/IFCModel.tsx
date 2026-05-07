@@ -2431,7 +2431,8 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
     setInspectGroupMode("none");
     if (selection) {
       setInspectPanelCollapsed(false);
-      if (!focusModeEnabled) setIfcPanelOpen(true);
+      // Painel direito permanece fechado por padrão para não atrapalhar a navegação 3D.
+      // O usuário abre manualmente pela pill "IFC" no topo.
     }
   }, [focusModeEnabled]);
 
