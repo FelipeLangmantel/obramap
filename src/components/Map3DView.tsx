@@ -44,6 +44,12 @@ interface HouseMarker {
   macros: any[];
 }
 
+function getMeshLayerKey(mesh: THREE.Mesh): string {
+  return typeof mesh.userData?.obramapLayerKey === "string" && mesh.userData.obramapLayerKey
+    ? mesh.userData.obramapLayerKey
+    : mesh.uuid;
+}
+
 // Aplica highlight temporario na mesh selecionada (modo Revisar).
 function useSelectionHighlight(scene: THREE.Object3D | null, selectedKey: string | null) {
   const highlightedRef = useRef<Array<{ mesh: THREE.Mesh; originalMaterial: THREE.Material | THREE.Material[] }>>([]);
@@ -70,7 +76,7 @@ function useSelectionHighlight(scene: THREE.Object3D | null, selectedKey: string
     scene.traverse((child) => {
       if (!(child as THREE.Mesh).isMesh) return;
       const mesh = child as THREE.Mesh;
-      if (mesh.uuid === selectedKey) selectedMesh = mesh;
+      if (getMeshLayerKey(mesh) === selectedKey) selectedMesh = mesh;
     });
 
     if (!selectedMesh) return restoreHighlighted;
@@ -558,19 +564,31 @@ export function Map3DView() {
 
     if (!projectId) return;
     const meshesToUpsert: { layer_key: string; mesh_name: string; material_name: string; detected_house_number: number | null }[] = [];
+    const nameCounts = new Map<string, number>();
     scene.traverse((child) => {
       if (!(child as THREE.Mesh).isMesh) return;
       const mesh = child as THREE.Mesh;
+      const meshName = mesh.name || "mesh";
+      const occurrence = nameCounts.get(meshName) ?? 0;
+      nameCounts.set(meshName, occurrence + 1);
+      const layerKey = `glb:${meshName}:${occurrence}`;
+      mesh.userData.obramapLayerKey = layerKey;
       const materialName = Array.isArray(mesh.material)
         ? mesh.material.map((m: any) => m.name).filter(Boolean).join(", ")
         : (mesh.material as any)?.name || "";
       meshesToUpsert.push({
-        layer_key: mesh.uuid,
+        layer_key: layerKey,
         mesh_name: mesh.name || "",
         material_name: materialName,
         detected_house_number: parseHouseNumberFromMesh(mesh.name || ""),
       });
     });
+    if (import.meta.env.DEV) {
+      console.log("[GLB Mesh Link] scene keys registered", {
+        count: meshesToUpsert.length,
+        sample: meshesToUpsert.slice(0, 5),
+      });
+    }
     if (meshesToUpsert.length > 0) {
       void meshHooks.bulkUpsertMeshes(meshesToUpsert);
     }
@@ -582,8 +600,18 @@ export function Map3DView() {
   const handleReviewMeshClick = useCallback((obj: THREE.Object3D) => {
     if (!reviewMode) return;
     if (!(obj as THREE.Mesh).isMesh) return;
-    setSelectedMeshKey((obj as THREE.Mesh).uuid);
-  }, [reviewMode]);
+    const mesh = obj as THREE.Mesh;
+    const layerKey = getMeshLayerKey(mesh);
+    if (import.meta.env.DEV) {
+      console.log("[GLB Mesh Link] review mesh selected", {
+        selectedMeshKey: layerKey,
+        meshUuid: mesh.uuid,
+        meshName: obj.name || "",
+        existingMesh: meshHooks.meshMap.get(layerKey) ?? null,
+      });
+    }
+    setSelectedMeshKey(layerKey);
+  }, [meshHooks.meshMap, reviewMode]);
 
   const handleIsolate = useCallback((key: string) => {
     setIsolatedKeys(prev => (prev?.has(key) ? null : new Set([key])));
@@ -624,7 +652,7 @@ export function Map3DView() {
     if (!sceneObj) return;
     sceneObj.traverse((child) => {
       if (!(child as THREE.Mesh).isMesh) return;
-      const saved = meshHooks.meshMap.get(child.uuid);
+      const saved = meshHooks.meshMap.get(getMeshLayerKey(child as THREE.Mesh));
       if (!saved) return;
       if (saved.ignored) { child.visible = false; return; }
       switch (mode) {
@@ -655,7 +683,7 @@ export function Map3DView() {
     if (!isolatedKeys) { applyViewMode(viewMode); return; }
     sceneObj.traverse((child) => {
       if (!(child as THREE.Mesh).isMesh) return;
-      child.visible = isolatedKeys.has(child.uuid);
+      child.visible = isolatedKeys.has(getMeshLayerKey(child as THREE.Mesh));
     });
   }, [isolatedKeys, sceneObj, applyViewMode, viewMode]);
 
@@ -1276,7 +1304,24 @@ export function Map3DView() {
             onShowAll={handleClearIsolation}
             onUpdate={async (key, data) => {
               if (!canManage3D) { toast.error("Sem permissão para revisar o modelo 3D."); return; }
-              await meshHooks.upsertMesh({ layer_key: key, ...data });
+              const payload = { layer_key: key, ...data };
+              if (import.meta.env.DEV) {
+                console.log("[GLB Mesh Link] map onUpdate", {
+                  selectedMeshKey,
+                  key,
+                  payload,
+                  before: meshHooks.meshMap.get(key) ?? null,
+                });
+              }
+              const saved = await meshHooks.upsertMesh(payload);
+              if (import.meta.env.DEV) {
+                console.log("[GLB Mesh Link] map onUpdate saved", {
+                  selectedMeshKey,
+                  key,
+                  saved,
+                  after: meshHooks.meshMap.get(key) ?? null,
+                });
+              }
             }}
             onIgnore={async (key) => {
               if (!canDelete3D) { toast.error("Sem permissão para remover ou ignorar itens do Mapa 3D."); return; }

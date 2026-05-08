@@ -48,8 +48,12 @@ export function MeshReviewPanel({
     if (!meshKey || !sceneRef) return null;
     let found: THREE.Mesh | null = null;
     sceneRef.traverse((child) => {
-      if (!found && (child as THREE.Mesh).isMesh && child.uuid === meshKey) {
-        found = child as THREE.Mesh;
+      if (!found && (child as THREE.Mesh).isMesh) {
+        const mesh = child as THREE.Mesh;
+        const layerKey = typeof mesh.userData?.obramapLayerKey === "string" && mesh.userData.obramapLayerKey
+          ? mesh.userData.obramapLayerKey
+          : mesh.uuid;
+        if (layerKey === meshKey) found = mesh;
       }
     });
     return found;
@@ -60,9 +64,15 @@ export function MeshReviewPanel({
     const box = new THREE.Box3();
     let found = false;
     sceneRef.traverse((child) => {
-      if ((child as THREE.Mesh).isMesh && child.uuid === meshKey) {
-        box.expandByObject(child);
-        found = true;
+      if ((child as THREE.Mesh).isMesh) {
+        const mesh = child as THREE.Mesh;
+        const layerKey = typeof mesh.userData?.obramapLayerKey === "string" && mesh.userData.obramapLayerKey
+          ? mesh.userData.obramapLayerKey
+          : mesh.uuid;
+        if (layerKey === meshKey) {
+          box.expandByObject(child);
+          found = true;
+        }
       }
     });
     if (!found || box.isEmpty()) { setBbox(null); return; }
@@ -83,6 +93,16 @@ export function MeshReviewPanel({
     setDraftHouse(currentHouse);
     setDraftService(currentService);
   }, [currentHouse, currentService, meshKey]);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV || !meshKey) return;
+    console.log("[GLB Mesh Link] panel values", {
+      meshKey,
+      meshData,
+      currentHouse,
+      currentService,
+    });
+  }, [currentHouse, currentService, meshData, meshKey]);
 
   if (!meshKey) return null;
 
@@ -122,16 +142,26 @@ export function MeshReviewPanel({
     }
 
     setSavingLink(true);
-    try {
-      await onUpdate(meshKey, {
-        assigned_house_number: selectedHouseNumber,
-        service_macro_id: selectedService.macro_id,
-        service_scope_id: selectedService.scope_id,
-        mesh_name: meshData?.mesh_name || selectedSceneMesh?.name || "",
-        material_name: meshData?.material_name || materialNameFromScene || "",
-        detected_house_number:
-          meshData?.detected_house_number ?? parseHouseNumberFromMesh(selectedSceneMesh?.name || ""),
+    const payload: Partial<ProjectModelMesh> = {
+      assigned_house_number: selectedHouseNumber,
+      service_macro_id: selectedService.macro_id,
+      service_scope_id: selectedService.scope_id,
+      mesh_name: meshData?.mesh_name || selectedSceneMesh?.name || "",
+      material_name: meshData?.material_name || materialNameFromScene || "",
+      detected_house_number:
+        meshData?.detected_house_number ?? parseHouseNumberFromMesh(selectedSceneMesh?.name || ""),
+    };
+    if (import.meta.env.DEV) {
+      console.log("[GLB Mesh Link] panel apply", {
+        meshKey,
+        sceneMeshUuid: selectedSceneMesh?.uuid ?? null,
+        selectedHouseNumber,
+        selectedService,
+        payload,
       });
+    }
+    try {
+      await onUpdate(meshKey, payload);
       toast.success("Vínculo aplicado à mesh. Clique em Sincronizar 3D Real para atualizar a produção.");
     } catch (error) {
       console.error("[MeshReviewPanel] apply link error", error);

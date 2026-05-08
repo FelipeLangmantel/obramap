@@ -46,6 +46,7 @@ export function useProjectModelMeshes(projectId: string | undefined) {
     }
     setMeshes((data || []) as unknown as ProjectModelMesh[]);
     loadedFor.current = projectId;
+    return (data || []) as unknown as ProjectModelMesh[];
   }, [projectId]);
 
   useEffect(() => {
@@ -77,16 +78,58 @@ export function useProjectModelMeshes(projectId: string | undefined) {
   /** Upsert único — preserva campos editáveis caso o registro já exista. */
   const upsertMesh = useCallback(
     async (data: Partial<ProjectModelMesh> & { layer_key: string }) => {
-      if (!projectId) return;
+      if (!projectId) {
+        throw new Error("projectId ausente ao salvar vinculo da mesh.");
+      }
       const payload: any = { ...data, project_id: projectId };
-      const { error } = await supabase
+      if (import.meta.env.DEV) {
+        console.log("[GLB Mesh Link] upsert payload", {
+          projectId,
+          layerKey: data.layer_key,
+          payload,
+        });
+      }
+      const { data: saved, error } = await supabase
         .from("project_model_meshes" as any)
-        .upsert(payload, { onConflict: "project_id,layer_key" });
+        .upsert(payload, { onConflict: "project_id,layer_key" })
+        .select("*")
+        .single();
       if (error) {
         console.error("[useProjectModelMeshes] upsert error", error);
+        if (import.meta.env.DEV) {
+          console.log("[GLB Mesh Link] upsert error", {
+            projectId,
+            layerKey: data.layer_key,
+            error,
+          });
+        }
         throw error;
       }
-      await refresh();
+      const savedMesh = saved as unknown as ProjectModelMesh;
+      if (import.meta.env.DEV) {
+        console.log("[GLB Mesh Link] upsert saved", {
+          projectId,
+          layerKey: data.layer_key,
+          saved: savedMesh,
+        });
+      }
+      setMeshes((prev) => {
+        const idx = prev.findIndex((mesh) => mesh.layer_key === savedMesh.layer_key);
+        if (idx === -1) return [...prev, savedMesh];
+        const next = [...prev];
+        next[idx] = savedMesh;
+        return next;
+      });
+      const refreshed = await refresh();
+      if (import.meta.env.DEV) {
+        const refreshedMesh = refreshed?.find((mesh) => mesh.layer_key === data.layer_key) ?? null;
+        console.log("[GLB Mesh Link] refresh after upsert", {
+          projectId,
+          layerKey: data.layer_key,
+          refreshedMesh,
+        });
+      }
+      return savedMesh;
     },
     [projectId, refresh],
   );
