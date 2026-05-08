@@ -553,6 +553,10 @@ export function Map3DView() {
     setIsolatedKeys(prev => (prev?.has(key) ? null : new Set([key])));
   }, []);
 
+  const handleClearIsolation = useCallback(() => {
+    setIsolatedKeys(null);
+  }, []);
+
   // Lista de casas para o painel de revisão
   const houseNumbers = useMemo(() => {
     const arr = (currentProject?.houses || [])
@@ -1207,6 +1211,22 @@ export function Map3DView() {
             Modo Revisão — clique em qualquer mesh do modelo
           </div>
         )}
+        {reviewMode && isolatedKeys && (
+          <div className="absolute top-14 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 rounded-full border border-primary/30 bg-background/95 px-3 py-1.5 text-xs font-medium shadow-lg backdrop-blur">
+            <Badge variant="secondary" className="h-5 rounded-full px-2 text-[10px]">
+              Isolando {isolatedKeys.size} mesh
+            </Badge>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 rounded-full px-2.5 text-[11px]"
+              onClick={handleClearIsolation}
+            >
+              Mostrar tudo
+            </Button>
+          </div>
+        )}
         {canManage3D && reviewMode && selectedMeshKey && (
           <MeshReviewPanel
             meshKey={selectedMeshKey}
@@ -1217,6 +1237,7 @@ export function Map3DView() {
             isolated={!!isolatedKeys?.has(selectedMeshKey)}
             onClose={() => { setSelectedMeshKey(null); setIsolatedKeys(null); }}
             onIsolate={handleIsolate}
+            onShowAll={handleClearIsolation}
             onUpdate={async (key, data) => {
               if (!canManage3D) { toast.error("Sem permissão para revisar o modelo 3D."); return; }
               await meshHooks.upsertMesh({ layer_key: key, ...data });

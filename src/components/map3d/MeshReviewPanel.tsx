@@ -29,13 +29,14 @@ interface Props {
   isolated: boolean;
   onClose: () => void;
   onIsolate: (key: string) => void;
+  onShowAll: () => void;
   onUpdate: (key: string, data: Partial<ProjectModelMesh>) => Promise<void>;
   onIgnore: (key: string) => void;
 }
 
 export function MeshReviewPanel({
   meshKey, meshData, sceneRef, houses, services, isolated,
-  onClose, onIsolate, onUpdate, onIgnore,
+  onClose, onIsolate, onShowAll, onUpdate, onIgnore,
 }: Props) {
   const [bbox, setBbox] = useState<{ size: THREE.Vector3; center: THREE.Vector3 } | null>(null);
 
@@ -190,6 +191,11 @@ export function MeshReviewPanel({
 
             {/* Ações */}
             <section className="grid grid-cols-2 gap-1.5 pt-1">
+              {isolated && (
+                <div className="col-span-2 rounded-md border border-primary/30 bg-primary/5 px-2 py-1.5 text-[10px] text-primary">
+                  Isolando 1 mesh. Use Mostrar tudo para voltar sem sair da Revisão.
+                </div>
+              )}
               <Button
                 variant="outline" size="sm" className="h-8 text-[11px]"
                 onClick={() => onUpdate(meshKey, { visible: !(meshData?.visible ?? true) })}
@@ -199,10 +205,10 @@ export function MeshReviewPanel({
               </Button>
               <Button
                 variant={isolated ? "default" : "outline"} size="sm" className="h-8 text-[11px]"
-                onClick={() => onIsolate(meshKey)}
+                onClick={() => isolated ? onShowAll() : onIsolate(meshKey)}
               >
                 <Crosshair className="h-3.5 w-3.5 mr-1" />
-                {isolated ? "Desisolar" : "Isolar"}
+                {isolated ? "Mostrar tudo" : "Isolar"}
               </Button>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
