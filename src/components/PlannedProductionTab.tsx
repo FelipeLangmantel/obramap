@@ -507,7 +507,7 @@ export function PlannedProductionTab() {
     const allHouseIds = [...new Set(week.services.flatMap(s => s.planned_house_ids || []))].sort((a, b) => a - b);
 
     const printContent = `
-      <!DOCTYPE html><html><head><title>Planejamento Semanal - ${currentProject?.name}</title>
+      <!DOCTYPE html><html><head><title>Planejamento Semanal - ${esc(currentProject?.name)}</title>
       <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Segoe UI', Arial, sans-serif; padding: 40px; color: #1a1a1a; line-height: 1.5; }
@@ -530,13 +530,13 @@ export function PlannedProductionTab() {
         .signature-line { margin-top: 60px; padding-top: 10px; border-top: 1px solid #1a1a1a; width: 200px; text-align: center; font-size: 12px; }
         @media print { body { padding: 20px; } }
       </style></head><body>
-        <div class="header"><h1>PLANEJAMENTO SEMANAL</h1><h2>${currentProject?.name}</h2></div>
-        <div class="period"><span>Semana ${week.week_number}:</span><span style="font-weight:700">${format(parseISO(week.week_start), "dd/MM/yyyy", { locale: ptBR })} a ${format(parseISO(week.week_end), "dd/MM/yyyy", { locale: ptBR })}</span></div>
+        <div class="header"><h1>PLANEJAMENTO SEMANAL</h1><h2>${esc(currentProject?.name)}</h2></div>
+        <div class="period"><span>Semana ${esc(week.week_number)}:</span><span style="font-weight:700">${esc(format(parseISO(week.week_start), "dd/MM/yyyy", { locale: ptBR }))} a ${esc(format(parseISO(week.week_end), "dd/MM/yyyy", { locale: ptBR }))}</span></div>
         <div class="summary"><div class="summary-card"><div class="summary-value">${week.services.length}</div><div class="summary-label">Serviços</div></div><div class="summary-card total"><div class="summary-value">${totalHouses}</div><div class="summary-label">Total de Casas</div></div></div>
         <table><thead><tr><th>Etapa</th><th>Serviço</th><th style="text-align:center">Casas</th><th>Nº das Casas</th></tr></thead><tbody>
-        ${week.services.map(s => `<tr><td><span class="color-dot" style="background:${s.macro_color}"></span>${s.macro_name}</td><td>${s.scope_name}</td><td style="text-align:center"><span class="houses-count">${s.planned_houses}</span></td><td style="font-size:11px">${(s.planned_house_ids || []).sort((a,b) => a-b).join(', ') || '-'}</td></tr>`).join('')}
+        ${week.services.map(s => `<tr><td><span class="color-dot" style="background:${esc(safeCssColor(s.macro_color))}"></span>${esc(s.macro_name)}</td><td>${esc(s.scope_name)}</td><td style="text-align:center"><span class="houses-count">${Number(s.planned_houses) || 0}</span></td><td style="font-size:11px">${esc((s.planned_house_ids || []).filter((n: any) => Number.isFinite(Number(n))).map(Number).sort((a: number, b: number) => a-b).join(', ') || '-')}</td></tr>`).join('')}
         </tbody></table>
-        <div class="footer"><div>Emitido em: ${format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</div></div>
+        <div class="footer"><div>Emitido em: ${esc(format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }))}</div></div>
         <div style="display:flex;justify-content:space-between;margin-top:60px"><div class="signature-line">Responsável Técnico</div><div class="signature-line">Encarregado da Obra</div></div>
         <div style="margin-top:30px;padding-top:10px;border-top:1px solid #e5e7eb;text-align:center;font-size:11px;color:#6b7280;font-weight:600;">© 2026 ObraMap | Engenharia Digital</div>
       </body></html>`;
