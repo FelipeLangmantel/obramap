@@ -903,7 +903,26 @@ export function Map3DView() {
     if (!projectId) return;
     setIsSyncing(true);
     try {
-      const allMeshes = Array.from(meshHooks.meshMap.values());
+      const meshMapBeforeRefresh = meshHooks.meshMap;
+      const refreshedAtSync = await meshHooks.refresh();
+      const refreshedMeshMap = new Map((refreshedAtSync || []).map((mesh) => [mesh.layer_key, mesh]));
+      const sourceMeshMap = refreshedAtSync ? refreshedMeshMap : meshMapBeforeRefresh;
+      console.log("[GLB MeshMap Consistency] sync source", {
+        projectId,
+        beforeCount: meshMapBeforeRefresh.size,
+        refreshedCount: refreshedAtSync?.length ?? null,
+        watched: GLB_REAL_SYNC_WATCH_KEYS.map((layerKey) => ({
+          layer_key: layerKey,
+          meshMapBeforeHas: meshMapBeforeRefresh.has(layerKey),
+          refreshedMapHas: refreshedMeshMap.has(layerKey),
+          overrideHas: meshReviewOverrides.has(layerKey),
+          before: meshMapBeforeRefresh.get(layerKey) ?? null,
+          refreshed: refreshedMeshMap.get(layerKey) ?? null,
+          override: meshReviewOverrides.get(layerKey) ?? null,
+        })),
+      });
+
+      const allMeshes = Array.from(sourceMeshMap.values());
       const meshes = allMeshes.filter(m => !m.ignored);
       if (meshes.length === 0) {
         if (!options?.silent) toast.info("Nenhuma mesh registrada.");
@@ -943,11 +962,14 @@ export function Map3DView() {
       const ignoredCount = allMeshes.filter((mesh) => mesh.ignored).length;
       const unlinkedCount = allMeshes.length - linkedCount - ignoredCount;
       const watchedDiagnostics = GLB_REAL_SYNC_WATCH_KEYS.map((layerKey) => {
-        const mesh = meshHooks.meshMap.get(layerKey);
+        const mesh = sourceMeshMap.get(layerKey);
         if (!mesh) {
           return {
             layer_key: layerKey,
             status: "NOT_FOUND_IN_MESH_MAP",
+            meshMapBeforeHas: meshMapBeforeRefresh.has(layerKey),
+            refreshedMapHas: refreshedMeshMap.has(layerKey),
+            overrideHas: meshReviewOverrides.has(layerKey),
           };
         }
         const missingFields = [
@@ -1076,7 +1098,7 @@ export function Map3DView() {
       console.error("[Sync3D]", err);
       toast.error("Erro ao sincronizar");
     } finally { setIsSyncing(false); }
-  }, [canManage3D, projectId, meshHooks, currentProject, applyViewMode, viewMode]);
+  }, [canManage3D, projectId, meshHooks, currentProject, applyViewMode, viewMode, meshReviewOverrides]);
 
   // Auto-sync após realtime, debounced (somente se já sincronizou ao menos 1x)
   const autoSync = useCallback(() => {
@@ -1667,17 +1689,48 @@ export function Map3DView() {
                   before: meshHooks.meshMap.get(key) ?? null,
                 });
               }
+              const meshMapBeforeUpdate = meshHooks.meshMap;
               const saved = await meshHooks.upsertMesh(payload);
+              const { data: directRead, error: directReadError } = await supabase
+                .from("project_model_meshes" as any)
+                .select("*")
+                .eq("project_id", projectId)
+                .eq("layer_key", key)
+                .maybeSingle();
+              if (directReadError) {
+                console.error("[GLB MeshMap Consistency] direct read after upsert error", directReadError);
+              }
+              const refreshedAfterUpdate = await meshHooks.refresh();
+              const refreshedAfterUpdateMap = new Map((refreshedAfterUpdate || []).map((mesh) => [mesh.layer_key, mesh]));
+              const effectiveSaved = (refreshedAfterUpdateMap.get(key) ?? directRead ?? saved) as ProjectModelMesh;
               setMeshReviewOverrides((prev) => {
                 const next = new Map(prev);
-                next.set(key, saved);
+                next.set(key, effectiveSaved);
                 return next;
+              });
+              console.log("[GLB MeshMap Consistency] apply link", {
+                layer_key: key,
+                returnedByUpsert: saved,
+                directRead,
+                directReadError,
+                refreshMapHasLayerKey: refreshedAfterUpdateMap.has(key),
+                refreshedMesh: refreshedAfterUpdateMap.get(key) ?? null,
+                meshMapBeforeHasLayerKey: meshMapBeforeUpdate.has(key),
+                meshMapCurrentHasLayerKey: meshHooks.meshMap.has(key),
+                overrideWillUse: effectiveSaved,
+                watched: GLB_REAL_SYNC_WATCH_KEYS.map((layerKey) => ({
+                  layer_key: layerKey,
+                  meshMapBeforeHas: meshMapBeforeUpdate.has(layerKey),
+                  refreshMapHas: refreshedAfterUpdateMap.has(layerKey),
+                  overrideHas: meshReviewOverrides.has(layerKey),
+                  refreshed: refreshedAfterUpdateMap.get(layerKey) ?? null,
+                })),
               });
               if (import.meta.env.DEV) {
                 console.log("[GLB Mesh Link] map onUpdate saved", {
                   selectedMeshKey,
                   key,
-                  saved,
+                  saved: effectiveSaved,
                   after: meshHooks.meshMap.get(key) ?? null,
                 });
                 console.log("[GLB Mesh Link Check] map onUpdate saved", {
