@@ -50,6 +50,12 @@ function getMeshLayerKey(mesh: THREE.Mesh): string {
     : mesh.uuid;
 }
 
+const GLB_REAL_SYNC_WATCH_KEYS = [
+  "glb:Geom3D_300:0",
+  "glb:Geom3D_302:0",
+  "glb:Geom3D_303:0",
+];
+
 function getMeshMaterialName(mesh: THREE.Mesh): string {
   const material = mesh.material as THREE.Material | THREE.Material[] | undefined;
   if (!material) return "";
@@ -897,7 +903,8 @@ export function Map3DView() {
     if (!projectId) return;
     setIsSyncing(true);
     try {
-      const meshes = Array.from(meshHooks.meshMap.values()).filter(m => !m.ignored);
+      const allMeshes = Array.from(meshHooks.meshMap.values());
+      const meshes = allMeshes.filter(m => !m.ignored);
       if (meshes.length === 0) {
         if (!options?.silent) toast.info("Nenhuma mesh registrada.");
         return;
@@ -928,6 +935,63 @@ export function Map3DView() {
             progressMap.set(`${hn}::${macro.id}::${scope.id}`, Number(scope.progress || 0));
           });
         });
+      });
+
+      const linkedCount = allMeshes.filter((mesh) =>
+        mesh.assigned_house_number != null && mesh.service_macro_id != null && mesh.service_scope_id != null,
+      ).length;
+      const ignoredCount = allMeshes.filter((mesh) => mesh.ignored).length;
+      const unlinkedCount = allMeshes.length - linkedCount - ignoredCount;
+      const watchedDiagnostics = GLB_REAL_SYNC_WATCH_KEYS.map((layerKey) => {
+        const mesh = meshHooks.meshMap.get(layerKey);
+        if (!mesh) {
+          return {
+            layer_key: layerKey,
+            status: "NOT_FOUND_IN_MESH_MAP",
+          };
+        }
+        const missingFields = [
+          mesh.assigned_house_number == null ? "missing assigned_house_number" : null,
+          mesh.service_macro_id == null ? "missing service_macro_id" : null,
+          mesh.service_scope_id == null ? "missing service_scope_id" : null,
+        ].filter(Boolean);
+        const progressKey = missingFields.length === 0
+          ? `${mesh.assigned_house_number}::${mesh.service_macro_id}::${mesh.service_scope_id}`
+          : null;
+        const progress = progressKey ? (progressMap.get(progressKey) ?? 0) : 0;
+        const calculatedProductionVisible = progress > 0;
+        const counterBucket = mesh.ignored
+          ? "ignored"
+          : missingFields.length > 0
+            ? "sem vínculo"
+            : calculatedProductionVisible
+              ? "visíveis"
+              : "ocultas";
+        return {
+          layer_key: mesh.layer_key,
+          mesh_name: mesh.mesh_name,
+          material_name: mesh.material_name,
+          assigned_house_number: mesh.assigned_house_number,
+          service_macro_id: mesh.service_macro_id,
+          service_scope_id: mesh.service_scope_id,
+          ignored: mesh.ignored,
+          production_visible_before_sync: mesh.production_visible,
+          progress_percent_before_sync: mesh.progress_percent,
+          progress_key: progressKey,
+          progress_found_in_houses_macros: progress,
+          calculated_production_visible: calculatedProductionVisible,
+          calculated_progress_percent: progress,
+          counter_bucket: counterBucket,
+          missing_fields: missingFields,
+        };
+      });
+      console.log("[GLB Real Sync Check] start", {
+        projectId,
+        meshMapTotal: allMeshes.length,
+        linkedCompleteTotal: linkedCount,
+        unlinkedTotal: unlinkedCount,
+        ignoredTotal: ignoredCount,
+        watchedDiagnostics,
       });
 
       if (import.meta.env.DEV) {
