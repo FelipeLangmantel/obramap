@@ -24,7 +24,7 @@ import { AssignHousePopover } from "./map3d/AssignHousePopover";
 import { useMeshHouseAssignments } from "@/hooks/useMeshHouseAssignments";
 import { IFCModel } from "./map3d/IFCModel";
 import { IfcSuggestionsPanel } from "./map3d/IfcSuggestionsPanel";
-import { isContextProjectModelMesh, useProjectModelMeshes, type ProjectModelMesh } from "@/hooks/useProjectModelMeshes";
+import { GLB_CONTEXT_MESH_MARKER, isContextProjectModelMesh, useProjectModelMeshes, type ProjectModelMesh } from "@/hooks/useProjectModelMeshes";
 import { MeshReviewPanel, type ServiceOption } from "./map3d/MeshReviewPanel";
 import { parseHouseNumberFromMesh } from "./map3d/parseHouseFromMeshName";
 import { HouseFotoHistoryDrawer } from "@/components/diario/HouseFotoHistoryDrawer";
@@ -55,6 +55,36 @@ const GLB_REAL_SYNC_WATCH_KEYS = [
   "glb:Geom3D_302:0",
   "glb:Geom3D_303:0",
 ];
+
+const GLB_CONTEXT_PRESETS = [
+  {
+    key: "asphalt",
+    label: "Marcar ruas/asfalto como Contexto",
+    terms: ["asphalt", "asfalto", "rua", "street", "road", "via"],
+  },
+  {
+    key: "grass",
+    label: "Marcar grama/terreno como Contexto",
+    terms: ["grass", "grama", "vegetation", "vegetacao", "vegetação", "veget", "terrain", "terreno", "soil", "solo"],
+  },
+  {
+    key: "paver",
+    label: "Marcar calçadas/paver como Contexto",
+    terms: ["paver", "calçada", "calcada", "sidewalk", "passeio", "guia", "meio fio", "meiofio", "curb"],
+  },
+  {
+    key: "text",
+    label: "Marcar textos/números como Contexto",
+    terms: ["3dtext", "text", "texto", "numero", "número", "numeracao", "numeração"],
+  },
+  {
+    key: "site",
+    label: "Marcar lotes/entorno como Contexto",
+    terms: ["lote", "lot", "site", "ifcsite", "implantacao", "implantação", "entorno", "base"],
+  },
+] as const;
+
+type GlbContextPresetKey = typeof GLB_CONTEXT_PRESETS[number]["key"];
 
 function getMeshMaterialName(mesh: THREE.Mesh): string {
   const material = mesh.material as THREE.Material | THREE.Material[] | undefined;
@@ -646,6 +676,7 @@ export function Map3DView() {
   const [selectedMeshKey, setSelectedMeshKey] = useState<string | null>(null);
   const [isolatedKeys, setIsolatedKeys] = useState<Set<string> | null>(null);
   const [meshReviewOverrides, setMeshReviewOverrides] = useState<Map<string, ProjectModelMesh>>(new Map());
+  const [contextBulkAction, setContextBulkAction] = useState<GlbContextPresetKey | null>(null);
 
   // Modo de visualização
   type ViewMode = "complete" | "real" | "simulation";
@@ -936,6 +967,109 @@ export function Map3DView() {
     });
     return n;
   }, [meshHooks.meshMap]);
+
+  const handleBulkMarkContext = useCallback(async (presetKey: GlbContextPresetKey) => {
+    if (!canManage3D) { toast.error("Sem permissão para revisar o modelo 3D."); return; }
+    if (!projectId || !sceneObj) return;
+    const preset = GLB_CONTEXT_PRESETS.find((item) => item.key === presetKey);
+    if (!preset) return;
+
+    setContextBulkAction(presetKey);
+    try {
+      const seen = new Set<string>();
+      const updates: Array<Partial<ProjectModelMesh> & { project_id: string; layer_key: string }> = [];
+      let found = 0;
+      let skippedLinked = 0;
+      let alreadyContext = 0;
+
+      sceneObj.traverse((child) => {
+        if (!(child as THREE.Mesh).isMesh) return;
+        const mesh = child as THREE.Mesh;
+        const layerKey = getMeshLayerKey(mesh);
+        if (seen.has(layerKey)) return;
+        seen.add(layerKey);
+
+        const saved = meshReviewOverrides.get(layerKey) ?? meshHooks.meshMap.get(layerKey) ?? null;
+        const searchText = [
+          saved?.mesh_name,
+          saved?.material_name,
+          mesh.name,
+          getMeshMaterialName(mesh),
+        ].filter(Boolean).join(" ").toLowerCase();
+        if (!preset.terms.some((term) => searchText.includes(term.toLowerCase()))) return;
+
+        found++;
+        if (isContextProjectModelMesh(saved)) {
+          alreadyContext++;
+          return;
+        }
+        const hasProductiveLink = !!saved
+          && saved.assigned_house_number != null
+          && saved.service_macro_id != null
+          && saved.service_scope_id != null;
+        if (hasProductiveLink) {
+          skippedLinked++;
+          return;
+        }
+
+        updates.push({
+          project_id: projectId,
+          layer_key: layerKey,
+          mesh_name: saved?.mesh_name || mesh.name || "",
+          material_name: saved?.material_name || getMeshMaterialName(mesh),
+          detected_house_number: saved?.detected_house_number ?? parseHouseNumberFromMesh(mesh.name || ""),
+          assigned_house_number: null,
+          service_macro_id: GLB_CONTEXT_MESH_MARKER,
+          service_scope_id: GLB_CONTEXT_MESH_MARKER,
+          production_visible: false,
+          progress_percent: 0,
+          visible: true,
+        });
+      });
+
+      const batchSize = 100;
+      const errors: any[] = [];
+      let sent = 0;
+      for (let index = 0; index < updates.length; index += batchSize) {
+        const batch = updates.slice(index, index + batchSize);
+        const { error } = await supabase
+          .from("project_model_meshes" as any)
+          .upsert(batch, { onConflict: "project_id,layer_key" });
+        sent += batch.length;
+        if (error) errors.push(error);
+      }
+
+      console.log("[GLB Real Context] bulk mark", {
+        preset: preset.key,
+        found,
+        marked: updates.length,
+        alreadyContext,
+        skippedLinked,
+        sent,
+        batchSize,
+        errors: errors.length,
+        sample: updates.slice(0, 8).map((mesh) => ({
+          layer_key: mesh.layer_key,
+          mesh_name: mesh.mesh_name,
+          material_name: mesh.material_name,
+        })),
+      });
+
+      if (errors.length > 0) throw errors[0];
+
+      const refreshed = await meshHooks.refresh();
+      if (refreshed?.length) {
+        const refreshedMap = new Map(refreshed.map((mesh) => [mesh.layer_key, mesh]));
+        applyViewMode(viewMode, refreshedMap);
+      }
+      toast.success(`${preset.label}: ${updates.length} marcadas · ${skippedLinked} puladas por vínculo produtivo · ${alreadyContext} já eram contexto · ${found} encontradas`);
+    } catch (error) {
+      console.error("[GLB Real Context] bulk mark error", error);
+      toast.error("Falha ao marcar contexto em lote.");
+    } finally {
+      setContextBulkAction(null);
+    }
+  }, [applyViewMode, canManage3D, meshHooks, meshReviewOverrides, projectId, sceneObj, viewMode]);
 
   // Sincronização 3D Real
   const handleSync3DReal = useCallback(async (options?: { silent?: boolean }) => {
@@ -1738,6 +1872,34 @@ export function Map3DView() {
               Mostrar tudo
             </Button>
           </div>
+        )}
+        {canManage3D && reviewMode && sceneObj && (
+          <Card className="absolute bottom-4 left-4 z-20 w-80 border-primary/20 bg-background/95 shadow-xl backdrop-blur">
+            <CardHeader className="px-3 pb-2 pt-3">
+              <CardTitle className="text-sm">Classificação rápida 3D Real</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1.5 px-3 pb-3">
+              <p className="text-[11px] leading-snug text-muted-foreground">
+                Marca meshes sem vínculo produtivo como contexto visual. Produções já vinculadas são puladas.
+              </p>
+              <div className="grid gap-1.5">
+                {GLB_CONTEXT_PRESETS.map((preset) => (
+                  <Button
+                    key={preset.key}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 justify-start text-[11px]"
+                    disabled={!!contextBulkAction}
+                    onClick={() => void handleBulkMarkContext(preset.key)}
+                  >
+                    {contextBulkAction === preset.key && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                    {preset.label}
+                  </Button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         )}
         {canManage3D && reviewMode && selectedMeshKey && (
           <MeshReviewPanel
