@@ -391,6 +391,75 @@ function isIfcRealContextElement(element: IfcPersistedElementRow, linkedElementI
   return false;
 }
 
+function getIfcRealContextDiagnosticReason(element: IfcPersistedElementRow, linkedElementIds: Set<string>) {
+  const text = normalizeIfcSearchText(element.category, element.ifc_layer_name, element.name, element.ifc_type);
+  const keyword = [
+    "lote",
+    "terreno",
+    "rua",
+    "avenida",
+    "via",
+    "asfalto",
+    "calcada",
+    "calcamento",
+    "passeio",
+    "meio fio",
+    "guia",
+    "sarjeta",
+    "paver",
+    "grama",
+    "grass",
+    "vegetacao",
+    "paisagismo",
+    "solo",
+    "site",
+    "ifcsite",
+    "terrain",
+    "entorno",
+    "base",
+    "urban",
+    "implantacao",
+    "quadra",
+    "texto",
+    "3dtext",
+    "numeracao",
+    "cota",
+    "anotacao",
+    "legenda",
+    "ifcannotation",
+    "ifctext",
+  ].find(item => text.includes(item));
+
+  if (keyword) return `context_keyword:${keyword}`;
+  if (element.category && element.category !== "production") return `non_production_category:${element.category}`;
+  if (!element.category) return "missing_category";
+  if (!element.detected_service_key && !linkedElementIds.has(element.id)) return "no_service_or_final_link";
+  return "production_candidate";
+}
+
+function isIfcRealContextSearchHit(element: IfcPersistedElementRow) {
+  const text = normalizeIfcSearchText(element.category, element.ifc_layer_name, element.name, element.ifc_type);
+  return [
+    "lote",
+    "terreno",
+    "rua",
+    "via",
+    "calcada",
+    "asfalto",
+    "paver",
+    "solo",
+    "grama",
+    "grass",
+    "site",
+    "ifcsite",
+    "terrain",
+    "entorno",
+    "implantacao",
+    "3dtext",
+    "texto",
+  ].some(term => text.includes(term));
+}
+
 function parseIfcLayerSemantic(layerName: string | null): {
   serviceKey: string | null;
   serviceLabel: string | null;
@@ -2289,6 +2358,10 @@ function IFCVisualModel({
 
     if (import.meta.env.DEV) {
       console.log("[IFC Real Visual] base hidden", { meshCount: entries.length });
+      console.log("[IFC Real Context] base visibility", {
+        baseHidden: true,
+        affectedBaseMeshes: entries.length,
+      });
     }
 
     return () => {
@@ -2441,6 +2514,20 @@ function IFCVisualModel({
             meshName: mesh.name || null,
             meshUuid: mesh.uuid,
           });
+          if (item.role === "context") {
+            console.log("[IFC Real Context] subset attempt", {
+              key: item.key,
+              label: item.label,
+              entityId: item.entityId,
+              matchingFaces: result.matchingFaces,
+              created: !!result.highlight,
+              skipReason: result.highlight ? null : result.reason || "subset_not_created",
+              geometryAttributes: getIfcGeometryAttributeNames(mesh.geometry),
+              meshName: mesh.name || null,
+              meshUuid: mesh.uuid,
+              materialSource,
+            });
+          }
         }
         if (!result.highlight) {
           material.dispose();
@@ -2479,6 +2566,15 @@ function IFCVisualModel({
           targetExpressId: getIfcEntityNumericId(item.entityId),
           meshCount: meshes.length,
         });
+        if (item.role === "context") {
+          console.log("[IFC Real Context] skipped render", {
+            key: item.key,
+            label: item.label,
+            entityId: item.entityId,
+            skipReason: meshes.length === 0 ? "no_mesh_with_geometry" : "matchingFaces_zero_or_subset_failed",
+            meshCount: meshes.length,
+          });
+        }
       }
     });
 
@@ -3543,11 +3639,45 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
     const seenEntityIds = new Set<string>();
     const overlays: IfcProductionOverlay[] = [];
     const linkedElementIds = new Set(productionActivationDiagnostics.items.map(item => item.ifc_element_id).filter(Boolean));
+    const contextCandidates: IfcPersistedElementRow[] = [];
+    const productionCandidates: IfcPersistedElementRow[] = [];
+    const contextSkipped: Array<{
+      id: string;
+      ifc_entity_id: string | null;
+      ifc_global_id: string | null;
+      category: string | null;
+      detected_service_key: string | null;
+      status: IfcPersistedStatus;
+      layer: string | null;
+      name: string | null;
+      ifc_type: string | null;
+      contextReason: string;
+      skipReason: string;
+    }> = [];
 
     persistedElements.forEach(element => {
-      if (!isIfcRealContextElement(element, linkedElementIds)) return;
+      const contextReason = getIfcRealContextDiagnosticReason(element, linkedElementIds);
+      const isContext = isIfcRealContextElement(element, linkedElementIds);
+      if (isContext) contextCandidates.push(element);
+      else productionCandidates.push(element);
+      if (!isContext) return;
       const entityId = normalizeIfcEntityId(element.ifc_entity_id);
-      if (!entityId || seenEntityIds.has(entityId)) return;
+      if (!entityId || seenEntityIds.has(entityId)) {
+        contextSkipped.push({
+          id: element.id,
+          ifc_entity_id: element.ifc_entity_id,
+          ifc_global_id: element.ifc_global_id,
+          category: element.category,
+          detected_service_key: element.detected_service_key,
+          status: element.status,
+          layer: element.ifc_layer_name,
+          name: element.name,
+          ifc_type: element.ifc_type,
+          contextReason,
+          skipReason: !entityId ? "missing_or_invalid_ifc_entity_id" : "duplicate_entity_id",
+        });
+        return;
+      }
 
       seenEntityIds.add(entityId);
       overlays.push({
@@ -3558,6 +3688,53 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         role: "context",
       });
     });
+
+    if (import.meta.env.DEV) {
+      const contextRenderedIds = new Set(overlays.filter(item => item.role === "context").map(item => item.key.replace(/^context:/, "")));
+      const relevantElements = persistedElements.filter(isIfcRealContextSearchHit);
+      console.log("[IFC Real Context] candidates built", {
+        totalPersistedElements: persistedElements.length,
+        totalContextCandidates: contextCandidates.length,
+        totalProductionCandidates: productionCandidates.length,
+        totalContextRendered: overlays.filter(item => item.role === "context").length,
+        totalProductionRendered: overlays.filter(item => item.role === "production").length,
+        nonProductiveSample: persistedElements
+          .filter(element => element.category !== "production")
+          .slice(0, 12)
+          .map(element => ({
+            id: element.id,
+            ifc_entity_id: element.ifc_entity_id,
+            ifc_global_id: element.ifc_global_id,
+            category: element.category,
+            detected_service_key: element.detected_service_key,
+            status: element.status,
+            layer: element.ifc_layer_name,
+            name: element.name,
+            ifc_type: element.ifc_type,
+            contextReason: getIfcRealContextDiagnosticReason(element, linkedElementIds),
+            rendered: contextRenderedIds.has(element.id),
+          })),
+        relevantContextTerms: relevantElements.slice(0, 30).map(element => {
+          const isContext = isIfcRealContextElement(element, linkedElementIds);
+          return {
+            id: element.id,
+            ifc_entity_id: element.ifc_entity_id,
+            ifc_global_id: element.ifc_global_id,
+            category: element.category,
+            classifiedAs: isContext ? "context" : "production",
+            inContextCandidates: isContext,
+            rendered: contextRenderedIds.has(element.id),
+            detected_service_key: element.detected_service_key,
+            status: element.status,
+            layer: element.ifc_layer_name,
+            name: element.name,
+            ifc_type: element.ifc_type,
+            contextReason: getIfcRealContextDiagnosticReason(element, linkedElementIds),
+          };
+        }),
+        contextSkipped: contextSkipped.slice(0, 30),
+      });
+    }
 
     productionActivationDiagnostics.items.forEach(item => {
       if (!item.ifc_element_id) return;
@@ -3576,6 +3753,16 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         role: "production",
       });
     });
+
+    if (import.meta.env.DEV) {
+      console.log("[IFC Real Context] final overlay list", {
+        totalPersistedElements: persistedElements.length,
+        totalContextCandidates: contextCandidates.length,
+        totalProductionCandidates: productionCandidates.length,
+        totalContextRendered: overlays.filter(item => item.role === "context").length,
+        totalProductionRendered: overlays.filter(item => item.role === "production").length,
+      });
+    }
 
     return overlays;
   }, [ifcRealModeActive, persistedElements, productionActivationDiagnostics.items]);
