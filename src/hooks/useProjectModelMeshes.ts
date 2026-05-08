@@ -27,6 +27,12 @@ export interface BulkMeshInput {
   detected_house_number: number | null;
 }
 
+const WATCHED_GLB_MESH_KEYS = ["Geom3D_302", "Geom3D_303"];
+
+function isWatchedGlbMeshKey(layerKey: string | null | undefined) {
+  return !!layerKey && WATCHED_GLB_MESH_KEYS.some((key) => layerKey.includes(key));
+}
+
 export function useProjectModelMeshes(projectId: string | undefined) {
   const [meshes, setMeshes] = useState<ProjectModelMesh[]>([]);
   const [loading, setLoading] = useState(false);
@@ -47,6 +53,24 @@ export function useProjectModelMeshes(projectId: string | undefined) {
     }
     setMeshes((data || []) as unknown as ProjectModelMesh[]);
     loadedFor.current = projectId;
+    if (import.meta.env.DEV) {
+      const watchedMeshes = ((data || []) as unknown as ProjectModelMesh[])
+        .filter((mesh) => isWatchedGlbMeshKey(mesh.layer_key))
+        .map((mesh) => ({
+          layer_key: mesh.layer_key,
+          mesh_name: mesh.mesh_name,
+          assigned_house_number: mesh.assigned_house_number,
+          service_macro_id: mesh.service_macro_id,
+          service_scope_id: mesh.service_scope_id,
+          production_visible: mesh.production_visible,
+          progress_percent: mesh.progress_percent,
+        }));
+      console.log("[GLB Mesh Link Check] refresh watched meshes", {
+        projectId,
+        count: data?.length ?? 0,
+        watchedMeshes,
+      });
+    }
     if (import.meta.env.DEV && debugLayerKeyRef.current) {
       const debugLayerKey = debugLayerKeyRef.current;
       const debugMesh = ((data || []) as unknown as ProjectModelMesh[]).find(
@@ -97,11 +121,15 @@ export function useProjectModelMeshes(projectId: string | undefined) {
       debugLayerKeyRef.current = data.layer_key;
       const payload: any = { ...data, project_id: projectId };
       if (import.meta.env.DEV) {
-        console.log("[GLB Mesh Link] upsert payload", {
+        const logPayload = {
           projectId,
           layerKey: data.layer_key,
           payload,
-        });
+        };
+        console.log("[GLB Mesh Link] upsert payload", logPayload);
+        if (isWatchedGlbMeshKey(data.layer_key)) {
+          console.log("[GLB Mesh Link Check] upsert payload", logPayload);
+        }
       }
       const { data: saved, error } = await supabase
         .from("project_model_meshes" as any)
@@ -150,12 +178,16 @@ export function useProjectModelMeshes(projectId: string | undefined) {
       }
       const verifiedMesh = verified as unknown as ProjectModelMesh;
       if (import.meta.env.DEV) {
-        console.log("[GLB Mesh Link] upsert saved", {
+        const logPayload = {
           projectId,
           layerKey: data.layer_key,
           saved: savedMesh,
           verified: verifiedMesh,
-        });
+        };
+        console.log("[GLB Mesh Link] upsert saved", logPayload);
+        if (isWatchedGlbMeshKey(data.layer_key)) {
+          console.log("[GLB Mesh Link Check] upsert saved", logPayload);
+        }
       }
       setMeshes((prev) => {
         const idx = prev.findIndex((mesh) => mesh.layer_key === verifiedMesh.layer_key);
@@ -167,11 +199,15 @@ export function useProjectModelMeshes(projectId: string | undefined) {
       const refreshed = await refresh();
       if (import.meta.env.DEV) {
         const refreshedMesh = refreshed?.find((mesh) => mesh.layer_key === data.layer_key) ?? null;
-        console.log("[GLB Mesh Link] refresh after upsert", {
+        const logPayload = {
           projectId,
           layerKey: data.layer_key,
           refreshedMesh,
-        });
+        };
+        console.log("[GLB Mesh Link] refresh after upsert", logPayload);
+        if (isWatchedGlbMeshKey(data.layer_key)) {
+          console.log("[GLB Mesh Link Check] refresh after upsert", logPayload);
+        }
       }
       return verifiedMesh;
     },
@@ -200,13 +236,14 @@ export function useProjectModelMeshes(projectId: string | undefined) {
       ((data || []) as any[]).forEach((r) => existing.set(r.layer_key, r));
 
       const toInsert: any[] = [];
-      const toUpdate: { id: string; mesh_name: string; material_name: string; detected_house_number: number | null }[] = [];
+      const toUpdate: { id: string; layer_key: string; mesh_name: string; material_name: string; detected_house_number: number | null }[] = [];
 
       for (const m of incoming) {
         const ex = existing.get(m.layer_key);
         if (ex) {
           toUpdate.push({
             id: (ex as any).id,
+            layer_key: m.layer_key,
             mesh_name: m.mesh_name,
             material_name: m.material_name,
             detected_house_number: m.detected_house_number,
@@ -223,6 +260,13 @@ export function useProjectModelMeshes(projectId: string | undefined) {
       }
 
       if (import.meta.env.DEV) {
+        const watchedIncoming = incoming.filter((mesh) => isWatchedGlbMeshKey(mesh.layer_key));
+        const watchedExisting = Array.from(existing.values())
+          .filter((mesh) => isWatchedGlbMeshKey(mesh.layer_key))
+          .map((mesh) => ({
+            id: mesh.id,
+            layer_key: mesh.layer_key,
+          }));
         console.log("[GLB Mesh Link] bulk inventory plan", {
           projectId,
           incoming: incoming.length,
@@ -230,6 +274,13 @@ export function useProjectModelMeshes(projectId: string | undefined) {
           toInsert: toInsert.length,
           toUpdate: toUpdate.length,
           sample: incoming.slice(0, 3),
+        });
+        console.log("[GLB Mesh Link Check] bulk inventory watched", {
+          projectId,
+          watchedIncoming,
+          watchedExisting,
+          watchedToInsert: toInsert.filter((mesh) => isWatchedGlbMeshKey(mesh.layer_key)),
+          watchedToUpdate: toUpdate.filter((mesh) => isWatchedGlbMeshKey(mesh.layer_key)),
         });
       }
 

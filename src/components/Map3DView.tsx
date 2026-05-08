@@ -639,6 +639,7 @@ export function Map3DView() {
   const [reviewMode, setReviewMode] = useState(false);
   const [selectedMeshKey, setSelectedMeshKey] = useState<string | null>(null);
   const [isolatedKeys, setIsolatedKeys] = useState<Set<string> | null>(null);
+  const [meshReviewOverrides, setMeshReviewOverrides] = useState<Map<string, ProjectModelMesh>>(new Map());
 
   // Modo de visualização
   type ViewMode = "complete" | "real" | "simulation";
@@ -713,9 +714,20 @@ export function Map3DView() {
       });
     });
     if (import.meta.env.DEV) {
+      const watchedKeys = meshesToUpsert.filter((mesh) =>
+        mesh.layer_key.includes("Geom3D_302") || mesh.layer_key.includes("Geom3D_303"),
+      );
+      const duplicateNames = Array.from(nameCounts.entries())
+        .filter(([, count]) => count > 1)
+        .slice(0, 20)
+        .map(([name, count]) => ({ name, count }));
       console.log("[GLB Mesh Link] scene keys registered", {
         count: meshesToUpsert.length,
         sample: meshesToUpsert.slice(0, 5),
+      });
+      console.log("[GLB Mesh Link Check] scene keys registered", {
+        watchedKeys,
+        duplicateNames,
       });
     }
     if (meshesToUpsert.length > 0) {
@@ -732,15 +744,43 @@ export function Map3DView() {
     const mesh = obj as THREE.Mesh;
     const layerKey = getMeshLayerKey(mesh);
     if (import.meta.env.DEV) {
+      const matchingKeys: string[] = [];
+      sceneObj?.traverse((child) => {
+        if (!(child as THREE.Mesh).isMesh) return;
+        const childMesh = child as THREE.Mesh;
+        const childKey = getMeshLayerKey(childMesh);
+        if (childKey.includes("Geom3D_302") || childKey.includes("Geom3D_303")) {
+          matchingKeys.push(childKey);
+        }
+      });
       console.log("[GLB Mesh Link] review mesh selected", {
         selectedMeshKey: layerKey,
         meshUuid: mesh.uuid,
         meshName: obj.name || "",
         existingMesh: meshHooks.meshMap.get(layerKey) ?? null,
       });
+      console.log("[GLB Mesh Link Check] review mesh selected", {
+        selectedMeshKey: layerKey,
+        meshUuid: mesh.uuid,
+        meshName: obj.name || "",
+        obramapLayerKey: mesh.userData?.obramapLayerKey ?? null,
+        existingMesh: meshHooks.meshMap.get(layerKey) ?? null,
+        watchedSceneKeys: matchingKeys,
+        watchedMeshMap: Array.from(meshHooks.meshMap.values())
+          .filter((item) => item.layer_key.includes("Geom3D_302") || item.layer_key.includes("Geom3D_303"))
+          .map((item) => ({
+            layer_key: item.layer_key,
+            mesh_name: item.mesh_name,
+            assigned_house_number: item.assigned_house_number,
+            service_macro_id: item.service_macro_id,
+            service_scope_id: item.service_scope_id,
+            production_visible: item.production_visible,
+            progress_percent: item.progress_percent,
+          })),
+      });
     }
     setSelectedMeshKey(layerKey);
-  }, [meshHooks.meshMap, reviewMode]);
+  }, [meshHooks.meshMap, reviewMode, sceneObj]);
 
   const handleIsolate = useCallback((key: string) => {
     setIsolatedKeys(prev => (prev?.has(key) ? null : new Set([key])));
@@ -1544,7 +1584,7 @@ export function Map3DView() {
         {canManage3D && reviewMode && selectedMeshKey && (
           <MeshReviewPanel
             meshKey={selectedMeshKey}
-            meshData={meshHooks.meshMap.get(selectedMeshKey) ?? null}
+            meshData={meshReviewOverrides.get(selectedMeshKey) ?? meshHooks.meshMap.get(selectedMeshKey) ?? null}
             sceneRef={sceneObj}
             houses={houseNumbers}
             services={serviceOptions}
@@ -1564,12 +1604,31 @@ export function Map3DView() {
                 });
               }
               const saved = await meshHooks.upsertMesh(payload);
+              setMeshReviewOverrides((prev) => {
+                const next = new Map(prev);
+                next.set(key, saved);
+                return next;
+              });
               if (import.meta.env.DEV) {
                 console.log("[GLB Mesh Link] map onUpdate saved", {
                   selectedMeshKey,
                   key,
                   saved,
                   after: meshHooks.meshMap.get(key) ?? null,
+                });
+                console.log("[GLB Mesh Link Check] map onUpdate saved", {
+                  key,
+                  saved,
+                  overrideApplied: true,
+                  watchedMeshMap: Array.from(meshHooks.meshMap.values())
+                    .filter((item) => item.layer_key.includes("Geom3D_302") || item.layer_key.includes("Geom3D_303"))
+                    .map((item) => ({
+                      layer_key: item.layer_key,
+                      mesh_name: item.mesh_name,
+                      assigned_house_number: item.assigned_house_number,
+                      service_macro_id: item.service_macro_id,
+                      service_scope_id: item.service_scope_id,
+                    })),
                 });
               }
             }}

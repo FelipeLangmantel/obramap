@@ -102,7 +102,20 @@ export function MeshReviewPanel({
       currentHouse,
       currentService,
     });
-  }, [currentHouse, currentService, meshData, meshKey]);
+    if (meshKey.includes("Geom3D_302") || meshKey.includes("Geom3D_303")) {
+      console.log("[GLB Mesh Link Check] panel values", {
+        meshKey,
+        meshData,
+        currentHouse,
+        currentService,
+        draftHouse,
+        draftService,
+        sceneMeshUuid: selectedSceneMesh?.uuid ?? null,
+        sceneMeshName: selectedSceneMesh?.name ?? null,
+        sceneLayerKey: selectedSceneMesh?.userData?.obramapLayerKey ?? null,
+      });
+    }
+  }, [currentHouse, currentService, draftHouse, draftService, meshData, meshKey, selectedSceneMesh]);
 
   if (!meshKey) return null;
 
@@ -159,6 +172,17 @@ export function MeshReviewPanel({
         selectedService,
         payload,
       });
+      if (meshKey.includes("Geom3D_302") || meshKey.includes("Geom3D_303")) {
+        console.log("[GLB Mesh Link Check] panel apply", {
+          meshKey,
+          sceneMeshUuid: selectedSceneMesh?.uuid ?? null,
+          sceneMeshName: selectedSceneMesh?.name ?? null,
+          sceneLayerKey: selectedSceneMesh?.userData?.obramapLayerKey ?? null,
+          selectedHouseNumber,
+          selectedService,
+          payload,
+        });
+      }
     }
     try {
       await onUpdate(meshKey, payload);
