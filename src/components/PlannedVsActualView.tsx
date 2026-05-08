@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { escapeHtml as esc } from "@/lib/escapeHtml";
 import { 
   BarChart3, 
   FileDown, 
@@ -307,7 +308,7 @@ export function PlannedVsActualView({
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Relatório Planejado x Realizado - ${projectName}</title>
+        <title>Relatório Planejado x Realizado - ${esc(projectName)}</title>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body { font-family: 'Segoe UI', Arial, sans-serif; padding: 30px; color: #1a1a1a; font-size: 11px; }
@@ -333,21 +334,21 @@ export function PlannedVsActualView({
       <body>
         <div class="header">
           <h1>RELATÓRIO PLANEJADO x REALIZADO</h1>
-          <h2>${projectName}</h2>
+          <h2>${esc(projectName)}</h2>
         </div>
         <div class="summary-grid">
-          <div class="summary-box"><div class="summary-label">Total Planejado</div><div class="summary-value">${stats.totalPlanned}</div></div>
-          <div class="summary-box"><div class="summary-label">Total Realizado</div><div class="summary-value">${stats.totalActual}</div></div>
-          <div class="summary-box"><div class="summary-label">Desvio Geral</div><div class="summary-value ${parseFloat(stats.overallDeviation) < 0 ? 'negative' : 'positive'}">${stats.overallDeviation}%</div></div>
-          <div class="summary-box"><div class="summary-label">Acurácia</div><div class="summary-value">${stats.accuracy}%</div></div>
-          <div class="summary-box"><div class="summary-label">Não Planejados</div><div class="summary-value">${stats.unplannedCount}</div></div>
+          <div class="summary-box"><div class="summary-label">Total Planejado</div><div class="summary-value">${Number(stats.totalPlanned) || 0}</div></div>
+          <div class="summary-box"><div class="summary-label">Total Realizado</div><div class="summary-value">${Number(stats.totalActual) || 0}</div></div>
+          <div class="summary-box"><div class="summary-label">Desvio Geral</div><div class="summary-value ${parseFloat(stats.overallDeviation) < 0 ? 'negative' : 'positive'}">${esc(stats.overallDeviation)}%</div></div>
+          <div class="summary-box"><div class="summary-label">Acurácia</div><div class="summary-value">${esc(stats.accuracy)}%</div></div>
+          <div class="summary-box"><div class="summary-label">Não Planejados</div><div class="summary-value">${Number(stats.unplannedCount) || 0}</div></div>
         </div>
         ${weeklyData.map(week => `
           <div style="margin-bottom: 15px;">
-            <div class="week-header">${format(parseISO(week.weekStart), "dd/MM/yyyy", { locale: ptBR })} - ${format(parseISO(week.weekEnd), "dd/MM/yyyy", { locale: ptBR })}</div>
+            <div class="week-header">${esc(format(parseISO(week.weekStart), "dd/MM/yyyy", { locale: ptBR }))} - ${esc(format(parseISO(week.weekEnd), "dd/MM/yyyy", { locale: ptBR }))}</div>
             <table>
               <thead><tr><th>Serviço</th><th class="text-center">Plan</th><th class="text-center">Real</th><th class="text-center">Desvio</th></tr></thead>
-              <tbody>${week.items.map(item => `<tr><td>${item.scopeName}</td><td class="text-center">${item.planned?.planned_houses || 0}</td><td class="text-center">${item.actualCount}</td><td class="text-center ${item.deviation < 0 ? 'text-danger' : 'text-success'}">${item.deviation}</td></tr>`).join('')}</tbody>
+              <tbody>${week.items.map(item => `<tr><td>${esc(item.scopeName)}</td><td class="text-center">${Number(item.planned?.planned_houses) || 0}</td><td class="text-center">${Number(item.actualCount) || 0}</td><td class="text-center ${item.deviation < 0 ? 'text-danger' : 'text-success'}">${Number(item.deviation) || 0}</td></tr>`).join('')}</tbody>
             </table>
           </div>
         `).join('')}

@@ -23,6 +23,22 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders })
   }
 
+  // SECURITY: only the DB webhook (with shared secret) or service-role caller may invoke this function.
+  {
+    const expectedSecret = Deno.env.get('NOTIFY_WEBHOOK_SECRET') ?? ''
+    const providedSecret = req.headers.get('x-webhook-secret') ?? ''
+    const authHeader = req.headers.get('Authorization') ?? ''
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    const isServiceRole = serviceKey && authHeader === `Bearer ${serviceKey}`
+    const hasSharedSecret = expectedSecret && providedSecret && providedSecret === expectedSecret
+    if (!isServiceRole && !hasSharedSecret) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+  }
+
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
