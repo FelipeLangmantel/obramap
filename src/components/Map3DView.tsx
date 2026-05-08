@@ -52,11 +52,65 @@ function getMeshLayerKey(mesh: THREE.Mesh): string {
 
 type RealMeshClass = "ignored" | "context" | "linkedProduction" | "unlinkedProduction";
 
+const CONTEXT_TERMS = [
+  "3dtext",
+  "text",
+  "texto",
+  "rua",
+  "street",
+  "via",
+  "lote",
+  "terreno",
+  "terrain",
+  "site",
+  "calcada",
+  "sidewalk",
+  "guia",
+  "meio fio",
+  "meio-fio",
+  "asfalto",
+  "asphalt",
+  "grama",
+  "grass",
+  "vegetation",
+  "soil",
+  "paver",
+  "concrete_scored",
+  "entorno",
+  "implantacao",
+];
+
+const PRODUCTION_TERMS = [
+  "parede",
+  "wall",
+  "laje",
+  "slab",
+  "radier",
+  "fundacao",
+  "estrutura",
+  "telhado",
+  "roof",
+  "ceramica",
+  "revestimento",
+  "porta",
+  "janela",
+  "esquadria",
+];
+
 function getMeshMaterialName(mesh: THREE.Mesh): string {
   const material = mesh.material as THREE.Material | THREE.Material[] | undefined;
   if (!material) return "";
   if (Array.isArray(material)) return material.map((m: any) => m?.name).filter(Boolean).join(" ");
   return (material as any).name || "";
+}
+
+function getMeshApproxSize(mesh: THREE.Mesh): [number, number, number] | null {
+  if (!mesh.geometry) return null;
+  mesh.geometry.computeBoundingBox();
+  const box = mesh.geometry.boundingBox;
+  if (!box) return null;
+  const size = box.getSize(new THREE.Vector3()).multiply(mesh.scale);
+  return [Number(size.x.toFixed(2)), Number(size.y.toFixed(2)), Number(size.z.toFixed(2))];
 }
 
 function isContextMesh(saved: ProjectModelMesh | null | undefined, mesh: THREE.Mesh): boolean {
@@ -98,11 +152,35 @@ function isContextMesh(saved: ProjectModelMesh | null | undefined, mesh: THREE.M
   ].some((term) => text.includes(term));
 }
 
+function isContextMeshForRealView(saved: ProjectModelMesh | null | undefined, mesh: THREE.Mesh): boolean {
+  const text = [
+    saved?.mesh_name,
+    saved?.material_name,
+    mesh.name,
+    getMeshMaterialName(mesh),
+  ].filter(Boolean).join(" ").toLowerCase();
+
+  if (CONTEXT_TERMS.some((term) => text.includes(term))) return true;
+  if (PRODUCTION_TERMS.some((term) => text.includes(term))) return false;
+
+  if (mesh.geometry) {
+    const approxSize = getMeshApproxSize(mesh);
+    if (approxSize) {
+      const size = new THREE.Vector3(...approxSize);
+      const maxHorizontal = Math.max(Math.abs(size.x), Math.abs(size.z));
+      const height = Math.abs(size.y);
+      if (maxHorizontal >= 20 && height <= 0.8) return true;
+    }
+  }
+
+  return false;
+}
+
 function classifyRealMesh(saved: ProjectModelMesh | null | undefined, mesh: THREE.Mesh): RealMeshClass {
   if (saved?.ignored) return "ignored";
-  if (isContextMesh(saved, mesh)) return "context";
   const hasLink = saved?.assigned_house_number != null && saved?.service_macro_id != null && saved?.service_scope_id != null;
-  return hasLink ? "linkedProduction" : "unlinkedProduction";
+  if (hasLink) return "linkedProduction";
+  return isContextMeshForRealView(saved, mesh) ? "context" : "unlinkedProduction";
 }
 
 // Aplica highlight temporario na mesh selecionada (modo Revisar).
@@ -657,6 +735,7 @@ export function Map3DView() {
 
   // Sincronização 3D Real
   const [isSyncing, setIsSyncing] = useState(false);
+  const [realSyncPending, setRealSyncPending] = useState(false);
   interface SyncResult { total: number; visible: number; hidden: number; unlinked: number; syncedAt: Date; }
   const [lastSyncResult, setLastSyncResult] = useState<SyncResult | null>(null);
   const [realSyncVersion, setRealSyncVersion] = useState(0);
@@ -805,7 +884,7 @@ export function Map3DView() {
   }, [currentProject]);
 
   // Aplica modo de visualização à cena
-  const applyViewMode = useCallback((mode: ViewMode, overrideMeshMap?: Map<string, ProjectModelMesh>, syncVersion = realSyncVersion) => {
+  const applyViewMode = useCallback((mode: ViewMode, overrideMeshMap?: Map<string, ProjectModelMesh>, syncVersion = realSyncVersion, pendingRealSync = realSyncPending) => {
     setViewMode(mode);
     if (!sceneObj) return;
     const sourceMap = overrideMeshMap ?? meshHooks.meshMap;
@@ -816,6 +895,8 @@ export function Map3DView() {
       linkedHidden: 0,
       unlinkedHidden: 0,
       ignored: 0,
+      contextSamples: [] as any[],
+      casa20Samples: [] as any[],
     };
     sceneObj.traverse((child) => {
       if (!(child as THREE.Mesh).isMesh) return;
@@ -835,11 +916,39 @@ export function Map3DView() {
             child.visible = saved?.visible ?? true;
             stats.contextVisible++;
           } else if (realClass === "linkedProduction") {
-            child.visible = !!saved?.production_visible;
+            child.visible = pendingRealSync ? false : !!saved?.production_visible;
             if (child.visible) stats.linkedVisible++; else stats.linkedHidden++;
           } else {
             child.visible = false;
             stats.unlinkedHidden++;
+          }
+          if (import.meta.env.DEV) {
+            if (realClass === "context" && stats.contextSamples.length < 10) {
+              stats.contextSamples.push({
+                layer_key: getMeshLayerKey(mesh),
+                mesh_name: saved?.mesh_name || mesh.name || null,
+                material_name: saved?.material_name || getMeshMaterialName(mesh) || null,
+                dimensions: getMeshApproxSize(mesh),
+                visible: child.visible,
+                classification: realClass,
+              });
+            }
+            if (saved?.assigned_house_number === 20 && stats.casa20Samples.length < 20) {
+              stats.casa20Samples.push({
+                layer_key: saved.layer_key,
+                mesh_name: saved.mesh_name,
+                material_name: saved.material_name,
+                assigned_house_number: saved.assigned_house_number,
+                service_macro_id: saved.service_macro_id,
+                service_scope_id: saved.service_scope_id,
+                ignored: saved.ignored,
+                production_visible: saved.production_visible,
+                progress_percent: saved.progress_percent,
+                dimensions: getMeshApproxSize(mesh),
+                classification: realClass,
+                visible: child.visible,
+              });
+            }
           }
           break;
         }
@@ -852,10 +961,11 @@ export function Map3DView() {
       console.log("[GLB Real View] applied", {
         ...stats,
         syncVersion,
+        pendingRealSync,
         usedOverrideMeshMap: !!overrideMeshMap,
       });
     }
-  }, [sceneObj, meshHooks.meshMap, realSyncVersion]);
+  }, [sceneObj, meshHooks.meshMap, realSyncPending, realSyncVersion]);
 
   // Re-aplica modo quando meshMap chega/atualiza ou cena fica pronta
   useEffect(() => {
@@ -893,6 +1003,7 @@ export function Map3DView() {
     if (!canManage3D) { toast.error("Sem permissão para sincronizar o 3D Real."); return; }
     if (!projectId) return;
     setIsSyncing(true);
+    if (viewMode === "real") setRealSyncPending(true);
     try {
       const meshes = Array.from(meshHooks.meshMap.values()).filter(m => !m.ignored);
       if (meshes.length === 0) {
@@ -1001,16 +1112,16 @@ export function Map3DView() {
       setRealSyncVersion(nextSyncVersion);
       if (refreshedMeshes?.length) {
         const refreshedMap = new Map(refreshedMeshes.map((mesh) => [mesh.layer_key, mesh]));
-        applyViewMode(viewMode, refreshedMap, nextSyncVersion);
+        applyViewMode(viewMode, refreshedMap, nextSyncVersion, false);
       } else {
-        applyViewMode(viewMode);
+        applyViewMode(viewMode, undefined, nextSyncVersion, false);
       }
       setLastSyncResult({ total: meshes.length, visible, hidden, unlinked, syncedAt: new Date() });
-      toast.success(`Sincronizado: ${visible} visíveis · ${hidden} ocultas · ${unlinked} sem vínculo`);
+      if (!options?.silent) toast.success(`Sincronizado: ${visible} visíveis · ${hidden} ocultas · ${unlinked} sem vínculo`);
     } catch (err) {
       console.error("[Sync3D]", err);
       toast.error("Erro ao sincronizar");
-    } finally { setIsSyncing(false); }
+    } finally { setIsSyncing(false); setRealSyncPending(false); }
   }, [canManage3D, projectId, meshHooks, currentProject, sceneObj, applyViewMode, viewMode]);
 
   // Auto-sync após realtime, debounced (somente se já sincronizou ao menos 1x)
@@ -1023,8 +1134,10 @@ export function Map3DView() {
   useEffect(() => { autoSyncRef.current = autoSync; }, [autoSync]);
 
   const handleViewModeChange = useCallback((mode: ViewMode) => {
-    applyViewMode(mode);
-    if (mode !== "real" || !projectId || isSyncing || meshHooks.meshMap.size === 0) return;
+    const shouldAutoSync = mode === "real" && !!projectId && !isSyncing && meshHooks.meshMap.size > 0;
+    if (shouldAutoSync) setRealSyncPending(true);
+    applyViewMode(mode, undefined, realSyncVersion, shouldAutoSync);
+    if (!shouldAutoSync) return;
     const now = Date.now();
     const syncKey = `${projectId}:real`;
     const lastAutoSync = realAutoSyncRef.current;
@@ -1034,7 +1147,7 @@ export function Map3DView() {
     syncDebounceRef.current = setTimeout(() => {
       void handleSync3DReal({ silent: true });
     }, 250);
-  }, [applyViewMode, handleSync3DReal, isSyncing, meshHooks.meshMap.size, projectId]);
+  }, [applyViewMode, handleSync3DReal, isSyncing, meshHooks.meshMap.size, projectId, realSyncVersion]);
 
 
   const handleMeshClick = useCallback((obj: THREE.Object3D) => {
@@ -1548,6 +1661,12 @@ export function Map3DView() {
           </Canvas>
         </div>
         <div id="map3d-ifc-panel-slot" className="pointer-events-none absolute bottom-3 left-0 right-3 top-3 z-40 overflow-hidden" />
+        {viewMode === "real" && realSyncPending && (
+          <div className="absolute top-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full border border-primary/30 bg-background/95 px-3 py-1.5 text-xs font-medium shadow-lg backdrop-blur pointer-events-none">
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+            Sincronizando 3D Real...
+          </div>
+        )}
         {cameraMode === "walk" && (
           <div className="absolute top-4 left-1/2 z-30 flex -translate-x-1/2 flex-col items-center gap-1 rounded-lg border border-primary/30 bg-background/95 px-3 py-2 text-xs shadow-lg backdrop-blur pointer-events-none">
             <div className="font-semibold text-primary">Caminhar na Obra</div>
