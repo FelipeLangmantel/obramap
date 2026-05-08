@@ -276,19 +276,19 @@ export function LogisticsTabContent({ companyId, contextId }: LogisticsTabProps)
     const bus = batchUnits.filter(bu => bu.batch_id === ship.batch_id);
     const unitList = bus.map(bu => units.find(u => u.id === bu.unit_id)).filter(Boolean) as IndUnit[];
 
-    const html = `<html><head><title>Romaneio ${ship.shipment_number}</title>
+    const html = `<html><head><title>Romaneio ${esc(ship.shipment_number)}</title>
     <style>body{font-family:Arial,sans-serif;padding:20px;font-size:12px}
     h1{font-size:18px;margin-bottom:4px}table{width:100%;border-collapse:collapse;margin-top:12px}
     th,td{border:1px solid #333;padding:6px;text-align:left}th{background:#eee}
     .sig{margin-top:60px;display:flex;gap:40px}.sig div{border-top:1px solid #333;padding-top:4px;width:200px;text-align:center}
     @media print{body{padding:10px}}</style></head><body>
-    <h1>ROMANEIO — ${ship.shipment_number}</h1>
-    <p><strong>Data:</strong> ${ship.planned_date ? format(new Date(ship.planned_date + "T12:00:00"), "dd/MM/yyyy") : "—"}</p>
-    <p><strong>Motorista:</strong> ${ship.driver_name || "—"} | <strong>Placa:</strong> ${ship.truck_plate || "—"}</p>
-    <p><strong>Origem:</strong> ${batch?.ind_factories?.name || "—"} | <strong>Lote:</strong> ${batch?.batch_code || "—"}</p>
-    <p><strong>Frete:</strong> ${BRL.format(ship.freight_value)}</p>
+    <h1>ROMANEIO — ${esc(ship.shipment_number)}</h1>
+    <p><strong>Data:</strong> ${esc(ship.planned_date ? format(new Date(ship.planned_date + "T12:00:00"), "dd/MM/yyyy") : "—")}</p>
+    <p><strong>Motorista:</strong> ${esc(ship.driver_name || "—")} | <strong>Placa:</strong> ${esc(ship.truck_plate || "—")}</p>
+    <p><strong>Origem:</strong> ${esc(batch?.ind_factories?.name || "—")} | <strong>Lote:</strong> ${esc(batch?.batch_code || "—")}</p>
+    <p><strong>Frete:</strong> ${esc(BRL.format(ship.freight_value))}</p>
     <table><thead><tr><th>#</th><th>Código</th><th>Nº Unidade</th></tr></thead>
-    <tbody>${unitList.map((u, i) => `<tr><td>${i + 1}</td><td>${u.code}</td><td>${u.unit_number}</td></tr>`).join("")}</tbody></table>
+    <tbody>${unitList.map((u, i) => `<tr><td>${i + 1}</td><td>${esc(u.code)}</td><td>${esc(u.unit_number)}</td></tr>`).join("")}</tbody></table>
     <p style="margin-top:8px"><strong>Total de peças: ${unitList.length}</strong></p>
     <div class="sig"><div>Conferente (origem)</div><div>Conferente (destino)</div><div>Motorista</div></div>
     </body></html>`;
