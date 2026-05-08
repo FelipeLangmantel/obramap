@@ -93,6 +93,7 @@ type IfcProductionOverlay = {
   key: string;
   label: string;
   entityId: string;
+  progressPercent: number;
 };
 type IfcPersistedElementRow = {
   id: string;
@@ -1635,7 +1636,44 @@ function getIfcEntityNumericId(entityId: string | null | undefined) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function createIfcEntityHighlightMesh(mesh: THREE.Mesh, entityId: string): {
+function clampIfcRealOpacity(progressPercent: number) {
+  const progress = Number.isFinite(progressPercent) ? progressPercent : 0;
+  return Math.min(1, Math.max(0.12, 0.12 + (progress / 100) * 0.88));
+}
+
+function createIfcRealVisualMaterial(progressPercent: number) {
+  const opacity = progressPercent >= 100 ? 1 : clampIfcRealOpacity(progressPercent);
+  return new THREE.MeshBasicMaterial({
+    color: "#22c55e",
+    transparent: opacity < 1,
+    opacity,
+    side: THREE.DoubleSide,
+    depthTest: true,
+    depthWrite: opacity >= 1,
+    polygonOffset: true,
+    polygonOffsetFactor: -4,
+    polygonOffsetUnits: -4,
+  });
+}
+
+function createIfcHiddenBaseMaterial() {
+  const material = new THREE.MeshBasicMaterial({
+    color: "#ffffff",
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+  });
+  material.colorWrite = false;
+  return material;
+}
+
+function createIfcEntityHighlightMesh(mesh: THREE.Mesh, entityId: string, options?: {
+  material?: THREE.Material;
+  name?: string;
+  renderOrder?: number;
+  includeBoxHelper?: boolean;
+  boxColor?: THREE.ColorRepresentation;
+}): {
   highlight: THREE.Mesh | null;
   boxHelper: THREE.Box3Helper | null;
   matchingFaces: number;
@@ -1699,14 +1737,16 @@ function createIfcEntityHighlightMesh(mesh: THREE.Mesh, entityId: string): {
   highlightGeometry.computeBoundingBox();
   highlightGeometry.computeBoundingSphere();
 
-  const highlight = new THREE.Mesh(highlightGeometry, createIfcInspectHighlightMaterial());
-  highlight.name = `IFC selected entity ${entityId}`;
-  highlight.renderOrder = 999;
+  const highlight = new THREE.Mesh(highlightGeometry, options?.material || createIfcInspectHighlightMaterial());
+  highlight.name = options?.name || `IFC selected entity ${entityId}`;
+  highlight.renderOrder = options?.renderOrder ?? 999;
   mesh.add(highlight);
   highlight.updateMatrixWorld(true);
 
   const localBox = highlightGeometry.boundingBox?.clone() || null;
-  const boxHelper = localBox && !localBox.isEmpty() ? new THREE.Box3Helper(localBox, "#38bdf8") : null;
+  const boxHelper = options?.includeBoxHelper === false
+    ? null
+    : localBox && !localBox.isEmpty() ? new THREE.Box3Helper(localBox, options?.boxColor || "#38bdf8") : null;
   if (boxHelper) {
     boxHelper.name = `IFC selected entity box ${entityId}`;
     boxHelper.renderOrder = 1000;
@@ -1951,6 +1991,7 @@ function IFCVisualModel({
   clearInspectSignal,
   testOverlays,
   productionOverlays,
+  productionRealModeActive,
   onInspectSelection,
   onStatusChange,
 }: {
@@ -1964,6 +2005,7 @@ function IFCVisualModel({
   clearInspectSignal: number;
   testOverlays: Ifc3DTestOverlay[];
   productionOverlays: IfcProductionOverlay[];
+  productionRealModeActive: boolean;
   onInspectSelection: (selection: IfcVisualInspectSelection | null) => void;
   onStatusChange: (status: IfcVisualStatus, message?: string | null) => void;
 }) {
@@ -1997,6 +2039,11 @@ function IFCVisualModel({
     highlight: THREE.Mesh;
     boxHelper: THREE.Box3Helper | null;
   }>>([]);
+  const realBaseMaterialRef = useRef<Array<{
+    mesh: THREE.Mesh;
+    previousMaterial: THREE.Material | THREE.Material[];
+  }>>([]);
+  const realHiddenMaterialRef = useRef<THREE.MeshBasicMaterial | null>(null);
 
   const restorePaintEntry = useCallback((entry: {
     mesh: THREE.Mesh;
@@ -2084,9 +2131,46 @@ function IFCVisualModel({
     productionOverlayRef.current.forEach(disposeIfcHighlightOverlay);
     productionOverlayRef.current = [];
     if (import.meta.env.DEV && removed > 0) {
-      console.log("[IFC Real] overlays removed", { removed });
+      console.log("[IFC Real Visual] overlays removed", { removed });
     }
   }, []);
+
+  const restoreIfcRealBaseMaterials = useCallback(() => {
+    const restored = realBaseMaterialRef.current.length;
+    realBaseMaterialRef.current.forEach(entry => {
+      entry.mesh.material = entry.previousMaterial;
+    });
+    realBaseMaterialRef.current = [];
+    realHiddenMaterialRef.current?.dispose();
+    realHiddenMaterialRef.current = null;
+    if (import.meta.env.DEV && restored > 0) {
+      console.log("[IFC Real Visual] base materials restored", { restored });
+    }
+  }, []);
+
+  useEffect(() => {
+    restoreIfcRealBaseMaterials();
+    if (!visible || !objectRef.current || !productionRealModeActive) return;
+
+    const hiddenMaterial = createIfcHiddenBaseMaterial();
+    realHiddenMaterialRef.current = hiddenMaterial;
+    const entries: Array<{ mesh: THREE.Mesh; previousMaterial: THREE.Material | THREE.Material[] }> = [];
+    objectRef.current.traverse(child => {
+      const mesh = child as THREE.Mesh;
+      if (!mesh.isMesh || !mesh.geometry) return;
+      entries.push({ mesh, previousMaterial: mesh.material as THREE.Material | THREE.Material[] });
+      mesh.material = hiddenMaterial;
+    });
+    realBaseMaterialRef.current = entries;
+
+    if (import.meta.env.DEV) {
+      console.log("[IFC Real Visual] base hidden", { meshCount: entries.length });
+    }
+
+    return () => {
+      restoreIfcRealBaseMaterials();
+    };
+  }, [object, productionRealModeActive, restoreIfcRealBaseMaterials, visible]);
 
   const testOverlayKey = useMemo(() => {
     return testOverlays.map(item => `${item.key}:${item.entityId}`).sort().join("|");
@@ -2184,10 +2268,12 @@ function IFCVisualModel({
     });
 
     if (import.meta.env.DEV) {
-      console.log("[IFC Real] entity ids used", productionOverlays.map(item => ({
+      console.log("[IFC Real Visual] entity ids used", productionOverlays.map(item => ({
         key: item.key,
         label: item.label,
         entityId: item.entityId,
+        progressPercent: item.progressPercent,
+        opacity: clampIfcRealOpacity(item.progressPercent),
         targetExpressId: getIfcEntityNumericId(item.entityId),
       })));
     }
@@ -2196,12 +2282,20 @@ function IFCVisualModel({
     productionOverlays.forEach(item => {
       let created = false;
       for (const mesh of meshes) {
-        const result = createIfcEntityHighlightMesh(mesh, item.entityId);
+        const material = createIfcRealVisualMaterial(item.progressPercent);
+        const result = createIfcEntityHighlightMesh(mesh, item.entityId, {
+          material,
+          name: `IFC real production entity ${item.entityId}`,
+          renderOrder: 1200,
+          includeBoxHelper: false,
+        });
         if (import.meta.env.DEV) {
-          console.log("[IFC Real] overlay attempt", {
+          console.log("[IFC Real Visual] overlay attempt", {
             key: item.key,
             label: item.label,
             entityId: item.entityId,
+            progressPercent: item.progressPercent,
+            opacity: clampIfcRealOpacity(item.progressPercent),
             targetExpressId: getIfcEntityNumericId(item.entityId),
             created: !!result.highlight,
             matchingFaces: result.matchingFaces,
@@ -2211,7 +2305,10 @@ function IFCVisualModel({
             meshUuid: mesh.uuid,
           });
         }
-        if (!result.highlight) continue;
+        if (!result.highlight) {
+          material.dispose();
+          continue;
+        }
 
         productionOverlayRef.current.push({
           key: item.key,
@@ -2225,10 +2322,11 @@ function IFCVisualModel({
       }
 
       if (!created && import.meta.env.DEV) {
-        console.log("[IFC Real] unable to create overlay", {
+        console.log("[IFC Real Visual] unable to create overlay", {
           key: item.key,
           label: item.label,
           entityId: item.entityId,
+          progressPercent: item.progressPercent,
           targetExpressId: getIfcEntityNumericId(item.entityId),
           meshCount: meshes.length,
         });
@@ -2236,7 +2334,7 @@ function IFCVisualModel({
     });
 
     if (import.meta.env.DEV) {
-      console.log("[IFC Real] overlays created", {
+      console.log("[IFC Real Visual] overlays created", {
         requested: productionOverlays.length,
         created: createdCount,
       });
@@ -2341,6 +2439,12 @@ function IFCVisualModel({
       loadTokenRef.current += 1;
       loadingUrlRef.current = null;
 
+      paintHistoryRef.current = [];
+      disposeIfcVisualTextureCache(paintTextureCacheRef.current);
+      clearInspectHighlight();
+      clearProductionOverlays();
+      restoreIfcRealBaseMaterials();
+
       if (objectRef.current) {
         disposeIfcVisualObject(objectRef.current);
         objectRef.current = null;
@@ -2348,9 +2452,6 @@ function IFCVisualModel({
         setObject(null);
         console.info("[IFC Visual] disposed");
       }
-      paintHistoryRef.current = [];
-      disposeIfcVisualTextureCache(paintTextureCacheRef.current);
-      clearInspectHighlight();
 
       return;
     }
@@ -2370,6 +2471,11 @@ function IFCVisualModel({
     loadingUrlRef.current = url;
 
     const loadVisualIfc = async () => {
+      paintHistoryRef.current = [];
+      clearInspectHighlight();
+      clearProductionOverlays();
+      restoreIfcRealBaseMaterials();
+
       if (objectRef.current) {
         disposeIfcVisualObject(objectRef.current);
         objectRef.current = null;
@@ -2377,8 +2483,6 @@ function IFCVisualModel({
         setObject(null);
         console.info("[IFC Visual] disposed");
       }
-      paintHistoryRef.current = [];
-      clearInspectHighlight();
 
       setObject(null);
       setLoadError(null);
@@ -2447,6 +2551,11 @@ function IFCVisualModel({
         loadingUrlRef.current = null;
       }
 
+      paintHistoryRef.current = [];
+      clearInspectHighlight();
+      clearProductionOverlays();
+      restoreIfcRealBaseMaterials();
+
       if (objectRef.current && objectUrlRef.current === url) {
         disposeIfcVisualObject(objectRef.current);
         objectRef.current = null;
@@ -2454,10 +2563,8 @@ function IFCVisualModel({
         setObject(null);
         console.info("[IFC Visual] disposed");
       }
-      paintHistoryRef.current = [];
-      clearInspectHighlight();
     };
-  }, [clearInspectHighlight, onStatusChange, url, visible]);
+  }, [clearInspectHighlight, clearProductionOverlays, onStatusChange, restoreIfcRealBaseMaterials, url, visible]);
 
   if (!visible) return null;
 
@@ -3283,16 +3390,19 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
     const overlays: IfcProductionOverlay[] = [];
 
     productionActivationDiagnostics.items.forEach(item => {
-      if (item.production_activation_status !== "would_activate") return;
+      if (!item.ifc_element_id) return;
       const element = elementById.get(item.ifc_element_id);
       const entityId = normalizeIfcEntityId(element?.ifc_entity_id);
       if (!entityId || seenEntityIds.has(entityId)) return;
+      const progressPercent = Math.max(0, Math.min(100, Number(item.progress_percent ?? 0)));
+      if (progressPercent <= 0) return;
 
       seenEntityIds.add(entityId);
       overlays.push({
         key: `production:${item.ifc_element_id}`,
         label: `Casa ${item.house_number ?? "-"} | ${item.trigger_service_label || item.trigger_service_key || "serviço IFC"}`,
         entityId,
+        progressPercent,
       });
     });
 
@@ -3301,14 +3411,28 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;
-    console.log("[IFC Real] diagnostics overlays", {
-      ifcRealModeActive,
-      diagnosticItems: productionActivationDiagnostics.items.length,
-      activatableItems: productionActivationDiagnostics.items.filter(item => item.production_activation_status === "would_activate").length,
-      overlayCount: activeIfcProductionOverlays.length,
-      entityIds: activeIfcProductionOverlays.map(item => item.entityId),
+    const elementById = new Map(persistedElements.map(element => [element.id, element]));
+    const evaluated = productionActivationDiagnostics.items.filter(item => !!item.ifc_element_id && !!normalizeIfcEntityId(elementById.get(item.ifc_element_id)?.ifc_entity_id));
+    const visibleItems = evaluated.filter(item => (item.progress_percent ?? 0) > 0);
+    const completeItems = visibleItems.filter(item => (item.progress_percent ?? 0) >= 100);
+    const partialItems = visibleItems.filter(item => {
+      const progress = item.progress_percent ?? 0;
+      return progress > 0 && progress < 100;
     });
-  }, [activeIfcProductionOverlays, ifcRealModeActive, productionActivationDiagnostics.items]);
+    console.log("[IFC Real Visual] diagnostics", {
+      ifcRealModeActive,
+      totalEvaluated: evaluated.length,
+      totalVisible: visibleItems.length,
+      totalHidden: Math.max(0, evaluated.length - visibleItems.length),
+      totalPartial: partialItems.length,
+      totalComplete: completeItems.length,
+      sample: activeIfcProductionOverlays.slice(0, 6).map(item => ({
+        entityId: item.entityId,
+        progressPercent: item.progressPercent,
+        opacity: clampIfcRealOpacity(item.progressPercent),
+      })),
+    });
+  }, [activeIfcProductionOverlays, ifcRealModeActive, persistedElements, productionActivationDiagnostics.items]);
 
   const handleToggleIfc3dTestMode = useCallback(() => {
     setIfc3dTestEnabled(prev => {
@@ -3500,6 +3624,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         clearInspectSignal={clearInspectSignal}
         testOverlays={activeIfc3dTestOverlays}
         productionOverlays={activeIfcProductionOverlays}
+        productionRealModeActive={ifcRealModeActive}
         onInspectSelection={handleInspectSelection}
         onStatusChange={handleVisualStatusChange}
       />
