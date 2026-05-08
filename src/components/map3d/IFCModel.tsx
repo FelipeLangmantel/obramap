@@ -104,7 +104,10 @@ type IfcPersistedElementRow = {
   raw_properties: Record<string, unknown> | null;
 };
 type IfcFinalLinkRow = {
+  id: string | null;
+  model_id: string | null;
   ifc_element_id: string;
+  house_id: string | null;
   house_number: number | null;
   trigger_service_key: string | null;
   trigger_service_label: string | null;
@@ -235,7 +238,10 @@ function asIfcFinalLinkRows(data: unknown): IfcFinalLinkRow[] {
       if (!ifcElementId) return null;
 
       return {
+        id: normalizeNullableString(row.id),
+        model_id: normalizeNullableString(row.model_id),
         ifc_element_id: ifcElementId,
+        house_id: normalizeNullableString(row.house_id),
         house_number: normalizeNullableNumber(row.house_number),
         trigger_service_key: normalizeNullableString(row.trigger_service_key),
         trigger_service_label: normalizeNullableString(row.trigger_service_label),
@@ -248,7 +254,7 @@ function asIfcFinalLinkRows(data: unknown): IfcFinalLinkRow[] {
 function buildIfc3DTestLinkedElements(elements: IfcPersistedElementRow[], links: IfcFinalLinkRow[]): Ifc3DTestLinkedElementRow[] {
   const elementById = new Map(elements.map(element => [element.id, element]));
 
-  return links
+  const linkedElements = links
     .map((link): Ifc3DTestLinkedElementRow | null => {
       const element = elementById.get(link.ifc_element_id);
       if (!element) return null;
@@ -264,6 +270,36 @@ function buildIfc3DTestLinkedElements(elements: IfcPersistedElementRow[], links:
       };
     })
     .filter((row): row is Ifc3DTestLinkedElementRow => !!row);
+
+  if (import.meta.env.DEV) {
+    const missingLinks = links.filter(link => !elementById.has(link.ifc_element_id));
+    console.log("[IFC Test] join diagnostics", {
+      elementsByIdSize: elementById.size,
+      firstLinkElementId: links[0]?.ifc_element_id ?? null,
+      firstElementId: elements[0]?.id ?? null,
+      matchedCount: linkedElements.length,
+      missingCount: missingLinks.length,
+      missingSample: missingLinks.slice(0, 5).map(link => ({
+        id: link.id,
+        model_id: link.model_id,
+        ifc_element_id: link.ifc_element_id,
+        house_id: link.house_id,
+        house_number: link.house_number,
+        trigger_service_key: link.trigger_service_key,
+        status: link.status,
+      })),
+      matchedSample: linkedElements.slice(0, 5).map(element => ({
+        ifc_element_id: element.ifc_element_id,
+        ifc_entity_id: element.ifc_entity_id,
+        ifc_global_id: element.ifc_global_id,
+        house_number: element.house_number,
+        trigger_service_key: element.trigger_service_key,
+        status: element.status,
+      })),
+    });
+  }
+
+  return linkedElements;
 }
 
 const IFC_ENTITY_TYPES = [
@@ -2042,16 +2078,33 @@ function IFCVisualModel({
       if (mesh.isMesh && mesh.geometry) meshes.push(mesh);
     });
 
-    console.info("[IFC 3D Test] entity ids used", testOverlays.map(item => ({
-      key: item.key,
-      label: item.label,
-      entityId: item.entityId,
-    })));
+    if (import.meta.env.DEV) {
+      console.log("[IFC Test] entity ids used", testOverlays.map(item => ({
+        key: item.key,
+        label: item.label,
+        entityId: item.entityId,
+        targetExpressId: getIfcEntityNumericId(item.entityId),
+      })));
+    }
 
     testOverlays.forEach(item => {
       let created = false;
       for (const mesh of meshes) {
         const result = createIfcEntityHighlightMesh(mesh, item.entityId);
+        if (import.meta.env.DEV) {
+          console.log("[IFC Test] overlay attempt", {
+            key: item.key,
+            label: item.label,
+            entityId: item.entityId,
+            targetExpressId: getIfcEntityNumericId(item.entityId),
+            created: !!result.highlight,
+            matchingFaces: result.matchingFaces,
+            reason: result.reason,
+            geometryAttributes: getIfcGeometryAttributeNames(mesh.geometry),
+            meshName: mesh.name || null,
+            meshUuid: mesh.uuid,
+          });
+        }
         if (!result.highlight) continue;
 
         testOverlayRef.current.push({
@@ -2060,23 +2113,28 @@ function IFCVisualModel({
           highlight: result.highlight,
           boxHelper: result.boxHelper,
         });
-        console.info("[IFC 3D Test] overlay created", {
-          key: item.key,
-          label: item.label,
-          entityId: item.entityId,
-          matchingFaces: result.matchingFaces,
-          vertexCount: result.highlightVertexCount,
-          bounds: result.boundsRaw,
-        });
+        if (import.meta.env.DEV) {
+          console.log("[IFC Test] overlay created", {
+            key: item.key,
+            label: item.label,
+            entityId: item.entityId,
+            targetExpressId: getIfcEntityNumericId(item.entityId),
+            matchingFaces: result.matchingFaces,
+            vertexCount: result.highlightVertexCount,
+            bounds: result.boundsRaw,
+            geometryAttributes: getIfcGeometryAttributeNames(mesh.geometry),
+          });
+        }
         created = true;
         break;
       }
 
-      if (!created) {
-        console.info("[IFC 3D Test] unable to create overlay", {
+      if (!created && import.meta.env.DEV) {
+        console.log("[IFC Test] unable to create overlay", {
           key: item.key,
           label: item.label,
           entityId: item.entityId,
+          targetExpressId: getIfcEntityNumericId(item.entityId),
           meshCount: meshes.length,
         });
       }
@@ -2815,6 +2873,13 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         if (modelError) throw modelError;
 
         const model = asProject3DModelIdRow(modelData as unknown);
+        if (import.meta.env.DEV) {
+          console.log("[IFC Test] model resolved", {
+            projectId,
+            companyId: companyId ?? null,
+            modelId: model?.id ?? null,
+          });
+        }
         if (!model?.id) {
           if (!cancelled) {
             setPersistedElements([]);
@@ -2829,11 +2894,46 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
             .eq("project_id", projectId)
             .eq("model_id", model.id),
           linksTable
-            .select("ifc_element_id, house_number, trigger_service_key, trigger_service_label, status")
+            .select("id, model_id, ifc_element_id, house_id, house_number, trigger_service_key, trigger_service_label, status")
             .eq("project_id", projectId)
             .eq("model_id", model.id)
             .eq("status", "confirmed"),
         ]);
+
+        if (import.meta.env.DEV) {
+          console.log("[IFC Test] persisted elements loaded", {
+            projectId,
+            companyId: companyId ?? null,
+            modelId: model.id,
+            count: Array.isArray(elementsData) ? elementsData.length : 0,
+            sample: asIfcPersistedElementRows(elementsData as unknown).slice(0, 3).map(element => ({
+              id: element.id,
+              ifc_entity_id: element.ifc_entity_id,
+              ifc_global_id: element.ifc_global_id,
+              detected_house_number: element.detected_house_number,
+              detected_service_key: element.detected_service_key,
+              status: element.status,
+              category: element.category,
+            })),
+            error: elementsError,
+          });
+          console.log("[IFC Test] links loaded", {
+            projectId,
+            modelId: model.id,
+            count: Array.isArray(linksData) ? linksData.length : 0,
+            sample: asIfcFinalLinkRows(linksData as unknown).slice(0, 3).map(link => ({
+              id: link.id,
+              model_id: link.model_id,
+              ifc_element_id: link.ifc_element_id,
+              house_id: link.house_id,
+              house_number: link.house_number,
+              trigger_service_key: link.trigger_service_key,
+              trigger_service_label: link.trigger_service_label,
+              status: link.status,
+            })),
+            error: linksError,
+          });
+        }
 
         if (elementsError) throw elementsError;
         if (linksError) throw linksError;
@@ -2989,6 +3089,20 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         !!element.ifc_entity_id
       )));
     });
+    if (import.meta.env.DEV) {
+      const countsByControl = IFC_3D_TEST_CONTROLS.reduce<Record<Ifc3DTestControlKey, number>>((acc, control) => {
+        acc[control.key] = map.get(control.key)?.length || 0;
+        return acc;
+      }, {} as Record<Ifc3DTestControlKey, number>);
+      const confirmedTotal = IFC_3D_TEST_CONTROLS.reduce((total, control) => total + (map.get(control.key)?.length || 0), 0);
+      console.log("[IFC Test] controls diagnostics", {
+        finalLinksCount: ifc3dTestLinkedElements.length,
+        houses: Array.from(new Set(ifc3dTestLinkedElements.map(element => element.house_number))),
+        services: Array.from(new Set(ifc3dTestLinkedElements.map(element => element.trigger_service_key))),
+        countsByControl,
+        confirmedTotal,
+      });
+    }
     return map;
   }, [ifc3dTestLinkedElements]);
 
@@ -3043,13 +3157,15 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
   const handleToggleIfc3dTestControl = useCallback((control: typeof IFC_3D_TEST_CONTROLS[number]) => {
     setIfc3dTestToggles(prev => {
       const next = { ...prev, [control.key]: !prev[control.key] };
-      console.info("[IFC 3D Test] toggle house/service", {
-        key: control.key,
-        houseNumber: control.houseNumber,
-        serviceKey: control.serviceKey,
-        enabled: next[control.key],
-        entityIds: (ifc3dTestElementsByControl.get(control.key) || []).map(element => element.ifc_entity_id),
-      });
+      if (import.meta.env.DEV) {
+        console.log("[IFC Test] toggle house/service", {
+          key: control.key,
+          houseNumber: control.houseNumber,
+          serviceKey: control.serviceKey,
+          enabled: next[control.key],
+          entityIds: (ifc3dTestElementsByControl.get(control.key) || []).map(element => element.ifc_entity_id),
+        });
+      }
       return next;
     });
   }, [ifc3dTestElementsByControl]);
@@ -3087,15 +3203,17 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
 
   useEffect(() => {
     if (!ifc3dTestEnabled) return;
-    console.info("[IFC 3D Test] confirmed elements loaded", {
-      total: ifc3dTestConfirmedTotal,
-      controls: IFC_3D_TEST_CONTROLS.map(control => ({
-        key: control.key,
-        label: control.label,
-        count: ifc3dTestElementsByControl.get(control.key)?.length || 0,
-        entityIds: (ifc3dTestElementsByControl.get(control.key) || []).map(element => element.ifc_entity_id),
-      })),
-    });
+    if (import.meta.env.DEV) {
+      console.log("[IFC Test] confirmed elements loaded", {
+        total: ifc3dTestConfirmedTotal,
+        controls: IFC_3D_TEST_CONTROLS.map(control => ({
+          key: control.key,
+          label: control.label,
+          count: ifc3dTestElementsByControl.get(control.key)?.length || 0,
+          entityIds: (ifc3dTestElementsByControl.get(control.key) || []).map(element => element.ifc_entity_id),
+        })),
+      });
+    }
   }, [ifc3dTestConfirmedTotal, ifc3dTestElementsByControl, ifc3dTestEnabled]);
 
   useEffect(() => {
