@@ -19,6 +19,18 @@ export interface IfcProductionActivationItem {
   trigger_service_label: string | null;
   activation_status: IfcActivationLink["activation_status"];
   production_activation_status: IfcProductionActivationStatus;
+  resolved_scope_id: string | null;
+  resolved_scope_label: string | null;
+  service_mapping_source: "exact_scope_match" | "label_suggestion" | "none";
+  progress_percent: number | null;
+  production_activation_reason:
+    | "production_found"
+    | "no_consolidated_progress"
+    | "scope_not_found_in_house"
+    | "service_mapping_missing"
+    | "house_not_found"
+    | "pending_link_data"
+    | "unknown_production_source";
 }
 
 export interface IfcProductionActivationSummary {
@@ -38,14 +50,29 @@ interface UseIfcProductionActivationDiagnosticsParams {
   enabled?: boolean;
 }
 
-interface ProductionRow {
-  scope_id: string | null;
-  house_ids: Array<number | string>;
-}
-
 interface HouseRow {
   id: string;
   house_number: number;
+  macros: HouseMacroRow[];
+}
+
+interface HouseMacroRow {
+  id: string | null;
+  name: string | null;
+  scopes: HouseScopeRow[];
+}
+
+interface HouseScopeRow {
+  id: string | null;
+  name: string | null;
+  progress: number;
+}
+
+interface ServiceCatalogRow {
+  macro_id: string | null;
+  macro_name: string | null;
+  scope_id: string | null;
+  scope_name: string | null;
 }
 
 const emptySummary: IfcProductionActivationSummary = {
@@ -67,24 +94,33 @@ function normalizeNullableNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function normalizeHouseIdArray(value: unknown): Array<number | string> {
-  if (!Array.isArray(value)) return [];
-  return value.filter((item): item is number | string => (
-    (typeof item === "number" && Number.isFinite(item)) ||
-    (typeof item === "string" && item.trim().length > 0)
-  ));
+function normalizeProgress(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
 }
 
-function asProductionRows(data: unknown): ProductionRow[] {
-  if (!Array.isArray(data)) return [];
+function asHouseMacros(value: unknown): HouseMacroRow[] {
+  if (!Array.isArray(value)) return [];
 
-  return data
-    .filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
-    .map(item => ({
-      scope_id: normalizeNullableString(item.scope_id),
-      house_ids: normalizeHouseIdArray(item.house_ids),
-    }))
-    .filter(item => !!item.scope_id && item.house_ids.length > 0);
+  return value
+    .filter((macro): macro is Record<string, unknown> => !!macro && typeof macro === "object")
+    .map(macro => ({
+      id: normalizeNullableString(macro.id),
+      name: normalizeNullableString(macro.name),
+      scopes: Array.isArray(macro.scopes)
+        ? macro.scopes
+          .filter((scope): scope is Record<string, unknown> => !!scope && typeof scope === "object")
+          .map(scope => ({
+            id: normalizeNullableString(scope.id),
+            name: normalizeNullableString(scope.name),
+            progress: normalizeProgress(scope.progress),
+          }))
+        : [],
+    }));
 }
 
 function asHouseRows(data: unknown): HouseRow[] {
@@ -95,12 +131,78 @@ function asHouseRows(data: unknown): HouseRow[] {
     .map(item => ({
       id: normalizeNullableString(item.id) || "",
       house_number: normalizeNullableNumber(item.house_number),
+      macros: asHouseMacros(item.macros),
     }))
     .filter((item): item is HouseRow => !!item.id && item.house_number != null);
 }
 
-function buildProductionKey(houseNumber: number, serviceKey: string) {
-  return `${houseNumber}::${serviceKey}`;
+function asServiceCatalogRows(data: unknown): ServiceCatalogRow[] {
+  if (!Array.isArray(data)) return [];
+
+  return data
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
+    .map(item => ({
+      macro_id: normalizeNullableString(item.macro_id),
+      macro_name: normalizeNullableString(item.macro_name),
+      scope_id: normalizeNullableString(item.scope_id),
+      scope_name: normalizeNullableString(item.scope_name),
+    }))
+    .filter(item => !!item.scope_id);
+}
+
+function findConsolidatedScope(house: HouseRow | null, scopeId: string | null) {
+  if (!house || !scopeId) return null;
+
+  for (const macro of house.macros) {
+    const scope = macro.scopes.find(item => item.id === scopeId);
+    if (scope) {
+      return {
+        macro,
+        scope,
+      };
+    }
+  }
+
+  return null;
+}
+
+function normalizeText(value: string | null | undefined) {
+  return (value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function hasTokenMatch(left: string, right: string) {
+  if (!left || !right) return false;
+  if (left.includes(right) || right.includes(left)) return true;
+
+  const leftTokens = new Set(left.split(" ").filter(Boolean));
+  const rightTokens = right.split(" ").filter(Boolean);
+  return rightTokens.some(token => token.length >= 3 && leftTokens.has(token));
+}
+
+function getServiceLabel(service: ServiceCatalogRow) {
+  if (service.macro_name && service.scope_name) return `${service.macro_name} -> ${service.scope_name}`;
+  return service.scope_name || service.scope_id || null;
+}
+
+function findLabelSuggestion(ifcKey: string, ifcLabel: string | null, services: ServiceCatalogRow[]) {
+  const normalizedIfcKey = normalizeText(ifcKey);
+  const normalizedIfcLabel = normalizeText(ifcLabel);
+  const normalizedIfcText = [normalizedIfcKey, normalizedIfcLabel].filter(Boolean).join(" ");
+
+  return services.find(service => {
+    const serviceText = normalizeText([
+      service.scope_id,
+      service.scope_name,
+      service.macro_name,
+      getServiceLabel(service),
+    ].filter(Boolean).join(" "));
+    return hasTokenMatch(serviceText, normalizedIfcText);
+  }) || null;
 }
 
 function summarizeItems(items: IfcProductionActivationItem[]): IfcProductionActivationSummary {
@@ -142,50 +244,79 @@ export function useIfcProductionActivationDiagnostics({
       return;
     }
 
-    setLoadingProduction(true);
+      setLoadingProduction(true);
     setError(null);
     try {
       const housesTable = supabase.from("houses" as any) as any;
-      const productionsTable = supabase.from("productions" as any) as any;
+      const servicesTable = supabase.from("project_contract_services" as any) as any;
 
-      const [{ data: housesData, error: housesError }, { data: productionsData, error: productionsError }] = await Promise.all([
+      const [
+        { data: housesData, error: housesError },
+        { data: servicesData, error: servicesError },
+      ] = await Promise.all([
         housesTable
-          .select("id, house_number")
+          .select("id, house_number, macros")
           .eq("project_id", projectId),
-        productionsTable
-          .select("scope_id, house_ids")
-          .eq("project_id", projectId)
-          .is("deleted_at", null),
+        servicesTable
+          .select("macro_id, macro_name, scope_id, scope_name")
+          .eq("project_id", projectId),
       ]);
 
       if (housesError) throw housesError;
-      if (productionsError) throw productionsError;
+      if (servicesError) throw servicesError;
 
-      const houseNumberById = new Map(asHouseRows(housesData as unknown).map(house => [house.id, house.house_number]));
-      const producedKeys = new Set<string>();
-
-      asProductionRows(productionsData as unknown).forEach(production => {
-        if (!production.scope_id) return;
-        production.house_ids.forEach(houseRef => {
-          const houseNumber = typeof houseRef === "number" ? houseRef : houseNumberById.get(houseRef);
-          if (houseNumber == null) return;
-          producedKeys.add(buildProductionKey(houseNumber, production.scope_id!));
-        });
-      });
+      const houses = asHouseRows(housesData as unknown);
+      const houseNumberById = new Map(houses.map(house => [house.id, house.house_number]));
+      const houseByNumber = new Map(houses.map(house => [house.house_number, house]));
+      const serviceCatalog = asServiceCatalogRows(servicesData as unknown);
+      const serviceByScopeId = new Map(serviceCatalog.map(service => [service.scope_id, service]));
 
       setItems(activationReadModel.links.map(link => {
         const houseNumber = link.house_number ?? (link.house_id ? houseNumberById.get(link.house_id) ?? null : null);
         const hasLinkData = houseNumber != null && !!link.trigger_service_key;
+        const exactService = link.trigger_service_key ? serviceByScopeId.get(link.trigger_service_key) || null : null;
+        const suggestedService = link.trigger_service_key && !exactService
+          ? findLabelSuggestion(link.trigger_service_key, link.trigger_service_label, serviceCatalog)
+          : null;
+        const resolvedScopeId = exactService
+          ? link.trigger_service_key
+          : suggestedService?.scope_id || null;
+        const resolvedScopeLabel = exactService ? getServiceLabel(exactService) : suggestedService ? getServiceLabel(suggestedService) : null;
+        const serviceMappingSource = exactService
+          ? "exact_scope_match"
+          : suggestedService
+            ? "label_suggestion"
+            : "none";
+        const house = houseNumber != null ? houseByNumber.get(houseNumber) || null : null;
+        const consolidatedScope = findConsolidatedScope(house, resolvedScopeId);
+        const progressPercent = consolidatedScope?.scope.progress ?? null;
+        const hasProduction = (progressPercent ?? 0) > 0;
         const productionStatus: IfcProductionActivationStatus = !hasLinkData
           ? "pending_link_data"
-          : producedKeys.has(buildProductionKey(houseNumber, link.trigger_service_key!))
+          : hasProduction
             ? "would_activate"
             : "not_activated";
+        const productionReason: IfcProductionActivationItem["production_activation_reason"] = !hasLinkData
+          ? "pending_link_data"
+          : !resolvedScopeId
+            ? "service_mapping_missing"
+            : !house
+              ? "house_not_found"
+              : !consolidatedScope
+                ? "scope_not_found_in_house"
+            : hasProduction
+              ? "production_found"
+              : "no_consolidated_progress";
 
         return {
           ...link,
           house_number: houseNumber,
           production_activation_status: productionStatus,
+          resolved_scope_id: resolvedScopeId,
+          resolved_scope_label: resolvedScopeLabel,
+          service_mapping_source: serviceMappingSource,
+          progress_percent: progressPercent,
+          production_activation_reason: productionReason,
         };
       }));
     } catch (err: any) {
@@ -195,6 +326,11 @@ export function useIfcProductionActivationDiagnostics({
       setItems(activationReadModel.links.map(link => ({
         ...link,
         production_activation_status: "unknown_production_source",
+        resolved_scope_id: null,
+        resolved_scope_label: null,
+        service_mapping_source: "none",
+        progress_percent: null,
+        production_activation_reason: "unknown_production_source",
       })));
     } finally {
       setLoadingProduction(false);

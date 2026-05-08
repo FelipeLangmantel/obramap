@@ -448,6 +448,22 @@ function productionActivationStatusLabel(status: string) {
   return "fonte desconhecida";
 }
 
+function productionActivationReasonLabel(reason: string | null | undefined) {
+  if (reason === "production_found") return "produção encontrada no progresso consolidado da casa";
+  if (reason === "no_consolidated_progress") return "sem progresso no scope resolvido";
+  if (reason === "scope_not_found_in_house") return "scope não encontrado na casa";
+  if (reason === "service_mapping_missing") return "sem mapeamento de serviço";
+  if (reason === "house_not_found") return "casa não encontrada";
+  if (reason === "pending_link_data") return "dados pendentes";
+  return "fonte desconhecida";
+}
+
+function serviceMappingSourceLabel(source: string | null | undefined) {
+  if (source === "exact_scope_match") return "match exato";
+  if (source === "label_suggestion") return "sugestão por nome";
+  return "sem mapeamento";
+}
+
 function serviceKeyMappingStatusLabel(status: string) {
   if (status === "exact_scope_match") return "match exato";
   if (status === "label_suggestion") return "sugestão por nome";
@@ -1942,6 +1958,10 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
                     <div key={item.link_id} className="flex flex-wrap items-center gap-2 rounded border border-border bg-muted/30 px-3 py-2 text-xs">
                       <span><span className="font-medium">Serviço:</span> {item.trigger_service_label || item.trigger_service_key || "sem serviço"}</span>
                       <span><span className="font-medium">Casa:</span> {item.house_number ?? (item.house_id ? "house_id" : "sem casa")}</span>
+                      <span><span className="font-medium">Scope resolvido:</span> {item.resolved_scope_id || "-"}{item.resolved_scope_label ? ` - ${item.resolved_scope_label}` : ""}</span>
+                      <span><span className="font-medium">Mapeamento:</span> {serviceMappingSourceLabel(item.service_mapping_source)}</span>
+                      <span><span className="font-medium">Progresso:</span> {typeof item.progress_percent === "number" ? `${Math.round(item.progress_percent)}%` : "-"}</span>
+                      <span><span className="font-medium">Motivo:</span> {productionActivationReasonLabel(item.production_activation_reason)}</span>
                       <span><span className="font-medium">Status:</span> {productionActivationStatusLabel(item.production_activation_status)}</span>
                       <Badge variant={item.production_activation_status === "would_activate" ? "default" : "outline"} className="text-[10px]">
                         {productionActivationStatusLabel(item.production_activation_status)}
