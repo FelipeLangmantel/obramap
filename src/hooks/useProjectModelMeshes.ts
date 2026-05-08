@@ -27,7 +27,8 @@ export interface BulkMeshInput {
   detected_house_number: number | null;
 }
 
-const WATCHED_GLB_MESH_KEYS = ["Geom3D_302", "Geom3D_303"];
+const WATCHED_GLB_MESH_KEYS = ["Geom3D_300", "Geom3D_302", "Geom3D_303"];
+const PROJECT_MODEL_MESHES_PAGE_SIZE = 1000;
 
 function isWatchedGlbMeshKey(layerKey: string | null | undefined) {
   return !!layerKey && WATCHED_GLB_MESH_KEYS.some((key) => layerKey.includes(key));
@@ -42,19 +43,44 @@ export function useProjectModelMeshes(projectId: string | undefined) {
   const refresh = useCallback(async () => {
     if (!projectId) return;
     setLoading(true);
-    const { data, error } = await supabase
-      .from("project_model_meshes" as any)
-      .select("*")
-      .eq("project_id", projectId);
-    setLoading(false);
-    if (error) {
-      console.error("[useProjectModelMeshes] load error", error);
-      return;
+    const allRows: ProjectModelMesh[] = [];
+    let page = 0;
+    let pagesLoaded = 0;
+    while (true) {
+      const from = page * PROJECT_MODEL_MESHES_PAGE_SIZE;
+      const to = from + PROJECT_MODEL_MESHES_PAGE_SIZE - 1;
+      const { data, error } = await supabase
+        .from("project_model_meshes" as any)
+        .select("*")
+        .eq("project_id", projectId)
+        .order("layer_key", { ascending: true })
+        .range(from, to);
+
+      if (error) {
+        setLoading(false);
+        console.error("[useProjectModelMeshes] load error", error);
+        return;
+      }
+
+      const rows = (data || []) as unknown as ProjectModelMesh[];
+      allRows.push(...rows);
+      pagesLoaded++;
+      if (rows.length < PROJECT_MODEL_MESHES_PAGE_SIZE) break;
+      page++;
     }
-    setMeshes((data || []) as unknown as ProjectModelMesh[]);
+    setLoading(false);
+    setMeshes(allRows);
     loadedFor.current = projectId;
+    console.log("[GLB MeshMap Refresh]", {
+      projectId,
+      totalLoaded: allRows.length,
+      pagesLoaded,
+      hasGeom300: allRows.some((mesh) => mesh.layer_key === "glb:Geom3D_300:0"),
+      hasGeom302: allRows.some((mesh) => mesh.layer_key === "glb:Geom3D_302:0"),
+      hasGeom303: allRows.some((mesh) => mesh.layer_key === "glb:Geom3D_303:0"),
+    });
     if (import.meta.env.DEV) {
-      const watchedMeshes = ((data || []) as unknown as ProjectModelMesh[])
+      const watchedMeshes = allRows
         .filter((mesh) => isWatchedGlbMeshKey(mesh.layer_key))
         .map((mesh) => ({
           layer_key: mesh.layer_key,
@@ -67,23 +93,23 @@ export function useProjectModelMeshes(projectId: string | undefined) {
         }));
       console.log("[GLB Mesh Link Check] refresh watched meshes", {
         projectId,
-        count: data?.length ?? 0,
+        count: allRows.length,
         watchedMeshes,
       });
     }
     if (import.meta.env.DEV && debugLayerKeyRef.current) {
       const debugLayerKey = debugLayerKeyRef.current;
-      const debugMesh = ((data || []) as unknown as ProjectModelMesh[]).find(
+      const debugMesh = allRows.find(
         (mesh) => mesh.layer_key === debugLayerKey,
       ) ?? null;
       console.log("[GLB Mesh Link] refresh loaded", {
         projectId,
-        count: data?.length ?? 0,
+        count: allRows.length,
         layerKey: debugLayerKey,
         mesh: debugMesh,
       });
     }
-    return (data || []) as unknown as ProjectModelMesh[];
+    return allRows;
   }, [projectId]);
 
   useEffect(() => {
