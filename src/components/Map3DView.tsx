@@ -1,6 +1,6 @@
 import { useState, useRef, Suspense, useCallback, useEffect, useMemo } from "react";
-import { Canvas, useThree } from "@react-three/fiber";
-import { OrbitControls, useGLTF, Html, PerspectiveCamera } from "@react-three/drei";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { OrbitControls, PointerLockControls, useGLTF, Html, PerspectiveCamera } from "@react-three/drei";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { MTLLoader } from "three/examples/jsm/loaders/MTLLoader.js";
 import { useLoader } from "@react-three/fiber";
@@ -265,6 +265,84 @@ function ZoomToMouseControls() {
   );
 }
 
+function WalkControls({ onExit, height = 1.7 }: { onExit: () => void; height?: number }) {
+  const { camera } = useThree();
+  const controlsRef = useRef<any>(null);
+  const keysRef = useRef({
+    forward: false,
+    backward: false,
+    left: false,
+    right: false,
+    sprint: false,
+  });
+  const moveRef = useRef({
+    forward: new THREE.Vector3(),
+    right: new THREE.Vector3(),
+    velocity: new THREE.Vector3(),
+  });
+
+  useEffect(() => {
+    camera.position.y = height;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      const keys = keysRef.current;
+      if (event.code === "KeyW" || event.code === "ArrowUp") keys.forward = true;
+      if (event.code === "KeyS" || event.code === "ArrowDown") keys.backward = true;
+      if (event.code === "KeyA" || event.code === "ArrowLeft") keys.left = true;
+      if (event.code === "KeyD" || event.code === "ArrowRight") keys.right = true;
+      if (event.code === "ShiftLeft" || event.code === "ShiftRight") keys.sprint = true;
+    };
+    const onKeyUp = (event: KeyboardEvent) => {
+      const keys = keysRef.current;
+      if (event.code === "KeyW" || event.code === "ArrowUp") keys.forward = false;
+      if (event.code === "KeyS" || event.code === "ArrowDown") keys.backward = false;
+      if (event.code === "KeyA" || event.code === "ArrowLeft") keys.left = false;
+      if (event.code === "KeyD" || event.code === "ArrowRight") keys.right = false;
+      if (event.code === "ShiftLeft" || event.code === "ShiftRight") keys.sprint = false;
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+    };
+  }, [camera, height]);
+
+  useFrame((_, delta) => {
+    const controls = controlsRef.current;
+    if (!controls?.isLocked) return;
+
+    const keys = keysRef.current;
+    const { forward, right, velocity } = moveRef.current;
+    velocity.set(0, 0, 0);
+
+    camera.getWorldDirection(forward);
+    forward.y = 0;
+    if (forward.lengthSq() > 0) forward.normalize();
+    right.crossVectors(forward, camera.up).normalize();
+
+    if (keys.forward) velocity.add(forward);
+    if (keys.backward) velocity.sub(forward);
+    if (keys.right) velocity.add(right);
+    if (keys.left) velocity.sub(right);
+    if (velocity.lengthSq() > 0) {
+      velocity.normalize().multiplyScalar((keys.sprint ? 8 : 4) * delta);
+      camera.position.add(velocity);
+      camera.position.y = Math.max(height, camera.position.y);
+    }
+  });
+
+  return (
+    <PointerLockControls
+      ref={controlsRef}
+      makeDefault
+      selector=".map3d-walk-lock-target"
+      onUnlock={onExit}
+    />
+  );
+}
+
 // Camera auto-fit
 function AutoFitCamera({ 
   fitTrigger, resetTrigger, savedPosition, savedTarget, onCameraChange, sceneReady
@@ -363,6 +441,7 @@ function AutoFitCamera({
 function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLegendItems,
   resetTrigger, fitTrigger, savedPosition, savedTarget, onCameraChange, sceneReady, onModelLoaded, onSceneReady,
   onMeshClick, selectedMeshKey, projectId, companyId, ifcRealModeActive, ifcHouseOptions, ifcServiceOptions,
+  cameraMode, onWalkExit,
 }: {
   modelData: ModelData | null; markers: HouseMarker[]; selectedMarkerId: number | null;
   onMarkerClick: (m: HouseMarker) => void; customLegendItems: any[];
@@ -378,6 +457,8 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   ifcRealModeActive?: boolean;
   ifcHouseOptions?: number[];
   ifcServiceOptions?: ServiceOption[];
+  cameraMode: "orbit" | "walk";
+  onWalkExit: () => void;
 }) {
   return (
     <>
@@ -385,7 +466,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
       <AutoFitCamera fitTrigger={fitTrigger} resetTrigger={resetTrigger}
         savedPosition={savedPosition} savedTarget={savedTarget}
         onCameraChange={onCameraChange} sceneReady={sceneReady} />
-      <ZoomToMouseControls />
+      {cameraMode === "orbit" ? <ZoomToMouseControls /> : <WalkControls onExit={onWalkExit} />}
       <ambientLight intensity={0.6} />
       <directionalLight position={[10, 10, 5]} intensity={1} castShadow />
       <directionalLight position={[-10, 10, -5]} intensity={0.5} />
@@ -516,6 +597,8 @@ export function Map3DView() {
   // Modo de visualização
   type ViewMode = "complete" | "real" | "simulation";
   const [viewMode, setViewMode] = useState<ViewMode>("complete");
+  type CameraMode = "orbit" | "walk";
+  const [cameraMode, setCameraMode] = useState<CameraMode>("orbit");
 
   // Sincronização 3D Real
   const [isSyncing, setIsSyncing] = useState(false);
@@ -622,6 +705,24 @@ export function Map3DView() {
   }, []);
 
   // Lista de casas para o painel de revisão
+  const exitWalkMode = useCallback(() => {
+    setCameraMode("orbit");
+  }, []);
+
+  const toggleWalkMode = useCallback(() => {
+    setCameraMode((mode) => {
+      const nextMode: CameraMode = mode === "walk" ? "orbit" : "walk";
+      if (nextMode === "walk") {
+        setAssignMode(false);
+        setReviewMode(false);
+        setPickedMesh(null);
+        setSelectedMeshKey(null);
+        setIsolatedKeys(null);
+      }
+      return nextMode;
+    });
+  }, []);
+
   const houseNumbers = useMemo(() => {
     const arr = (currentProject?.houses || [])
       .map((h: any) => h.houseNumber ?? h.house_number ?? h.number ?? h.id)
@@ -1166,6 +1267,7 @@ export function Map3DView() {
     if (!canDelete3D) { toast.error("Sem permissão para resetar o Mapa 3D."); return; }
     if (!projectId) return;
     setModelData(null); setMarkers([]); setSelectedMarker(null); setPendingObjFile(null);
+    setCameraMode("orbit");
     setSavedPos(null); setSavedTgt(null); setPendingPos(null); setPendingTgt(null);
     setSceneReady(false); setHasChanges(true);
     toast.success("Mapa resetado. Salve para confirmar.");
@@ -1191,6 +1293,18 @@ export function Map3DView() {
             </>)}
             <Button variant="outline" size="sm" onClick={centerCamera} disabled={isLoading}><Target className="h-4 w-4 mr-1.5" />Centralizar</Button>
             <Button variant="outline" size="sm" onClick={resetCameraView} disabled={isLoading}><Home className="h-4 w-4 mr-1.5" />Resetar Visão</Button>
+            {modelData && (
+              <Button
+                variant={cameraMode === "walk" ? "default" : "outline"}
+                size="sm"
+                onClick={toggleWalkMode}
+                disabled={isLoading}
+                title="Caminhar pelo modelo em primeira pessoa"
+              >
+                <Move3D className="h-4 w-4 mr-1.5" />
+                {cameraMode === "walk" ? "Sair do caminhar" : "Caminhar"}
+              </Button>
+            )}
             {canManage3D && layerManager.layers.length > 0 && (
               <Button variant={showLayers ? "default" : "outline"} size="sm" onClick={() => setShowLayers(p => !p)} disabled={isLoading}>
                 <Layers className="h-4 w-4 mr-1.5" />Camadas ({layerManager.layers.length})
@@ -1200,7 +1314,7 @@ export function Map3DView() {
               <Button
                 variant={assignMode ? "default" : "outline"}
                 size="sm"
-                onClick={() => { setAssignMode(p => !p); setPickedMesh(null); }}
+                onClick={() => { setCameraMode("orbit"); setAssignMode(p => !p); setPickedMesh(null); }}
                 disabled={isLoading}
                 title="Clique nas malhas do modelo para batizar cada casa"
               >
@@ -1218,6 +1332,7 @@ export function Map3DView() {
                 variant={reviewMode ? "default" : "outline"}
                 size="sm"
                 onClick={() => {
+                  setCameraMode("orbit");
                   setReviewMode(p => !p);
                   setSelectedMeshKey(null);
                   setIsolatedKeys(null);
@@ -1319,12 +1434,12 @@ export function Map3DView() {
           </div>
         )}
         <div
-          className="absolute inset-0"
+          className="map3d-walk-lock-target absolute inset-0"
           style={assignMode ? { cursor: "crosshair" } : undefined}
         >
           <Canvas shadows dpr={[1, 1.5]} frameloop="always"
             gl={{ antialias: true, powerPreference: "high-performance", stencil: false, depth: true }}
-            onDoubleClick={centerCamera}
+            onDoubleClick={cameraMode === "orbit" ? centerCamera : undefined}
             style={{ width: "100%", height: "100%", background: "#f0f4f8" }}
           >
             <Scene modelData={modelData} markers={markers} selectedMarkerId={selectedMarker?.id || null}
@@ -1333,16 +1448,26 @@ export function Map3DView() {
               savedPosition={savedPos} savedTarget={savedTgt}
               onCameraChange={handleCameraChange} sceneReady={sceneReady}
               onModelLoaded={handleModelLoaded} onSceneReady={handleSceneReady}
-              onMeshClick={reviewMode ? handleReviewMeshClick : assignMode ? handleMeshClick : undefined}
-              selectedMeshKey={reviewMode ? selectedMeshKey : null}
+              onMeshClick={cameraMode === "walk" ? undefined : reviewMode ? handleReviewMeshClick : assignMode ? handleMeshClick : undefined}
+              selectedMeshKey={cameraMode === "walk" ? null : reviewMode ? selectedMeshKey : null}
               projectId={projectId}
               companyId={companyId}
               ifcRealModeActive={modelData?.type === "ifc" && viewMode === "real"}
               ifcHouseOptions={houseNumbers}
-              ifcServiceOptions={serviceOptions} />
+              ifcServiceOptions={serviceOptions}
+              cameraMode={cameraMode}
+              onWalkExit={exitWalkMode} />
           </Canvas>
         </div>
         <div id="map3d-ifc-panel-slot" className="pointer-events-none absolute bottom-3 left-0 right-3 top-3 z-40 overflow-hidden" />
+        {cameraMode === "walk" && (
+          <div className="absolute top-4 left-1/2 z-30 flex -translate-x-1/2 flex-col items-center gap-1 rounded-lg border border-primary/30 bg-background/95 px-3 py-2 text-xs shadow-lg backdrop-blur pointer-events-none">
+            <div className="font-semibold text-primary">Caminhar na Obra</div>
+            <div className="text-muted-foreground">
+              Clique no mapa para capturar o mouse · WASD mover · Shift acelerar · Esc sair
+            </div>
+          </div>
+        )}
         {assignMode && (
           <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-primary text-primary-foreground px-3 py-1.5 rounded-full text-xs font-medium shadow-lg flex items-center gap-1.5 pointer-events-none">
             <MousePointerClick className="h-3.5 w-3.5" />
