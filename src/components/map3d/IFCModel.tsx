@@ -2877,9 +2877,9 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         const { data: modelRowsData, error: modelError } = await existingModelQuery;
         if (modelError) throw modelError;
 
-        const modelRows = Array.isArray(modelRowsData) ? modelRowsData : [];
+        const modelRows = (Array.isArray(modelRowsData) ? modelRowsData : []) as unknown as Array<Record<string, unknown>>;
         const candidateModelIds = modelRows
-          .map(row => normalizeNullableString((row as Record<string, unknown>)?.id))
+          .map(row => normalizeNullableString(row?.id))
           .filter((value): value is string => !!value);
 
         if (import.meta.env.DEV) {
