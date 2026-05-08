@@ -44,27 +44,63 @@ interface HouseMarker {
   macros: any[];
 }
 
-// Aplica highlight branco emissivo na mesh selecionada (modo Revisar).
+// Aplica highlight temporario na mesh selecionada (modo Revisar).
 function useSelectionHighlight(scene: THREE.Object3D | null, selectedKey: string | null) {
+  const highlightedRef = useRef<Array<{ mesh: THREE.Mesh; originalMaterial: THREE.Material | THREE.Material[] }>>([]);
+
   useEffect(() => {
-    if (!scene) return;
+    const restoreHighlighted = () => {
+      highlightedRef.current.forEach(({ mesh, originalMaterial }) => {
+        mesh.material = originalMaterial;
+        const materials = Array.isArray(originalMaterial) ? originalMaterial : [originalMaterial];
+        materials.forEach(material => {
+          material.needsUpdate = true;
+        });
+        if (import.meta.env.DEV) {
+          console.log("[GLB Review Highlight] restored", { uuid: mesh.uuid, name: mesh.name || null });
+        }
+      });
+      highlightedRef.current = [];
+    };
+
+    restoreHighlighted();
+    if (!scene || !selectedKey) return restoreHighlighted;
+
+    let selectedMesh: THREE.Mesh | null = null;
     scene.traverse((child) => {
       if (!(child as THREE.Mesh).isMesh) return;
       const mesh = child as THREE.Mesh;
-      const mat = mesh.material as THREE.MeshStandardMaterial | THREE.MeshStandardMaterial[];
-      const apply = (m: any) => {
-        if (!m || m.emissive === undefined) return;
-        if (mesh.uuid === selectedKey) {
-          m.emissive.set(0xffffff);
-          m.emissiveIntensity = 0.25;
-        } else {
-          m.emissive.set(0x000000);
-          m.emissiveIntensity = 0;
-        }
-        m.needsUpdate = true;
-      };
-      if (Array.isArray(mat)) mat.forEach(apply); else apply(mat);
+      if (mesh.uuid === selectedKey) selectedMesh = mesh;
     });
+
+    if (!selectedMesh) return restoreHighlighted;
+
+    const originalMaterial = selectedMesh.material as THREE.Material | THREE.Material[];
+    const highlightMaterial = (material: THREE.Material) => {
+      const clone = material.clone();
+      const anyClone = clone as any;
+      if (anyClone.emissive?.set) {
+        anyClone.emissive.set(0xffffff);
+        anyClone.emissiveIntensity = Math.max(Number(anyClone.emissiveIntensity || 0), 0.32);
+      } else if (anyClone.color?.lerp) {
+        anyClone.color.lerp(new THREE.Color(0xffffff), 0.28);
+      }
+      if ("opacity" in anyClone) {
+        anyClone.transparent = anyClone.transparent || anyClone.opacity < 1;
+      }
+      clone.needsUpdate = true;
+      return clone;
+    };
+
+    selectedMesh.material = Array.isArray(originalMaterial)
+      ? originalMaterial.map(highlightMaterial)
+      : highlightMaterial(originalMaterial);
+    highlightedRef.current = [{ mesh: selectedMesh, originalMaterial }];
+    if (import.meta.env.DEV) {
+      console.log("[GLB Review Highlight] selected", { uuid: selectedMesh.uuid, name: selectedMesh.name || null });
+    }
+
+    return restoreHighlighted;
   }, [scene, selectedKey]);
 }
 
