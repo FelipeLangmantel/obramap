@@ -246,6 +246,28 @@ export function MeshReviewPanel({
     }
   };
 
+  const handleClearLink = async () => {
+    if (!meshKey) return;
+    setSavingLink(true);
+    try {
+      await onUpdate(meshKey, {
+        assigned_house_number: null,
+        service_macro_id: null,
+        service_scope_id: null,
+        production_visible: false,
+        progress_percent: 0,
+      });
+      setDraftHouse("_none");
+      setDraftService("_none");
+      toast.success("Vínculo limpo. A mesh ficou sem vínculo de produção.");
+    } catch (error) {
+      console.error("[MeshReviewPanel] clear link error", error);
+      toast.error("Falha ao limpar vínculo da mesh.");
+    } finally {
+      setSavingLink(false);
+    }
+  };
+
   return (
     <Card className="absolute top-4 right-4 w-80 z-20 shadow-2xl border-primary/30">
       <CardHeader className="pb-2">
@@ -391,6 +413,16 @@ export function MeshReviewPanel({
               >
                 <Save className="h-3.5 w-3.5 mr-1" />
                 {savingLink ? "Aplicando..." : "Aplicar vínculo"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 w-full text-[11px]"
+                disabled={!meshKey || savingLink}
+                onClick={handleClearLink}
+              >
+                Limpar vínculo
               </Button>
             </section>
 

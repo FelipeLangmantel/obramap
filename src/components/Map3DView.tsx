@@ -996,11 +996,17 @@ export function Map3DView() {
         });
       });
 
-      const linkedCount = allMeshes.filter((mesh) =>
-        !isContextProjectModelMesh(mesh) && mesh.assigned_house_number != null && mesh.service_macro_id != null && mesh.service_scope_id != null,
-      ).length;
       const ignoredCount = allMeshes.filter((mesh) => mesh.ignored).length;
-      const unlinkedCount = allMeshes.length - linkedCount - ignoredCount;
+      const contextCount = allMeshes.filter((mesh) => !mesh.ignored && isContextProjectModelMesh(mesh)).length;
+      const linkedProductionMeshes = allMeshes.filter((mesh) =>
+        !mesh.ignored
+        && !isContextProjectModelMesh(mesh)
+        && mesh.assigned_house_number != null
+        && mesh.service_macro_id != null
+        && mesh.service_scope_id != null,
+      );
+      const linkedCount = linkedProductionMeshes.length;
+      const unlinkedCount = Math.max(0, allMeshes.length - linkedCount - ignoredCount - contextCount);
       const watchedDiagnostics = GLB_REAL_SYNC_WATCH_KEYS.map((layerKey) => {
         const mesh = sourceMeshMap.get(layerKey);
         if (!mesh) {
@@ -1090,24 +1096,15 @@ export function Map3DView() {
         });
       }
 
-      let visible = 0, hidden = 0, unlinked = 0;
+      let visible = 0, hidden = 0;
       const now = new Date().toISOString();
+      const updates: Array<Partial<ProjectModelMesh> & { project_id: string; layer_key: string }> = [];
 
-      const syncResults = await Promise.all(meshes.map(async (mesh) => {
-        const hasLink = mesh.assigned_house_number != null && mesh.service_macro_id != null && mesh.service_scope_id != null;
-        const isContextMesh = isContextProjectModelMesh(mesh);
-        let progress = 0; let pv = false;
-        let progressKey: string | null = null;
-        if (isContextMesh) {
-          unlinked++;
-        } else if (!hasLink) {
-          unlinked++;
-        } else {
-          progressKey = `${mesh.assigned_house_number}::${mesh.service_macro_id}::${mesh.service_scope_id}`;
-          progress = progressMap.get(progressKey) ?? 0;
-          pv = progress > 0;
-          if (pv) visible++; else hidden++;
-        }
+      linkedProductionMeshes.forEach((mesh) => {
+        const progressKey = `${mesh.assigned_house_number}::${mesh.service_macro_id}::${mesh.service_scope_id}`;
+        const progress = progressMap.get(progressKey) ?? 0;
+        const pv = progress > 0;
+        if (pv) visible++; else hidden++;
         if (import.meta.env.DEV && mesh.assigned_house_number === 20) {
           console.log("[GLB Real Sync] mesh decision", {
             layer_key: mesh.layer_key,
@@ -1120,13 +1117,43 @@ export function Map3DView() {
             production_visible: pv,
           });
         }
-        return supabase.from("project_model_meshes" as any).update({
-          production_visible: pv, progress_percent: progress, last_synced_at: now,
-        }).eq("id", (mesh as any).id);
-      }));
-      const syncErrors = syncResults.map((result) => result.error).filter(Boolean);
+        const currentProgress = Number(mesh.progress_percent ?? 0);
+        if (mesh.production_visible !== pv || currentProgress !== progress) {
+          updates.push({
+            project_id: projectId,
+            layer_key: mesh.layer_key,
+            production_visible: pv,
+            progress_percent: progress,
+            last_synced_at: now,
+          });
+        }
+      });
+
+      const batchSize = 100;
+      const syncErrors: any[] = [];
+      let updatesSent = 0;
+      for (let index = 0; index < updates.length; index += batchSize) {
+        const batch = updates.slice(index, index + batchSize);
+        const { error } = await supabase
+          .from("project_model_meshes" as any)
+          .upsert(batch, { onConflict: "project_id,layer_key" });
+        updatesSent += batch.length;
+        if (error) syncErrors.push(error);
+      }
+      console.log("[GLB Real Sync Optimized]", {
+        projectId,
+        totalMeshMap: allMeshes.length,
+        totalContext: contextCount,
+        totalLinkedProduction: linkedCount,
+        totalUnlinkedIgnoredInSync: unlinkedCount,
+        totalIgnored: ignoredCount,
+        totalUpdatesNeeded: updates.length,
+        totalUpdatesSent: updatesSent,
+        batchSize,
+        errors: syncErrors.length,
+      });
       if (syncErrors.length > 0) {
-        console.error("[GLB Real Sync] update errors", syncErrors);
+        console.error("[GLB Real Sync Optimized] update errors", syncErrors);
         throw syncErrors[0];
       }
 
@@ -1137,8 +1164,8 @@ export function Map3DView() {
       } else {
         applyViewMode(viewMode);
       }
-      setLastSyncResult({ total: meshes.length, visible, hidden, unlinked, syncedAt: new Date() });
-      if (!options?.silent) toast.success(`Sincronizado: ${visible} visíveis · ${hidden} ocultas · ${unlinked} sem vínculo`);
+      setLastSyncResult({ total: linkedCount, visible, hidden, unlinked: unlinkedCount, syncedAt: new Date() });
+      if (!options?.silent) toast.success(`Sincronizado: ${visible} produção visíveis · ${hidden} produção ocultas · ${contextCount} contextos · ${unlinkedCount} sem vínculo ignoradas`);
     } catch (err) {
       console.error("[Sync3D]", err);
       toast.error("Erro ao sincronizar");
