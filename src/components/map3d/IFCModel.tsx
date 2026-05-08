@@ -2859,28 +2859,39 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         const elementsTable = supabase.from("project_ifc_elements" as any);
         const linksTable = supabase.from("project_ifc_element_links" as any);
 
+        // Resolve all model rows matching this storage_path (re-uploads create
+        // multiple rows). Ordered newest first so we mirror the Suggestions
+        // Panel and can fall back across siblings if confirmed links live on
+        // another row id.
         let existingModelQuery = modelTable
-          .select("id")
+          .select("id, created_at")
           .eq("project_id", projectId)
           .eq("storage_path", url)
-          .eq("model_type", "ifc");
+          .eq("model_type", "ifc")
+          .order("created_at", { ascending: false });
 
         if (companyId) {
           existingModelQuery = existingModelQuery.eq("company_id", companyId);
         }
 
-        const { data: modelData, error: modelError } = await existingModelQuery.limit(1).maybeSingle();
+        const { data: modelRowsData, error: modelError } = await existingModelQuery;
         if (modelError) throw modelError;
 
-        const model = asProject3DModelIdRow(modelData as unknown);
+        const modelRows = (Array.isArray(modelRowsData) ? modelRowsData : []) as unknown as Array<Record<string, unknown>>;
+        const candidateModelIds = modelRows
+          .map(row => normalizeNullableString(row?.id))
+          .filter((value): value is string => !!value);
+
         if (import.meta.env.DEV) {
           console.log("[IFC Test] model resolved", {
             projectId,
             companyId: companyId ?? null,
-            modelId: model?.id ?? null,
+            primaryModelId: candidateModelIds[0] ?? null,
+            candidateCount: candidateModelIds.length,
+            candidateModelIds,
           });
         }
-        if (!model?.id) {
+        if (candidateModelIds.length === 0) {
           if (!cancelled) {
             setPersistedElements([]);
             setIfc3dTestLinkedElements([]);
@@ -2888,23 +2899,38 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
           return;
         }
 
-        const [{ data: elementsData, error: elementsError }, { data: linksData, error: linksError }] = await Promise.all([
-          elementsTable
-            .select("id, ifc_global_id, ifc_entity_id, ifc_type, ifc_layer_name, name, detected_service_key, detected_service_label, detected_house_number, category, confidence, needs_review, status, raw_properties")
-            .eq("project_id", projectId)
-            .eq("model_id", model.id),
-          linksTable
-            .select("id, model_id, ifc_element_id, house_id, house_number, trigger_service_key, trigger_service_label, status")
-            .eq("project_id", projectId)
-            .eq("model_id", model.id)
-            .eq("status", "confirmed"),
-        ]);
+        // Look up confirmed links across ALL candidate model rows for this
+        // storage_path. The "Teste 3D Real IFC" only needs the union of
+        // confirmed links to enable the overlay; using the union avoids the
+        // bug where the picked model id has zero links because confirmations
+        // were performed against a sibling row.
+        const { data: linksData, error: linksError } = await linksTable
+          .select("id, model_id, ifc_element_id, house_id, house_number, trigger_service_key, trigger_service_label, status")
+          .eq("project_id", projectId)
+          .in("model_id", candidateModelIds)
+          .eq("status", "confirmed");
+        if (linksError) throw linksError;
+
+        const finalLinkRows = asIfcFinalLinkRows(linksData as unknown);
+
+        // Pick the model id that actually owns the confirmed links; fall back
+        // to the newest row when none have links yet.
+        const linkModelIds = Array.from(
+          new Set(finalLinkRows.map(link => link.model_id).filter((value): value is string => !!value)),
+        );
+        const elementModelIds = linkModelIds.length > 0 ? linkModelIds : [candidateModelIds[0]];
+
+        const { data: elementsData, error: elementsError } = await elementsTable
+          .select("id, ifc_global_id, ifc_entity_id, ifc_type, ifc_layer_name, name, detected_service_key, detected_service_label, detected_house_number, category, confidence, needs_review, status, raw_properties")
+          .eq("project_id", projectId)
+          .in("model_id", elementModelIds);
+        if (elementsError) throw elementsError;
 
         if (import.meta.env.DEV) {
           console.log("[IFC Test] persisted elements loaded", {
             projectId,
             companyId: companyId ?? null,
-            modelId: model.id,
+            modelIds: elementModelIds,
             count: Array.isArray(elementsData) ? elementsData.length : 0,
             sample: asIfcPersistedElementRows(elementsData as unknown).slice(0, 3).map(element => ({
               id: element.id,
@@ -2919,7 +2945,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
           });
           console.log("[IFC Test] links loaded", {
             projectId,
-            modelId: model.id,
+            modelIds: candidateModelIds,
             count: Array.isArray(linksData) ? linksData.length : 0,
             sample: asIfcFinalLinkRows(linksData as unknown).slice(0, 3).map(link => ({
               id: link.id,
