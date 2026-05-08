@@ -11,7 +11,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { X, Copy, Eye, EyeOff, Crosshair, EyeOff as Ignore, Box, Home, Save } from "lucide-react";
 import { toast } from "sonner";
-import type { ProjectModelMesh } from "@/hooks/useProjectModelMeshes";
+import {
+  GLB_CONTEXT_MESH_MARKER,
+  isContextProjectModelMesh,
+  type ProjectModelMesh,
+} from "@/hooks/useProjectModelMeshes";
 import { parseHouseNumberFromMesh } from "./parseHouseFromMeshName";
 
 export interface ServiceOption {
@@ -83,11 +87,17 @@ export function MeshReviewPanel({
   }, [meshKey, sceneRef]);
 
   const currentService = useMemo(() => {
+    if (isContextProjectModelMesh(meshData)) return "_none";
     if (!meshData?.service_macro_id || !meshData?.service_scope_id) return "_none";
     return `${meshData.service_macro_id}::${meshData.service_scope_id}`;
   }, [meshData]);
 
   const currentHouse = meshData?.assigned_house_number != null ? String(meshData.assigned_house_number) : "_none";
+  const meshType = meshData?.ignored
+    ? "ignored"
+    : isContextProjectModelMesh(meshData)
+      ? "context"
+      : "production";
 
   useEffect(() => {
     setDraftHouse(currentHouse);
@@ -143,6 +153,45 @@ export function MeshReviewPanel({
     Number.isFinite(selectedHouseNumber) &&
     !!selectedService;
 
+  const handleSetProductionType = async () => {
+    if (!meshKey) return;
+    await onUpdate(meshKey, {
+      ignored: false,
+      visible: true,
+      assigned_house_number: null,
+      service_macro_id: null,
+      service_scope_id: null,
+      production_visible: false,
+      progress_percent: 0,
+    });
+    toast.success("Mesh marcada como produção. Escolha Casa e Serviço para vincular.");
+  };
+
+  const handleSetContextType = async () => {
+    if (!meshKey) return;
+    await onUpdate(meshKey, {
+      ignored: false,
+      visible: true,
+      assigned_house_number: null,
+      service_macro_id: GLB_CONTEXT_MESH_MARKER,
+      service_scope_id: GLB_CONTEXT_MESH_MARKER,
+      production_visible: false,
+      progress_percent: 0,
+    });
+    toast.success("Mesh marcada como contexto do 3D Real.");
+  };
+
+  const handleSetIgnoredType = async () => {
+    if (!meshKey) return;
+    await onUpdate(meshKey, {
+      ignored: true,
+      visible: false,
+      production_visible: false,
+      progress_percent: 0,
+    });
+    toast.success("Mesh marcada como ignorada.");
+  };
+
   const handleApplyLink = async () => {
     if (!meshKey) return;
     if (meshData?.ignored) {
@@ -159,6 +208,8 @@ export function MeshReviewPanel({
       assigned_house_number: selectedHouseNumber,
       service_macro_id: selectedService.macro_id,
       service_scope_id: selectedService.scope_id,
+      ignored: false,
+      visible: true,
       mesh_name: meshData?.mesh_name || selectedSceneMesh?.name || "",
       material_name: meshData?.material_name || materialNameFromScene || "",
       detected_house_number:
@@ -228,6 +279,44 @@ export function MeshReviewPanel({
               </div>
               {meshData?.detected_house_number != null && (
                 <Badge variant="secondary" className="text-[10px]">Casa detectada: {meshData.detected_house_number}</Badge>
+              )}
+            </section>
+
+            <section className="space-y-2">
+              <p className="text-[10px] uppercase font-semibold text-muted-foreground">Tipo da mesh</p>
+              <div className="grid grid-cols-3 gap-1.5">
+                <Button
+                  type="button"
+                  variant={meshType === "production" ? "default" : "outline"}
+                  size="sm"
+                  className="h-8 text-[11px]"
+                  onClick={handleSetProductionType}
+                >
+                  Produção
+                </Button>
+                <Button
+                  type="button"
+                  variant={meshType === "context" ? "default" : "outline"}
+                  size="sm"
+                  className="h-8 text-[11px]"
+                  onClick={handleSetContextType}
+                >
+                  Contexto
+                </Button>
+                <Button
+                  type="button"
+                  variant={meshType === "ignored" ? "destructive" : "outline"}
+                  size="sm"
+                  className="h-8 text-[11px]"
+                  onClick={handleSetIgnoredType}
+                >
+                  Ignorar
+                </Button>
+              </div>
+              {meshType === "context" && (
+                <p className="text-[10px] text-muted-foreground">
+                  Contexto fica sempre visível no 3D Real e não precisa de Casa/Serviço.
+                </p>
               )}
             </section>
 

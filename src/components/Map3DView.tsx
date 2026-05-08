@@ -24,7 +24,7 @@ import { AssignHousePopover } from "./map3d/AssignHousePopover";
 import { useMeshHouseAssignments } from "@/hooks/useMeshHouseAssignments";
 import { IFCModel } from "./map3d/IFCModel";
 import { IfcSuggestionsPanel } from "./map3d/IfcSuggestionsPanel";
-import { useProjectModelMeshes, type ProjectModelMesh } from "@/hooks/useProjectModelMeshes";
+import { isContextProjectModelMesh, useProjectModelMeshes, type ProjectModelMesh } from "@/hooks/useProjectModelMeshes";
 import { MeshReviewPanel, type ServiceOption } from "./map3d/MeshReviewPanel";
 import { parseHouseNumberFromMesh } from "./map3d/parseHouseFromMeshName";
 import { HouseFotoHistoryDrawer } from "@/components/diario/HouseFotoHistoryDrawer";
@@ -855,6 +855,10 @@ export function Map3DView() {
           child.visible = saved.visible;
           break;
         case "real": {
+          if (isContextProjectModelMesh(saved)) {
+            child.visible = saved.visible;
+            break;
+          }
           const hasLink = saved.assigned_house_number != null && saved.service_macro_id != null && saved.service_scope_id != null;
           child.visible = hasLink && !!saved.production_visible;
           break;
@@ -864,6 +868,42 @@ export function Map3DView() {
           break;
       }
     });
+    if (mode === "real") {
+      const stats = {
+        contextVisible: 0,
+        linkedVisible: 0,
+        linkedHidden: 0,
+        unlinkedHidden: 0,
+        ignored: 0,
+        contextExamples: [] as Array<{ layer_key: string; mesh_name: string | null; material_name: string | null }>,
+      };
+      sourceMap.forEach((mesh) => {
+        if (mesh.ignored) {
+          stats.ignored++;
+          return;
+        }
+        if (isContextProjectModelMesh(mesh)) {
+          if (mesh.visible) stats.contextVisible++;
+          if (stats.contextExamples.length < 8) {
+            stats.contextExamples.push({
+              layer_key: mesh.layer_key,
+              mesh_name: mesh.mesh_name,
+              material_name: mesh.material_name,
+            });
+          }
+          return;
+        }
+        const hasLink = mesh.assigned_house_number != null && mesh.service_macro_id != null && mesh.service_scope_id != null;
+        if (!hasLink) {
+          stats.unlinkedHidden++;
+        } else if (mesh.production_visible) {
+          stats.linkedVisible++;
+        } else {
+          stats.linkedHidden++;
+        }
+      });
+      console.log("[GLB Real Context]", stats);
+    }
   }, [sceneObj, meshHooks.meshMap]);
 
   // Re-aplica modo quando meshMap chega/atualiza ou cena fica pronta
@@ -957,7 +997,7 @@ export function Map3DView() {
       });
 
       const linkedCount = allMeshes.filter((mesh) =>
-        mesh.assigned_house_number != null && mesh.service_macro_id != null && mesh.service_scope_id != null,
+        !isContextProjectModelMesh(mesh) && mesh.assigned_house_number != null && mesh.service_macro_id != null && mesh.service_scope_id != null,
       ).length;
       const ignoredCount = allMeshes.filter((mesh) => mesh.ignored).length;
       const unlinkedCount = allMeshes.length - linkedCount - ignoredCount;
@@ -972,12 +1012,13 @@ export function Map3DView() {
             overrideHas: meshReviewOverrides.has(layerKey),
           };
         }
-        const missingFields = [
+        const isContextMesh = isContextProjectModelMesh(mesh);
+        const missingFields = isContextMesh ? [] : [
           mesh.assigned_house_number == null ? "missing assigned_house_number" : null,
           mesh.service_macro_id == null ? "missing service_macro_id" : null,
           mesh.service_scope_id == null ? "missing service_scope_id" : null,
         ].filter(Boolean);
-        const progressKey = missingFields.length === 0
+        const progressKey = !isContextMesh && missingFields.length === 0
           ? `${mesh.assigned_house_number}::${mesh.service_macro_id}::${mesh.service_scope_id}`
           : null;
         const progress = progressKey ? (progressMap.get(progressKey) ?? 0) : 0;
@@ -1004,6 +1045,7 @@ export function Map3DView() {
           calculated_production_visible: calculatedProductionVisible,
           calculated_progress_percent: progress,
           counter_bucket: counterBucket,
+          is_context: isContextMesh,
           missing_fields: missingFields,
         };
       });
@@ -1019,7 +1061,7 @@ export function Map3DView() {
       if (import.meta.env.DEV) {
         const house20 = housesForSync.find((h: any) => (h.houseNumber ?? h.house_number ?? h.number ?? h.id) === 20) ?? null;
         const linkedMeshes = meshes
-          .filter((mesh) => mesh.assigned_house_number != null && mesh.service_macro_id != null && mesh.service_scope_id != null)
+          .filter((mesh) => !isContextProjectModelMesh(mesh) && mesh.assigned_house_number != null && mesh.service_macro_id != null && mesh.service_scope_id != null)
           .map((mesh) => ({
             layer_key: mesh.layer_key,
             mesh_name: mesh.mesh_name,
@@ -1053,9 +1095,12 @@ export function Map3DView() {
 
       const syncResults = await Promise.all(meshes.map(async (mesh) => {
         const hasLink = mesh.assigned_house_number != null && mesh.service_macro_id != null && mesh.service_scope_id != null;
+        const isContextMesh = isContextProjectModelMesh(mesh);
         let progress = 0; let pv = false;
         let progressKey: string | null = null;
-        if (!hasLink) {
+        if (isContextMesh) {
+          unlinked++;
+        } else if (!hasLink) {
           unlinked++;
         } else {
           progressKey = `${mesh.assigned_house_number}::${mesh.service_macro_id}::${mesh.service_scope_id}`;

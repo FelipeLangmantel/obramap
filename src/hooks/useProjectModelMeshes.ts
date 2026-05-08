@@ -27,6 +27,15 @@ export interface BulkMeshInput {
   detected_house_number: number | null;
 }
 
+export const GLB_CONTEXT_MESH_MARKER = "__obramap_context__";
+
+export function isContextProjectModelMesh(
+  mesh: Pick<ProjectModelMesh, "service_macro_id" | "service_scope_id"> | null | undefined,
+) {
+  return mesh?.service_macro_id === GLB_CONTEXT_MESH_MARKER
+    && mesh?.service_scope_id === GLB_CONTEXT_MESH_MARKER;
+}
+
 const WATCHED_GLB_MESH_KEYS = ["Geom3D_300", "Geom3D_302", "Geom3D_303"];
 const PROJECT_MODEL_MESHES_PAGE_SIZE = 1000;
 
