@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Html } from "@react-three/drei";
 import * as THREE from "three";
 import { supabase } from "@/integrations/supabase/client";
+import { useIfcProductionActivationDiagnostics } from "@/hooks/useIfcProductionActivationDiagnostics";
 
 interface Props {
   url: string;
@@ -12,6 +13,7 @@ interface Props {
   onSceneReady?: (scene: THREE.Object3D) => void;
   onMeshClick?: (mesh: THREE.Object3D) => void;
   selectedMeshKey?: string | null;
+  ifcRealModeActive?: boolean;
 }
 
 interface IfcInventoryItem {
@@ -84,6 +86,11 @@ type IfcInspectGroupMode = "none" | "house" | "service";
 type Ifc3DTestControlKey = "91-radier" | "91-paredes" | "92-radier" | "92-paredes";
 type Ifc3DTestOverlay = {
   key: Ifc3DTestControlKey;
+  label: string;
+  entityId: string;
+};
+type IfcProductionOverlay = {
+  key: string;
   label: string;
   entityId: string;
 };
@@ -1943,6 +1950,7 @@ function IFCVisualModel({
   clearPaintSignal,
   clearInspectSignal,
   testOverlays,
+  productionOverlays,
   onInspectSelection,
   onStatusChange,
 }: {
@@ -1955,6 +1963,7 @@ function IFCVisualModel({
   clearPaintSignal: number;
   clearInspectSignal: number;
   testOverlays: Ifc3DTestOverlay[];
+  productionOverlays: IfcProductionOverlay[];
   onInspectSelection: (selection: IfcVisualInspectSelection | null) => void;
   onStatusChange: (status: IfcVisualStatus, message?: string | null) => void;
 }) {
@@ -1978,6 +1987,12 @@ function IFCVisualModel({
   } | null>(null);
   const testOverlayRef = useRef<Array<{
     key: Ifc3DTestControlKey;
+    entityId: string;
+    highlight: THREE.Mesh;
+    boxHelper: THREE.Box3Helper | null;
+  }>>([]);
+  const productionOverlayRef = useRef<Array<{
+    key: string;
     entityId: string;
     highlight: THREE.Mesh;
     boxHelper: THREE.Box3Helper | null;
@@ -2064,9 +2079,22 @@ function IFCVisualModel({
     testOverlayRef.current = [];
   }, []);
 
+  const clearProductionOverlays = useCallback(() => {
+    const removed = productionOverlayRef.current.length;
+    productionOverlayRef.current.forEach(disposeIfcHighlightOverlay);
+    productionOverlayRef.current = [];
+    if (import.meta.env.DEV && removed > 0) {
+      console.log("[IFC Real] overlays removed", { removed });
+    }
+  }, []);
+
   const testOverlayKey = useMemo(() => {
     return testOverlays.map(item => `${item.key}:${item.entityId}`).sort().join("|");
   }, [testOverlays]);
+
+  const productionOverlayKey = useMemo(() => {
+    return productionOverlays.map(item => `${item.key}:${item.entityId}`).sort().join("|");
+  }, [productionOverlays]);
 
   useEffect(() => {
     clearTestOverlays();
@@ -2144,6 +2172,80 @@ function IFCVisualModel({
       clearTestOverlays();
     };
   }, [clearTestOverlays, object, testOverlayKey, testOverlays, visible]);
+
+  useEffect(() => {
+    clearProductionOverlays();
+    if (!visible || !objectRef.current || productionOverlays.length === 0) return;
+
+    const meshes: THREE.Mesh[] = [];
+    objectRef.current.traverse(child => {
+      const mesh = child as THREE.Mesh;
+      if (mesh.isMesh && mesh.geometry) meshes.push(mesh);
+    });
+
+    if (import.meta.env.DEV) {
+      console.log("[IFC Real] entity ids used", productionOverlays.map(item => ({
+        key: item.key,
+        label: item.label,
+        entityId: item.entityId,
+        targetExpressId: getIfcEntityNumericId(item.entityId),
+      })));
+    }
+
+    let createdCount = 0;
+    productionOverlays.forEach(item => {
+      let created = false;
+      for (const mesh of meshes) {
+        const result = createIfcEntityHighlightMesh(mesh, item.entityId);
+        if (import.meta.env.DEV) {
+          console.log("[IFC Real] overlay attempt", {
+            key: item.key,
+            label: item.label,
+            entityId: item.entityId,
+            targetExpressId: getIfcEntityNumericId(item.entityId),
+            created: !!result.highlight,
+            matchingFaces: result.matchingFaces,
+            reason: result.reason,
+            geometryAttributes: getIfcGeometryAttributeNames(mesh.geometry),
+            meshName: mesh.name || null,
+            meshUuid: mesh.uuid,
+          });
+        }
+        if (!result.highlight) continue;
+
+        productionOverlayRef.current.push({
+          key: item.key,
+          entityId: item.entityId,
+          highlight: result.highlight,
+          boxHelper: result.boxHelper,
+        });
+        createdCount += 1;
+        created = true;
+        break;
+      }
+
+      if (!created && import.meta.env.DEV) {
+        console.log("[IFC Real] unable to create overlay", {
+          key: item.key,
+          label: item.label,
+          entityId: item.entityId,
+          targetExpressId: getIfcEntityNumericId(item.entityId),
+          meshCount: meshes.length,
+        });
+      }
+    });
+
+    if (import.meta.env.DEV) {
+      console.log("[IFC Real] overlays created", {
+        requested: productionOverlays.length,
+        created: createdCount,
+      });
+    }
+
+    return () => {
+      clearProductionOverlays();
+    };
+  }, [clearProductionOverlays, object, productionOverlayKey, productionOverlays, visible]);
 
   const inspectMesh = useCallback((event: any, hit: THREE.Object3D) => {
     logIfcInspectIntersections(event);
@@ -2461,7 +2563,7 @@ function buildIfcElementPayload(item: IfcInventoryItem, projectId: string, compa
   };
 }
 
-export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, onMeshClick, selectedMeshKey }: Props) {
+export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, onMeshClick, selectedMeshKey, ifcRealModeActive = false }: Props) {
   const [items, setItems] = useState<IfcInventoryItem[]>([]);
   const [filter, setFilter] = useState<IfcInventoryFilter>("production");
   const [search, setSearch] = useState("");
@@ -2500,6 +2602,10 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
   const persistedKeyRef = useRef<string | null>(null);
   const autoMinimizedInventoryRef = useRef(false);
   const inspectPanelOpenLoggedRef = useRef(false);
+  const productionActivationDiagnostics = useIfcProductionActivationDiagnostics({
+    projectId,
+    enabled: !!projectId && ifcRealModeActive && showVisualIfc && visualStatus === "ready",
+  });
 
   void onSceneReady;
   void onMeshClick;
@@ -3169,6 +3275,41 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
     });
   }, [ifc3dTestElementsByControl, ifc3dTestEnabled, ifc3dTestToggles]);
 
+  const activeIfcProductionOverlays = useMemo<IfcProductionOverlay[]>(() => {
+    if (!ifcRealModeActive) return [];
+
+    const elementById = new Map(persistedElements.map(element => [element.id, element]));
+    const seenEntityIds = new Set<string>();
+    const overlays: IfcProductionOverlay[] = [];
+
+    productionActivationDiagnostics.items.forEach(item => {
+      if (item.production_activation_status !== "would_activate") return;
+      const element = elementById.get(item.ifc_element_id);
+      const entityId = normalizeIfcEntityId(element?.ifc_entity_id);
+      if (!entityId || seenEntityIds.has(entityId)) return;
+
+      seenEntityIds.add(entityId);
+      overlays.push({
+        key: `production:${item.ifc_element_id}`,
+        label: `Casa ${item.house_number ?? "-"} | ${item.trigger_service_label || item.trigger_service_key || "serviço IFC"}`,
+        entityId,
+      });
+    });
+
+    return overlays;
+  }, [ifcRealModeActive, persistedElements, productionActivationDiagnostics.items]);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    console.log("[IFC Real] diagnostics overlays", {
+      ifcRealModeActive,
+      diagnosticItems: productionActivationDiagnostics.items.length,
+      activatableItems: productionActivationDiagnostics.items.filter(item => item.production_activation_status === "would_activate").length,
+      overlayCount: activeIfcProductionOverlays.length,
+      entityIds: activeIfcProductionOverlays.map(item => item.entityId),
+    });
+  }, [activeIfcProductionOverlays, ifcRealModeActive, productionActivationDiagnostics.items]);
+
   const handleToggleIfc3dTestMode = useCallback(() => {
     setIfc3dTestEnabled(prev => {
       const next = !prev;
@@ -3358,6 +3499,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         clearPaintSignal={clearPaintSignal}
         clearInspectSignal={clearInspectSignal}
         testOverlays={activeIfc3dTestOverlays}
+        productionOverlays={activeIfcProductionOverlays}
         onInspectSelection={handleInspectSelection}
         onStatusChange={handleVisualStatusChange}
       />

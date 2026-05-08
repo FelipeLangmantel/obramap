@@ -320,7 +320,7 @@ function AutoFitCamera({
 // Scene
 function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLegendItems,
   resetTrigger, fitTrigger, savedPosition, savedTarget, onCameraChange, sceneReady, onModelLoaded, onSceneReady,
-  onMeshClick, selectedMeshKey, projectId, companyId,
+  onMeshClick, selectedMeshKey, projectId, companyId, ifcRealModeActive,
 }: {
   modelData: ModelData | null; markers: HouseMarker[]; selectedMarkerId: number | null;
   onMarkerClick: (m: HouseMarker) => void; customLegendItems: any[];
@@ -333,6 +333,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   selectedMeshKey?: string | null;
   projectId?: string | null;
   companyId?: string | null;
+  ifcRealModeActive?: boolean;
 }) {
   return (
     <>
@@ -351,7 +352,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
           {modelData.type === "gltf" ? (
             <GLTFModel url={modelData.url} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} selectedMeshKey={selectedMeshKey} />
           ) : modelData.type === "ifc" ? (
-            <IFCModel url={modelData.url} projectId={projectId} companyId={companyId} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} selectedMeshKey={selectedMeshKey} />
+            <IFCModel url={modelData.url} projectId={projectId} companyId={companyId} ifcRealModeActive={ifcRealModeActive} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} selectedMeshKey={selectedMeshKey} />
           ) : (
             <OBJModel url={modelData.url} mtlUrl={modelData.mtlUrl} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} selectedMeshKey={selectedMeshKey} />
           )}
@@ -1174,7 +1175,8 @@ export function Map3DView() {
               onMeshClick={reviewMode ? handleReviewMeshClick : assignMode ? handleMeshClick : undefined}
               selectedMeshKey={reviewMode ? selectedMeshKey : null}
               projectId={projectId}
-              companyId={companyId} />
+              companyId={companyId}
+              ifcRealModeActive={modelData?.type === "ifc" && viewMode === "real"} />
           </Canvas>
         </div>
         <div id="map3d-ifc-panel-slot" className="pointer-events-none absolute bottom-3 left-0 right-3 top-3 z-40 overflow-hidden" />
