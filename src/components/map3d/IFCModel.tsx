@@ -96,6 +96,7 @@ type IfcProductionOverlay = {
   progressPercent: number;
   role: "context" | "production";
 };
+type IfcRealMaterialSource = "original" | "original_array" | "fallback";
 type IfcPersistedElementRow = {
   id: string;
   ifc_global_id: string | null;
@@ -1689,21 +1690,72 @@ function clampIfcRealOpacity(progressPercent: number) {
   return Math.min(1, Math.max(0.12, 0.12 + (progress / 100) * 0.88));
 }
 
-function createIfcRealVisualMaterial(progressPercent: number, role: IfcProductionOverlay["role"]) {
-  const opacity = role === "context"
-    ? 0.65
+function getIfcRealOpacity(progressPercent: number, role: IfcProductionOverlay["role"]) {
+  return role === "context"
+    ? 0.95
     : progressPercent >= 100 ? 1 : clampIfcRealOpacity(progressPercent);
-  return new THREE.MeshBasicMaterial({
+}
+
+function configureIfcRealMaterial(material: THREE.Material, opacity: number, role: IfcProductionOverlay["role"]) {
+  const realMaterial = material as THREE.Material & {
+    opacity?: number;
+    transparent?: boolean;
+    depthWrite?: boolean;
+    side?: THREE.Side;
+    polygonOffset?: boolean;
+    polygonOffsetFactor?: number;
+    polygonOffsetUnits?: number;
+  };
+
+  realMaterial.opacity = opacity;
+  realMaterial.transparent = opacity < 1 || realMaterial.transparent === true;
+  realMaterial.depthWrite = role === "production" && opacity >= 1;
+  realMaterial.side = THREE.DoubleSide;
+  realMaterial.polygonOffset = true;
+  realMaterial.polygonOffsetFactor = -4;
+  realMaterial.polygonOffsetUnits = -4;
+  material.needsUpdate = true;
+  return material;
+}
+
+function createIfcRealFallbackMaterial(progressPercent: number, role: IfcProductionOverlay["role"]) {
+  const opacity = getIfcRealOpacity(progressPercent, role);
+  return configureIfcRealMaterial(new THREE.MeshBasicMaterial({
     color: role === "context" ? "#6f6b63" : "#9f9a90",
     transparent: opacity < 1,
     opacity,
     side: THREE.DoubleSide,
-    depthTest: true,
-    depthWrite: role === "production" && opacity >= 1,
-    polygonOffset: true,
-    polygonOffsetFactor: -4,
-    polygonOffsetUnits: -4,
-  });
+  }), opacity, role);
+}
+
+function getIfcPrimaryMaterial(material: THREE.Material | THREE.Material[] | undefined): {
+  material: THREE.Material | null;
+  source: IfcRealMaterialSource;
+} {
+  if (Array.isArray(material)) {
+    const selected = material.find(item => {
+      const candidate = item as THREE.Material & { map?: unknown; color?: unknown };
+      return !!candidate?.map || !!candidate?.color;
+    }) || material[0] || null;
+    return { material: selected, source: selected ? "original_array" : "fallback" };
+  }
+  return { material: material || null, source: material ? "original" : "fallback" };
+}
+
+function createIfcRealVisualMaterialFromSource(sourceMaterial: THREE.Material | THREE.Material[] | undefined, progressPercent: number, role: IfcProductionOverlay["role"]): {
+  material: THREE.Material;
+  source: IfcRealMaterialSource;
+} {
+  const opacity = getIfcRealOpacity(progressPercent, role);
+  const { material, source } = getIfcPrimaryMaterial(sourceMaterial);
+  if (!material) {
+    return { material: createIfcRealFallbackMaterial(progressPercent, role), source: "fallback" };
+  }
+
+  return {
+    material: configureIfcRealMaterial(material.clone(), opacity, role),
+    source,
+  };
 }
 
 function createIfcHiddenBaseMaterial() {
@@ -1851,6 +1903,27 @@ function disposeIfcHighlightOverlay(overlay: { highlight: THREE.Mesh; boxHelper:
       material.forEach(item => item.dispose());
     } else {
       material.dispose();
+    }
+  }
+}
+
+function disposeIfcRealVisualOverlay(overlay: { highlight: THREE.Mesh; boxHelper: THREE.Box3Helper | null }) {
+  overlay.highlight.parent?.remove(overlay.highlight);
+  overlay.boxHelper?.parent?.remove(overlay.boxHelper);
+  overlay.highlight.geometry?.dispose();
+  const material = overlay.highlight.material as THREE.Material | THREE.Material[];
+  if (Array.isArray(material)) {
+    material.forEach(item => item.dispose());
+  } else {
+    material?.dispose();
+  }
+  if (overlay.boxHelper) {
+    overlay.boxHelper.geometry?.dispose();
+    const helperMaterial = overlay.boxHelper.material as THREE.Material | THREE.Material[];
+    if (Array.isArray(helperMaterial)) {
+      helperMaterial.forEach(item => item.dispose());
+    } else {
+      helperMaterial.dispose();
     }
   }
 }
@@ -2086,6 +2159,7 @@ function IFCVisualModel({
   const productionOverlayRef = useRef<Array<{
     key: string;
     entityId: string;
+    materialSource: IfcRealMaterialSource;
     highlight: THREE.Mesh;
     boxHelper: THREE.Box3Helper | null;
   }>>([]);
@@ -2178,7 +2252,7 @@ function IFCVisualModel({
 
   const clearProductionOverlays = useCallback(() => {
     const removed = productionOverlayRef.current.length;
-    productionOverlayRef.current.forEach(disposeIfcHighlightOverlay);
+    productionOverlayRef.current.forEach(disposeIfcRealVisualOverlay);
     productionOverlayRef.current = [];
     if (import.meta.env.DEV && removed > 0) {
       console.log("[IFC Real Visual] overlays removed", { removed });
@@ -2324,16 +2398,26 @@ function IFCVisualModel({
         entityId: item.entityId,
         role: item.role,
         progressPercent: item.progressPercent,
-        opacity: item.role === "context" ? 0.65 : clampIfcRealOpacity(item.progressPercent),
+        opacity: getIfcRealOpacity(item.progressPercent, item.role),
         targetExpressId: getIfcEntityNumericId(item.entityId),
       })));
     }
 
     let createdCount = 0;
+    let originalMaterialCount = 0;
+    let fallbackMaterialCount = 0;
+    const materialSamples: Array<{
+      entityId: string;
+      progressPercent: number;
+      role: IfcProductionOverlay["role"];
+      materialSource: IfcRealMaterialSource;
+    }> = [];
     productionOverlays.forEach(item => {
       let created = false;
       for (const mesh of meshes) {
-        const material = createIfcRealVisualMaterial(item.progressPercent, item.role);
+        const originalEntry = realBaseMaterialRef.current.find(entry => entry.mesh === mesh);
+        const sourceMaterial = originalEntry?.previousMaterial || (mesh.material as THREE.Material | THREE.Material[] | undefined);
+        const { material, source: materialSource } = createIfcRealVisualMaterialFromSource(sourceMaterial, item.progressPercent, item.role);
         const result = createIfcEntityHighlightMesh(mesh, item.entityId, {
           material,
           name: `IFC real ${item.role} entity ${item.entityId}`,
@@ -2347,7 +2431,8 @@ function IFCVisualModel({
             entityId: item.entityId,
             role: item.role,
             progressPercent: item.progressPercent,
-            opacity: item.role === "context" ? 0.65 : clampIfcRealOpacity(item.progressPercent),
+            opacity: getIfcRealOpacity(item.progressPercent, item.role),
+            materialSource,
             targetExpressId: getIfcEntityNumericId(item.entityId),
             created: !!result.highlight,
             matchingFaces: result.matchingFaces,
@@ -2365,9 +2450,20 @@ function IFCVisualModel({
         productionOverlayRef.current.push({
           key: item.key,
           entityId: item.entityId,
+          materialSource,
           highlight: result.highlight,
           boxHelper: result.boxHelper,
         });
+        if (materialSource === "fallback") fallbackMaterialCount += 1;
+        else originalMaterialCount += 1;
+        if (materialSamples.length < 6) {
+          materialSamples.push({
+            entityId: item.entityId,
+            progressPercent: item.progressPercent,
+            role: item.role,
+            materialSource,
+          });
+        }
         createdCount += 1;
         created = true;
         break;
@@ -2392,6 +2488,9 @@ function IFCVisualModel({
         created: createdCount,
         context: productionOverlays.filter(item => item.role === "context").length,
         production: productionOverlays.filter(item => item.role === "production").length,
+        originalMaterials: originalMaterialCount,
+        fallbackMaterials: fallbackMaterialCount,
+        materialSamples,
       });
     }
 
@@ -3513,7 +3612,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         entityId: item.entityId,
         role: item.role,
         progressPercent: item.progressPercent,
-        opacity: item.role === "context" ? 0.65 : clampIfcRealOpacity(item.progressPercent),
+        opacity: getIfcRealOpacity(item.progressPercent, item.role),
       })),
       contextSample: contextCandidates.slice(0, 6).map(element => ({
         id: element.id,
