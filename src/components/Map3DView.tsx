@@ -50,6 +50,61 @@ function getMeshLayerKey(mesh: THREE.Mesh): string {
     : mesh.uuid;
 }
 
+type RealMeshClass = "ignored" | "context" | "linkedProduction" | "unlinkedProduction";
+
+function getMeshMaterialName(mesh: THREE.Mesh): string {
+  const material = mesh.material as THREE.Material | THREE.Material[] | undefined;
+  if (!material) return "";
+  if (Array.isArray(material)) return material.map((m: any) => m?.name).filter(Boolean).join(" ");
+  return (material as any).name || "";
+}
+
+function isContextMesh(saved: ProjectModelMesh | null | undefined, mesh: THREE.Mesh): boolean {
+  const text = [
+    saved?.mesh_name,
+    saved?.material_name,
+    mesh.name,
+    getMeshMaterialName(mesh),
+  ].filter(Boolean).join(" ").toLowerCase();
+
+  return [
+    "3dtext",
+    "text",
+    "texto",
+    "rua",
+    "street",
+    "via",
+    "lote",
+    "terreno",
+    "terrain",
+    "site",
+    "calçada",
+    "calcada",
+    "sidewalk",
+    "guia",
+    "meio fio",
+    "meio-fio",
+    "asfalto",
+    "asphalt",
+    "grama",
+    "grass",
+    "vegetation",
+    "soil",
+    "paver",
+    "concrete_scored",
+    "entorno",
+    "implantação",
+    "implantacao",
+  ].some((term) => text.includes(term));
+}
+
+function classifyRealMesh(saved: ProjectModelMesh | null | undefined, mesh: THREE.Mesh): RealMeshClass {
+  if (saved?.ignored) return "ignored";
+  if (isContextMesh(saved, mesh)) return "context";
+  const hasLink = saved?.assigned_house_number != null && saved?.service_macro_id != null && saved?.service_scope_id != null;
+  return hasLink ? "linkedProduction" : "unlinkedProduction";
+}
+
 // Aplica highlight temporario na mesh selecionada (modo Revisar).
 function useSelectionHighlight(scene: THREE.Object3D | null, selectedKey: string | null) {
   const highlightedRef = useRef<Array<{ mesh: THREE.Mesh; originalMaterial: THREE.Material | THREE.Material[] }>>([]);
@@ -604,7 +659,9 @@ export function Map3DView() {
   const [isSyncing, setIsSyncing] = useState(false);
   interface SyncResult { total: number; visible: number; hidden: number; unlinked: number; syncedAt: Date; }
   const [lastSyncResult, setLastSyncResult] = useState<SyncResult | null>(null);
+  const [realSyncVersion, setRealSyncVersion] = useState(0);
   const syncDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const realAutoSyncRef = useRef<{ key: string; at: number } | null>(null);
 
   // Cena ref para aplicar visibilidade fora do JSX
   const [sceneObj, setSceneObj] = useState<THREE.Object3D | null>(null);
@@ -748,35 +805,62 @@ export function Map3DView() {
   }, [currentProject]);
 
   // Aplica modo de visualização à cena
-  const applyViewMode = useCallback((mode: ViewMode) => {
+  const applyViewMode = useCallback((mode: ViewMode, overrideMeshMap?: Map<string, ProjectModelMesh>, syncVersion = realSyncVersion) => {
     setViewMode(mode);
     if (!sceneObj) return;
+    const sourceMap = overrideMeshMap ?? meshHooks.meshMap;
+    const stats = {
+      total: 0,
+      contextVisible: 0,
+      linkedVisible: 0,
+      linkedHidden: 0,
+      unlinkedHidden: 0,
+      ignored: 0,
+    };
     sceneObj.traverse((child) => {
       if (!(child as THREE.Mesh).isMesh) return;
-      const saved = meshHooks.meshMap.get(getMeshLayerKey(child as THREE.Mesh));
-      if (!saved) return;
-      if (saved.ignored) { child.visible = false; return; }
+      const mesh = child as THREE.Mesh;
+      const saved = sourceMap.get(getMeshLayerKey(mesh));
+      stats.total++;
       switch (mode) {
         case "complete":
-          child.visible = saved.visible;
+          child.visible = saved?.ignored ? false : (saved?.visible ?? true);
           break;
         case "real": {
-          const hasLink = saved.assigned_house_number != null && saved.service_macro_id != null && saved.service_scope_id != null;
-          child.visible = hasLink && saved.production_visible;
+          const realClass = classifyRealMesh(saved, mesh);
+          if (realClass === "ignored") {
+            child.visible = false;
+            stats.ignored++;
+          } else if (realClass === "context") {
+            child.visible = saved?.visible ?? true;
+            stats.contextVisible++;
+          } else if (realClass === "linkedProduction") {
+            child.visible = !!saved?.production_visible;
+            if (child.visible) stats.linkedVisible++; else stats.linkedHidden++;
+          } else {
+            child.visible = false;
+            stats.unlinkedHidden++;
+          }
           break;
         }
         case "simulation":
-          child.visible = saved.visible;
+          child.visible = saved?.ignored ? false : (saved?.visible ?? true);
           break;
       }
     });
-  }, [sceneObj, meshHooks.meshMap]);
+    if (import.meta.env.DEV && mode === "real") {
+      console.log("[GLB Real View] applied", {
+        ...stats,
+        syncVersion,
+        usedOverrideMeshMap: !!overrideMeshMap,
+      });
+    }
+  }, [sceneObj, meshHooks.meshMap, realSyncVersion]);
 
   // Re-aplica modo quando meshMap chega/atualiza ou cena fica pronta
   useEffect(() => {
     if (meshHooks.meshMap.size > 0 && sceneObj) applyViewMode(viewMode);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meshHooks.meshMap, sceneObj]);
+  }, [meshHooks.meshMap, sceneObj, viewMode, realSyncVersion, applyViewMode]);
 
   // Aplica isolamento (sobrepõe modo de visão)
   useEffect(() => {
@@ -805,13 +889,16 @@ export function Map3DView() {
   }, [meshHooks.meshMap]);
 
   // Sincronização 3D Real
-  const handleSync3DReal = useCallback(async () => {
+  const handleSync3DReal = useCallback(async (options?: { silent?: boolean }) => {
     if (!canManage3D) { toast.error("Sem permissão para sincronizar o 3D Real."); return; }
     if (!projectId) return;
     setIsSyncing(true);
     try {
       const meshes = Array.from(meshHooks.meshMap.values()).filter(m => !m.ignored);
-      if (meshes.length === 0) { toast.info("Nenhuma mesh registrada."); return; }
+      if (meshes.length === 0) {
+        if (!options?.silent) toast.info("Nenhuma mesh registrada.");
+        return;
+      }
 
       let housesForSync: any[] = currentProject?.houses || [];
       const { data: housesData, error: housesError } = await supabase
@@ -910,27 +997,11 @@ export function Map3DView() {
       }
 
       const refreshedMeshes = await meshHooks.refresh();
-      if (sceneObj && refreshedMeshes?.length) {
+      const nextSyncVersion = Date.now();
+      setRealSyncVersion(nextSyncVersion);
+      if (refreshedMeshes?.length) {
         const refreshedMap = new Map(refreshedMeshes.map((mesh) => [mesh.layer_key, mesh]));
-        sceneObj.traverse((child) => {
-          if (!(child as THREE.Mesh).isMesh) return;
-          const saved = refreshedMap.get(getMeshLayerKey(child as THREE.Mesh));
-          if (!saved) return;
-          if (saved.ignored) { child.visible = false; return; }
-          switch (viewMode) {
-            case "complete":
-              child.visible = saved.visible;
-              break;
-            case "real": {
-              const hasLink = saved.assigned_house_number != null && saved.service_macro_id != null && saved.service_scope_id != null;
-              child.visible = hasLink && saved.production_visible;
-              break;
-            }
-            case "simulation":
-              child.visible = saved.visible;
-              break;
-          }
-        });
+        applyViewMode(viewMode, refreshedMap, nextSyncVersion);
       } else {
         applyViewMode(viewMode);
       }
@@ -946,10 +1017,24 @@ export function Map3DView() {
   const autoSync = useCallback(() => {
     if (!lastSyncResult) return;
     if (syncDebounceRef.current) clearTimeout(syncDebounceRef.current);
-    syncDebounceRef.current = setTimeout(() => { void handleSync3DReal(); }, 800);
+    syncDebounceRef.current = setTimeout(() => { void handleSync3DReal({ silent: true }); }, 800);
   }, [lastSyncResult, handleSync3DReal]);
   const autoSyncRef = useRef(autoSync);
   useEffect(() => { autoSyncRef.current = autoSync; }, [autoSync]);
+
+  const handleViewModeChange = useCallback((mode: ViewMode) => {
+    applyViewMode(mode);
+    if (mode !== "real" || !projectId || isSyncing || meshHooks.meshMap.size === 0) return;
+    const now = Date.now();
+    const syncKey = `${projectId}:real`;
+    const lastAutoSync = realAutoSyncRef.current;
+    if (lastAutoSync?.key === syncKey && now - lastAutoSync.at < 3000) return;
+    realAutoSyncRef.current = { key: syncKey, at: now };
+    if (syncDebounceRef.current) clearTimeout(syncDebounceRef.current);
+    syncDebounceRef.current = setTimeout(() => {
+      void handleSync3DReal({ silent: true });
+    }, 250);
+  }, [applyViewMode, handleSync3DReal, isSyncing, meshHooks.meshMap.size, projectId]);
 
 
   const handleMeshClick = useCallback((obj: THREE.Object3D) => {
@@ -1336,7 +1421,10 @@ export function Map3DView() {
                   setReviewMode(p => !p);
                   setSelectedMeshKey(null);
                   setIsolatedKeys(null);
-                  if (!reviewMode) setAssignMode(false);
+                  if (!reviewMode) {
+                    setAssignMode(false);
+                    handleViewModeChange("complete");
+                  }
                 }}
                 disabled={isLoading}
                 title="Clique numa mesh para revisar UUID, geometria e vínculos"
@@ -1368,7 +1456,7 @@ export function Map3DView() {
                 type="single"
                 size="sm"
                 value={viewMode}
-                onValueChange={(v) => { if (v) applyViewMode(v as ViewMode); }}
+                onValueChange={(v) => { if (v) handleViewModeChange(v as ViewMode); }}
                 className="border border-input rounded-md p-0.5 bg-background"
               >
                 <ToggleGroupItem value="complete" className="h-7 px-2 text-xs gap-1" title="Mostrar todo o modelo">
