@@ -2930,7 +2930,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
           console.log("[IFC Test] persisted elements loaded", {
             projectId,
             companyId: companyId ?? null,
-            modelId: model.id,
+            modelIds: elementModelIds,
             count: Array.isArray(elementsData) ? elementsData.length : 0,
             sample: asIfcPersistedElementRows(elementsData as unknown).slice(0, 3).map(element => ({
               id: element.id,
@@ -2945,7 +2945,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
           });
           console.log("[IFC Test] links loaded", {
             projectId,
-            modelId: model.id,
+            modelIds: candidateModelIds,
             count: Array.isArray(linksData) ? linksData.length : 0,
             sample: asIfcFinalLinkRows(linksData as unknown).slice(0, 3).map(link => ({
               id: link.id,
