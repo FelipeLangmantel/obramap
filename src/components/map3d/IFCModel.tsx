@@ -94,6 +94,7 @@ type IfcProductionOverlay = {
   label: string;
   entityId: string;
   progressPercent: number;
+  role: "context" | "production";
 };
 type IfcPersistedElementRow = {
   id: string;
@@ -1641,10 +1642,12 @@ function clampIfcRealOpacity(progressPercent: number) {
   return Math.min(1, Math.max(0.12, 0.12 + (progress / 100) * 0.88));
 }
 
-function createIfcRealVisualMaterial(progressPercent: number) {
-  const opacity = progressPercent >= 100 ? 1 : clampIfcRealOpacity(progressPercent);
+function createIfcRealVisualMaterial(progressPercent: number, role: IfcProductionOverlay["role"]) {
+  const opacity = role === "context"
+    ? 0.56
+    : progressPercent >= 100 ? 1 : clampIfcRealOpacity(progressPercent);
   return new THREE.MeshBasicMaterial({
-    color: "#22c55e",
+    color: role === "context" ? "#b8b4ab" : "#d8d6ce",
     transparent: opacity < 1,
     opacity,
     side: THREE.DoubleSide,
@@ -2272,8 +2275,9 @@ function IFCVisualModel({
         key: item.key,
         label: item.label,
         entityId: item.entityId,
+        role: item.role,
         progressPercent: item.progressPercent,
-        opacity: clampIfcRealOpacity(item.progressPercent),
+        opacity: item.role === "context" ? 0.56 : clampIfcRealOpacity(item.progressPercent),
         targetExpressId: getIfcEntityNumericId(item.entityId),
       })));
     }
@@ -2282,10 +2286,10 @@ function IFCVisualModel({
     productionOverlays.forEach(item => {
       let created = false;
       for (const mesh of meshes) {
-        const material = createIfcRealVisualMaterial(item.progressPercent);
+        const material = createIfcRealVisualMaterial(item.progressPercent, item.role);
         const result = createIfcEntityHighlightMesh(mesh, item.entityId, {
           material,
-          name: `IFC real production entity ${item.entityId}`,
+          name: `IFC real ${item.role} entity ${item.entityId}`,
           renderOrder: 1200,
           includeBoxHelper: false,
         });
@@ -2294,8 +2298,9 @@ function IFCVisualModel({
             key: item.key,
             label: item.label,
             entityId: item.entityId,
+            role: item.role,
             progressPercent: item.progressPercent,
-            opacity: clampIfcRealOpacity(item.progressPercent),
+            opacity: item.role === "context" ? 0.56 : clampIfcRealOpacity(item.progressPercent),
             targetExpressId: getIfcEntityNumericId(item.entityId),
             created: !!result.highlight,
             matchingFaces: result.matchingFaces,
@@ -2326,6 +2331,7 @@ function IFCVisualModel({
           key: item.key,
           label: item.label,
           entityId: item.entityId,
+          role: item.role,
           progressPercent: item.progressPercent,
           targetExpressId: getIfcEntityNumericId(item.entityId),
           meshCount: meshes.length,
@@ -2337,6 +2343,8 @@ function IFCVisualModel({
       console.log("[IFC Real Visual] overlays created", {
         requested: productionOverlays.length,
         created: createdCount,
+        context: productionOverlays.filter(item => item.role === "context").length,
+        production: productionOverlays.filter(item => item.role === "production").length,
       });
     }
 
@@ -3389,6 +3397,21 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
     const seenEntityIds = new Set<string>();
     const overlays: IfcProductionOverlay[] = [];
 
+    persistedElements.forEach(element => {
+      if (element.category === "production") return;
+      const entityId = normalizeIfcEntityId(element.ifc_entity_id);
+      if (!entityId || seenEntityIds.has(entityId)) return;
+
+      seenEntityIds.add(entityId);
+      overlays.push({
+        key: `context:${element.id}`,
+        label: element.name || element.ifc_layer_name || element.ifc_type || "Contexto IFC",
+        entityId,
+        progressPercent: 100,
+        role: "context",
+      });
+    });
+
     productionActivationDiagnostics.items.forEach(item => {
       if (!item.ifc_element_id) return;
       const element = elementById.get(item.ifc_element_id);
@@ -3403,6 +3426,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         label: `Casa ${item.house_number ?? "-"} | ${item.trigger_service_label || item.trigger_service_key || "serviço IFC"}`,
         entityId,
         progressPercent,
+        role: "production",
       });
     });
 
@@ -3414,6 +3438,8 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
     const elementById = new Map(persistedElements.map(element => [element.id, element]));
     const evaluated = productionActivationDiagnostics.items.filter(item => !!item.ifc_element_id && !!normalizeIfcEntityId(elementById.get(item.ifc_element_id)?.ifc_entity_id));
     const visibleItems = evaluated.filter(item => (item.progress_percent ?? 0) > 0);
+    const contextItems = activeIfcProductionOverlays.filter(item => item.role === "context");
+    const productionItems = activeIfcProductionOverlays.filter(item => item.role === "production");
     const completeItems = visibleItems.filter(item => (item.progress_percent ?? 0) >= 100);
     const partialItems = visibleItems.filter(item => {
       const progress = item.progress_percent ?? 0;
@@ -3424,12 +3450,16 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
       totalEvaluated: evaluated.length,
       totalVisible: visibleItems.length,
       totalHidden: Math.max(0, evaluated.length - visibleItems.length),
+      totalContextKept: contextItems.length,
+      totalProductionVisuals: productionItems.length,
       totalPartial: partialItems.length,
       totalComplete: completeItems.length,
+      basePreserved: false,
       sample: activeIfcProductionOverlays.slice(0, 6).map(item => ({
         entityId: item.entityId,
+        role: item.role,
         progressPercent: item.progressPercent,
-        opacity: clampIfcRealOpacity(item.progressPercent),
+        opacity: item.role === "context" ? 0.56 : clampIfcRealOpacity(item.progressPercent),
       })),
     });
   }, [activeIfcProductionOverlays, ifcRealModeActive, persistedElements, productionActivationDiagnostics.items]);
