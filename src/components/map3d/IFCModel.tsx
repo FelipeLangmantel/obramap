@@ -2,8 +2,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Html } from "@react-three/drei";
 import * as THREE from "three";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useIfcProductionActivationDiagnostics } from "@/hooks/useIfcProductionActivationDiagnostics";
+
+type IfcServiceOption = {
+  id: string;
+  label: string;
+  macro_id: string;
+  scope_id: string;
+};
 
 interface Props {
   url: string;
@@ -14,6 +22,8 @@ interface Props {
   onMeshClick?: (mesh: THREE.Object3D) => void;
   selectedMeshKey?: string | null;
   ifcRealModeActive?: boolean;
+  houseOptions?: number[];
+  serviceOptions?: IfcServiceOption[];
 }
 
 interface IfcInventoryItem {
@@ -99,6 +109,7 @@ type IfcProductionOverlay = {
 type IfcRealMaterialSource = "original" | "original_array" | "fallback";
 type IfcPersistedElementRow = {
   id: string;
+  model_id: string | null;
   ifc_global_id: string | null;
   ifc_entity_id: string | null;
   ifc_type: string | null;
@@ -220,6 +231,7 @@ function asIfcPersistedElementRows(data: unknown): IfcPersistedElementRow[] {
 
       return {
         id,
+        model_id: normalizeNullableString(row.model_id),
         ifc_global_id: normalizeNullableString(row.ifc_global_id),
         ifc_entity_id: normalizeNullableString(row.ifc_entity_id),
         ifc_type: normalizeNullableString(row.ifc_type),
@@ -2920,7 +2932,7 @@ function buildIfcElementPayload(item: IfcInventoryItem, projectId: string, compa
   };
 }
 
-export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, onMeshClick, selectedMeshKey, ifcRealModeActive = false }: Props) {
+export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, onMeshClick, selectedMeshKey, ifcRealModeActive = false, houseOptions = [], serviceOptions = [] }: Props) {
   const [items, setItems] = useState<IfcInventoryItem[]>([]);
   const [filter, setFilter] = useState<IfcInventoryFilter>("production");
   const [search, setSearch] = useState("");
@@ -2944,6 +2956,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
   const [inspectGroupMode, setInspectGroupMode] = useState<IfcInspectGroupMode>("none");
   const [persistedElements, setPersistedElements] = useState<IfcPersistedElementRow[]>([]);
   const [ifc3dTestLinkedElements, setIfc3dTestLinkedElements] = useState<Ifc3DTestLinkedElementRow[]>([]);
+  const [ifcLinkEditSavingId, setIfcLinkEditSavingId] = useState<string | null>(null);
   const [ifc3dTestEnabled, setIfc3dTestEnabled] = useState(false);
   const [ifc3dTestToggles, setIfc3dTestToggles] = useState<Record<Ifc3DTestControlKey, boolean>>({
     "91-radier": false,
@@ -3384,7 +3397,7 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
         const elementModelIds = linkModelIds.length > 0 ? linkModelIds : [candidateModelIds[0]];
 
         const { data: elementsData, error: elementsError } = await elementsTable
-          .select("id, ifc_global_id, ifc_entity_id, ifc_type, ifc_layer_name, name, detected_service_key, detected_service_label, detected_house_number, category, confidence, needs_review, status, raw_properties")
+          .select("id, model_id, ifc_global_id, ifc_entity_id, ifc_type, ifc_layer_name, name, detected_service_key, detected_service_label, detected_house_number, category, confidence, needs_review, status, raw_properties")
           .eq("project_id", projectId)
           .in("model_id", elementModelIds);
         if (elementsError) throw elementsError;
@@ -3573,6 +3586,10 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
     return findIfcPersistedElementMatch(inspectSelection, persistedElements);
   }, [inspectSelection, persistedElements]);
 
+  const finalLinkedElementIds = useMemo(() => {
+    return new Set(ifc3dTestLinkedElements.map(element => element.ifc_element_id));
+  }, [ifc3dTestLinkedElements]);
+
   const sameHouseElements = useMemo(() => {
     const houseNumber = inspectedPersistedElement?.detected_house_number;
     if (houseNumber == null) return [];
@@ -3584,6 +3601,100 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
     if (!serviceKey) return [];
     return persistedElements.filter(element => element.detected_service_key === serviceKey);
   }, [inspectedPersistedElement, persistedElements]);
+
+  const handleSaveInspectedIfcLinkSuggestion = useCallback(async (
+    element: IfcPersistedElementRow,
+    houseNumber: number,
+    serviceOptionId: string,
+  ) => {
+    if (!projectId) {
+      toast.error("Projeto nao identificado para editar sugestao IFC");
+      return;
+    }
+    if (!element?.id) {
+      toast.error("Elemento IFC nao identificado para editar sugestao");
+      return;
+    }
+    if (finalLinkedElementIds.has(element.id)) {
+      toast.warning("Este elemento ja possui vinculo final. Use o painel Sugestoes IFC para revisar antes de alterar.");
+      return;
+    }
+
+    const serviceOption = serviceOptions.find(option => option.id === serviceOptionId);
+    if (!serviceOption || houseNumber == null) {
+      toast.error("Selecione casa e servico para salvar a sugestao");
+      return;
+    }
+
+    setIfcLinkEditSavingId(element.id);
+    try {
+      const now = new Date().toISOString();
+      const rawProperties = {
+        ...(element.raw_properties || {}),
+        houseDetectionSource: "manual_review",
+        serviceDetectionSource: "manual_review",
+        manualHouseAssignment: true,
+        manualServiceAssignment: true,
+        manualLinkEditedAt: now,
+        manualServiceMacroId: serviceOption.macro_id,
+        manualServiceScopeId: serviceOption.scope_id,
+        manualServiceLabel: serviceOption.label,
+        previousDetectedHouseNumber: element.detected_house_number,
+        previousDetectedServiceKey: element.detected_service_key,
+        previousDetectedServiceLabel: element.detected_service_label,
+      };
+      const updatePayload = {
+        detected_house_number: houseNumber,
+        detected_service_key: serviceOption.scope_id,
+        detected_service_label: serviceOption.label,
+        category: "production",
+        confidence: "manual",
+        needs_review: true,
+        status: "suggested",
+        raw_properties: rawProperties,
+      };
+
+      const elementsTable = supabase.from("project_ifc_elements" as any) as any;
+      const { error: updateError } = await elementsTable
+        .update(updatePayload)
+        .eq("id", element.id)
+        .eq("project_id", projectId);
+
+      if (updateError) throw updateError;
+
+      setPersistedElements(prev => prev.map(row => (
+        row.id === element.id
+          ? {
+              ...row,
+              detected_house_number: houseNumber,
+              detected_service_key: serviceOption.scope_id,
+              detected_service_label: serviceOption.label,
+              category: "production",
+              confidence: "manual",
+              needs_review: true,
+              status: "suggested",
+              raw_properties: rawProperties,
+            }
+          : row
+      )));
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("obramap:ifc-elements-updated", {
+          detail: {
+            projectId,
+            modelId: element.model_id,
+            elementId: element.id,
+          },
+        }));
+      }
+      toast.success("Sugestao IFC salva. Proximo passo: confirmar e gerar vinculo final.");
+    } catch (err) {
+      console.error("[IFC Inspect] Falha ao salvar sugestao manual", err);
+      toast.error("Falha ao salvar sugestao IFC");
+    } finally {
+      setIfcLinkEditSavingId(null);
+    }
+  }, [finalLinkedElementIds, projectId, serviceOptions]);
 
   const ifc3dTestElementsByControl = useMemo(() => {
     const map = new Map<Ifc3DTestControlKey, Ifc3DTestLinkedElementRow[]>();
@@ -4488,8 +4599,13 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
                 groupElements={inspectGroupElements}
                 sameHouseCount={sameHouseElements.length}
                 sameServiceCount={sameServiceElements.length}
+                houseOptions={houseOptions}
+                serviceOptions={serviceOptions}
+                hasFinalLink={!!inspectedPersistedElement && finalLinkedElementIds.has(inspectedPersistedElement.id)}
+                savingLinkEdit={!!inspectedPersistedElement && ifcLinkEditSavingId === inspectedPersistedElement.id}
                 onShowHouse={() => setInspectGroupMode("house")}
                 onShowService={() => setInspectGroupMode("service")}
+                onSaveLinkSuggestion={handleSaveInspectedIfcLinkSuggestion}
                 onClear={handleClearInspectSelection}
               />
             ) : (
@@ -4533,8 +4649,13 @@ function IfcInspectPanelEmbedded({
   groupElements,
   sameHouseCount,
   sameServiceCount,
+  houseOptions,
+  serviceOptions,
+  hasFinalLink,
+  savingLinkEdit,
   onShowHouse,
   onShowService,
+  onSaveLinkSuggestion,
   onClear,
 }: {
   selection: IfcVisualInspectSelection;
@@ -4543,16 +4664,39 @@ function IfcInspectPanelEmbedded({
   groupElements: IfcPersistedElementRow[];
   sameHouseCount: number;
   sameServiceCount: number;
+  houseOptions: number[];
+  serviceOptions: IfcServiceOption[];
+  hasFinalLink: boolean;
+  savingLinkEdit: boolean;
   onShowHouse: () => void;
   onShowService: () => void;
+  onSaveLinkSuggestion: (element: IfcPersistedElementRow, houseNumber: number, serviceOptionId: string) => Promise<void>;
   onClear: () => void;
 }) {
   const houseSource = getPersistedHouseDetectionSource(element);
+  const [editingLink, setEditingLink] = useState(false);
+  const [editHouseValue, setEditHouseValue] = useState("");
+  const [editServiceValue, setEditServiceValue] = useState("");
   const groupTitle = groupMode === "house"
     ? "Elementos da mesma casa"
     : groupMode === "service"
       ? "Elementos do mesmo serviço"
       : null;
+  const matchedCurrentService = useMemo(() => {
+    if (!element) return null;
+    return serviceOptions.find(option => (
+      option.scope_id === element.detected_service_key ||
+      option.id === element.detected_service_key ||
+      option.label === element.detected_service_label
+    )) || null;
+  }, [element, serviceOptions]);
+  const canSaveLinkEdit = !!element && !hasFinalLink && !!editHouseValue && !!editServiceValue && !savingLinkEdit;
+
+  useEffect(() => {
+    setEditingLink(false);
+    setEditHouseValue(element?.detected_house_number == null ? "" : String(element.detected_house_number));
+    setEditServiceValue(matchedCurrentService?.id || "");
+  }, [element?.id, element?.detected_house_number, matchedCurrentService?.id]);
 
   return (
     <div className="mt-3 rounded-md border border-primary/30 bg-background p-2">
@@ -4597,7 +4741,65 @@ function IfcInspectPanelEmbedded({
             <button type="button" onClick={onShowService} disabled={!element.detected_service_key} className="rounded border border-border bg-background px-2 py-1 text-[10px] font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50">
               Mesmo serviço ({sameServiceCount})
             </button>
+            <button type="button" onClick={() => setEditingLink(prev => !prev)} disabled={hasFinalLink} className="rounded border border-primary/40 bg-background px-2 py-1 text-[10px] font-medium text-primary hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50">
+              {editingLink ? "Fechar edição" : "Editar vínculo"}
+            </button>
           </div>
+          {hasFinalLink && (
+            <p className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-900">
+              Este elemento já possui vínculo final. Alterar a sugestão não altera o vínculo final existente; revise pelo painel Sugestões IFC.
+            </p>
+          )}
+          {editingLink && !hasFinalLink && (
+            <div className="mt-3 rounded-md border border-border bg-background p-2">
+              <p className="text-xs font-semibold">Editar vínculo como sugestão</p>
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                Salva somente a sugestão deste elemento. Depois confirme e gere o vínculo final.
+              </p>
+              <div className="mt-2 grid gap-2">
+                <label className="grid gap-1 text-[10px] font-medium text-muted-foreground">
+                  Casa
+                  <select
+                    value={editHouseValue}
+                    onChange={event => setEditHouseValue(event.target.value)}
+                    className="h-8 rounded border border-input bg-background px-2 text-xs text-foreground"
+                  >
+                    <option value="">Selecionar casa...</option>
+                    {houseOptions.map(houseNumber => (
+                      <option key={houseNumber} value={houseNumber}>Casa {houseNumber}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="grid gap-1 text-[10px] font-medium text-muted-foreground">
+                  Serviço
+                  <select
+                    value={editServiceValue}
+                    onChange={event => setEditServiceValue(event.target.value)}
+                    className="h-8 rounded border border-input bg-background px-2 text-xs text-foreground"
+                  >
+                    <option value="">Selecionar serviço...</option>
+                    {serviceOptions.map(option => (
+                      <option key={option.id} value={option.id}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  disabled={!canSaveLinkEdit}
+                  onClick={() => {
+                    const houseNumber = Number(editHouseValue);
+                    if (!element || !Number.isFinite(houseNumber)) return;
+                    void onSaveLinkSuggestion(element, houseNumber, editServiceValue).then(() => {
+                      setEditingLink(false);
+                    });
+                  }}
+                  className="rounded border border-primary bg-primary px-2 py-1.5 text-[11px] font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {savingLinkEdit ? "Salvando..." : "Salvar como sugestão"}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <p className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-900">
