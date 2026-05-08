@@ -31,6 +31,7 @@ export function useProjectModelMeshes(projectId: string | undefined) {
   const [meshes, setMeshes] = useState<ProjectModelMesh[]>([]);
   const [loading, setLoading] = useState(false);
   const loadedFor = useRef<string | null>(null);
+  const debugLayerKeyRef = useRef<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!projectId) return;
@@ -46,6 +47,18 @@ export function useProjectModelMeshes(projectId: string | undefined) {
     }
     setMeshes((data || []) as unknown as ProjectModelMesh[]);
     loadedFor.current = projectId;
+    if (import.meta.env.DEV && debugLayerKeyRef.current) {
+      const debugLayerKey = debugLayerKeyRef.current;
+      const debugMesh = ((data || []) as unknown as ProjectModelMesh[]).find(
+        (mesh) => mesh.layer_key === debugLayerKey,
+      ) ?? null;
+      console.log("[GLB Mesh Link] refresh loaded", {
+        projectId,
+        count: data?.length ?? 0,
+        layerKey: debugLayerKey,
+        mesh: debugMesh,
+      });
+    }
     return (data || []) as unknown as ProjectModelMesh[];
   }, [projectId]);
 
@@ -81,6 +94,7 @@ export function useProjectModelMeshes(projectId: string | undefined) {
       if (!projectId) {
         throw new Error("projectId ausente ao salvar vinculo da mesh.");
       }
+      debugLayerKeyRef.current = data.layer_key;
       const payload: any = { ...data, project_id: projectId };
       if (import.meta.env.DEV) {
         console.log("[GLB Mesh Link] upsert payload", {
@@ -106,18 +120,48 @@ export function useProjectModelMeshes(projectId: string | undefined) {
         throw error;
       }
       const savedMesh = saved as unknown as ProjectModelMesh;
+      const { data: verified, error: verifyError } = await supabase
+        .from("project_model_meshes" as any)
+        .select("*")
+        .eq("project_id", projectId)
+        .eq("layer_key", data.layer_key)
+        .maybeSingle();
+      if (verifyError) {
+        console.error("[useProjectModelMeshes] verify error", verifyError);
+        if (import.meta.env.DEV) {
+          console.log("[GLB Mesh Link] verify error", {
+            projectId,
+            layerKey: data.layer_key,
+            error: verifyError,
+          });
+        }
+        throw verifyError;
+      }
+      if (!verified) {
+        const verifyMissingError = new Error("Mesh salva nao ficou visivel no refresh por project_id/layer_key.");
+        if (import.meta.env.DEV) {
+          console.log("[GLB Mesh Link] verify missing", {
+            projectId,
+            layerKey: data.layer_key,
+            saved: savedMesh,
+          });
+        }
+        throw verifyMissingError;
+      }
+      const verifiedMesh = verified as unknown as ProjectModelMesh;
       if (import.meta.env.DEV) {
         console.log("[GLB Mesh Link] upsert saved", {
           projectId,
           layerKey: data.layer_key,
           saved: savedMesh,
+          verified: verifiedMesh,
         });
       }
       setMeshes((prev) => {
-        const idx = prev.findIndex((mesh) => mesh.layer_key === savedMesh.layer_key);
-        if (idx === -1) return [...prev, savedMesh];
+        const idx = prev.findIndex((mesh) => mesh.layer_key === verifiedMesh.layer_key);
+        if (idx === -1) return [...prev, verifiedMesh];
         const next = [...prev];
-        next[idx] = savedMesh;
+        next[idx] = verifiedMesh;
         return next;
       });
       const refreshed = await refresh();
@@ -129,7 +173,7 @@ export function useProjectModelMeshes(projectId: string | undefined) {
           refreshedMesh,
         });
       }
-      return savedMesh;
+      return verifiedMesh;
     },
     [projectId, refresh],
   );
@@ -145,10 +189,14 @@ export function useProjectModelMeshes(projectId: string | undefined) {
 
       const existing = new Map<string, ProjectModelMesh>();
       // usa o estado mais recente sincronicamente refazendo o fetch
-      const { data } = await supabase
+      const { data, error: existingError } = await supabase
         .from("project_model_meshes" as any)
         .select("id, layer_key")
         .eq("project_id", projectId);
+      if (existingError) {
+        console.error("[useProjectModelMeshes] bulk existing fetch error", existingError);
+        return;
+      }
       ((data || []) as any[]).forEach((r) => existing.set(r.layer_key, r));
 
       const toInsert: any[] = [];
@@ -174,13 +222,26 @@ export function useProjectModelMeshes(projectId: string | undefined) {
         }
       }
 
+      if (import.meta.env.DEV) {
+        console.log("[GLB Mesh Link] bulk inventory plan", {
+          projectId,
+          incoming: incoming.length,
+          existing: existing.size,
+          toInsert: toInsert.length,
+          toUpdate: toUpdate.length,
+          sample: incoming.slice(0, 3),
+        });
+      }
+
       if (toInsert.length > 0) {
-        const { error } = await supabase.from("project_model_meshes" as any).insert(toInsert);
+        const { error } = await supabase
+          .from("project_model_meshes" as any)
+          .upsert(toInsert, { onConflict: "project_id,layer_key" });
         if (error) console.error("[useProjectModelMeshes] bulk insert error", error);
       }
       // Updates em lote — paralelos
       if (toUpdate.length > 0) {
-        await Promise.all(
+        const results = await Promise.all(
           toUpdate.map((u) =>
             supabase
               .from("project_model_meshes" as any)
@@ -192,6 +253,12 @@ export function useProjectModelMeshes(projectId: string | undefined) {
               .eq("id", u.id),
           ),
         );
+        const updateErrors = results
+          .map((result) => result.error)
+          .filter(Boolean);
+        if (updateErrors.length > 0) {
+          console.error("[useProjectModelMeshes] bulk update errors", updateErrors);
+        }
       }
       await refresh();
     },

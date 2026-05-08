@@ -592,7 +592,7 @@ export function Map3DView() {
     if (meshesToUpsert.length > 0) {
       void meshHooks.bulkUpsertMeshes(meshesToUpsert);
     }
-  }, [layerManager.extractLayers, projectId, meshHooks]);
+  }, [layerManager.extractLayers, projectId, meshHooks.bulkUpsertMeshes]);
 
   // ====================================================
   // Modo "Revisar Modelo": clique destaca a mesh
