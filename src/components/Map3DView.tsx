@@ -660,7 +660,7 @@ export function Map3DView() {
           child.visible = saved.visible;
           break;
         case "real": {
-          const hasLink = saved.assigned_house_number != null && saved.service_macro_id != null;
+          const hasLink = saved.assigned_house_number != null && saved.service_macro_id != null && saved.service_scope_id != null;
           child.visible = hasLink && saved.production_visible;
           break;
         }
@@ -712,43 +712,134 @@ export function Map3DView() {
       const meshes = Array.from(meshHooks.meshMap.values()).filter(m => !m.ignored);
       if (meshes.length === 0) { toast.info("Nenhuma mesh registrada."); return; }
 
+      let housesForSync: any[] = currentProject?.houses || [];
+      const { data: housesData, error: housesError } = await supabase
+        .from("houses")
+        .select("house_number, macros")
+        .eq("project_id", projectId)
+        .order("house_number", { ascending: true });
+      if (housesError) {
+        console.error("[GLB Real Sync] houses load error", housesError);
+      } else if (housesData?.length) {
+        housesForSync = housesData.map((house: any) => ({
+          id: house.house_number,
+          houseNumber: house.house_number,
+          house_number: house.house_number,
+          macros: Array.isArray(house.macros) ? house.macros : [],
+        }));
+      }
+
       const progressMap = new Map<string, number>();
-      (currentProject?.houses || []).forEach((h: any) => {
-        const hn = h.houseNumber ?? h.house_number ?? h.number;
+      housesForSync.forEach((h: any) => {
+        const hn = h.houseNumber ?? h.house_number ?? h.number ?? h.id;
         (h.macros || []).forEach((macro: any) => {
           (macro.scopes || []).forEach((scope: any) => {
-            progressMap.set(`${hn}::${macro.id}::${scope.id}`, scope.progress || 0);
+            progressMap.set(`${hn}::${macro.id}::${scope.id}`, Number(scope.progress || 0));
           });
         });
       });
 
+      if (import.meta.env.DEV) {
+        const house20 = housesForSync.find((h: any) => (h.houseNumber ?? h.house_number ?? h.number ?? h.id) === 20) ?? null;
+        const linkedMeshes = meshes
+          .filter((mesh) => mesh.assigned_house_number != null && mesh.service_macro_id != null && mesh.service_scope_id != null)
+          .map((mesh) => ({
+            layer_key: mesh.layer_key,
+            mesh_name: mesh.mesh_name,
+            assigned_house_number: mesh.assigned_house_number,
+            service_macro_id: mesh.service_macro_id,
+            service_scope_id: mesh.service_scope_id,
+            ignored: mesh.ignored,
+          }));
+        console.log("[GLB Real Sync] inputs", {
+          projectId,
+          totalHouses: housesForSync.length,
+          house20Found: !!house20,
+          house20Scopes: house20
+            ? (house20.macros || []).flatMap((macro: any) =>
+                (macro.scopes || []).map((scope: any) => ({
+                  macro_id: macro.id,
+                  macro_name: macro.name,
+                  scope_id: scope.id,
+                  scope_name: scope.name,
+                  progress: Number(scope.progress || 0),
+                })),
+              )
+            : [],
+          linkedCasa20: linkedMeshes.filter((mesh) => mesh.assigned_house_number === 20),
+          linkedMeshes: linkedMeshes.slice(0, 20),
+        });
+      }
+
       let visible = 0, hidden = 0, unlinked = 0;
       const now = new Date().toISOString();
 
-      await Promise.all(meshes.map(async (mesh) => {
+      const syncResults = await Promise.all(meshes.map(async (mesh) => {
         const hasLink = mesh.assigned_house_number != null && mesh.service_macro_id != null && mesh.service_scope_id != null;
         let progress = 0; let pv = false;
+        let progressKey: string | null = null;
         if (!hasLink) {
           unlinked++;
         } else {
-          progress = progressMap.get(`${mesh.assigned_house_number}::${mesh.service_macro_id}::${mesh.service_scope_id}`) ?? 0;
+          progressKey = `${mesh.assigned_house_number}::${mesh.service_macro_id}::${mesh.service_scope_id}`;
+          progress = progressMap.get(progressKey) ?? 0;
           pv = progress > 0;
           if (pv) visible++; else hidden++;
         }
-        await supabase.from("project_model_meshes" as any).update({
+        if (import.meta.env.DEV && mesh.assigned_house_number === 20) {
+          console.log("[GLB Real Sync] mesh decision", {
+            layer_key: mesh.layer_key,
+            mesh_name: mesh.mesh_name,
+            assigned_house_number: mesh.assigned_house_number,
+            service_macro_id: mesh.service_macro_id,
+            service_scope_id: mesh.service_scope_id,
+            progressKey,
+            progress,
+            production_visible: pv,
+          });
+        }
+        return supabase.from("project_model_meshes" as any).update({
           production_visible: pv, progress_percent: progress, last_synced_at: now,
         }).eq("id", (mesh as any).id);
       }));
+      const syncErrors = syncResults.map((result) => result.error).filter(Boolean);
+      if (syncErrors.length > 0) {
+        console.error("[GLB Real Sync] update errors", syncErrors);
+        throw syncErrors[0];
+      }
 
-      await meshHooks.refresh();
-      applyViewMode(viewMode);
+      const refreshedMeshes = await meshHooks.refresh();
+      if (sceneObj && refreshedMeshes?.length) {
+        const refreshedMap = new Map(refreshedMeshes.map((mesh) => [mesh.layer_key, mesh]));
+        sceneObj.traverse((child) => {
+          if (!(child as THREE.Mesh).isMesh) return;
+          const saved = refreshedMap.get(getMeshLayerKey(child as THREE.Mesh));
+          if (!saved) return;
+          if (saved.ignored) { child.visible = false; return; }
+          switch (viewMode) {
+            case "complete":
+              child.visible = saved.visible;
+              break;
+            case "real": {
+              const hasLink = saved.assigned_house_number != null && saved.service_macro_id != null && saved.service_scope_id != null;
+              child.visible = hasLink && saved.production_visible;
+              break;
+            }
+            case "simulation":
+              child.visible = saved.visible;
+              break;
+          }
+        });
+      } else {
+        applyViewMode(viewMode);
+      }
       setLastSyncResult({ total: meshes.length, visible, hidden, unlinked, syncedAt: new Date() });
       toast.success(`Sincronizado: ${visible} visíveis · ${hidden} ocultas · ${unlinked} sem vínculo`);
     } catch (err) {
       console.error("[Sync3D]", err);
       toast.error("Erro ao sincronizar");
     } finally { setIsSyncing(false); }
-  }, [canManage3D, projectId, meshHooks, currentProject, applyViewMode, viewMode]);
+  }, [canManage3D, projectId, meshHooks, currentProject, sceneObj, applyViewMode, viewMode]);
 
   // Auto-sync após realtime, debounced (somente se já sincronizou ao menos 1x)
   const autoSync = useCallback(() => {
