@@ -1460,7 +1460,7 @@ export function Map3DView() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleSync3DReal}
+                onClick={() => handleSync3DReal()}
                 disabled={isLoading || isSyncing || meshHooks.meshMap.size === 0}
                 title="Atualiza a visibilidade das meshes a partir da produção real"
               >
