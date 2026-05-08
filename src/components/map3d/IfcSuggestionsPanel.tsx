@@ -1193,6 +1193,14 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
       await loadSuggestions();
       await loadLinkDiagnostics();
       await activationReadModel.refetch();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("obramap:ifc-links-updated", {
+          detail: {
+            projectId,
+            modelId,
+          },
+        }));
+      }
       if (result.created === 0) {
         toast.info("Nenhum vínculo final foi criado. Verifique se há sugestões confirmadas com casa, house_id real e serviço detectados, ou se os vínculos já existem.");
       } else {

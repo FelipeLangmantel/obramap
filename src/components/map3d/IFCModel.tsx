@@ -2979,6 +2979,20 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
     };
 
     void loadPersistedElements();
+    const handleIfcLinksUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ projectId?: string | null; modelId?: string | null }>).detail;
+      if (detail?.projectId !== projectId) return;
+      if (import.meta.env.DEV) {
+        console.log("[IFC Test] links updated event received", {
+          projectId,
+          eventModelId: detail?.modelId ?? null,
+        });
+      }
+      void loadPersistedElements();
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("obramap:ifc-links-updated", handleIfcLinksUpdated);
+    }
     channel = supabase
       .channel(`ifc-final-links-${projectId}`)
       .on(
@@ -2990,6 +3004,9 @@ export function IFCModel({ url, projectId, companyId, onLoaded, onSceneReady, on
 
     return () => {
       cancelled = true;
+      if (typeof window !== "undefined") {
+        window.removeEventListener("obramap:ifc-links-updated", handleIfcLinksUpdated);
+      }
       if (channel) supabase.removeChannel(channel);
     };
   }, [companyId, error, loaded, projectId, saveStatus, url]);
