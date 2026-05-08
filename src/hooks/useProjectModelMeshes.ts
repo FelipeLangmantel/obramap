@@ -82,7 +82,10 @@ export function useProjectModelMeshes(projectId: string | undefined) {
       const { error } = await supabase
         .from("project_model_meshes" as any)
         .upsert(payload, { onConflict: "project_id,layer_key" });
-      if (error) console.error("[useProjectModelMeshes] upsert error", error);
+      if (error) {
+        console.error("[useProjectModelMeshes] upsert error", error);
+        throw error;
+      }
       await refresh();
     },
     [projectId, refresh],

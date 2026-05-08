@@ -9,9 +9,10 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { X, Copy, Eye, EyeOff, Crosshair, EyeOff as Ignore, Box, Home } from "lucide-react";
+import { X, Copy, Eye, EyeOff, Crosshair, EyeOff as Ignore, Box, Home, Save } from "lucide-react";
 import { toast } from "sonner";
 import type { ProjectModelMesh } from "@/hooks/useProjectModelMeshes";
+import { parseHouseNumberFromMesh } from "./parseHouseFromMeshName";
 
 export interface ServiceOption {
   id: string;          // `${macro_id}::${scope_id}`
@@ -39,6 +40,20 @@ export function MeshReviewPanel({
   onClose, onIsolate, onShowAll, onUpdate, onIgnore,
 }: Props) {
   const [bbox, setBbox] = useState<{ size: THREE.Vector3; center: THREE.Vector3 } | null>(null);
+  const [draftHouse, setDraftHouse] = useState("_none");
+  const [draftService, setDraftService] = useState("_none");
+  const [savingLink, setSavingLink] = useState(false);
+
+  const selectedSceneMesh = useMemo(() => {
+    if (!meshKey || !sceneRef) return null;
+    let found: THREE.Mesh | null = null;
+    sceneRef.traverse((child) => {
+      if (!found && (child as THREE.Mesh).isMesh && child.uuid === meshKey) {
+        found = child as THREE.Mesh;
+      }
+    });
+    return found;
+  }, [meshKey, sceneRef]);
 
   useEffect(() => {
     if (!meshKey || !sceneRef) { setBbox(null); return; }
@@ -64,6 +79,11 @@ export function MeshReviewPanel({
 
   const currentHouse = meshData?.assigned_house_number != null ? String(meshData.assigned_house_number) : "_none";
 
+  useEffect(() => {
+    setDraftHouse(currentHouse);
+    setDraftService(currentService);
+  }, [currentHouse, currentService, meshKey]);
+
   if (!meshKey) return null;
 
   const copy = (s: string) => {
@@ -71,6 +91,55 @@ export function MeshReviewPanel({
   };
 
   const fmt = (n: number) => n.toFixed(2);
+
+  const materialNameFromScene = (() => {
+    const material = selectedSceneMesh?.material;
+    if (!material) return "";
+    if (Array.isArray(material)) {
+      return material.map((m) => m?.name).filter(Boolean).join(", ");
+    }
+    return material.name || "";
+  })();
+
+  const selectedService = services.find((service) => service.id === draftService) ?? null;
+  const selectedHouseNumber = draftHouse === "_none" ? null : parseInt(draftHouse, 10);
+  const canApplyLink =
+    !!meshKey &&
+    !savingLink &&
+    !meshData?.ignored &&
+    Number.isFinite(selectedHouseNumber) &&
+    !!selectedService;
+
+  const handleApplyLink = async () => {
+    if (!meshKey) return;
+    if (meshData?.ignored) {
+      toast.error("Remova Ignorar mesh antes de vincular.");
+      return;
+    }
+    if (!Number.isFinite(selectedHouseNumber) || !selectedService) {
+      toast.error("Selecione Casa e Serviço para aplicar o vínculo.");
+      return;
+    }
+
+    setSavingLink(true);
+    try {
+      await onUpdate(meshKey, {
+        assigned_house_number: selectedHouseNumber,
+        service_macro_id: selectedService.macro_id,
+        service_scope_id: selectedService.scope_id,
+        mesh_name: meshData?.mesh_name || selectedSceneMesh?.name || "",
+        material_name: meshData?.material_name || materialNameFromScene || "",
+        detected_house_number:
+          meshData?.detected_house_number ?? parseHouseNumberFromMesh(selectedSceneMesh?.name || ""),
+      });
+      toast.success("Vínculo aplicado à mesh. Clique em Sincronizar 3D Real para atualizar a produção.");
+    } catch (error) {
+      console.error("[MeshReviewPanel] apply link error", error);
+      toast.error("Falha ao aplicar vínculo da mesh.");
+    } finally {
+      setSavingLink(false);
+    }
+  };
 
   return (
     <Card className="absolute top-4 right-4 w-80 z-20 shadow-2xl border-primary/30">
@@ -138,10 +207,8 @@ export function MeshReviewPanel({
               <div>
                 <label className="text-[10px] text-muted-foreground">Casa</label>
                 <Select
-                  value={currentHouse}
-                  onValueChange={(v) =>
-                    onUpdate(meshKey, { assigned_house_number: v === "_none" ? null : parseInt(v, 10) })
-                  }
+                  value={draftHouse}
+                  onValueChange={setDraftHouse}
                 >
                   <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent className="max-h-[260px]">
@@ -157,15 +224,8 @@ export function MeshReviewPanel({
               <div>
                 <label className="text-[10px] text-muted-foreground">Serviço</label>
                 <Select
-                  value={currentService}
-                  onValueChange={(v) => {
-                    if (v === "_none") {
-                      onUpdate(meshKey, { service_macro_id: null, service_scope_id: null });
-                    } else {
-                      const svc = services.find(s => s.id === v);
-                      if (svc) onUpdate(meshKey, { service_macro_id: svc.macro_id, service_scope_id: svc.scope_id });
-                    }
-                  }}
+                  value={draftService}
+                  onValueChange={setDraftService}
                 >
                   <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecionar..." /></SelectTrigger>
                   <SelectContent className="max-h-[260px]">
@@ -176,6 +236,19 @@ export function MeshReviewPanel({
                   </SelectContent>
                 </Select>
               </div>
+              {meshData?.ignored && (
+                <p className="text-[10px] text-destructive">Remova Ignorar mesh antes de vincular.</p>
+              )}
+              <Button
+                type="button"
+                size="sm"
+                className="h-8 w-full text-[11px]"
+                disabled={!canApplyLink}
+                onClick={handleApplyLink}
+              >
+                <Save className="h-3.5 w-3.5 mr-1" />
+                {savingLink ? "Aplicando..." : "Aplicar vínculo"}
+              </Button>
             </section>
 
             {/* Estado atual */}
