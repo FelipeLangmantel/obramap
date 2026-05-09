@@ -58,29 +58,14 @@ const GLB_REAL_SYNC_WATCH_KEYS = [
 
 const GLB_CONTEXT_PRESETS = [
   {
-    key: "asphalt",
-    label: "Marcar ruas/asfalto como Contexto",
-    terms: ["asphalt", "asfalto", "rua", "street", "road", "via"],
-  },
-  {
     key: "grass",
     label: "Marcar grama/terreno como Contexto",
     terms: ["grass", "grama", "vegetation", "vegetacao", "vegetação", "veget", "terrain", "terreno", "soil", "solo"],
   },
   {
-    key: "paver",
-    label: "Marcar calçadas/paver como Contexto",
-    terms: ["paver", "calçada", "calcada", "sidewalk", "passeio", "guia", "meio fio", "meiofio", "curb"],
-  },
-  {
     key: "text",
     label: "Marcar textos/números como Contexto",
     terms: ["3dtext", "text", "texto", "numero", "número", "numeracao", "numeração"],
-  },
-  {
-    key: "site",
-    label: "Marcar lotes/entorno como Contexto",
-    terms: ["lote", "lot", "site", "ifcsite", "implantacao", "implantação", "entorno", "base"],
   },
 ] as const;
 
@@ -2105,7 +2090,7 @@ export function Map3DView() {
             </CardHeader>
             <CardContent className="space-y-1.5 px-3 pb-3">
               <p className="text-[11px] leading-snug text-muted-foreground">
-                Marca meshes sem vínculo produtivo como contexto visual. Produções já vinculadas são puladas.
+                Para ruas, calçadas, paver, lotes e entorno, clique diretamente na peça desejada e marque como Contexto. A classificação automática por material pode marcar peças erradas.
               </p>
               <div className="grid gap-1.5">
                 {GLB_CONTEXT_PRESETS.map((preset) => (
