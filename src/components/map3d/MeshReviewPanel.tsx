@@ -9,7 +9,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { X, Copy, Eye, EyeOff, Crosshair, EyeOff as Ignore, Box, Home, Save } from "lucide-react";
+import { X, Copy, Eye, EyeOff, Crosshair, EyeOff as Ignore, Box, Home, Save, Search } from "lucide-react";
 import { toast } from "sonner";
 import {
   GLB_CONTEXT_MESH_MARKER,
@@ -37,11 +37,12 @@ interface Props {
   onShowAll: () => void;
   onUpdate: (key: string, data: Partial<ProjectModelMesh>) => Promise<void>;
   onIgnore: (key: string) => void;
+  onFindSimilar?: (key: string) => void;
 }
 
 export function MeshReviewPanel({
   meshKey, meshData, sceneRef, houses, services, isolated,
-  onClose, onIsolate, onShowAll, onUpdate, onIgnore,
+  onClose, onIsolate, onShowAll, onUpdate, onIgnore, onFindSimilar,
 }: Props) {
   const [bbox, setBbox] = useState<{ size: THREE.Vector3; center: THREE.Vector3 } | null>(null);
   const [draftHouse, setDraftHouse] = useState("_none");
@@ -98,6 +99,12 @@ export function MeshReviewPanel({
     : isContextProjectModelMesh(meshData)
       ? "context"
       : "production";
+  const hasCompleteProductiveLink = !!meshData
+    && meshData.assigned_house_number != null
+    && meshData.service_macro_id != null
+    && meshData.service_scope_id != null
+    && !meshData.ignored
+    && !isContextProjectModelMesh(meshData);
 
   useEffect(() => {
     setDraftHouse(currentHouse);
@@ -448,6 +455,19 @@ export function MeshReviewPanel({
               >
                 Limpar vínculo
               </Button>
+              {onFindSimilar && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="h-8 w-full text-[11px]"
+                  disabled={!hasCompleteProductiveLink || savingLink}
+                  onClick={() => onFindSimilar(meshKey)}
+                >
+                  <Search className="h-3.5 w-3.5 mr-1" />
+                  Encontrar similares
+                </Button>
+              )}
             </section>
 
             {/* Estado atual */}

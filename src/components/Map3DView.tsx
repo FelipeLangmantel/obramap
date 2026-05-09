@@ -27,6 +27,13 @@ import { IFCModel } from "./map3d/IFCModel";
 import { IfcSuggestionsPanel } from "./map3d/IfcSuggestionsPanel";
 import { GLB_CONTEXT_MESH_MARKER, isContextProjectModelMesh, useProjectModelMeshes, type ProjectModelMesh } from "@/hooks/useProjectModelMeshes";
 import { MeshReviewPanel, type ServiceOption } from "./map3d/MeshReviewPanel";
+import { GlbSmartLinkDialog } from "./map3d/GlbSmartLinkDialog";
+import {
+  getSceneMeshInfo,
+  scoreGlbSimilarCandidates,
+  type GlbMeshRuntimeInfo,
+  type GlbSmartLinkCandidate,
+} from "./map3d/glbSmartLink";
 import { parseHouseNumberFromMesh } from "./map3d/parseHouseFromMeshName";
 import { HouseFotoHistoryDrawer } from "@/components/diario/HouseFotoHistoryDrawer";
 import { canDelete3DAssets, canManage3DMap } from "@/lib/accessControl";
@@ -383,7 +390,13 @@ function WalkControls({ onExit, height = 1.7 }: { onExit: () => void; height?: n
   });
 
   useEffect(() => {
-    camera.position.y = height;
+    const before = camera.position.clone();
+    camera.position.y = Math.max(camera.position.y, height);
+    console.log("[Walk Mode Check] walk controls mounted", {
+      before: before.toArray(),
+      after: camera.position.toArray(),
+      pointerLockActive: typeof document !== "undefined" ? !!document.pointerLockElement : false,
+    });
 
     const onKeyDown = (event: KeyboardEvent) => {
       const keys = keysRef.current;
@@ -439,7 +452,15 @@ function WalkControls({ onExit, height = 1.7 }: { onExit: () => void; height?: n
       ref={controlsRef}
       makeDefault
       selector=".map3d-walk-lock-target"
-      onUnlock={onExit}
+      onLock={() => console.log("[Walk Mode Check] pointer lock captured", {
+        cameraPosition: camera.position.toArray(),
+      })}
+      onUnlock={() => {
+        console.log("[Walk Mode Check] pointer lock released", {
+          cameraPosition: camera.position.toArray(),
+        });
+        onExit();
+      }}
     />
   );
 }
@@ -454,7 +475,11 @@ function WalkMeshInspector({ enabled, onInspect }: { enabled: boolean; onInspect
 
     const handlePointerDown = (event: PointerEvent) => {
       if (event.button !== 0) return;
-      if (typeof document !== "undefined" && !document.pointerLockElement) return;
+      const pointerLockActive = typeof document !== "undefined" && !!document.pointerLockElement;
+      if (!pointerLockActive) {
+        console.log("[Walk Mode Check] pointer down before pointer lock; letting controls capture");
+        return;
+      }
 
       const visibleMeshes: THREE.Object3D[] = [];
       scene.traverse((child) => {
@@ -465,6 +490,13 @@ function WalkMeshInspector({ enabled, onInspect }: { enabled: boolean; onInspect
 
       raycasterRef.current.setFromCamera(centerRef.current, camera);
       const [hit] = raycasterRef.current.intersectObjects(visibleMeshes, true);
+      console.log("[Walk Mode Check] pointer lock raycast", {
+        visibleMeshes: visibleMeshes.length,
+        hit: hit?.object ? {
+          name: hit.object.name,
+          layerKey: (hit.object as any).userData?.obramapLayerKey,
+        } : null,
+      });
       if (!hit?.object || !(hit.object as THREE.Mesh).isMesh) return;
 
       onInspect(hit.object as THREE.Mesh);
@@ -480,12 +512,13 @@ function WalkMeshInspector({ enabled, onInspect }: { enabled: boolean; onInspect
 
 // Camera auto-fit
 function AutoFitCamera({ 
-  fitTrigger, resetTrigger, savedPosition, savedTarget, onCameraChange, sceneReady
+  fitTrigger, resetTrigger, savedPosition, savedTarget, onCameraChange, sceneReady, enabled = true
 }: {
   fitTrigger: number; resetTrigger: number;
   savedPosition?: [number, number, number] | null; savedTarget?: [number, number, number] | null;
   onCameraChange?: (pos: [number, number, number], tgt: [number, number, number]) => void;
   sceneReady: boolean;
+  enabled?: boolean;
 }) {
   const { camera, scene } = useThree();
   const controls = useThree((s) => s.controls) as any;
@@ -526,7 +559,7 @@ function AutoFitCamera({
 
   // Auto-fit when scene becomes ready - ALWAYS fit to model bounds
   useEffect(() => {
-    if (!sceneReady || hasAutoFitRef.current || !controls) return;
+    if (!enabled || !sceneReady || hasAutoFitRef.current || !controls) return;
     hasAutoFitRef.current = true;
     
     // Always fit to model - saved positions may be stale/wrong
@@ -537,25 +570,25 @@ function AutoFitCamera({
       if (attempts < 30) requestAnimationFrame(tryFit);
     };
     tryFit();
-  }, [sceneReady, controls, camera, doFit]);
+  }, [enabled, sceneReady, controls, camera, doFit]);
 
   // Fit trigger
   useEffect(() => {
-    if (fitTrigger <= 0) return;
+    if (!enabled || fitTrigger <= 0) return;
     let attempts = 0;
     const tryFit = () => { if (!doFit() && attempts++ < 15) requestAnimationFrame(tryFit); };
     tryFit();
-  }, [fitTrigger, doFit]);
+  }, [enabled, fitTrigger, doFit]);
 
   // Reset trigger
   useEffect(() => {
-    if (resetTrigger <= 0 || !controls) return;
+    if (!enabled || resetTrigger <= 0 || !controls) return;
     if (savedPosition && savedTarget) {
       camera.position.set(savedPosition[0], savedPosition[1], savedPosition[2]);
       controls.target?.set(savedTarget[0], savedTarget[1], savedTarget[2]);
       controls.update();
     } else { doFit(); }
-  }, [resetTrigger, savedPosition, savedTarget, controls, camera, doFit]);
+  }, [enabled, resetTrigger, savedPosition, savedTarget, controls, camera, doFit]);
 
   // Track camera changes
   useEffect(() => {
@@ -601,7 +634,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
       <PerspectiveCamera makeDefault position={[0, 50, 50]} fov={50} />
       <AutoFitCamera fitTrigger={fitTrigger} resetTrigger={resetTrigger}
         savedPosition={savedPosition} savedTarget={savedTarget}
-        onCameraChange={onCameraChange} sceneReady={sceneReady} />
+        onCameraChange={onCameraChange} sceneReady={sceneReady} enabled={cameraMode === "orbit"} />
       {cameraMode === "orbit" ? <ZoomToMouseControls /> : <WalkControls onExit={onWalkExit} />}
       <WalkMeshInspector enabled={cameraMode === "walk"} onInspect={(mesh) => onWalkMeshInspect?.(mesh)} />
       <ambientLight intensity={0.6} />
@@ -871,6 +904,11 @@ export function Map3DView() {
   const [meshReviewOverrides, setMeshReviewOverrides] = useState<Map<string, ProjectModelMesh>>(new Map());
   const [contextBulkAction, setContextBulkAction] = useState<GlbContextPresetKey | null>(null);
   const [contextPreview, setContextPreview] = useState<GlbContextPreview | null>(null);
+  const [smartLinkOpen, setSmartLinkOpen] = useState(false);
+  const [smartLinkBase, setSmartLinkBase] = useState<GlbMeshRuntimeInfo | null>(null);
+  const [smartLinkCandidates, setSmartLinkCandidates] = useState<GlbSmartLinkCandidate[]>([]);
+  const [smartLinkSelectedKeys, setSmartLinkSelectedKeys] = useState<Set<string>>(new Set());
+  const [smartLinkApplying, setSmartLinkApplying] = useState(false);
 
   // Modo de visualização
   type ViewMode = "complete" | "real" | "simulation";
@@ -1042,6 +1080,7 @@ export function Map3DView() {
   const toggleWalkMode = useCallback(() => {
     setCameraMode((mode) => {
       const nextMode: CameraMode = mode === "walk" ? "orbit" : "walk";
+      console.log("[Walk Mode Check] cameraMode toggle", { from: mode, to: nextMode });
       if (nextMode === "walk") {
         setAssignMode(false);
         setReviewMode(false);
@@ -1095,6 +1134,148 @@ export function Map3DView() {
   const openDashboardView = useCallback((targetView: "diario-obra" | "production") => {
     navigate("/dashboard", { state: { targetView } });
   }, [navigate]);
+
+  const smartLinkServiceLabel = useMemo(() => {
+    const mesh = smartLinkBase?.saved;
+    if (!mesh?.service_macro_id || !mesh?.service_scope_id) return "Serviço da mesh base";
+    return serviceOptions.find((service) =>
+      service.macro_id === mesh.service_macro_id && service.scope_id === mesh.service_scope_id
+    )?.label ?? `${mesh.service_macro_id} → ${mesh.service_scope_id}`;
+  }, [serviceOptions, smartLinkBase]);
+
+  const openSmartLinkSimilar = useCallback((layerKey: string) => {
+    if (!sceneObj) {
+      toast.error("Cena 3D ainda não está pronta.");
+      return;
+    }
+
+    const sourceMap = new Map(meshHooks.meshMap);
+    meshReviewOverrides.forEach((value, key) => sourceMap.set(key, value));
+    const runtimeMeshes = getSceneMeshInfo(sceneObj, sourceMap, getMeshLayerKey);
+    const base = runtimeMeshes.find((mesh) => mesh.layerKey === layerKey) ?? null;
+    const baseSaved = sourceMap.get(layerKey) ?? null;
+    const hasBaseLink = !!baseSaved
+      && baseSaved.assigned_house_number != null
+      && baseSaved.service_macro_id != null
+      && baseSaved.service_scope_id != null
+      && !baseSaved.ignored
+      && !isContextProjectModelMesh(baseSaved);
+
+    if (!base || !baseSaved || !hasBaseLink) {
+      toast.error("Selecione uma mesh com Casa e Serviço vinculados para buscar similares.");
+      return;
+    }
+
+    const candidates = scoreGlbSimilarCandidates({ ...base, saved: baseSaved }, runtimeMeshes)
+      .filter((candidate) => candidate.layerKey !== layerKey);
+    const selected = new Set(
+      candidates
+        .filter((candidate) => candidate.selectedByDefault)
+        .map((candidate) => candidate.layerKey),
+    );
+
+    console.log("[GLB Smart Link] preview built", {
+      baseMesh: baseSaved,
+      baseRuntime: base,
+      totalAnalyzed: runtimeMeshes.length,
+      candidates: candidates.length,
+      selectedByDefault: selected.size,
+      statusCounts: candidates.reduce((acc, candidate) => {
+        acc[candidate.status] = (acc[candidate.status] ?? 0) + 1;
+        return acc;
+      }, {} as Record<string, number>),
+      sample: candidates.slice(0, 10),
+    });
+
+    setSmartLinkBase({ ...base, saved: baseSaved });
+    setSmartLinkCandidates(candidates);
+    setSmartLinkSelectedKeys(selected);
+    setSmartLinkOpen(true);
+  }, [meshHooks.meshMap, meshReviewOverrides, sceneObj]);
+
+  const toggleSmartLinkCandidate = useCallback((layerKey: string, checked: boolean) => {
+    setSmartLinkSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(layerKey);
+      else next.delete(layerKey);
+      return next;
+    });
+  }, []);
+
+  const applySmartLinkSelection = useCallback(async () => {
+    if (!projectId || !smartLinkBase?.saved) return;
+    const baseSaved = smartLinkBase.saved;
+    if (!baseSaved.service_macro_id || !baseSaved.service_scope_id) return;
+
+    const selectedCandidates = smartLinkCandidates.filter((candidate) =>
+      smartLinkSelectedKeys.has(candidate.layerKey)
+      && candidate.status === "applicable"
+      && candidate.suggestedHouseNumber != null
+    );
+    if (selectedCandidates.length === 0) {
+      toast.error("Nenhuma candidata aplicável com casa sugerida foi selecionada.");
+      return;
+    }
+
+    setSmartLinkApplying(true);
+    try {
+      const updates = selectedCandidates.map((candidate) => ({
+        project_id: projectId,
+        layer_key: candidate.layerKey,
+        mesh_name: candidate.meshName,
+        material_name: candidate.materialName,
+        detected_house_number: candidate.suggestedHouseNumber,
+        assigned_house_number: candidate.suggestedHouseNumber,
+        service_macro_id: baseSaved.service_macro_id,
+        service_scope_id: baseSaved.service_scope_id,
+        ignored: false,
+        visible: true,
+        production_visible: false,
+        progress_percent: 0,
+      }));
+      const batchSize = 100;
+      const errors: any[] = [];
+      let sent = 0;
+      for (let index = 0; index < updates.length; index += batchSize) {
+        const batch = updates.slice(index, index + batchSize);
+        const { error } = await supabase
+          .from("project_model_meshes" as any)
+          .upsert(batch, { onConflict: "project_id,layer_key" });
+        sent += batch.length;
+        if (error) errors.push(error);
+      }
+
+      console.log("[GLB Smart Link] applied", {
+        base: baseSaved,
+        selected: smartLinkSelectedKeys.size,
+        applicable: selectedCandidates.length,
+        sent,
+        skipped: smartLinkSelectedKeys.size - selectedCandidates.length,
+        errors: errors.length,
+        sample: updates.slice(0, 10),
+      });
+
+      if (errors.length > 0) throw errors[0];
+
+      const refreshed = await meshHooks.refresh();
+      const refreshedMap = new Map((refreshed || []).map((mesh) => [mesh.layer_key, mesh]));
+      setMeshReviewOverrides((prev) => {
+        const next = new Map(prev);
+        updates.forEach((update) => {
+          const saved = refreshedMap.get(update.layer_key);
+          if (saved) next.set(update.layer_key, saved);
+        });
+        return next;
+      });
+      toast.success(`Vínculos aplicados: ${sent}. Clique em Sincronizar 3D Real para atualizar a produção.`);
+      setSmartLinkOpen(false);
+    } catch (error) {
+      console.error("[GLB Smart Link] apply error", error);
+      toast.error("Falha ao aplicar vínculos inteligentes.");
+    } finally {
+      setSmartLinkApplying(false);
+    }
+  }, [meshHooks, projectId, smartLinkBase, smartLinkCandidates, smartLinkSelectedKeys]);
 
   const applyViewMode = useCallback((mode: ViewMode, overrideMeshMap?: Map<string, ProjectModelMesh>) => {
     setViewMode(mode);
@@ -2414,6 +2595,7 @@ export function Map3DView() {
             onClose={() => { setSelectedMeshKey(null); setIsolatedKeys(null); }}
             onIsolate={handleIsolate}
             onShowAll={handleClearIsolation}
+            onFindSimilar={openSmartLinkSimilar}
             onUpdate={async (key, data) => {
               if (!canManage3D) { toast.error("Sem permissão para revisar o modelo 3D."); return; }
               const payload = { layer_key: key, ...data };
@@ -2555,6 +2737,18 @@ export function Map3DView() {
           </div>
         )}
       </Card>
+
+      <GlbSmartLinkDialog
+        open={smartLinkOpen}
+        base={smartLinkBase}
+        candidates={smartLinkCandidates}
+        selectedKeys={smartLinkSelectedKeys}
+        applying={smartLinkApplying}
+        serviceLabel={smartLinkServiceLabel}
+        onOpenChange={setSmartLinkOpen}
+        onToggle={toggleSmartLinkCandidate}
+        onApply={applySmartLinkSelection}
+      />
 
       {canManage3D && projectId && (
         <LinkLayersDialog
