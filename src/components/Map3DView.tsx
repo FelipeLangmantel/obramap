@@ -904,6 +904,7 @@ export function Map3DView() {
   const [meshReviewOverrides, setMeshReviewOverrides] = useState<Map<string, ProjectModelMesh>>(new Map());
   const [contextBulkAction, setContextBulkAction] = useState<GlbContextPresetKey | null>(null);
   const [contextPreview, setContextPreview] = useState<GlbContextPreview | null>(null);
+  const [quickContextPanelOpen, setQuickContextPanelOpen] = useState(false);
   const [smartLinkOpen, setSmartLinkOpen] = useState(false);
   const [smartLinkBase, setSmartLinkBase] = useState<GlbMeshRuntimeInfo | null>(null);
   const [smartLinkCandidates, setSmartLinkCandidates] = useState<GlbSmartLinkCandidate[]>([]);
@@ -2303,6 +2304,7 @@ export function Map3DView() {
                   setReviewMode(p => !p);
                   setSelectedMeshKey(null);
                   setIsolatedKeys(null);
+                  setQuickContextPanelOpen(false);
                   if (!reviewMode) {
                     setAssignMode(false);
                     applyViewMode("complete");
@@ -2318,6 +2320,19 @@ export function Map3DView() {
                     {pendingMeshCount} pend.
                   </Badge>
                 )}
+              </Button>
+            )}
+            {canManage3D && reviewMode && sceneObj && (
+              <Button
+                type="button"
+                variant={quickContextPanelOpen ? "default" : "outline"}
+                size="sm"
+                onClick={() => setQuickContextPanelOpen((open) => !open)}
+                disabled={isLoading}
+                title="Abrir ferramentas manuais de contexto do 3D Real"
+              >
+                <Layers className="h-4 w-4 mr-1.5" />
+                Contexto rápido
               </Button>
             )}
             {canManage3D && modelData?.type === "ifc" && projectId && (
@@ -2478,10 +2493,19 @@ export function Map3DView() {
             </Button>
           </div>
         )}
-        {canManage3D && reviewMode && sceneObj && (
+        {canManage3D && reviewMode && sceneObj && quickContextPanelOpen && (
           <Card className="absolute bottom-4 left-4 z-20 w-80 border-primary/20 bg-background/95 shadow-xl backdrop-blur">
-            <CardHeader className="px-3 pb-2 pt-3">
+            <CardHeader className="flex flex-row items-center justify-between gap-2 px-3 pb-2 pt-3">
               <CardTitle className="text-sm">Classificação rápida 3D Real</CardTitle>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-[11px]"
+                onClick={() => setQuickContextPanelOpen(false)}
+              >
+                Fechar
+              </Button>
             </CardHeader>
             <CardContent className="space-y-1.5 px-3 pb-3">
               <p className="text-[11px] leading-snug text-muted-foreground">

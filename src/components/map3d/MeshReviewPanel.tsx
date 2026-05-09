@@ -101,10 +101,13 @@ export function MeshReviewPanel({
       : "production";
   const hasCompleteProductiveLink = !!meshData
     && meshData.assigned_house_number != null
-    && meshData.service_macro_id != null
-    && meshData.service_scope_id != null
+    && !!meshData.service_macro_id
+    && !!meshData.service_scope_id
     && !meshData.ignored
     && !isContextProjectModelMesh(meshData);
+  const smartLinkStatusText = hasCompleteProductiveLink
+    ? "Status: Pronta para encontrar similares"
+    : "Status: Vincule Casa e Serviço primeiro";
 
   useEffect(() => {
     setDraftHouse(currentHouse);
@@ -455,19 +458,21 @@ export function MeshReviewPanel({
               >
                 Limpar vínculo
               </Button>
-              {onFindSimilar && (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="h-8 w-full text-[11px]"
-                  disabled={!hasCompleteProductiveLink || savingLink}
-                  onClick={() => onFindSimilar(meshKey)}
-                >
-                  <Search className="h-3.5 w-3.5 mr-1" />
-                  Encontrar similares
-                </Button>
-              )}
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="h-8 w-full text-[11px]"
+                disabled={!onFindSimilar || !hasCompleteProductiveLink || savingLink}
+                title={hasCompleteProductiveLink ? "Encontrar meshes semelhantes para vincular em lote" : "Vincule Casa e Serviço primeiro."}
+                onClick={() => onFindSimilar?.(meshKey)}
+              >
+                <Search className="h-3.5 w-3.5 mr-1" />
+                Encontrar similares
+              </Button>
+              <p className={hasCompleteProductiveLink ? "text-[10px] text-emerald-600" : "text-[10px] text-muted-foreground"}>
+                {smartLinkStatusText}
+              </p>
             </section>
 
             {/* Estado atual */}
