@@ -1,4 +1,5 @@
 import { useState, useRef, Suspense, useCallback, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, PointerLockControls, useGLTF, Html, PerspectiveCamera } from "@react-three/drei";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
@@ -29,6 +30,7 @@ import { MeshReviewPanel, type ServiceOption } from "./map3d/MeshReviewPanel";
 import { parseHouseNumberFromMesh } from "./map3d/parseHouseFromMeshName";
 import { HouseFotoHistoryDrawer } from "@/components/diario/HouseFotoHistoryDrawer";
 import { canDelete3DAssets, canManage3DMap } from "@/lib/accessControl";
+import { calculateHouseProgress } from "@/data/constructionData";
 
 interface ModelData {
   url: string;
@@ -81,6 +83,12 @@ type GlbContextPreview = {
   materialNames: string[];
   meshNames: string[];
   sample: Array<{ layer_key: string; mesh_name: string; material_name: string }>;
+};
+
+type WalkInspection = {
+  layerKey: string;
+  meshName: string;
+  materialName: string;
 };
 
 const GLB_CONTEXT_SUSPECT_TERMS = [
@@ -436,6 +444,40 @@ function WalkControls({ onExit, height = 1.7 }: { onExit: () => void; height?: n
   );
 }
 
+function WalkMeshInspector({ enabled, onInspect }: { enabled: boolean; onInspect: (mesh: THREE.Mesh) => void }) {
+  const { camera, scene, gl } = useThree();
+  const raycasterRef = useRef(new THREE.Raycaster());
+  const centerRef = useRef(new THREE.Vector2(0, 0));
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.button !== 0) return;
+      if (typeof document !== "undefined" && !document.pointerLockElement) return;
+
+      const visibleMeshes: THREE.Object3D[] = [];
+      scene.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh && child.visible) {
+          visibleMeshes.push(child);
+        }
+      });
+
+      raycasterRef.current.setFromCamera(centerRef.current, camera);
+      const [hit] = raycasterRef.current.intersectObjects(visibleMeshes, true);
+      if (!hit?.object || !(hit.object as THREE.Mesh).isMesh) return;
+
+      onInspect(hit.object as THREE.Mesh);
+    };
+
+    const domElement = gl.domElement;
+    domElement.addEventListener("pointerdown", handlePointerDown);
+    return () => domElement.removeEventListener("pointerdown", handlePointerDown);
+  }, [camera, enabled, gl, onInspect, scene]);
+
+  return null;
+}
+
 // Camera auto-fit
 function AutoFitCamera({ 
   fitTrigger, resetTrigger, savedPosition, savedTarget, onCameraChange, sceneReady
@@ -534,7 +576,7 @@ function AutoFitCamera({
 function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLegendItems,
   resetTrigger, fitTrigger, savedPosition, savedTarget, onCameraChange, sceneReady, onModelLoaded, onSceneReady,
   onMeshClick, selectedMeshKey, projectId, companyId, ifcRealModeActive, ifcHouseOptions, ifcServiceOptions,
-  cameraMode, onWalkExit,
+  cameraMode, onWalkExit, onWalkMeshInspect,
 }: {
   modelData: ModelData | null; markers: HouseMarker[]; selectedMarkerId: number | null;
   onMarkerClick: (m: HouseMarker) => void; customLegendItems: any[];
@@ -552,6 +594,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   ifcServiceOptions?: ServiceOption[];
   cameraMode: "orbit" | "walk";
   onWalkExit: () => void;
+  onWalkMeshInspect?: (mesh: THREE.Mesh) => void;
 }) {
   return (
     <>
@@ -560,6 +603,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
         savedPosition={savedPosition} savedTarget={savedTarget}
         onCameraChange={onCameraChange} sceneReady={sceneReady} />
       {cameraMode === "orbit" ? <ZoomToMouseControls /> : <WalkControls onExit={onWalkExit} />}
+      <WalkMeshInspector enabled={cameraMode === "walk"} onInspect={(mesh) => onWalkMeshInspect?.(mesh)} />
       <ambientLight intensity={0.6} />
       <directionalLight position={[10, 10, 5]} intensity={1} castShadow />
       <directionalLight position={[-10, 10, -5]} intensity={0.5} />
@@ -647,8 +691,146 @@ function HouseDetailsPanel({ marker, onClose, customLegendItems, onOpenPhotoHist
   );
 }
 
+function HouseWalkInspectPanel({
+  inspection,
+  meshData,
+  house,
+  macrosTemplate,
+  customLegendItems,
+  onClose,
+  onOpenDiary,
+  onOpenProduction,
+  onOpenHistory,
+}: {
+  inspection: WalkInspection;
+  meshData: ProjectModelMesh | null;
+  house: any | null;
+  macrosTemplate?: any[];
+  customLegendItems: any[];
+  onClose: () => void;
+  onOpenDiary: () => void;
+  onOpenProduction: () => void;
+  onOpenHistory: () => void;
+}) {
+  const color = (progress: number) => {
+    if (progress === 0) return "hsl(var(--muted))";
+    for (const item of [...customLegendItems].sort((a, b) => a.minPercent - b.minPercent)) {
+      if (progress >= item.minPercent && progress <= item.maxPercent) return item.color;
+    }
+    return progress < 50 ? "hsl(0,84%,60%)" : progress < 100 ? "hsl(45,93%,47%)" : "hsl(142,71%,45%)";
+  };
+
+  const macroSummaries = useMemo(() => {
+    if (!house?.macros?.length) return [];
+    return house.macros.map((macro: any) => {
+      const scopes = Array.isArray(macro.scopes) ? macro.scopes : [];
+      const totalWeight = scopes.reduce((sum: number, scope: any) => sum + (Number(scope.weight) || 0), 0);
+      const progress = totalWeight > 0
+        ? Math.round(scopes.reduce((sum: number, scope: any) => sum + (Number(scope.progress) || 0) * (Number(scope.weight) || 0), 0) / totalWeight)
+        : Math.round(scopes.reduce((sum: number, scope: any) => sum + (Number(scope.progress) || 0), 0) / (scopes.length || 1));
+      return { ...macro, progress };
+    });
+  }, [house]);
+
+  const overallProgress = house ? calculateHouseProgress(house, macrosTemplate) : 0;
+  const currentMacro = macroSummaries.find((macro: any) => macro.progress > 0 && macro.progress < 100)
+    ?? [...macroSummaries].reverse().find((macro: any) => macro.progress > 0)
+    ?? macroSummaries[0]
+    ?? null;
+  const clickedMacro = macroSummaries.find((macro: any) => macro.id === meshData?.service_macro_id) ?? null;
+  const clickedScope = clickedMacro?.scopes?.find((scope: any) => scope.id === meshData?.service_scope_id) ?? null;
+  const serviceRows = macroSummaries
+    .flatMap((macro: any) => (macro.scopes ?? []).map((scope: any) => ({ macro, scope })))
+    .filter(({ scope }: any) => Number(scope.progress) > 0 || scope.id === meshData?.service_scope_id)
+    .slice(0, 8);
+
+  return (
+    <Card className="absolute right-4 top-4 z-30 w-[360px] max-h-[calc(100%-2rem)] overflow-hidden border-primary/20 bg-background/95 shadow-xl backdrop-blur">
+      <CardHeader className="pb-2">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <CardTitle className="text-lg">{house ? `Casa ${house.id}` : "Mesh sem vínculo de casa"}</CardTitle>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              {house ? "Inspeção no modo Caminhar" : "Vincule esta mesh no modo Revisão"}
+            </p>
+          </div>
+          <Button type="button" variant="ghost" size="icon" onClick={onClose}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="max-h-[70vh] space-y-4 overflow-y-auto">
+        {!house ? (
+          <div className="rounded-lg border border-dashed p-3 text-sm">
+            <p className="font-medium text-foreground">Mesh sem vínculo de casa</p>
+            <p className="mt-1 text-xs text-muted-foreground">Vincule esta mesh no modo Revisão para que ela abra o painel da casa.</p>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Progresso geral</span>
+                <span className="font-semibold">{overallProgress}%</span>
+              </div>
+              <div className="h-2.5 overflow-hidden rounded-full bg-muted">
+                <div className="h-full rounded-full transition-all" style={{ width: `${overallProgress}%`, backgroundColor: color(overallProgress) }} />
+              </div>
+              {currentMacro && (
+                <div className="flex items-center justify-between rounded-md bg-muted/40 px-2 py-1.5 text-xs">
+                  <span className="text-muted-foreground">Etapa atual</span>
+                  <span className="font-medium">{currentMacro.name} · {currentMacro.progress}%</span>
+                </div>
+              )}
+            </div>
+
+            {clickedMacro && clickedScope && (
+              <div className="rounded-lg border border-primary/25 bg-primary/5 p-3 text-sm">
+                <p className="text-[10px] font-semibold uppercase text-muted-foreground">Serviço clicado</p>
+                <p className="mt-1 font-medium">{clickedMacro.name} → {clickedScope.name}</p>
+                <p className="text-xs text-muted-foreground">{Number(clickedScope.progress) || 0}% concluído</p>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground">Resumo de serviços</p>
+              {serviceRows.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Nenhum serviço com avanço registrado nesta casa.</p>
+              ) : (
+                serviceRows.map(({ macro, scope }: any) => (
+                  <div key={`${macro.id}:${scope.id}`} className="space-y-1 rounded-md border p-2">
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="min-w-0 truncate">{macro.name} → {scope.name}</span>
+                      <span className="font-medium">{Number(scope.progress) || 0}%</span>
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                      <div className="h-full rounded-full" style={{ width: `${Number(scope.progress) || 0}%`, backgroundColor: color(Number(scope.progress) || 0) }} />
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="grid grid-cols-3 gap-1.5">
+              <Button type="button" variant="outline" size="sm" className="h-8 text-[11px]" onClick={onOpenDiary}>Ver diário</Button>
+              <Button type="button" variant="outline" size="sm" className="h-8 text-[11px]" onClick={onOpenProduction}>Ver produção</Button>
+              <Button type="button" variant="outline" size="sm" className="h-8 text-[11px]" onClick={onOpenHistory}>Ver histórico</Button>
+            </div>
+          </>
+        )}
+
+        <div className="space-y-1 rounded-md bg-muted/40 p-2 text-[10px] text-muted-foreground">
+          <p className="font-mono">layer_key: {inspection.layerKey}</p>
+          <p>mesh: {meshData?.mesh_name || inspection.meshName || "—"}</p>
+          <p>material: {meshData?.material_name || inspection.materialName || "—"}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function Map3DView() {
   const { currentProject, refreshHousesFromDB } = useConstruction();
+  const navigate = useNavigate();
   const { profile } = useAuth();
   const projectId = currentProject?.id;
   const companyId = (currentProject as any)?.company_id || profile?.company_id || null;
@@ -695,6 +877,9 @@ export function Map3DView() {
   const [viewMode, setViewMode] = useState<ViewMode>("complete");
   type CameraMode = "orbit" | "walk";
   const [cameraMode, setCameraMode] = useState<CameraMode>("orbit");
+  const [walkInspection, setWalkInspection] = useState<WalkInspection | null>(null);
+  const [walkHistoryOpen, setWalkHistoryOpen] = useState(false);
+  const [walkHistoryHouseNumber, setWalkHistoryHouseNumber] = useState<number | null>(null);
 
   // Sincronização 3D Real
   const [isSyncing, setIsSyncing] = useState(false);
@@ -831,6 +1016,15 @@ export function Map3DView() {
     setSelectedMeshKey(layerKey);
   }, [meshHooks.meshMap, reviewMode, sceneObj]);
 
+  const handleWalkMeshInspect = useCallback((mesh: THREE.Mesh) => {
+    const layerKey = getMeshLayerKey(mesh);
+    setWalkInspection({
+      layerKey,
+      meshName: mesh.name || "",
+      materialName: getMeshMaterialName(mesh),
+    });
+  }, []);
+
   const handleIsolate = useCallback((key: string) => {
     setIsolatedKeys(prev => (prev?.has(key) ? null : new Set([key])));
   }, []);
@@ -842,6 +1036,7 @@ export function Map3DView() {
   // Lista de casas para o painel de revisão
   const exitWalkMode = useCallback(() => {
     setCameraMode("orbit");
+    setWalkInspection(null);
   }, []);
 
   const toggleWalkMode = useCallback(() => {
@@ -853,6 +1048,9 @@ export function Map3DView() {
         setPickedMesh(null);
         setSelectedMeshKey(null);
         setIsolatedKeys(null);
+        setSelectedMarker(null);
+      } else {
+        setWalkInspection(null);
       }
       return nextMode;
     });
@@ -883,6 +1081,21 @@ export function Map3DView() {
   }, [currentProject]);
 
   // Aplica modo de visualização à cena
+  const walkMeshData = useMemo(() => {
+    if (!walkInspection) return null;
+    return meshReviewOverrides.get(walkInspection.layerKey) ?? meshHooks.meshMap.get(walkInspection.layerKey) ?? null;
+  }, [meshHooks.meshMap, meshReviewOverrides, walkInspection]);
+
+  const walkHouse = useMemo(() => {
+    const houseNumber = walkMeshData?.assigned_house_number;
+    if (houseNumber == null) return null;
+    return currentProject?.houses?.find((house: any) => Number(house.id) === Number(houseNumber)) ?? null;
+  }, [currentProject?.houses, walkMeshData?.assigned_house_number]);
+
+  const openDashboardView = useCallback((targetView: "diario-obra" | "production") => {
+    navigate("/dashboard", { state: { targetView } });
+  }, [navigate]);
+
   const applyViewMode = useCallback((mode: ViewMode, overrideMeshMap?: Map<string, ProjectModelMesh>) => {
     setViewMode(mode);
     if (!sceneObj) return;
@@ -2032,7 +2245,8 @@ export function Map3DView() {
               ifcHouseOptions={houseNumbers}
               ifcServiceOptions={serviceOptions}
               cameraMode={cameraMode}
-              onWalkExit={exitWalkMode} />
+              onWalkExit={exitWalkMode}
+              onWalkMeshInspect={handleWalkMeshInspect} />
           </Canvas>
         </div>
         <div id="map3d-ifc-panel-slot" className="pointer-events-none absolute bottom-3 left-0 right-3 top-3 z-40 overflow-hidden" />
@@ -2040,7 +2254,7 @@ export function Map3DView() {
           <div className="absolute top-4 left-1/2 z-30 flex -translate-x-1/2 flex-col items-center gap-1 rounded-lg border border-primary/30 bg-background/95 px-3 py-2 text-xs shadow-lg backdrop-blur pointer-events-none">
             <div className="font-semibold text-primary">Caminhar na Obra</div>
             <div className="text-muted-foreground">
-              Clique no mapa para capturar o mouse · WASD mover · Shift acelerar · Esc sair
+              Clique no mapa para capturar o mouse · depois clique mirando uma peça para inspecionar · WASD mover · Shift acelerar · Esc sair
             </div>
           </div>
         )}
@@ -2300,12 +2514,36 @@ export function Map3DView() {
             onOpenPhotoHistory={() => setPhotoHistoryOpen(true)}
           />
         )}
+        {cameraMode === "walk" && walkInspection && (
+          <HouseWalkInspectPanel
+            inspection={walkInspection}
+            meshData={walkMeshData}
+            house={walkHouse}
+            macrosTemplate={currentProject?.macrosTemplate}
+            customLegendItems={customLegendItems}
+            onClose={() => setWalkInspection(null)}
+            onOpenDiary={() => openDashboardView("diario-obra")}
+            onOpenProduction={() => openDashboardView("production")}
+            onOpenHistory={() => {
+              const houseNumber = walkMeshData?.assigned_house_number ?? null;
+              setWalkHistoryHouseNumber(houseNumber);
+              setWalkHistoryOpen(houseNumber != null);
+            }}
+          />
+        )}
         <HouseFotoHistoryDrawer
           open={photoHistoryOpen}
           onOpenChange={setPhotoHistoryOpen}
           houseId={selectedMarker?.houseNumber ?? null}
           projectId={projectId ?? null}
           houseLabel={selectedMarker ? `Casa ${String(selectedMarker.houseNumber).padStart(2, "0")}` : undefined}
+        />
+        <HouseFotoHistoryDrawer
+          open={walkHistoryOpen}
+          onOpenChange={setWalkHistoryOpen}
+          houseId={walkHistoryHouseNumber}
+          projectId={projectId ?? null}
+          houseLabel={walkHistoryHouseNumber != null ? `Casa ${String(walkHistoryHouseNumber).padStart(2, "0")}` : undefined}
         />
         {!modelData && markers.length === 0 && !isLoading && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
