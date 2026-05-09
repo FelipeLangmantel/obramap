@@ -86,6 +86,32 @@ const GLB_CONTEXT_PRESETS = [
 
 type GlbContextPresetKey = typeof GLB_CONTEXT_PRESETS[number]["key"];
 
+type GlbContextPreview = {
+  presetKey: GlbContextPresetKey | "clear";
+  title: string;
+  found: number;
+  alreadyContext: number;
+  skippedLinked: number;
+  wouldMark: Array<Partial<ProjectModelMesh> & { project_id: string; layer_key: string }>;
+  materialNames: string[];
+  meshNames: string[];
+  sample: Array<{ layer_key: string; mesh_name: string; material_name: string }>;
+};
+
+const GLB_CONTEXT_SUSPECT_TERMS = [
+  "laje",
+  "slab",
+  "telhado",
+  "roof",
+  "parede",
+  "wall",
+  "radier",
+  "fundacao",
+  "fundação",
+  "foundation",
+  "concrete",
+];
+
 function getMeshMaterialName(mesh: THREE.Mesh): string {
   const material = mesh.material as THREE.Material | THREE.Material[] | undefined;
   if (!material) return "";
@@ -677,6 +703,7 @@ export function Map3DView() {
   const [isolatedKeys, setIsolatedKeys] = useState<Set<string> | null>(null);
   const [meshReviewOverrides, setMeshReviewOverrides] = useState<Map<string, ProjectModelMesh>>(new Map());
   const [contextBulkAction, setContextBulkAction] = useState<GlbContextPresetKey | null>(null);
+  const [contextPreview, setContextPreview] = useState<GlbContextPreview | null>(null);
 
   // Modo de visualização
   type ViewMode = "complete" | "real" | "simulation";
@@ -1070,6 +1097,204 @@ export function Map3DView() {
       setContextBulkAction(null);
     }
   }, [applyViewMode, canManage3D, meshHooks, meshReviewOverrides, projectId, sceneObj, viewMode]);
+
+  const buildContextPreview = useCallback((presetKey: GlbContextPresetKey): GlbContextPreview | null => {
+    if (!canManage3D) { toast.error("Sem permissão para revisar o modelo 3D."); return null; }
+    if (!projectId || !sceneObj) return null;
+    const preset = GLB_CONTEXT_PRESETS.find((item) => item.key === presetKey);
+    if (!preset) return null;
+
+    const seen = new Set<string>();
+    const materialCounts = new Map<string, number>();
+    const nameCounts = new Map<string, number>();
+    const updates: Array<Partial<ProjectModelMesh> & { project_id: string; layer_key: string }> = [];
+    let found = 0;
+    let skippedLinked = 0;
+    let alreadyContext = 0;
+
+    sceneObj.traverse((child) => {
+      if (!(child as THREE.Mesh).isMesh) return;
+      const mesh = child as THREE.Mesh;
+      const layerKey = getMeshLayerKey(mesh);
+      if (seen.has(layerKey)) return;
+      seen.add(layerKey);
+
+      const saved = meshReviewOverrides.get(layerKey) ?? meshHooks.meshMap.get(layerKey) ?? null;
+      const meshName = saved?.mesh_name || mesh.name || "";
+      const materialName = saved?.material_name || getMeshMaterialName(mesh);
+      const searchText = [meshName, materialName].filter(Boolean).join(" ").toLowerCase();
+      if (!preset.terms.some((term) => searchText.includes(term.toLowerCase()))) return;
+
+      found++;
+      materialCounts.set(materialName || "(sem material)", (materialCounts.get(materialName || "(sem material)") ?? 0) + 1);
+      nameCounts.set(meshName || "(sem nome)", (nameCounts.get(meshName || "(sem nome)") ?? 0) + 1);
+
+      if (isContextProjectModelMesh(saved)) {
+        alreadyContext++;
+        return;
+      }
+      const hasProductiveLink = !!saved
+        && saved.assigned_house_number != null
+        && saved.service_macro_id != null
+        && saved.service_scope_id != null;
+      if (hasProductiveLink) {
+        skippedLinked++;
+        return;
+      }
+
+      updates.push({
+        project_id: projectId,
+        layer_key: layerKey,
+        mesh_name: meshName,
+        material_name: materialName,
+        detected_house_number: saved?.detected_house_number ?? parseHouseNumberFromMesh(mesh.name || ""),
+        assigned_house_number: null,
+        service_macro_id: GLB_CONTEXT_MESH_MARKER,
+        service_scope_id: GLB_CONTEXT_MESH_MARKER,
+        production_visible: false,
+        progress_percent: 0,
+        visible: true,
+      });
+    });
+
+    return {
+      presetKey,
+      title: preset.label,
+      found,
+      alreadyContext,
+      skippedLinked,
+      wouldMark: updates,
+      materialNames: Array.from(materialCounts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, count]) => `${name} (${count})`),
+      meshNames: Array.from(nameCounts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, count]) => `${name} (${count})`),
+      sample: updates.slice(0, 10).map((mesh) => ({
+        layer_key: mesh.layer_key,
+        mesh_name: String(mesh.mesh_name ?? ""),
+        material_name: String(mesh.material_name ?? ""),
+      })),
+    };
+  }, [canManage3D, meshHooks.meshMap, meshReviewOverrides, projectId, sceneObj]);
+
+  const openContextPreview = useCallback((presetKey: GlbContextPresetKey) => {
+    const preview = buildContextPreview(presetKey);
+    if (preview) setContextPreview(preview);
+  }, [buildContextPreview]);
+
+  const applyContextPreview = useCallback(async () => {
+    if (!contextPreview || contextPreview.presetKey === "clear") return;
+    setContextBulkAction(contextPreview.presetKey);
+    try {
+      const batchSize = 100;
+      const errors: any[] = [];
+      let sent = 0;
+      for (let index = 0; index < contextPreview.wouldMark.length; index += batchSize) {
+        const batch = contextPreview.wouldMark.slice(index, index + batchSize);
+        const { error } = await supabase
+          .from("project_model_meshes" as any)
+          .upsert(batch, { onConflict: "project_id,layer_key" });
+        sent += batch.length;
+        if (error) errors.push(error);
+      }
+      console.log("[GLB Real Context] bulk mark confirmed", {
+        preset: contextPreview.presetKey,
+        found: contextPreview.found,
+        marked: contextPreview.wouldMark.length,
+        alreadyContext: contextPreview.alreadyContext,
+        skippedLinked: contextPreview.skippedLinked,
+        sent,
+        batchSize,
+        errors: errors.length,
+        sample: contextPreview.sample,
+      });
+      if (errors.length > 0) throw errors[0];
+
+      const refreshed = await meshHooks.refresh();
+      if (refreshed?.length) {
+        const refreshedMap = new Map(refreshed.map((mesh) => [mesh.layer_key, mesh]));
+        applyViewMode(viewMode, refreshedMap);
+      }
+      toast.success(`${contextPreview.title}: ${sent} marcadas · ${contextPreview.skippedLinked} puladas por vínculo produtivo · ${contextPreview.alreadyContext} já eram contexto`);
+      setContextPreview(null);
+    } catch (error) {
+      console.error("[GLB Real Context] bulk mark confirmed error", error);
+      toast.error("Falha ao marcar contexto em lote.");
+    } finally {
+      setContextBulkAction(null);
+    }
+  }, [applyViewMode, contextPreview, meshHooks, viewMode]);
+
+  const handleClearQuickContexts = useCallback(async () => {
+    if (!canManage3D) { toast.error("Sem permissão para revisar o modelo 3D."); return; }
+    if (!projectId) return;
+    setContextBulkAction("grass");
+    try {
+      const contexts = Array.from(meshHooks.meshMap.values()).filter((mesh) =>
+        isContextProjectModelMesh(mesh) && mesh.assigned_house_number == null,
+      );
+      const batchSize = 100;
+      const errors: any[] = [];
+      let sent = 0;
+      for (let index = 0; index < contexts.length; index += batchSize) {
+        const batch = contexts.slice(index, index + batchSize).map((mesh) => ({
+          project_id: projectId,
+          layer_key: mesh.layer_key,
+          service_macro_id: null,
+          service_scope_id: null,
+          production_visible: false,
+          progress_percent: 0,
+        }));
+        const { error } = await supabase
+          .from("project_model_meshes" as any)
+          .upsert(batch, { onConflict: "project_id,layer_key" });
+        sent += batch.length;
+        if (error) errors.push(error);
+      }
+      if (errors.length > 0) throw errors[0];
+      const refreshed = await meshHooks.refresh();
+      if (refreshed?.length) {
+        const refreshedMap = new Map(refreshed.map((mesh) => [mesh.layer_key, mesh]));
+        applyViewMode(viewMode, refreshedMap);
+      }
+      toast.success(`Contextos sem vínculo produtivo limpos: ${sent}.`);
+    } catch (error) {
+      console.error("[GLB Real Context] clear contexts error", error);
+      toast.error("Falha ao limpar contextos.");
+    } finally {
+      setContextBulkAction(null);
+    }
+  }, [applyViewMode, canManage3D, meshHooks, projectId, viewMode]);
+
+  const logContextAudit = useCallback(() => {
+    const contexts = Array.from(meshHooks.meshMap.values()).filter((mesh) => isContextProjectModelMesh(mesh));
+    const materialCounts = new Map<string, number>();
+    const nameCounts = new Map<string, number>();
+    const suspects: ProjectModelMesh[] = [];
+    contexts.forEach((mesh) => {
+      const material = mesh.material_name || "(sem material)";
+      const name = mesh.mesh_name || "(sem nome)";
+      const text = `${name} ${material}`.toLowerCase();
+      materialCounts.set(material, (materialCounts.get(material) ?? 0) + 1);
+      nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
+      if (GLB_CONTEXT_SUSPECT_TERMS.some((term) => text.includes(term))) {
+        suspects.push(mesh);
+      }
+    });
+    console.log("[GLB Context Audit]", {
+      totalContexts: contexts.length,
+      byMaterial: Array.from(materialCounts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 30),
+      byMeshName: Array.from(nameCounts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 30),
+      sample: contexts.slice(0, 20).map((mesh) => ({
+        layer_key: mesh.layer_key,
+        mesh_name: mesh.mesh_name,
+        material_name: mesh.material_name,
+      })),
+      suspects: suspects.slice(0, 30).map((mesh) => ({
+        layer_key: mesh.layer_key,
+        mesh_name: mesh.mesh_name,
+        material_name: mesh.material_name,
+      })),
+    });
+    toast.info(`Auditoria enviada ao console: ${contexts.length} contextos, ${suspects.length} suspeitos.`);
+  }, [meshHooks.meshMap]);
 
   // Sincronização 3D Real
   const handleSync3DReal = useCallback(async (options?: { silent?: boolean }) => {
@@ -1891,16 +2116,94 @@ export function Map3DView() {
                     size="sm"
                     className="h-8 justify-start text-[11px]"
                     disabled={!!contextBulkAction}
-                    onClick={() => void handleBulkMarkContext(preset.key)}
+                    onClick={() => openContextPreview(preset.key)}
                   >
                     {contextBulkAction === preset.key && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
                     {preset.label}
                   </Button>
                 ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 justify-start text-[11px]"
+                  disabled={!!contextBulkAction}
+                  onClick={() => void handleClearQuickContexts()}
+                >
+                  Limpar contextos sem vínculo produtivo
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 justify-start text-[11px]"
+                  onClick={logContextAudit}
+                >
+                  Auditar contextos no console
+                </Button>
               </div>
             </CardContent>
           </Card>
         )}
+        <AlertDialog open={!!contextPreview} onOpenChange={(open) => { if (!open) setContextPreview(null); }}>
+          <AlertDialogContent className="max-w-2xl">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirmar contexto rápido</AlertDialogTitle>
+              <AlertDialogDescription>
+                Confirme antes de marcar como contexto. Produções já vinculadas serão puladas.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            {contextPreview && (
+              <div className="max-h-[55vh] space-y-3 overflow-y-auto pr-1 text-sm">
+                <div className="grid grid-cols-4 gap-2 text-xs">
+                  <div className="rounded-md border p-2">
+                    <p className="text-muted-foreground">Encontradas</p>
+                    <p className="text-base font-semibold">{contextPreview.found}</p>
+                  </div>
+                  <div className="rounded-md border p-2">
+                    <p className="text-muted-foreground">Já contexto</p>
+                    <p className="text-base font-semibold">{contextPreview.alreadyContext}</p>
+                  </div>
+                  <div className="rounded-md border p-2">
+                    <p className="text-muted-foreground">Puladas</p>
+                    <p className="text-base font-semibold">{contextPreview.skippedLinked}</p>
+                  </div>
+                  <div className="rounded-md border p-2">
+                    <p className="text-muted-foreground">Seriam marcadas</p>
+                    <p className="text-base font-semibold">{contextPreview.wouldMark.length}</p>
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-1 text-xs font-semibold uppercase text-muted-foreground">Materiais encontrados</p>
+                  <p className="text-xs leading-relaxed">{contextPreview.materialNames.join(" · ") || "Nenhum"}</p>
+                </div>
+                <div>
+                  <p className="mb-1 text-xs font-semibold uppercase text-muted-foreground">Nomes encontrados</p>
+                  <p className="text-xs leading-relaxed">{contextPreview.meshNames.join(" · ") || "Nenhum"}</p>
+                </div>
+                <div>
+                  <p className="mb-1 text-xs font-semibold uppercase text-muted-foreground">Amostra</p>
+                  <div className="space-y-1">
+                    {contextPreview.sample.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">Nenhuma mesh nova seria marcada.</p>
+                    ) : contextPreview.sample.map((mesh) => (
+                      <div key={mesh.layer_key} className="rounded border bg-muted/30 px-2 py-1 text-xs">
+                        <p className="font-mono">{mesh.layer_key}</p>
+                        <p>{mesh.mesh_name || "sem nome"} · {mesh.material_name || "sem material"}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={() => void applyContextPreview()}>
+                Confirmar marcação
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         {canManage3D && reviewMode && selectedMeshKey && (
           <MeshReviewPanel
             meshKey={selectedMeshKey}

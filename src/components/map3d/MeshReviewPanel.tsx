@@ -181,6 +181,19 @@ export function MeshReviewPanel({
     toast.success("Mesh marcada como contexto do 3D Real.");
   };
 
+  const handleRemoveContextType = async () => {
+    if (!meshKey) return;
+    await onUpdate(meshKey, {
+      ignored: false,
+      visible: true,
+      service_macro_id: null,
+      service_scope_id: null,
+      production_visible: false,
+      progress_percent: 0,
+    });
+    toast.success("Contexto removido da mesh.");
+  };
+
   const handleSetIgnoredType = async () => {
     if (!meshKey) return;
     await onUpdate(meshKey, {
@@ -336,9 +349,20 @@ export function MeshReviewPanel({
                 </Button>
               </div>
               {meshType === "context" && (
-                <p className="text-[10px] text-muted-foreground">
-                  Contexto fica sempre visível no 3D Real e não precisa de Casa/Serviço.
-                </p>
+                <div className="space-y-1.5">
+                  <p className="text-[10px] text-muted-foreground">
+                    Contexto fica sempre visível no 3D Real e não precisa de Casa/Serviço.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 w-full text-[11px]"
+                    onClick={handleRemoveContextType}
+                  >
+                    Remover contexto
+                  </Button>
+                </div>
               )}
             </section>
 
