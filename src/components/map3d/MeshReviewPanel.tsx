@@ -99,13 +99,16 @@ export function MeshReviewPanel({
     : isContextProjectModelMesh(meshData)
       ? "context"
       : "production";
-  const hasCompleteProductiveLink = !!meshData
-    && meshData.assigned_house_number != null
-    && !!meshData.service_macro_id
-    && !!meshData.service_scope_id
-    && !meshData.ignored
+  const hasAssignedHouse = meshData?.assigned_house_number != null;
+  const hasServiceMacro = !!meshData?.service_macro_id && !isContextProjectModelMesh(meshData);
+  const hasServiceScope = !!meshData?.service_scope_id && !isContextProjectModelMesh(meshData);
+  const hasOnFindSimilar = !!onFindSimilar;
+  const canFindSimilar = hasAssignedHouse
+    && hasServiceMacro
+    && hasServiceScope
+    && !meshData?.ignored
     && !isContextProjectModelMesh(meshData);
-  const smartLinkStatusText = hasCompleteProductiveLink
+  const smartLinkStatusText = canFindSimilar
     ? "Status: Pronta para encontrar similares"
     : "Status: Vincule Casa e Serviço primeiro";
 
@@ -463,16 +466,37 @@ export function MeshReviewPanel({
                 variant="secondary"
                 size="sm"
                 className="h-8 w-full text-[11px]"
-                disabled={!onFindSimilar || !hasCompleteProductiveLink || savingLink}
-                title={hasCompleteProductiveLink ? "Encontrar meshes semelhantes para vincular em lote" : "Vincule Casa e Serviço primeiro."}
-                onClick={() => onFindSimilar?.(meshKey)}
+                disabled={!canFindSimilar || savingLink}
+                title={canFindSimilar ? "Encontrar meshes semelhantes para vincular em lote" : "Vincule Casa e Serviço primeiro."}
+                onClick={() => {
+                  if (!onFindSimilar) {
+                    if (import.meta.env.DEV) {
+                      console.error("[GLB Smart Link] onFindSimilar ausente no MeshReviewPanel", {
+                        meshKey,
+                        hasAssignedHouse,
+                        hasServiceMacro,
+                        hasServiceScope,
+                      });
+                    }
+                    toast.error("Busca de similares indisponível neste painel.");
+                    return;
+                  }
+                  onFindSimilar(meshKey);
+                }}
               >
                 <Search className="h-3.5 w-3.5 mr-1" />
-                Encontrar similares
+                {canFindSimilar ? "Encontrar similares" : "Vincule Casa e Serviço primeiro."}
               </Button>
-              <p className={hasCompleteProductiveLink ? "text-[10px] text-emerald-600" : "text-[10px] text-muted-foreground"}>
+              <p className={canFindSimilar ? "text-[10px] text-emerald-600" : "text-[10px] text-muted-foreground"}>
                 {smartLinkStatusText}
               </p>
+              <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 rounded-md bg-muted/30 px-2 py-1 text-[9px] text-muted-foreground">
+                <span>hasAssignedHouse: {String(hasAssignedHouse)}</span>
+                <span>hasServiceMacro: {String(hasServiceMacro)}</span>
+                <span>hasServiceScope: {String(hasServiceScope)}</span>
+                <span>hasOnFindSimilar: {String(hasOnFindSimilar)}</span>
+                <span className="col-span-2">canFindSimilar: {String(canFindSimilar)}</span>
+              </div>
             </section>
 
             {/* Estado atual */}
