@@ -466,20 +466,21 @@ function WalkControls({ onExit, height = 1.7 }: { onExit: () => void; height?: n
 }
 
 function WalkMeshInspector({ enabled, onInspect }: { enabled: boolean; onInspect: (mesh: THREE.Mesh) => void }) {
-  const { camera, scene, gl } = useThree();
+  const { camera, scene } = useThree();
   const raycasterRef = useRef(new THREE.Raycaster());
   const centerRef = useRef(new THREE.Vector2(0, 0));
 
   useEffect(() => {
     if (!enabled) return;
 
-    const handlePointerDown = (event: PointerEvent) => {
-      if (event.button !== 0) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.code !== "KeyE" || event.repeat) return;
       const pointerLockActive = typeof document !== "undefined" && !!document.pointerLockElement;
+      console.log("[Walk Inspect Check] key E pressed", { pointerLockActive });
       if (!pointerLockActive) {
-        console.log("[Walk Mode Check] pointer down before pointer lock; letting controls capture");
         return;
       }
+      event.preventDefault();
 
       const visibleMeshes: THREE.Object3D[] = [];
       scene.traverse((child) => {
@@ -490,7 +491,7 @@ function WalkMeshInspector({ enabled, onInspect }: { enabled: boolean; onInspect
 
       raycasterRef.current.setFromCamera(centerRef.current, camera);
       const [hit] = raycasterRef.current.intersectObjects(visibleMeshes, true);
-      console.log("[Walk Mode Check] pointer lock raycast", {
+      console.log("[Walk Inspect Check] raycast executed", {
         visibleMeshes: visibleMeshes.length,
         hit: hit?.object ? {
           name: hit.object.name,
@@ -502,10 +503,9 @@ function WalkMeshInspector({ enabled, onInspect }: { enabled: boolean; onInspect
       onInspect(hit.object as THREE.Mesh);
     };
 
-    const domElement = gl.domElement;
-    domElement.addEventListener("pointerdown", handlePointerDown);
-    return () => domElement.removeEventListener("pointerdown", handlePointerDown);
-  }, [camera, enabled, gl, onInspect, scene]);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [camera, enabled, onInspect, scene]);
 
   return null;
 }
@@ -1057,12 +1057,23 @@ export function Map3DView() {
 
   const handleWalkMeshInspect = useCallback((mesh: THREE.Mesh) => {
     const layerKey = getMeshLayerKey(mesh);
+    const meshData = meshReviewOverrides.get(layerKey) ?? meshHooks.meshMap.get(layerKey) ?? null;
+    console.log("[Walk Inspect Check] mesh inspected", {
+      meshName: mesh.name || "",
+      layerKey,
+      meshMapFound: !!meshData,
+      assigned_house_number: meshData?.assigned_house_number ?? null,
+      service_macro_id: meshData?.service_macro_id ?? null,
+      service_scope_id: meshData?.service_scope_id ?? null,
+      opensPanel: true,
+      withoutHouseLink: meshData?.assigned_house_number == null,
+    });
     setWalkInspection({
       layerKey,
       meshName: mesh.name || "",
       materialName: getMeshMaterialName(mesh),
     });
-  }, []);
+  }, [meshHooks.meshMap, meshReviewOverrides]);
 
   const handleIsolate = useCallback((key: string) => {
     setIsolatedKeys(prev => (prev?.has(key) ? null : new Set([key])));
@@ -2450,7 +2461,7 @@ export function Map3DView() {
           <div className="absolute top-4 left-1/2 z-30 flex -translate-x-1/2 flex-col items-center gap-1 rounded-lg border border-primary/30 bg-background/95 px-3 py-2 text-xs shadow-lg backdrop-blur pointer-events-none">
             <div className="font-semibold text-primary">Caminhar na Obra</div>
             <div className="text-muted-foreground">
-              Clique no mapa para capturar o mouse Â· depois clique mirando uma peÃ§a para inspecionar Â· WASD mover Â· Shift acelerar Â· Esc sair
+              Clique no mapa para capturar o mouse · WASD mover · Mouse olhar · E inspecionar · Shift acelerar · Esc sair
             </div>
           </div>
         )}
