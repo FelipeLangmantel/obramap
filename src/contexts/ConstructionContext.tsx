@@ -83,6 +83,7 @@ interface ConstructionContextType {
   getHouseProgress: (houseId: number) => number;
   moveHouseToQuadra: (houseId: number, newQuadraId: string) => void;
   refreshHousesFromDB: () => Promise<void>;
+  ensureFreshProjectHouses: (options?: { force?: boolean; reason?: string }) => Promise<void>;
   
   // Filters
   filterQuadra: string;
@@ -152,11 +153,19 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
   // ✅ Flags para controlar carregamento e evitar loops
   const filtersLoadedRef = useRef(false);
   const projectsRef = useRef<Project[] | null>(null);
-  const hydratedProjectIdsRef = useRef<Set<string>>(new Set());
+  const cacheHydratedProjectIdsRef = useRef<Set<string>>(new Set());
+  const serverHydratedProjectIdsRef = useRef<Set<string>>(new Set());
+  const lastFreshHousesFetchRef = useRef<Map<string, number>>(new Map());
   const isHydratingRef = useRef(false);
   const lastProjectsLoadKeyRef = useRef<string | null>(null);
 
   const currentProject = projects.find((p) => p.id === currentProjectId) || null;
+
+  const getAverageHouseProgress = useCallback((houses: House[], template?: Macro[]) => {
+    if (!houses.length) return 0;
+    const total = houses.reduce((sum, house) => sum + calculateHouseProgress(house, template), 0);
+    return Math.round(total / houses.length);
+  }, []);
 
   useEffect(() => {
     if (!currentProjectId) return;
@@ -242,7 +251,9 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       setProjects([]);
       setCurrentProjectId(null);
       setSelectedHouse(null);
-      hydratedProjectIdsRef.current.clear();
+      cacheHydratedProjectIdsRef.current.clear();
+      serverHydratedProjectIdsRef.current.clear();
+      lastFreshHousesFetchRef.current.clear();
       projectsRef.current = null;
       lastProjectsLoadKeyRef.current = null;
       setIsLoading(false);
@@ -269,7 +280,9 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     setProjects([]);
     setCurrentProjectId(null);
     setSelectedHouse(null);
-    hydratedProjectIdsRef.current.clear();
+    cacheHydratedProjectIdsRef.current.clear();
+    serverHydratedProjectIdsRef.current.clear();
+    lastFreshHousesFetchRef.current.clear();
     projectsRef.current = null;
 
     const loadProjects = async () => {
@@ -289,10 +302,16 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
             setProjects(cached);
             projectsRef.current = cached;
             setCurrentProjectId((id) => id ?? cached[0]?.id ?? null);
+            console.log("[Map Progress Cache Check] projects loaded from cache", {
+              projects: cached.length,
+              projectIds: cached.map((p) => p.id),
+              housesByProject: cached.map((p) => ({ projectId: p.id, houses: p.houses?.length ?? 0 })),
+              online: typeof navigator === "undefined" ? true : navigator.onLine,
+            });
             // Já considera projetos hidratados (com casas) se a snapshot trouxer casas
             cached.forEach((p) => {
               if (Array.isArray(p.houses) && p.houses.length > 0) {
-                hydratedProjectIdsRef.current.add(p.id);
+                cacheHydratedProjectIdsRef.current.add(p.id);
               }
             });
             setIsLoading(false);
@@ -382,11 +401,19 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!currentProjectId) return;
     // ✅ Only hydrate if we don't already have houses loaded for this project
-    if (hydratedProjectIdsRef.current.has(currentProjectId)) {
+    if (serverHydratedProjectIdsRef.current.has(currentProjectId)) {
+      console.log("[Map Progress Cache Check] hydrate skipped", {
+        projectId: currentProjectId,
+        reason: "server_already_hydrated",
+      });
       return;
     }
     // ✅ Prevent parallel hydration
     if (isHydratingRef.current) {
+      console.log("[Map Progress Cache Check] hydrate skipped", {
+        projectId: currentProjectId,
+        reason: "hydration_in_flight",
+      });
       return;
     }
 
@@ -399,13 +426,11 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
 
       // ⚡ Cache-first: pinta a UI com o snapshot offline antes da rede
-      let hadCache = false;
       try {
         const snap = await getProjectSnapshot(currentProjectId);
         const cachedHouses = snap?.data?.houses as House[] | undefined;
         const cachedQuadras = snap?.data?.quadras as Quadra[] | undefined;
         if (cachedHouses?.length || cachedQuadras?.length) {
-          hadCache = true;
           setProjects((prev) =>
             prev.map((p) =>
               p.id === currentProjectId
@@ -413,7 +438,14 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
                 : p
             )
           );
-          hydratedProjectIdsRef.current.add(currentProjectId);
+          cacheHydratedProjectIdsRef.current.add(currentProjectId);
+          console.log("[Map Progress Cache Check] project loaded from cache", {
+            projectId: currentProjectId,
+            cacheHouses: cachedHouses?.length ?? 0,
+            cacheQuadras: cachedQuadras?.length ?? 0,
+            cacheAverageProgress: getAverageHouseProgress(cachedHouses ?? project.houses ?? [], project.macrosTemplate),
+            online: typeof navigator === "undefined" ? true : navigator.onLine,
+          });
           setIsLoading(false);
         }
       } catch (e) {
@@ -422,6 +454,10 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
 
       // Sem internet: confia no cache (ou fica vazio se não tiver)
       if (typeof navigator !== "undefined" && !navigator.onLine) {
+        console.log("[Map Progress Cache Check] Supabase fetch skipped", {
+          projectId: currentProjectId,
+          reason: "offline_cache_allowed",
+        });
         setIsLoading(false);
         isHydratingRef.current = false;
         return;
@@ -463,7 +499,17 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
           macros: jsonToMacros(h.macros),
         }));
 
-        hydratedProjectIdsRef.current.add(currentProjectId);
+        serverHydratedProjectIdsRef.current.add(currentProjectId);
+        lastFreshHousesFetchRef.current.set(currentProjectId, Date.now());
+        console.log("[Map Progress Cache Check] project loaded from Supabase", {
+          projectId: currentProjectId,
+          serverHouses: houses.length,
+          serverQuadras: quadras.length,
+          serverAverageProgress: getAverageHouseProgress(houses, project.macrosTemplate),
+          firstHouse: houses[0]
+            ? { id: houses[0].id, lastUpdate: houses[0].lastUpdate, macros: houses[0].macros?.length ?? 0 }
+            : null,
+        });
         setProjects((prev) => {
           const next = prev.map((p) => (p.id === currentProjectId ? { ...p, quadras, houses } : p));
           // 💾 Persiste snapshot completo para uso offline
@@ -473,7 +519,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         });
       } catch (e) {
         console.error("Error hydrating project:", e);
-        if (!hadCache) hydratedProjectIdsRef.current.delete(currentProjectId);
+        serverHydratedProjectIdsRef.current.delete(currentProjectId);
       } finally {
         setIsLoading(false);
         isHydratingRef.current = false;
@@ -1638,6 +1684,13 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     if (!currentProjectId) return;
 
     try {
+      const project = projectsRef.current?.find((p) => p.id === currentProjectId);
+      console.log("[Map Progress Cache Check] refresh houses start", {
+        projectId: currentProjectId,
+        online: typeof navigator === "undefined" ? true : navigator.onLine,
+        reason: "explicit_refresh",
+      });
+
       const { data: housesData, error } = await supabase
         .from('houses')
         .select('*')
@@ -1660,6 +1713,21 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         macros: jsonToMacros(h.macros),
       }));
 
+      serverHydratedProjectIdsRef.current.add(currentProjectId);
+      lastFreshHousesFetchRef.current.set(currentProjectId, Date.now());
+      console.log("[Map Progress Cache Check] refresh houses success", {
+        projectId: currentProjectId,
+        serverHouses: refreshedHouses.length,
+        serverAverageProgress: getAverageHouseProgress(refreshedHouses, project?.macrosTemplate),
+        firstHouse: refreshedHouses[0]
+          ? {
+              id: refreshedHouses[0].id,
+              lastUpdate: refreshedHouses[0].lastUpdate,
+              macros: refreshedHouses[0].macros?.length ?? 0,
+            }
+          : null,
+      });
+
       setProjects(prev => prev.map(p => {
         if (p.id !== currentProjectId) return p;
         return { ...p, houses: refreshedHouses };
@@ -1674,8 +1742,46 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       console.error('Error refreshing houses from DB:', error);
+      serverHydratedProjectIdsRef.current.delete(currentProjectId);
     }
-  }, [currentProjectId, selectedHouse]);
+  }, [currentProjectId, getAverageHouseProgress, selectedHouse]);
+
+  const ensureFreshProjectHouses = useCallback(async (options?: { force?: boolean; reason?: string }) => {
+    if (!currentProjectId) return;
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      console.log("[Map Progress Cache Check] fresh houses skipped", {
+        projectId: currentProjectId,
+        reason: options?.reason ?? "unspecified",
+        skipReason: "offline_cache_allowed",
+      });
+      return;
+    }
+
+    const now = Date.now();
+    const lastFetch = lastFreshHousesFetchRef.current.get(currentProjectId) ?? 0;
+    const ageMs = now - lastFetch;
+    const throttleMs = 20_000;
+
+    if (!options?.force && lastFetch > 0 && ageMs < throttleMs) {
+      console.log("[Map Progress Cache Check] fresh houses skipped", {
+        projectId: currentProjectId,
+        reason: options?.reason ?? "unspecified",
+        skipReason: "throttled",
+        ageMs,
+        throttleMs,
+      });
+      return;
+    }
+
+    console.log("[Map Progress Cache Check] fresh houses requested", {
+      projectId: currentProjectId,
+      reason: options?.reason ?? "unspecified",
+      force: options?.force ?? false,
+      ageMs: lastFetch ? ageMs : null,
+    });
+    await refreshHousesFromDB();
+  }, [currentProjectId, refreshHousesFromDB]);
 
   // Escuta o evento disparado pelo sync worker / recálculo manual
   // (offline → online) para recarregar as casas do projeto afetado.
@@ -1906,6 +2012,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         getHouseProgress,
         moveHouseToQuadra,
         refreshHousesFromDB,
+        ensureFreshProjectHouses,
         reorderQuadras,
         filterQuadra,
         setFilterQuadra,

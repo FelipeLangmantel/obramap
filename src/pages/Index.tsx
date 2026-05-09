@@ -77,7 +77,7 @@ function Index() {
     return restoredState?.activeView || "home";
   });
   const location = useLocation();
-  const { selectedHouse, isLoading, projects, currentProject, setCurrentProject } = useConstruction();
+  const { selectedHouse, isLoading, projects, currentProject, setCurrentProject, ensureFreshProjectHouses } = useConstruction();
   const { canAccessProject, canAccessMenu, isLoading: authLoading } = useAuth();
 
   // ✅ Persistir estado real da rota
@@ -129,7 +129,15 @@ function Index() {
     return () => console.log("[UNMOUNT] Index unmounted");
   }, []);
 
-  // ✅ Se navegou de outra rota com targetView no state, aplicar a view
+  // Revalida casas ao entrar nos mapas para evitar progresso preso no snapshot local.
+  useEffect(() => {
+    if (!currentProject?.id) return;
+    if (activeView !== "map" && activeView !== "interactive-map") return;
+
+    void ensureFreshProjectHouses({ reason: `enter_${activeView}` });
+  }, [activeView, currentProject?.id, ensureFreshProjectHouses]);
+
+  // Se navegou de outra rota com targetView no state, aplicar a view
   useEffect(() => {
     const state = location.state as { targetView?: ViewType } | null;
     if (state?.targetView) {
