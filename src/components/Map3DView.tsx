@@ -1309,7 +1309,11 @@ export function Map3DView() {
       return;
     }
 
-    const candidates = scoreGlbSimilarCandidates({ ...base, saved: baseSaved }, runtimeMeshes)
+    const candidates = scoreGlbSimilarCandidates(
+      { ...base, saved: baseSaved },
+      runtimeMeshes,
+      { validHouseNumbers: houseNumbers },
+    )
       .filter((candidate) => candidate.layerKey !== layerKey);
     const selected = new Set(
       candidates
@@ -1329,6 +1333,30 @@ export function Map3DView() {
       }, {} as Record<string, number>),
       sample: candidates.slice(0, 10),
     });
+    console.log("[GLB Smart House Suggestion]", {
+      totalCandidates: candidates.length,
+      existingHouse: candidates.filter((candidate) => candidate.currentAssignedHouseNumber != null).length,
+      suggestedHigh: candidates.filter((candidate) => candidate.suggestionConfidence === "alta" && candidate.currentAssignedHouseNumber == null).length,
+      suggestedMedium: candidates.filter((candidate) => candidate.suggestionConfidence === "media").length,
+      suggestedLow: candidates.filter((candidate) => candidate.suggestionConfidence === "baixa").length,
+      withoutSuggestion: candidates.filter((candidate) => candidate.suggestionConfidence === "nenhuma").length,
+      sourceCounts: candidates.reduce((acc, candidate) => {
+        acc[candidate.suggestionSource] = (acc[candidate.suggestionSource] ?? 0) + 1;
+        return acc;
+      }, {} as Record<string, number>),
+      sample: candidates
+        .filter((candidate) => candidate.suggestedHouseNumber != null)
+        .slice(0, 10)
+        .map((candidate) => ({
+          layerKey: candidate.layerKey,
+          meshName: candidate.meshName,
+          house: candidate.suggestedHouseNumber,
+          confidence: candidate.suggestionConfidence,
+          source: candidate.suggestionSource,
+          distance: candidate.suggestionDistance,
+          reason: candidate.suggestionReason,
+        })),
+    });
 
     setSmartLinkBase({ ...base, saved: baseSaved });
     setSmartLinkBaseKey(layerKey);
@@ -1338,7 +1366,7 @@ export function Map3DView() {
     setSmartLinkPreviewBarOpen(false);
     setSmartLinkPreviewMode(null);
     setSmartLinkOpen(true);
-  }, [meshHooks.meshMap, meshReviewOverrides, sceneObj]);
+  }, [houseNumbers, meshHooks.meshMap, meshReviewOverrides, sceneObj]);
 
   const toggleSmartLinkCandidate = useCallback((layerKey: string, checked: boolean) => {
     setSmartLinkSelectedKeys((prev) => {

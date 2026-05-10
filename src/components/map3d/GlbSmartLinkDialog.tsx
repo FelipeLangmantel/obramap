@@ -55,9 +55,16 @@ export function GlbSmartLinkDialog({
     return candidates.reduce(
       (acc, item) => {
         acc[item.status] += 1;
+        if (
+          item.suggestedHouseNumber != null
+          && item.currentAssignedHouseNumber == null
+          && (item.suggestionConfidence === "alta" || item.suggestionConfidence === "media")
+        ) {
+          acc.suggested += 1;
+        }
         return acc;
       },
-      { applicable: 0, missing_house: 0, linked: 0, context: 0, ignored: 0, self: 0 } as Record<GlbSmartLinkCandidate["status"], number>,
+      { applicable: 0, missing_house: 0, linked: 0, context: 0, ignored: 0, self: 0, suggested: 0 },
     );
   }, [candidates]);
 
@@ -86,10 +93,11 @@ export function GlbSmartLinkDialog({
             </div>
           )}
 
-          <div className="grid grid-cols-6 gap-2 text-xs">
+          <div className="grid grid-cols-7 gap-2 text-xs">
             <div className="rounded-md border p-2"><p className="text-muted-foreground">Candidatas</p><p className="text-base font-semibold">{candidates.length}</p></div>
             <div className="rounded-md border p-2"><p className="text-muted-foreground">Aplicaveis</p><p className="text-base font-semibold">{counts.applicable}</p></div>
             <div className="rounded-md border p-2"><p className="text-muted-foreground">Selecionadas</p><p className="text-base font-semibold">{selectedKeys.size}</p></div>
+            <div className="rounded-md border p-2"><p className="text-muted-foreground">Sugeridas</p><p className="text-base font-semibold">{counts.suggested}</p></div>
             <div className="rounded-md border p-2"><p className="text-muted-foreground">Sem casa</p><p className="text-base font-semibold">{counts.missing_house}</p></div>
             <div className="rounded-md border p-2"><p className="text-muted-foreground">Ja vinculadas</p><p className="text-base font-semibold">{counts.linked}</p></div>
             <div className="rounded-md border p-2"><p className="text-muted-foreground">Ign./contexto</p><p className="text-base font-semibold">{counts.ignored + counts.context}</p></div>
@@ -134,8 +142,15 @@ export function GlbSmartLinkDialog({
                     </div>
                     <div>
                       <p className="text-muted-foreground">Casa</p>
-                      <p className="font-semibold">{item.suggestedHouseNumber ?? "-"}</p>
+                      <p className="font-semibold">{item.suggestedHouseNumber != null ? `Casa ${item.suggestedHouseNumber}` : "-"}</p>
                       <p className="text-[10px] text-muted-foreground">{item.suggestionReason}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        confianca {item.suggestionConfidence}
+                        {item.suggestionDistance != null ? ` | ${item.suggestionDistance.toFixed(1)}m` : ""}
+                      </p>
+                      {item.suggestionSource !== "none" && (
+                        <p className="text-[10px] text-muted-foreground">fonte: {item.suggestionSource}</p>
+                      )}
                       {item.currentAssignedHouseNumber != null && (
                         <p className="text-[10px] text-muted-foreground">atual: {item.currentAssignedHouseNumber}</p>
                       )}
