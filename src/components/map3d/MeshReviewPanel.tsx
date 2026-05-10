@@ -286,7 +286,7 @@ export function MeshReviewPanel({
         : "";
 
   return (
-    <Card className="absolute top-4 right-4 z-20 flex max-h-[calc(100vh-2rem)] w-80 flex-col overflow-hidden shadow-2xl border-primary/30">
+    <Card className="absolute top-4 right-4 bottom-4 z-20 flex w-80 flex-col overflow-hidden shadow-2xl border-primary/30">
       <CardHeader className="pb-2 shrink-0">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm flex items-center gap-1.5">
