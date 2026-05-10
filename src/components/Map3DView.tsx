@@ -81,6 +81,8 @@ const GLB_CONTEXT_PRESETS = [
 
 type GlbContextPresetKey = typeof GLB_CONTEXT_PRESETS[number]["key"];
 
+type SmartLinkIsolationFilter = "all" | "applicable" | "selected" | "missing_house" | "medium" | "linked";
+
 type GlbContextPreview = {
   presetKey: GlbContextPresetKey | "clear";
   title: string;
@@ -937,6 +939,8 @@ export function Map3DView() {
   const [smartLinkPreviewEnabled, setSmartLinkPreviewEnabled] = useState(false);
   const [smartLinkPreviewBarOpen, setSmartLinkPreviewBarOpen] = useState(false);
   const [smartLinkPreviewMode, setSmartLinkPreviewMode] = useState<"show" | "isolate" | null>(null);
+  const [smartLinkIsolationFilter, setSmartLinkIsolationFilter] = useState<SmartLinkIsolationFilter>("all");
+  const [smartLinkFocusedCandidateKey, setSmartLinkFocusedCandidateKey] = useState<string | null>(null);
   const [smartLinkApplying, setSmartLinkApplying] = useState(false);
   const smartLinkPreviewMaterialsRef = useRef<Array<{ mesh: THREE.Mesh; originalMaterial: THREE.Material | THREE.Material[] }>>([]);
   const smartLinkPreviewStateRef = useRef({
@@ -1113,8 +1117,24 @@ export function Map3DView() {
           })),
       });
     }
+    if (smartLinkPreviewEnabled) {
+      const candidate = smartLinkCandidates.find((item) => item.layerKey === layerKey) ?? null;
+      if (candidate) {
+        setSmartLinkFocusedCandidateKey(layerKey);
+        console.log("[GLB Smart Review]", {
+          action: "focus-candidate",
+          focusedCandidateKey: layerKey,
+          status: candidate.status,
+          suggestedHouseNumber: candidate.suggestedHouseNumber,
+          selected: smartLinkSelectedKeys.has(layerKey),
+          filterMode: smartLinkIsolationFilter,
+        });
+      } else {
+        setSmartLinkFocusedCandidateKey(null);
+      }
+    }
     setSelectedMeshKey(layerKey);
-  }, [meshHooks.meshMap, reviewMode, sceneObj]);
+  }, [meshHooks.meshMap, reviewMode, sceneObj, smartLinkCandidates, smartLinkIsolationFilter, smartLinkPreviewEnabled, smartLinkSelectedKeys]);
 
   const handleWalkMeshInspect = useCallback((mesh: THREE.Mesh) => {
     const layerKey = getMeshLayerKey(mesh);
@@ -1292,10 +1312,12 @@ export function Map3DView() {
       }
       const color = layerKey === smartLinkBaseKey
         ? "#38bdf8"
+        : layerKey === smartLinkFocusedCandidateKey
+          ? "#fb7185"
         : selectedKeys.has(layerKey)
           ? "#f472b6"
           : "#facc15";
-      const intensity = selectedKeys.has(layerKey) || layerKey === smartLinkBaseKey ? 1.25 : 1;
+      const intensity = selectedKeys.has(layerKey) || layerKey === smartLinkBaseKey || layerKey === smartLinkFocusedCandidateKey ? 1.25 : 1;
       mesh.material = Array.isArray(originalMaterial)
         ? originalMaterial.map((material) => tintMaterial(material, color, intensity))
         : tintMaterial(originalMaterial, color, intensity);
@@ -1316,6 +1338,7 @@ export function Map3DView() {
     sceneObj,
     smartLinkBaseKey,
     smartLinkCandidates,
+    smartLinkFocusedCandidateKey,
     smartLinkPreviewEnabled,
     smartLinkSelectedKeys,
   ]);
@@ -1474,9 +1497,11 @@ export function Map3DView() {
     setSmartLinkBaseKey(layerKey);
     setSmartLinkCandidates(candidates);
     setSmartLinkSelectedKeys(selected);
+    setSmartLinkFocusedCandidateKey(null);
     setSmartLinkPreviewEnabled(true);
     setSmartLinkPreviewBarOpen(false);
     setSmartLinkPreviewMode(null);
+    setSmartLinkIsolationFilter("all");
     setSmartLinkOpen(true);
   }, [currentProject?.name, houseNumbers, meshHooks.meshMap, meshReviewOverrides, projectId, sceneObj]);
 
@@ -1485,13 +1510,67 @@ export function Map3DView() {
       const next = new Set(prev);
       if (checked) next.add(layerKey);
       else next.delete(layerKey);
+      const candidate = smartLinkCandidates.find((item) => item.layerKey === layerKey) ?? null;
+      console.log("[GLB Smart Review]", {
+        action: "toggle-candidate",
+        focusedCandidateKey: smartLinkFocusedCandidateKey,
+        layerKey,
+        status: candidate?.status ?? null,
+        suggestedHouseNumber: candidate?.suggestedHouseNumber ?? null,
+        selected: checked,
+        filterMode: smartLinkIsolationFilter,
+      });
       return next;
     });
-  }, []);
+  }, [smartLinkCandidates, smartLinkFocusedCandidateKey, smartLinkIsolationFilter]);
 
-  const smartLinkCandidatePreviewKeys = useMemo(() => {
-    return smartLinkCandidates.map((candidate) => candidate.layerKey);
-  }, [smartLinkCandidates]);
+  const smartLinkFocusedCandidate = useMemo(() => {
+    if (!smartLinkFocusedCandidateKey) return null;
+    return smartLinkCandidates.find((candidate) => candidate.layerKey === smartLinkFocusedCandidateKey) ?? null;
+  }, [smartLinkCandidates, smartLinkFocusedCandidateKey]);
+
+  const getSmartLinkIsolationKeys = useCallback((filter: SmartLinkIsolationFilter) => {
+    const keys = new Set<string>();
+    if (smartLinkBaseKey) keys.add(smartLinkBaseKey);
+    smartLinkCandidates.forEach((candidate) => {
+      const include = filter === "all"
+        || (filter === "applicable" && candidate.status === "applicable")
+        || (filter === "selected" && smartLinkSelectedKeys.has(candidate.layerKey))
+        || (filter === "missing_house" && candidate.status === "missing_house")
+        || (filter === "medium" && candidate.suggestionConfidence === "media")
+        || (filter === "linked" && candidate.status === "linked");
+      if (include) keys.add(candidate.layerKey);
+    });
+    return keys;
+  }, [smartLinkBaseKey, smartLinkCandidates, smartLinkSelectedKeys]);
+
+  const isolateSmartLinkByFilter = useCallback((filter: SmartLinkIsolationFilter) => {
+    const keys = getSmartLinkIsolationKeys(filter);
+    if (keys.size === 0) {
+      toast.info("Nenhuma candidata neste filtro.");
+      return;
+    }
+    const beforeState = smartLinkPreviewStateRef.current;
+    console.log("[GLB Smart Review]", {
+      action: "isolate-filter",
+      filterMode: filter,
+      isolatedCount: keys.size,
+      focusedCandidateKey: smartLinkFocusedCandidateKey,
+      dialogOpenBefore: beforeState.dialogOpen,
+    });
+    setSmartLinkPreviewEnabled(true);
+    setIsolatedKeys(keys);
+    setSmartLinkIsolationFilter(filter);
+    setSmartLinkPreviewMode("isolate");
+    setSmartLinkPreviewBarOpen(true);
+    setSmartLinkOpen(false);
+    toast.info(`Isolando ${keys.size} mesh(es) do filtro SmartLink.`);
+  }, [getSmartLinkIsolationKeys, smartLinkFocusedCandidateKey]);
+
+  useEffect(() => {
+    if (!smartLinkPreviewEnabled || smartLinkPreviewMode !== "isolate") return;
+    setIsolatedKeys(getSmartLinkIsolationKeys(smartLinkIsolationFilter));
+  }, [getSmartLinkIsolationKeys, smartLinkIsolationFilter, smartLinkPreviewEnabled, smartLinkPreviewMode]);
 
   const showSmartLinkCandidatesOnMap = useCallback(() => {
     const beforeState = smartLinkPreviewStateRef.current;
@@ -1506,6 +1585,7 @@ export function Map3DView() {
     });
     setSmartLinkPreviewEnabled(true);
     setIsolatedKeys(null);
+    setSmartLinkIsolationFilter("all");
     setSmartLinkPreviewMode("show");
     setSmartLinkPreviewBarOpen(true);
     setSmartLinkOpen(false);
@@ -1513,27 +1593,18 @@ export function Map3DView() {
   }, []);
 
   const isolateSmartLinkCandidates = useCallback(() => {
-    const keys = new Set<string>();
-    if (smartLinkBaseKey) keys.add(smartLinkBaseKey);
-    smartLinkCandidatePreviewKeys.forEach((key) => keys.add(key));
-    if (keys.size === 0) return;
     const beforeState = smartLinkPreviewStateRef.current;
     console.log("[GLB Smart Dialog State]", {
       action: "minimize-dialog",
-      reason: "isolate candidates",
+      reason: "isolate all candidates",
       dialogOpenBefore: beforeState.dialogOpen,
       dialogOpenAfter: false,
       previewActive: true,
       cleanupCalled: false,
       caller: "isolateSmartLinkCandidates",
     });
-    setSmartLinkPreviewEnabled(true);
-    setIsolatedKeys(keys);
-    setSmartLinkPreviewMode("isolate");
-    setSmartLinkPreviewBarOpen(true);
-    setSmartLinkOpen(false);
-    toast.info(`Isolando ${keys.size} mesh(es) da busca de similares.`);
-  }, [smartLinkBaseKey, smartLinkCandidatePreviewKeys]);
+    isolateSmartLinkByFilter("all");
+  }, [isolateSmartLinkByFilter]);
 
   const clearSmartLinkPreviewVisual = useCallback((reason = "visual cleanup") => {
     const beforeState = smartLinkPreviewStateRef.current;
@@ -1600,6 +1671,8 @@ export function Map3DView() {
     setSmartLinkBaseKey(null);
     setSmartLinkCandidates([]);
     setSmartLinkSelectedKeys(new Set());
+    setSmartLinkFocusedCandidateKey(null);
+    setSmartLinkIsolationFilter("all");
     clearSmartLinkPreviewVisual(reason);
     console.log("[GLB Smart Preview State]", {
       action: "clear-end",
@@ -2938,25 +3011,37 @@ export function Map3DView() {
           </div>
         )}
         {smartLinkPreviewBarOpen && smartLinkPreviewEnabled && (
-          <div className="absolute top-4 left-1/2 z-30 flex -translate-x-1/2 flex-wrap items-center gap-2 rounded-lg border border-primary/30 bg-background/95 px-3 py-2 text-xs shadow-lg backdrop-blur">
+          <div className="absolute top-4 left-1/2 z-30 flex max-w-[calc(100%-2rem)] -translate-x-1/2 flex-wrap items-center gap-2 rounded-lg border border-primary/30 bg-background/95 px-3 py-2 text-xs shadow-lg backdrop-blur">
             <div>
               <p className="font-semibold text-primary">Previa de similares ativa</p>
               <p className="text-muted-foreground">
-                {smartLinkPreviewMode === "isolate" ? "Candidatas isoladas no mapa" : "Candidatas destacadas no mapa"}
+                {smartLinkPreviewMode === "isolate" ? `Isolando filtro: ${smartLinkIsolationFilter}` : "Candidatas destacadas no mapa"}
               </p>
             </div>
             <Button type="button" size="sm" variant="outline" onClick={returnToSmartLinkList}>
               Voltar para lista
             </Button>
-            {smartLinkPreviewMode === "isolate" ? (
-              <Button type="button" size="sm" variant="outline" onClick={showSmartLinkCandidatesOnMap}>
-                Mostrar tudo
+            <Button type="button" size="sm" variant="outline" onClick={showSmartLinkCandidatesOnMap}>
+              Mostrar tudo
+            </Button>
+            {([
+              ["all", "Todas"],
+              ["applicable", "Aplicaveis"],
+              ["selected", "Selecionadas"],
+              ["missing_house", "Sem casa"],
+              ["medium", "Confianca media"],
+              ["linked", "Ja vinculadas"],
+            ] as Array<[SmartLinkIsolationFilter, string]>).map(([filter, label]) => (
+              <Button
+                key={filter}
+                type="button"
+                size="sm"
+                variant={smartLinkPreviewMode === "isolate" && smartLinkIsolationFilter === filter ? "default" : "outline"}
+                onClick={() => isolateSmartLinkByFilter(filter)}
+              >
+                {label}
               </Button>
-            ) : (
-              <Button type="button" size="sm" variant="outline" onClick={isolateSmartLinkCandidates}>
-                Isolar candidatas
-              </Button>
-            )}
+            ))}
             <Button type="button" size="sm" variant="ghost" onClick={() => clearSmartLinkPreview("preview bar clear")}>
               Limpar destaque
             </Button>
@@ -3124,7 +3209,12 @@ export function Map3DView() {
             houses={houseNumbers}
             services={serviceOptions}
             isolated={!!isolatedKeys?.has(selectedMeshKey)}
-            onClose={() => { setSelectedMeshKey(null); setIsolatedKeys(null); }}
+            smartLinkCandidate={smartLinkFocusedCandidate?.layerKey === selectedMeshKey ? smartLinkFocusedCandidate : null}
+            smartLinkSelected={selectedMeshKey ? smartLinkSelectedKeys.has(selectedMeshKey) : false}
+            onSmartLinkToggleCandidate={toggleSmartLinkCandidate}
+            onSmartLinkClearFocus={() => setSmartLinkFocusedCandidateKey(null)}
+            onSmartLinkReturnToList={returnToSmartLinkList}
+            onClose={() => { setSelectedMeshKey(null); setIsolatedKeys(null); setSmartLinkFocusedCandidateKey(null); }}
             onIsolate={handleIsolate}
             onShowAll={handleClearIsolation}
             onFindSimilar={openSmartLinkSimilar}

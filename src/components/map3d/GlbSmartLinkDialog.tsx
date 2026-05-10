@@ -108,7 +108,7 @@ export function GlbSmartLinkDialog({
               Mostrar candidatas no mapa
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={onIsolateCandidates}>
-              Isolar candidatas
+              Isolar todas
             </Button>
             <Button type="button" variant="ghost" size="sm" onClick={onClearPreview}>
               Limpar destaque
