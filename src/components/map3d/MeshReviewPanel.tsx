@@ -17,6 +17,7 @@ import {
   type ProjectModelMesh,
 } from "@/hooks/useProjectModelMeshes";
 import { parseHouseNumberFromMesh } from "./parseHouseFromMeshName";
+import type { GlbSmartLinkCandidate } from "./glbSmartLink";
 
 export interface ServiceOption {
   id: string;          // `${macro_id}::${scope_id}`
@@ -38,13 +39,28 @@ interface Props {
   onUpdate: (key: string, data: Partial<ProjectModelMesh>) => Promise<void>;
   onIgnore: (key: string) => void;
   onFindSimilar?: (key: string) => void;
+  smartLinkCandidate?: GlbSmartLinkCandidate | null;
+  smartLinkSelected?: boolean;
+  onSmartLinkToggleCandidate?: (key: string, checked: boolean) => void;
+  onSmartLinkClearFocus?: () => void;
+  onSmartLinkReturnToList?: () => void;
 }
 
 type PendingTypeChange = "production" | "context" | "ignored" | null;
 
+const smartLinkStatusLabel: Record<GlbSmartLinkCandidate["status"], string> = {
+  applicable: "aplicavel",
+  missing_house: "sem casa",
+  linked: "ja vinculada",
+  context: "contexto",
+  ignored: "ignorada",
+  self: "mesh base",
+};
+
 export function MeshReviewPanel({
   meshKey, meshData, sceneRef, houses, services, isolated,
   onClose, onIsolate, onShowAll, onUpdate, onIgnore, onFindSimilar,
+  smartLinkCandidate, smartLinkSelected = false, onSmartLinkToggleCandidate, onSmartLinkClearFocus, onSmartLinkReturnToList,
 }: Props) {
   const [bbox, setBbox] = useState<{ size: THREE.Vector3; center: THREE.Vector3 } | null>(null);
   const [draftHouse, setDraftHouse] = useState("_none");
@@ -67,6 +83,21 @@ export function MeshReviewPanel({
     });
     return found;
   }, [meshKey, sceneRef]);
+
+  const smartLinkCanSelectCandidate = smartLinkCandidate?.status === "applicable";
+  const smartLinkSelectionBlockReason = smartLinkCandidate
+    ? smartLinkCandidate.status === "missing_house"
+      ? smartLinkCandidate.houseSuggestionRejectReason || "sem casa sugerida aplicavel"
+      : smartLinkCandidate.status === "linked"
+        ? "ja vinculada"
+        : smartLinkCandidate.status === "context"
+          ? "contexto"
+          : smartLinkCandidate.status === "ignored"
+            ? "ignorada"
+            : smartLinkCandidate.status === "self"
+              ? "mesh base"
+              : ""
+    : "";
 
   useEffect(() => {
     if (!meshKey || !sceneRef) { setBbox(null); return; }
@@ -405,6 +436,72 @@ export function MeshReviewPanel({
                 <p className="text-[10px] text-muted-foreground font-mono">
                   Centro: {fmt(bbox.center.x)}, {fmt(bbox.center.y)}, {fmt(bbox.center.z)}
                 </p>
+              </section>
+            )}
+
+            {smartLinkCandidate && (
+              <section className="space-y-2 rounded-md border border-primary/20 bg-primary/5 p-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[10px] uppercase font-semibold text-primary">Sugestão SmartLink</p>
+                  <Badge variant={smartLinkCanSelectCandidate ? "default" : "outline"} className="text-[9px]">
+                    {smartLinkStatusLabel[smartLinkCandidate.status]}
+                  </Badge>
+                </div>
+                <div className="space-y-1 text-[10px] text-muted-foreground">
+                  <p className="font-mono text-foreground">{smartLinkCandidate.layerKey}</p>
+                  <p>{smartLinkCandidate.meshName || "sem nome"} | {smartLinkCandidate.materialName || "sem material"}</p>
+                  <p>
+                    Casa: {smartLinkCandidate.suggestedHouseNumber != null ? `Casa ${smartLinkCandidate.suggestedHouseNumber}` : "-"}
+                    {" | "}confiança {smartLinkCandidate.suggestionConfidence}
+                  </p>
+                  <p>
+                    fonte: {smartLinkCandidate.suggestionSource}
+                    {smartLinkCandidate.suggestionDistance != null ? ` | ancora ${smartLinkCandidate.suggestionDistance.toFixed(1)}m` : ""}
+                  </p>
+                  {smartLinkCandidate.secondSuggestionDistance != null && (
+                    <p>
+                      2a ancora {smartLinkCandidate.secondSuggestionDistance.toFixed(1)}m
+                      {smartLinkCandidate.suggestionDistanceGap != null ? ` | gap ${smartLinkCandidate.suggestionDistanceGap.toFixed(1)}m` : ""}
+                      {smartLinkCandidate.suggestionDistanceRatio != null ? ` | ratio ${smartLinkCandidate.suggestionDistanceRatio.toFixed(2)}` : ""}
+                    </p>
+                  )}
+                  <p>motivo: {smartLinkCandidate.houseSuggestionRejectReason || smartLinkCandidate.suggestionReason}</p>
+                  <p>{smartLinkSelected ? "Selecionada para aplicar" : "Não selecionada"}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={smartLinkSelected ? "outline" : "default"}
+                    className="h-7 text-[11px]"
+                    disabled={!smartLinkCanSelectCandidate || !onSmartLinkToggleCandidate}
+                    title={smartLinkCanSelectCandidate ? "Alternar seleção desta candidata" : smartLinkSelectionBlockReason}
+                    onClick={() => onSmartLinkToggleCandidate?.(smartLinkCandidate.layerKey, !smartLinkSelected)}
+                  >
+                    {smartLinkSelected ? "Desselecionar" : "Selecionar"}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-[11px]"
+                    onClick={onSmartLinkClearFocus}
+                  >
+                    Limpar foco
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="col-span-2 h-7 text-[11px]"
+                    onClick={onSmartLinkReturnToList}
+                  >
+                    Voltar para lista
+                  </Button>
+                </div>
+                {!smartLinkCanSelectCandidate && smartLinkSelectionBlockReason && (
+                  <p className="text-[10px] text-amber-600">Não selecionável: {smartLinkSelectionBlockReason}</p>
+                )}
               </section>
             )}
 
