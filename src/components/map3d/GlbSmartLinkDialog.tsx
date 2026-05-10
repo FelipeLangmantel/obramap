@@ -148,6 +148,13 @@ export function GlbSmartLinkDialog({
                         confianca {item.suggestionConfidence}
                         {item.suggestionDistance != null ? ` | ${item.suggestionDistance.toFixed(1)}m` : ""}
                       </p>
+                      {item.secondSuggestionDistance != null && (
+                        <p className="text-[10px] text-muted-foreground">
+                          2a ancora {item.secondSuggestionDistance.toFixed(1)}m
+                          {item.suggestionDistanceGap != null ? ` | gap ${item.suggestionDistanceGap.toFixed(1)}m` : ""}
+                          {item.suggestionDistanceRatio != null ? ` | ratio ${item.suggestionDistanceRatio.toFixed(2)}` : ""}
+                        </p>
+                      )}
                       {item.suggestionSource !== "none" && (
                         <p className="text-[10px] text-muted-foreground">fonte: {item.suggestionSource}</p>
                       )}

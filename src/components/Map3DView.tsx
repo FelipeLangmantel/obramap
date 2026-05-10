@@ -1417,9 +1417,23 @@ export function Map3DView() {
       suggestedLow: candidates.filter((candidate) => candidate.suggestionConfidence === "baixa").length,
       withoutSuggestion: candidates.filter((candidate) => candidate.suggestionConfidence === "nenhuma").length,
       rejectedOutsideProject: candidates.filter((candidate) => candidate.houseSuggestionRejectReason === "casa fora do projeto").length,
-      rejectedAmbiguous: candidates.filter((candidate) => candidate.houseSuggestionRejectReason === "ancora ambigua").length,
+      rejectedAmbiguous: candidates.filter((candidate) =>
+        candidate.houseSuggestionRejectReason === "ancora ambigua"
+        || candidate.houseSuggestionRejectReason === "segundo numero muito proximo"
+      ).length,
       rejectedDuplicate: candidates.filter((candidate) => candidate.houseSuggestionRejectReason === "duplicada para o mesmo servico").length,
-      rejectedFar: candidates.filter((candidate) => candidate.houseSuggestionRejectReason === "ancora distante").length,
+      rejectedFar: candidates.filter((candidate) =>
+        candidate.houseSuggestionRejectReason === "ancora distante"
+        || candidate.houseSuggestionRejectReason === "distancia excessiva"
+      ).length,
+      acceptedDominantAnchor: candidates.filter((candidate) => candidate.acceptedDominantAnchor === true).length,
+      downgradedByAnchorCompetition: candidates.filter((candidate) =>
+        candidate.houseSuggestionRejectReason === "segundo numero muito proximo"
+        || candidate.houseSuggestionRejectReason === "ancora ambigua"
+        || candidate.houseSuggestionRejectReason === "ancora dominante media"
+      ).length,
+      applicableAfterAnchorFilter: candidates.filter((candidate) => candidate.status === "applicable").length,
+      selectedAfterAnchorFilter: selected.size,
       sourceCounts: candidates.reduce((acc, candidate) => {
         acc[candidate.suggestionSource] = (acc[candidate.suggestionSource] ?? 0) + 1;
         return acc;
@@ -1434,6 +1448,10 @@ export function Map3DView() {
           confidence: candidate.suggestionConfidence,
           source: candidate.suggestionSource,
           distance: candidate.suggestionDistance,
+          secondDistance: candidate.secondSuggestionDistance,
+          distanceGap: candidate.suggestionDistanceGap,
+          distanceRatio: candidate.suggestionDistanceRatio,
+          acceptedDominantAnchor: candidate.acceptedDominantAnchor,
           reason: candidate.suggestionReason,
         })),
       strongCandidateNearestAnchors: candidates.slice(0, 20).map((candidate) => ({
@@ -1444,6 +1462,10 @@ export function Map3DView() {
         confidence: candidate.suggestionConfidence,
         source: candidate.suggestionSource,
         distance: candidate.suggestionDistance,
+        secondDistance: candidate.secondSuggestionDistance,
+        distanceGap: candidate.suggestionDistanceGap,
+        distanceRatio: candidate.suggestionDistanceRatio,
+        acceptedDominantAnchor: candidate.acceptedDominantAnchor,
         rejectReason: candidate.houseSuggestionRejectReason,
       })),
     });

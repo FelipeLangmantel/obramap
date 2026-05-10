@@ -28,6 +28,10 @@ export interface GlbSmartLinkCandidate extends GlbMeshRuntimeInfo {
   suggestionReason: string;
   suggestionConfidence: "alta" | "media" | "baixa" | "nenhuma";
   suggestionDistance?: number;
+  secondSuggestionDistance?: number;
+  suggestionDistanceGap?: number;
+  suggestionDistanceRatio?: number;
+  acceptedDominantAnchor?: boolean;
   suggestionSource: "linked_neighbor" | "text_anchor" | "house_position" | "none";
   houseSuggestionRejectReason?: string;
   selectedByDefault: boolean;
@@ -155,20 +159,58 @@ function nearestAnchor(
 
   const secondDifferentHouse = ranked.find((item) => item.anchor.houseNumber !== nearest.anchor.houseNumber);
   const scale = Math.max(diagonal(mesh), 1);
+  const secondDistance = secondDifferentHouse?.distance;
+  const distanceGap = secondDistance != null ? secondDistance - nearest.distance : undefined;
+  const distanceRatio = secondDistance != null && secondDistance > 0
+    ? nearest.distance / secondDistance
+    : undefined;
+  const hasCompetingAnchor = secondDistance != null;
+  const highDominance = !hasCompetingAnchor
+    || (distanceGap != null && distanceGap >= 2)
+    || (distanceRatio != null && distanceRatio <= 0.75);
+  const mediumDominance = highDominance
+    || (distanceGap != null && distanceGap >= 1)
+    || (distanceRatio != null && distanceRatio <= 0.85);
+  const ambiguous = hasCompetingAnchor && !mediumDominance;
+  const textHighDistanceLimit = 12;
+  const textDiscardDistanceLimit = 15;
   const highLimit = source === "linked_neighbor"
     ? Math.max(3, Math.min(8, scale * 0.9))
-    : Math.max(4, Math.min(12, scale * 1.1));
+    : textHighDistanceLimit;
   const mediumLimit = source === "linked_neighbor"
     ? Math.max(5, Math.min(14, scale * 1.4))
-    : Math.max(6, Math.min(18, scale * 1.7));
-  const ambiguityMargin = Math.max(1.5, nearest.distance * 0.25);
-  const ambiguous = !!secondDifferentHouse
-    && secondDifferentHouse.distance <= nearest.distance + ambiguityMargin;
+    : textDiscardDistanceLimit;
 
   let confidence: GlbSmartLinkCandidate["suggestionConfidence"] = "nenhuma";
-  if (!ambiguous && nearest.distance <= highLimit) confidence = "alta";
-  else if (!ambiguous && nearest.distance <= mediumLimit) confidence = "media";
-  else if (nearest.distance <= mediumLimit * 1.5) confidence = "baixa";
+  let rejectReason: string | undefined;
+  if (source === "text_anchor") {
+    if (nearest.distance > textDiscardDistanceLimit) {
+      confidence = "nenhuma";
+      rejectReason = "distancia excessiva";
+    } else if (ambiguous) {
+      confidence = "baixa";
+      rejectReason = "segundo numero muito proximo";
+    } else if (nearest.distance <= textHighDistanceLimit && highDominance) {
+      confidence = "alta";
+    } else if (mediumDominance) {
+      confidence = "media";
+      rejectReason = nearest.distance > textHighDistanceLimit
+        ? "distancia alta mas ancora dominante"
+        : "ancora dominante media";
+    } else {
+      confidence = "baixa";
+      rejectReason = "ancora ambigua";
+    }
+  } else if (!ambiguous && nearest.distance <= highLimit) {
+    confidence = "alta";
+  } else if (!ambiguous && nearest.distance <= mediumLimit) {
+    confidence = "media";
+  } else if (nearest.distance <= mediumLimit * 1.5) {
+    confidence = "baixa";
+    rejectReason = "ancora com baixa confianca";
+  } else {
+    rejectReason = "ancora distante";
+  }
 
   return {
     houseNumber: nearest.anchor.houseNumber,
@@ -177,14 +219,17 @@ function nearestAnchor(
     source,
     ambiguous,
     nearestLayerKey: nearest.anchor.layerKey,
-    secondDistance: secondDifferentHouse?.distance,
-    rejectReason: ambiguous
+    secondDistance,
+    distanceGap,
+    distanceRatio,
+    acceptedDominantAnchor: !ambiguous && mediumDominance,
+    rejectReason: rejectReason ?? (ambiguous
       ? "ancora ambigua"
       : confidence === "nenhuma"
         ? "ancora distante"
         : confidence === "baixa"
           ? "ancora com baixa confianca"
-          : undefined,
+          : undefined),
   };
 }
 
@@ -322,6 +367,10 @@ export function scoreGlbSimilarCandidates(
           ? "text_anchor"
           : inferredHouse.source;
       const suggestionDistance = inferredHouse.distance;
+      const secondSuggestionDistance = inferredHouse.secondDistance;
+      const suggestionDistanceGap = inferredHouse.distanceGap;
+      const suggestionDistanceRatio = inferredHouse.distanceRatio;
+      const acceptedDominantAnchor = inferredHouse.acceptedDominantAnchor;
       const isStrongMatch = score >= 90
         && dimensionScore >= 0.96
         && heightScore >= 0.90
@@ -336,6 +385,8 @@ export function scoreGlbSimilarCandidates(
             ? "sem ancoras de casa"
             : "sem ancora proxima confiavel"
         )
+        : currentAssignedHouseNumber == null && suggestionConfidence === "media"
+          ? inferredHouse.rejectReason ?? "confianca media sem aplicacao automatica"
         : undefined;
       const suggestionReason = currentAssignedHouseNumber != null
         ? "casa ja vinculada nesta mesh"
@@ -346,7 +397,11 @@ export function scoreGlbSimilarCandidates(
             : inferredHouse.houseNumber != null && (inferredHouse.confidence === "alta" || inferredHouse.confidence === "media")
               ? inferredHouse.source === "linked_neighbor"
                 ? "sugerida por mesh vizinha"
-                : "sugerida por texto/numero proximo"
+                : inferredHouse.confidence === "alta" && inferredHouse.distance != null && inferredHouse.distance > 8
+                  ? "distancia alta mas ancora dominante"
+                  : inferredHouse.acceptedDominantAnchor
+                    ? "ancora dominante"
+                    : "sugerida por texto/numero proximo"
               : directHouseWasDiscarded
                 ? "casa descartada por estar fora do projeto"
               : inferredHouse.confidence === "baixa"
@@ -360,7 +415,7 @@ export function scoreGlbSimilarCandidates(
             ? "context"
             : hasLink
               ? "linked"
-              : suggestedHouseNumber == null || suggestionConfidence === "baixa" || suggestionConfidence === "nenhuma"
+              : suggestedHouseNumber == null || suggestionConfidence !== "alta"
                 ? "missing_house"
                 : "applicable";
 
@@ -384,6 +439,10 @@ export function scoreGlbSimilarCandidates(
         suggestionReason,
         suggestionConfidence,
         suggestionDistance,
+        secondSuggestionDistance,
+        suggestionDistanceGap,
+        suggestionDistanceRatio,
+        acceptedDominantAnchor,
         suggestionSource,
         houseSuggestionRejectReason,
         selectedByDefault: false,
@@ -427,7 +486,8 @@ export function scoreGlbSimilarCandidates(
       ...candidate,
       selectedByDefault: candidate.matchStrength === "strong"
         && candidate.score >= 90
-        && candidate.suggestionConfidence === "alta",
+        && candidate.suggestionConfidence === "alta"
+        && candidate.acceptedDominantAnchor !== false,
     };
   });
 }
