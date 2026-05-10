@@ -22,12 +22,14 @@ export interface GlbSmartLinkCandidate extends GlbMeshRuntimeInfo {
   confidence: "alta" | "media" | "baixa";
   reasons: string[];
   status: GlbSmartLinkStatus;
+  matchStrength: "strong" | "other";
   currentAssignedHouseNumber: number | null;
   suggestedHouseNumber: number | null;
   suggestionReason: string;
   suggestionConfidence: "alta" | "media" | "baixa" | "nenhuma";
   suggestionDistance?: number;
   suggestionSource: "linked_neighbor" | "text_anchor" | "house_position" | "none";
+  houseSuggestionRejectReason?: string;
   selectedByDefault: boolean;
 }
 
@@ -66,10 +68,18 @@ function diagonal(info: GlbMeshRuntimeInfo) {
   return Math.sqrt(info.size.x ** 2 + info.size.y ** 2 + info.size.z ** 2);
 }
 
-function parseTextAnchorHouseNumber(mesh: GlbMeshRuntimeInfo) {
+function parseTextAnchorHouseNumber(mesh: GlbMeshRuntimeInfo, validHouseNumbers?: Set<number>) {
   const text = `${mesh.meshName} ${mesh.materialName}`.toLowerCase();
   if (!/(3dtext|text|texto|numero|numeracao|number)/i.test(text)) return null;
-  const matches = text.match(/\d{1,4}/g) ?? [];
+  const searchable = text.replace(/3dtext/g, " ").replace(/3d/g, " ");
+  const matches = searchable.match(/\d{1,4}/g) ?? [];
+  const parsedNumbers = matches
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value) && value > 0 && value < 10000);
+  const validNumbers = validHouseNumbers
+    ? parsedNumbers.filter((value) => validHouseNumbers.has(value))
+    : parsedNumbers;
+  if (validNumbers.length > 0) return validNumbers[validNumbers.length - 1];
   for (const value of matches) {
     const parsed = Number(value);
     if (Number.isFinite(parsed) && parsed > 0 && parsed < 10000) return parsed;
@@ -107,7 +117,7 @@ function buildHouseAnchors(meshes: GlbMeshRuntimeInfo[], validHouseNumbers?: Set
       });
     }
 
-    const textHouse = saved?.detected_house_number ?? parseTextAnchorHouseNumber(mesh);
+    const textHouse = saved?.detected_house_number ?? parseTextAnchorHouseNumber(mesh, validHouseNumbers);
     if (textHouse != null && isValidHouse(Number(textHouse))) {
       textAnchors.push({
         houseNumber: Number(textHouse),
@@ -150,21 +160,48 @@ function nearestAnchor(
     confidence,
     distance: nearest.distance,
     source,
+    ambiguous,
+    nearestLayerKey: nearest.anchor.layerKey,
+    secondDistance: secondDifferentHouse?.distance,
+    rejectReason: ambiguous
+      ? "ancora ambigua"
+      : confidence === "nenhuma"
+        ? "ancora distante"
+        : confidence === "baixa"
+          ? "ancora com baixa confianca"
+          : undefined,
   };
 }
 
 function suggestHouse(mesh: GlbMeshRuntimeInfo, anchors: ReturnType<typeof buildHouseAnchors>) {
-  const linked = nearestAnchor(mesh, anchors.linkedAnchors, "linked_neighbor", mesh.layerKey);
-  if (linked && linked.confidence !== "nenhuma") return linked;
-
   const text = nearestAnchor(mesh, anchors.textAnchors, "text_anchor", mesh.layerKey);
   if (text && text.confidence !== "nenhuma") return text;
+
+  const linked = nearestAnchor(mesh, anchors.linkedAnchors, "linked_neighbor", mesh.layerKey);
+  if (linked && linked.confidence !== "nenhuma") return linked;
 
   return {
     houseNumber: null,
     confidence: "nenhuma" as const,
     distance: undefined,
     source: "none" as const,
+    rejectReason: anchors.textAnchors.length === 0 && anchors.linkedAnchors.length === 0
+      ? "sem ancoras de casa"
+      : "sem ancora proxima confiavel",
+  };
+}
+
+export function getGlbHouseSuggestionDiagnostics(
+  meshes: GlbMeshRuntimeInfo[],
+  validHouseNumbers?: number[],
+) {
+  const validSet = validHouseNumbers?.length
+    ? new Set(validHouseNumbers.map(Number).filter(Number.isFinite))
+    : undefined;
+  const anchors = buildHouseAnchors(meshes, validSet);
+  return {
+    linkedAnchors: anchors.linkedAnchors,
+    textAnchors: anchors.textAnchors,
   };
 }
 
@@ -206,7 +243,7 @@ export function getSceneMeshInfo(
 export function scoreGlbSimilarCandidates(
   base: GlbMeshRuntimeInfo,
   meshes: GlbMeshRuntimeInfo[],
-  options?: { validHouseNumbers?: number[] },
+  options?: { validHouseNumbers?: number[]; includeOtherPossible?: boolean },
 ) {
   const baseDims = sortedDimensions(base);
   const basePrefix = prefixOf(base.meshName);
@@ -227,6 +264,7 @@ export function scoreGlbSimilarCandidates(
       const heightScore = similarity(base.center.y, mesh.center.y);
       const volumeScore = similarity(base.volume, mesh.volume);
       const materialScore = baseMaterial && mesh.materialName.toLowerCase() === baseMaterial ? 1 : 0;
+      const materialCompatible = materialScore > 0 || !baseMaterial;
       const nameScore = basePrefix && prefixOf(mesh.meshName) === basePrefix ? 1 : 0;
       const score = Math.round((
         dimensionScore * 0.45
@@ -260,6 +298,19 @@ export function scoreGlbSimilarCandidates(
           ? "text_anchor"
           : inferredHouse.source;
       const suggestionDistance = inferredHouse.distance;
+      const isStrongMatch = score >= 90
+        && dimensionScore >= 0.96
+        && heightScore >= 0.90
+        && volumeScore >= 0.90
+        && materialCompatible;
+      const matchStrength: GlbSmartLinkCandidate["matchStrength"] = isStrongMatch ? "strong" : "other";
+      const houseSuggestionRejectReason = suggestedHouseNumber == null
+        ? inferredHouse.rejectReason ?? (
+          houseAnchors.textAnchors.length === 0 && houseAnchors.linkedAnchors.length === 0
+            ? "sem ancoras de casa"
+            : "sem ancora proxima confiavel"
+        )
+        : undefined;
       const suggestionReason = currentAssignedHouseNumber != null
         ? "casa ja vinculada nesta mesh"
         : saved?.detected_house_number != null
@@ -299,16 +350,18 @@ export function scoreGlbSimilarCandidates(
         confidence: confidenceFromScore(score),
         reasons,
         status,
+        matchStrength,
         currentAssignedHouseNumber,
         suggestedHouseNumber,
         suggestionReason,
         suggestionConfidence,
         suggestionDistance,
         suggestionSource,
+        houseSuggestionRejectReason,
         selectedByDefault: status === "applicable" && score >= 70,
       };
     })
-    .filter((item) => item.score >= 58)
+    .filter((item) => options?.includeOtherPossible || item.matchStrength === "strong")
     .sort((a, b) => b.score - a.score)
     .slice(0, 120);
 }

@@ -29,6 +29,7 @@ import { GLB_CONTEXT_MESH_MARKER, isContextProjectModelMesh, useProjectModelMesh
 import { MeshReviewPanel, type ServiceOption } from "./map3d/MeshReviewPanel";
 import { GlbSmartLinkDialog } from "./map3d/GlbSmartLinkDialog";
 import {
+  getGlbHouseSuggestionDiagnostics,
   getSceneMeshInfo,
   scoreGlbSimilarCandidates,
   type GlbMeshRuntimeInfo,
@@ -1324,6 +1325,7 @@ export function Map3DView() {
     const sourceMap = new Map(meshHooks.meshMap);
     meshReviewOverrides.forEach((value, key) => sourceMap.set(key, value));
     const runtimeMeshes = getSceneMeshInfo(sceneObj, sourceMap, getMeshLayerKey);
+    const houseAnchorDiagnostics = getGlbHouseSuggestionDiagnostics(runtimeMeshes, houseNumbers);
     const base = runtimeMeshes.find((mesh) => mesh.layerKey === layerKey) ?? null;
     const baseSaved = sourceMap.get(layerKey) ?? null;
     const hasBaseLink = !!baseSaved
@@ -1338,12 +1340,13 @@ export function Map3DView() {
       return;
     }
 
-    const candidates = scoreGlbSimilarCandidates(
+    const allSimilarCandidates = scoreGlbSimilarCandidates(
       { ...base, saved: baseSaved },
       runtimeMeshes,
-      { validHouseNumbers: houseNumbers },
+      { validHouseNumbers: houseNumbers, includeOtherPossible: true },
     )
       .filter((candidate) => candidate.layerKey !== layerKey);
+    const candidates = allSimilarCandidates.filter((candidate) => candidate.matchStrength === "strong");
     const selected = new Set(
       candidates
         .filter((candidate) => candidate.selectedByDefault)
@@ -1354,6 +1357,8 @@ export function Map3DView() {
       baseMesh: baseSaved,
       baseRuntime: base,
       totalAnalyzed: runtimeMeshes.length,
+      allSimilarCandidates: allSimilarCandidates.length,
+      hiddenOtherPossible: allSimilarCandidates.length - candidates.length,
       candidates: candidates.length,
       selectedByDefault: selected.size,
       statusCounts: candidates.reduce((acc, candidate) => {
@@ -1364,6 +1369,11 @@ export function Map3DView() {
     });
     console.log("[GLB Smart House Suggestion]", {
       totalCandidates: candidates.length,
+      linkedAnchorTotal: houseAnchorDiagnostics.linkedAnchors.length,
+      textAnchorTotal: houseAnchorDiagnostics.textAnchors.length,
+      linkedAnchorSample: houseAnchorDiagnostics.linkedAnchors.slice(0, 10),
+      textAnchorSample: houseAnchorDiagnostics.textAnchors.slice(0, 10),
+      strongCandidates: candidates.filter((candidate) => candidate.matchStrength === "strong").length,
       existingHouse: candidates.filter((candidate) => candidate.currentAssignedHouseNumber != null).length,
       suggestedHigh: candidates.filter((candidate) => candidate.suggestionConfidence === "alta" && candidate.currentAssignedHouseNumber == null).length,
       suggestedMedium: candidates.filter((candidate) => candidate.suggestionConfidence === "media").length,
@@ -1385,6 +1395,16 @@ export function Map3DView() {
           distance: candidate.suggestionDistance,
           reason: candidate.suggestionReason,
         })),
+      strongCandidateNearestAnchors: candidates.slice(0, 20).map((candidate) => ({
+        layerKey: candidate.layerKey,
+        meshName: candidate.meshName,
+        score: candidate.score,
+        house: candidate.suggestedHouseNumber,
+        confidence: candidate.suggestionConfidence,
+        source: candidate.suggestionSource,
+        distance: candidate.suggestionDistance,
+        rejectReason: candidate.houseSuggestionRejectReason,
+      })),
     });
 
     setSmartLinkBase({ ...base, saved: baseSaved });
