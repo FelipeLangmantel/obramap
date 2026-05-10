@@ -29,9 +29,9 @@ interface Props {
 }
 
 const statusLabel: Record<GlbSmartLinkCandidate["status"], string> = {
-  applicable: "aplicável",
+  applicable: "aplicavel",
   missing_house: "sem casa",
-  linked: "já vinculada",
+  linked: "ja vinculada",
   context: "contexto",
   ignored: "ignorada",
   self: "mesh base",
@@ -67,7 +67,7 @@ export function GlbSmartLinkDialog({
         <DialogHeader>
           <DialogTitle>Encontrar similares GLB</DialogTitle>
           <DialogDescription>
-            Revise antes de aplicar. O serviço será copiado da mesh base e vínculos existentes não serão sobrescritos.
+            Revise antes de aplicar. O servico sera copiado da mesh base e vinculos existentes nao serao sobrescritos.
           </DialogDescription>
         </DialogHeader>
 
@@ -81,17 +81,17 @@ export function GlbSmartLinkDialog({
                 <span className="text-muted-foreground">{base.materialName || "sem material"}</span>
               </div>
               <p className="mt-1 text-muted-foreground">
-                Serviço: {serviceLabel} · Dimensões: {base.size.x.toFixed(2)} × {base.size.y.toFixed(2)} × {base.size.z.toFixed(2)}
+                Servico: {serviceLabel} | Dimensoes: {base.size.x.toFixed(2)} x {base.size.y.toFixed(2)} x {base.size.z.toFixed(2)}
               </p>
             </div>
           )}
 
           <div className="grid grid-cols-6 gap-2 text-xs">
             <div className="rounded-md border p-2"><p className="text-muted-foreground">Candidatas</p><p className="text-base font-semibold">{candidates.length}</p></div>
-            <div className="rounded-md border p-2"><p className="text-muted-foreground">Aplicáveis</p><p className="text-base font-semibold">{counts.applicable}</p></div>
+            <div className="rounded-md border p-2"><p className="text-muted-foreground">Aplicaveis</p><p className="text-base font-semibold">{counts.applicable}</p></div>
             <div className="rounded-md border p-2"><p className="text-muted-foreground">Selecionadas</p><p className="text-base font-semibold">{selectedKeys.size}</p></div>
             <div className="rounded-md border p-2"><p className="text-muted-foreground">Sem casa</p><p className="text-base font-semibold">{counts.missing_house}</p></div>
-            <div className="rounded-md border p-2"><p className="text-muted-foreground">Já vinculadas</p><p className="text-base font-semibold">{counts.linked}</p></div>
+            <div className="rounded-md border p-2"><p className="text-muted-foreground">Ja vinculadas</p><p className="text-base font-semibold">{counts.linked}</p></div>
             <div className="rounded-md border p-2"><p className="text-muted-foreground">Ign./contexto</p><p className="text-base font-semibold">{counts.ignored + counts.context}</p></div>
           </div>
 
@@ -123,18 +123,18 @@ export function GlbSmartLinkDialog({
                     />
                     <div className="min-w-0">
                       <p className="truncate font-mono">{item.layerKey}</p>
-                      <p className="truncate">{item.meshName || "sem nome"} · {item.materialName || "sem material"}</p>
+                      <p className="truncate">{item.meshName || "sem nome"} | {item.materialName || "sem material"}</p>
                       <p className="text-muted-foreground">
-                        {item.size.x.toFixed(2)} × {item.size.y.toFixed(2)} × {item.size.z.toFixed(2)} · {item.reasons.join(" · ")}
+                        {item.size.x.toFixed(2)} x {item.size.y.toFixed(2)} x {item.size.z.toFixed(2)} | {item.reasons.join(" | ")}
                       </p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">Score</p>
-                      <p className="font-semibold">{item.score}% · {item.confidence}</p>
+                      <p className="font-semibold">{item.score}% | {item.confidence}</p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">Casa</p>
-                      <p className="font-semibold">{item.suggestedHouseNumber ?? "—"}</p>
+                      <p className="font-semibold">{item.suggestedHouseNumber ?? "-"}</p>
                       <p className="text-[10px] text-muted-foreground">{item.suggestionReason}</p>
                       {item.currentAssignedHouseNumber != null && (
                         <p className="text-[10px] text-muted-foreground">atual: {item.currentAssignedHouseNumber}</p>

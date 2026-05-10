@@ -127,8 +127,8 @@ export function scoreGlbSimilarCandidates(base: GlbMeshRuntimeInfo, meshes: GlbM
       const suggestionReason = saved?.detected_house_number != null
         ? "casa detectada salva"
         : parsedHouseNumber != null
-          ? "nÃºmero encontrado no nome da mesh"
-          : "sem casa sugerida confiÃ¡vel";
+          ? "numero encontrado no nome da mesh"
+          : "sem casa sugerida confiavel";
       const status: GlbSmartLinkStatus = mesh.layerKey === base.layerKey
         ? "self"
         : saved?.ignored
