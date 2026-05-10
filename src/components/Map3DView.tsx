@@ -938,6 +938,15 @@ export function Map3DView() {
   const [smartLinkPreviewMode, setSmartLinkPreviewMode] = useState<"show" | "isolate" | null>(null);
   const [smartLinkApplying, setSmartLinkApplying] = useState(false);
   const smartLinkPreviewMaterialsRef = useRef<Array<{ mesh: THREE.Mesh; originalMaterial: THREE.Material | THREE.Material[] }>>([]);
+  const smartLinkPreviewStateRef = useRef({
+    isLoading: false,
+    previewEnabled: false,
+    previewBarOpen: false,
+    dialogOpen: false,
+    applying: false,
+    selectedCount: 0,
+    isolatedCount: 0,
+  });
 
   // Modo de visualização
   type ViewMode = "complete" | "real" | "simulation";
@@ -956,6 +965,26 @@ export function Map3DView() {
 
   // Cena ref para aplicar visibilidade fora do JSX
   const [sceneObj, setSceneObj] = useState<THREE.Object3D | null>(null);
+
+  useEffect(() => {
+    smartLinkPreviewStateRef.current = {
+      isLoading,
+      previewEnabled: smartLinkPreviewEnabled,
+      previewBarOpen: smartLinkPreviewBarOpen,
+      dialogOpen: smartLinkOpen,
+      applying: smartLinkApplying,
+      selectedCount: smartLinkSelectedKeys.size,
+      isolatedCount: isolatedKeys?.size ?? 0,
+    };
+  }, [
+    isLoading,
+    isolatedKeys,
+    smartLinkApplying,
+    smartLinkOpen,
+    smartLinkPreviewBarOpen,
+    smartLinkPreviewEnabled,
+    smartLinkSelectedKeys,
+  ]);
 
   // Atribuição manual mesh→casa (persistida no banco) — fonte da verdade.
   const meshAssignments = useMeshHouseAssignments(projectId);
@@ -1403,8 +1432,22 @@ export function Map3DView() {
     toast.info(`Isolando ${keys.size} mesh(es) da busca de similares.`);
   }, [smartLinkBaseKey, smartLinkCandidatePreviewKeys]);
 
-  const clearSmartLinkPreview = useCallback(() => {
-    console.log("[GLB Smart Preview] clear requested", { reason: "user/action" });
+  const clearSmartLinkPreview = useCallback((reason = "user/action") => {
+    const beforeState = smartLinkPreviewStateRef.current;
+    const restoredMaterials = smartLinkPreviewMaterialsRef.current.length;
+    console.log("[GLB Smart Preview State]", {
+      action: "clear-start",
+      reason,
+      loadingBefore: beforeState.isLoading,
+      previewKeysCount: smartLinkCandidates.length,
+      selectedKeysCount: beforeState.selectedCount,
+      isolatedKeysCount: beforeState.isolatedCount,
+      restoredMaterialsCount: restoredMaterials,
+      isDialogOpen: beforeState.dialogOpen,
+      isPreviewBarOpen: beforeState.previewBarOpen,
+      applyingBefore: beforeState.applying,
+    });
+    setSmartLinkApplying(false);
     setSmartLinkPreviewEnabled(false);
     setSmartLinkPreviewBarOpen(false);
     setSmartLinkPreviewMode(null);
@@ -1414,8 +1457,22 @@ export function Map3DView() {
     setSmartLinkCandidates([]);
     setSmartLinkSelectedKeys(new Set());
     setIsolatedKeys(null);
-    clearSmartLinkPreviewHighlight("clear preview");
-  }, [clearSmartLinkPreviewHighlight]);
+    clearSmartLinkPreviewHighlight(reason);
+    setIsLoading(false);
+    console.log("[GLB Smart Preview State]", {
+      action: "clear-end",
+      reason,
+      loadingBefore: beforeState.isLoading,
+      loadingAfter: false,
+      previewKeysCount: 0,
+      selectedKeysCount: 0,
+      isolatedKeysCount: 0,
+      restoredMaterialsCount: restoredMaterials,
+      isDialogOpen: false,
+      isPreviewBarOpen: false,
+      applyingAfter: false,
+    });
+  }, [clearSmartLinkPreviewHighlight, smartLinkCandidates.length]);
 
   const returnToSmartLinkList = useCallback(() => {
     if (!smartLinkBase || smartLinkCandidates.length === 0) return;
@@ -1426,22 +1483,13 @@ export function Map3DView() {
   const handleSmartLinkOpenChange = useCallback((open: boolean) => {
     setSmartLinkOpen(open);
     if (!open) {
-      console.log("[GLB Smart Preview] clear requested", { reason: "dialog closed" });
-      setSmartLinkPreviewEnabled(false);
-      setSmartLinkPreviewBarOpen(false);
-      setSmartLinkPreviewMode(null);
-      setSmartLinkBase(null);
-      setSmartLinkBaseKey(null);
-      setSmartLinkCandidates([]);
-      setSmartLinkSelectedKeys(new Set());
-      setIsolatedKeys(null);
-      clearSmartLinkPreviewHighlight("dialog closed");
+      clearSmartLinkPreview("dialog closed");
     }
-  }, [clearSmartLinkPreviewHighlight]);
+  }, [clearSmartLinkPreview]);
 
   useEffect(() => {
     if (!reviewMode) {
-      clearSmartLinkPreview();
+      clearSmartLinkPreview("review mode exited");
     }
   }, [clearSmartLinkPreview, reviewMode]);
 
@@ -1450,7 +1498,7 @@ export function Map3DView() {
     const currentModelUrl = modelData?.url ?? null;
     if (smartLinkModelUrlRef.current && smartLinkModelUrlRef.current !== currentModelUrl) {
       console.log("[GLB Smart Preview] clear requested", { reason: "model changed" });
-      clearSmartLinkPreview();
+      clearSmartLinkPreview("model changed");
     }
     smartLinkModelUrlRef.current = currentModelUrl;
   }, [clearSmartLinkPreview, modelData?.url]);
@@ -1521,17 +1569,20 @@ export function Map3DView() {
         return next;
       });
       toast.success(`Vínculos aplicados: ${sent}. Clique em Sincronizar 3D Real para atualizar a produção.`);
-      clearSmartLinkPreview();
+      clearSmartLinkPreview("apply completed");
       handleSmartLinkOpenChange(false);
     } catch (error) {
       console.error("[GLB Smart Link] apply error", error);
+      clearSmartLinkPreview("apply error");
       toast.error("Falha ao aplicar vínculos inteligentes.");
     } finally {
       setSmartLinkApplying(false);
+      setIsLoading(false);
     }
   }, [clearSmartLinkPreview, handleSmartLinkOpenChange, meshHooks, projectId, smartLinkBase, smartLinkCandidates, smartLinkSelectedKeys]);
 
   const applyViewMode = useCallback((mode: ViewMode, overrideMeshMap?: Map<string, ProjectModelMesh>) => {
+    clearSmartLinkPreview("view mode changed");
     setViewMode(mode);
     if (!sceneObj) return;
     const sourceMap = overrideMeshMap ?? meshHooks.meshMap;
@@ -1595,7 +1646,7 @@ export function Map3DView() {
       });
       console.log("[GLB Real Context]", stats);
     }
-  }, [sceneObj, meshHooks.meshMap]);
+  }, [clearSmartLinkPreview, sceneObj, meshHooks.meshMap]);
 
   // Re-aplica modo quando meshMap chega/atualiza ou cena fica pronta
   useEffect(() => {
