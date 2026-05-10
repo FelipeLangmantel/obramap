@@ -932,6 +932,8 @@ export function Map3DView() {
   const [contextPreview, setContextPreview] = useState<GlbContextPreview | null>(null);
   const [quickContextPanelOpen, setQuickContextPanelOpen] = useState(false);
   const [pendingGlbImport, setPendingGlbImport] = useState<{ file: File; existingGlbRecords: number } | null>(null);
+  const [glbLinkScope, setGlbLinkScope] = useState<"preserve" | "fresh">("preserve");
+  const [trustedGlbLinkKeys, setTrustedGlbLinkKeys] = useState<Set<string>>(new Set());
   const [smartLinkOpen, setSmartLinkOpen] = useState(false);
   const [smartLinkBase, setSmartLinkBase] = useState<GlbMeshRuntimeInfo | null>(null);
   const [smartLinkBaseKey, setSmartLinkBaseKey] = useState<string | null>(null);
@@ -1001,6 +1003,41 @@ export function Map3DView() {
 
   // Inventário de meshes do modelo
   const meshHooks = useProjectModelMeshes(projectId);
+
+  const sanitizeGlbMeshForCurrentModel = useCallback((mesh: ProjectModelMesh | null | undefined): ProjectModelMesh | null => {
+    if (!mesh) return null;
+    if (modelData?.type !== "gltf" || glbLinkScope === "preserve" || trustedGlbLinkKeys.has(mesh.layer_key)) return mesh;
+    const hasPossiblyStaleState = mesh.assigned_house_number != null
+      || mesh.service_macro_id != null
+      || mesh.service_scope_id != null
+      || mesh.ignored
+      || mesh.production_visible
+      || Number(mesh.progress_percent ?? 0) > 0;
+    if (!hasPossiblyStaleState) return mesh;
+    return {
+      ...mesh,
+      assigned_house_number: null,
+      service_macro_id: null,
+      service_scope_id: null,
+      ignored: false,
+      visible: true,
+      production_visible: false,
+      progress_percent: 0,
+    };
+  }, [glbLinkScope, modelData?.type, trustedGlbLinkKeys]);
+
+  const getCurrentMeshRecord = useCallback((layerKey: string) => {
+    return sanitizeGlbMeshForCurrentModel(meshReviewOverrides.get(layerKey) ?? meshHooks.meshMap.get(layerKey) ?? null);
+  }, [meshHooks.meshMap, meshReviewOverrides, sanitizeGlbMeshForCurrentModel]);
+
+  const buildCurrentMeshMap = useCallback((sourceMap: Map<string, ProjectModelMesh>) => {
+    const next = new Map<string, ProjectModelMesh>();
+    sourceMap.forEach((mesh, key) => {
+      const sanitized = sanitizeGlbMeshForCurrentModel(mesh);
+      if (sanitized) next.set(key, sanitized);
+    });
+    return next;
+  }, [sanitizeGlbMeshForCurrentModel]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mtlInputRef = useRef<HTMLInputElement>(null);
@@ -1144,7 +1181,7 @@ export function Map3DView() {
 
   const handleWalkMeshInspect = useCallback((mesh: THREE.Mesh) => {
     const layerKey = getMeshLayerKey(mesh);
-    const meshData = meshReviewOverrides.get(layerKey) ?? meshHooks.meshMap.get(layerKey) ?? null;
+    const meshData = getCurrentMeshRecord(layerKey);
     console.log("[Walk Inspect Check] mesh inspected", {
       meshName: mesh.name || "",
       layerKey,
@@ -1160,7 +1197,7 @@ export function Map3DView() {
       meshName: mesh.name || "",
       materialName: getMeshMaterialName(mesh),
     });
-  }, [meshHooks.meshMap, meshReviewOverrides]);
+  }, [getCurrentMeshRecord]);
 
   const handleIsolate = useCallback((key: string) => {
     setIsolatedKeys(prev => (prev?.has(key) ? null : new Set([key])));
@@ -1222,8 +1259,8 @@ export function Map3DView() {
   // Aplica modo de visualização à cena
   const walkMeshData = useMemo(() => {
     if (!walkInspection) return null;
-    return meshReviewOverrides.get(walkInspection.layerKey) ?? meshHooks.meshMap.get(walkInspection.layerKey) ?? null;
-  }, [meshHooks.meshMap, meshReviewOverrides, walkInspection]);
+    return getCurrentMeshRecord(walkInspection.layerKey);
+  }, [getCurrentMeshRecord, walkInspection]);
 
   const walkHouse = useMemo(() => {
     const houseNumber = walkMeshData?.assigned_house_number;
@@ -1355,8 +1392,11 @@ export function Map3DView() {
       return;
     }
 
-    const sourceMap = new Map(meshHooks.meshMap);
-    meshReviewOverrides.forEach((value, key) => sourceMap.set(key, value));
+    const sourceMap = buildCurrentMeshMap(meshHooks.meshMap);
+    meshReviewOverrides.forEach((value, key) => {
+      const sanitized = sanitizeGlbMeshForCurrentModel(value);
+      if (sanitized) sourceMap.set(key, sanitized);
+    });
     const runtimeMeshes = getSceneMeshInfo(sceneObj, sourceMap, getMeshLayerKey);
     const houseAnchorDiagnostics = getGlbHouseSuggestionDiagnostics(runtimeMeshes, houseNumbers);
     const base = runtimeMeshes.find((mesh) => mesh.layerKey === layerKey) ?? null;
@@ -1509,7 +1549,7 @@ export function Map3DView() {
     setSmartLinkPreviewMode(null);
     setSmartLinkIsolationFilter("all");
     setSmartLinkOpen(true);
-  }, [currentProject?.name, houseNumbers, meshHooks.meshMap, meshReviewOverrides, projectId, sceneObj]);
+  }, [buildCurrentMeshMap, currentProject?.name, houseNumbers, meshHooks.meshMap, meshReviewOverrides, projectId, sanitizeGlbMeshForCurrentModel, sceneObj]);
 
   const toggleSmartLinkCandidate = useCallback((layerKey: string, checked: boolean) => {
     setSmartLinkSelectedKeys((prev) => {
@@ -1813,6 +1853,11 @@ export function Map3DView() {
 
       const refreshed = await meshHooks.refresh();
       const refreshedMap = new Map((refreshed || []).map((mesh) => [mesh.layer_key, mesh]));
+      setTrustedGlbLinkKeys((prev) => {
+        const next = new Set(prev);
+        updates.forEach((update) => next.add(update.layer_key));
+        return next;
+      });
       setMeshReviewOverrides((prev) => {
         const next = new Map(prev);
         updates.forEach((update) => {
@@ -1844,7 +1889,7 @@ export function Map3DView() {
       contextExamples: [] as Array<{ layer_key: string; mesh_name: string | null; material_name: string | null }>,
     };
     if (!sceneObj) return realStats;
-    const sourceMap = overrideMeshMap ?? meshHooks.meshMap;
+    const sourceMap = buildCurrentMeshMap(overrideMeshMap ?? meshHooks.meshMap);
     sceneObj.traverse((child) => {
       if (!(child as THREE.Mesh).isMesh) return;
       const mesh = child as THREE.Mesh;
@@ -1900,7 +1945,7 @@ export function Map3DView() {
       }
     }
     return realStats;
-  }, [sceneObj, meshHooks.meshMap]);
+  }, [buildCurrentMeshMap, sceneObj, meshHooks.meshMap]);
 
   // Re-aplica modo quando meshMap chega/atualiza ou cena fica pronta
   useEffect(() => {
@@ -1926,12 +1971,12 @@ export function Map3DView() {
 
   const pendingMeshCount = useMemo(() => {
     let n = 0;
-    meshHooks.meshMap.forEach((m) => {
+    buildCurrentMeshMap(meshHooks.meshMap).forEach((m) => {
       if (m.ignored) return;
       if (m.assigned_house_number == null || m.service_macro_id == null) n++;
     });
     return n;
-  }, [meshHooks.meshMap]);
+  }, [buildCurrentMeshMap, meshHooks.meshMap]);
 
   const handleBulkMarkContext = useCallback(async (presetKey: GlbContextPresetKey) => {
     if (!canManage3D) { toast.error("Sem permissão para revisar o modelo 3D."); return; }
@@ -1954,7 +1999,7 @@ export function Map3DView() {
         if (seen.has(layerKey)) return;
         seen.add(layerKey);
 
-        const saved = meshReviewOverrides.get(layerKey) ?? meshHooks.meshMap.get(layerKey) ?? null;
+        const saved = getCurrentMeshRecord(layerKey);
         const searchText = [
           saved?.mesh_name,
           saved?.material_name,
@@ -2022,6 +2067,11 @@ export function Map3DView() {
 
       if (errors.length > 0) throw errors[0];
 
+      setTrustedGlbLinkKeys((prev) => {
+        const next = new Set(prev);
+        updates.forEach((update) => next.add(update.layer_key));
+        return next;
+      });
       const refreshed = await meshHooks.refresh();
       if (refreshed?.length) {
         const refreshedMap = new Map(refreshed.map((mesh) => [mesh.layer_key, mesh]));
@@ -2034,7 +2084,7 @@ export function Map3DView() {
     } finally {
       setContextBulkAction(null);
     }
-  }, [applyViewMode, canManage3D, meshHooks, meshReviewOverrides, projectId, sceneObj, viewMode]);
+  }, [applyViewMode, canManage3D, getCurrentMeshRecord, meshHooks, projectId, sceneObj, viewMode]);
 
   const buildContextPreview = useCallback((presetKey: GlbContextPresetKey): GlbContextPreview | null => {
     if (!canManage3D) { toast.error("Sem permissão para revisar o modelo 3D."); return null; }
@@ -2057,7 +2107,7 @@ export function Map3DView() {
       if (seen.has(layerKey)) return;
       seen.add(layerKey);
 
-      const saved = meshReviewOverrides.get(layerKey) ?? meshHooks.meshMap.get(layerKey) ?? null;
+      const saved = getCurrentMeshRecord(layerKey);
       const meshName = saved?.mesh_name || mesh.name || "";
       const materialName = saved?.material_name || getMeshMaterialName(mesh);
       const searchText = [meshName, materialName].filter(Boolean).join(" ").toLowerCase();
@@ -2110,7 +2160,7 @@ export function Map3DView() {
         material_name: String(mesh.material_name ?? ""),
       })),
     };
-  }, [canManage3D, meshHooks.meshMap, meshReviewOverrides, projectId, sceneObj]);
+  }, [canManage3D, getCurrentMeshRecord, projectId, sceneObj]);
 
   const openContextPreview = useCallback((presetKey: GlbContextPresetKey) => {
     const preview = buildContextPreview(presetKey);
@@ -2145,6 +2195,11 @@ export function Map3DView() {
       });
       if (errors.length > 0) throw errors[0];
 
+      setTrustedGlbLinkKeys((prev) => {
+        const next = new Set(prev);
+        contextPreview.wouldMark.forEach((mesh) => next.add(mesh.layer_key));
+        return next;
+      });
       const refreshed = await meshHooks.refresh();
       if (refreshed?.length) {
         const refreshedMap = new Map(refreshed.map((mesh) => [mesh.layer_key, mesh]));
@@ -2165,7 +2220,7 @@ export function Map3DView() {
     if (!projectId) return;
     setContextBulkAction("grass");
     try {
-      const contexts = Array.from(meshHooks.meshMap.values()).filter((mesh) =>
+      const contexts = Array.from(buildCurrentMeshMap(meshHooks.meshMap).values()).filter((mesh) =>
         isContextProjectModelMesh(mesh) && mesh.assigned_house_number == null,
       );
       const batchSize = 100;
@@ -2199,10 +2254,10 @@ export function Map3DView() {
     } finally {
       setContextBulkAction(null);
     }
-  }, [applyViewMode, canManage3D, meshHooks, projectId, viewMode]);
+  }, [applyViewMode, buildCurrentMeshMap, canManage3D, meshHooks, projectId, viewMode]);
 
   const logContextAudit = useCallback(() => {
-    const contexts = Array.from(meshHooks.meshMap.values()).filter((mesh) => isContextProjectModelMesh(mesh));
+    const contexts = Array.from(buildCurrentMeshMap(meshHooks.meshMap).values()).filter((mesh) => isContextProjectModelMesh(mesh));
     const materialCounts = new Map<string, number>();
     const nameCounts = new Map<string, number>();
     const suspects: ProjectModelMesh[] = [];
@@ -2232,7 +2287,7 @@ export function Map3DView() {
       })),
     });
     toast.info(`Auditoria enviada ao console: ${contexts.length} contextos, ${suspects.length} suspeitos.`);
-  }, [meshHooks.meshMap]);
+  }, [buildCurrentMeshMap, meshHooks.meshMap]);
 
   // Sincronização 3D Real
   const handleSync3DReal = useCallback(async (options?: { silent?: boolean }) => {
@@ -2240,9 +2295,9 @@ export function Map3DView() {
     if (!projectId) return;
     setIsSyncing(true);
     try {
-      const meshMapBeforeRefresh = meshHooks.meshMap;
+      const meshMapBeforeRefresh = buildCurrentMeshMap(meshHooks.meshMap);
       const refreshedAtSync = await meshHooks.refresh();
-      const refreshedMeshMap = new Map((refreshedAtSync || []).map((mesh) => [mesh.layer_key, mesh]));
+      const refreshedMeshMap = buildCurrentMeshMap(new Map((refreshedAtSync || []).map((mesh) => [mesh.layer_key, mesh])));
       const sourceMeshMap = refreshedAtSync ? refreshedMeshMap : meshMapBeforeRefresh;
       console.log("[GLB MeshMap Consistency] sync source", {
         projectId,
@@ -2255,7 +2310,7 @@ export function Map3DView() {
           overrideHas: meshReviewOverrides.has(layerKey),
           before: meshMapBeforeRefresh.get(layerKey) ?? null,
           refreshed: refreshedMeshMap.get(layerKey) ?? null,
-          override: meshReviewOverrides.get(layerKey) ?? null,
+          override: sanitizeGlbMeshForCurrentModel(meshReviewOverrides.get(layerKey) ?? null),
         })),
       });
 
@@ -2458,8 +2513,8 @@ export function Map3DView() {
       let contextApplied = contextCount;
       let unlinkedApplied = unlinkedCount;
       if (refreshedMeshes?.length) {
-        const refreshedMap = new Map(refreshedMeshes.map((mesh) => [mesh.layer_key, mesh]));
-        const appliedStats = applyViewMode(viewMode, refreshedMap);
+              const refreshedMap = buildCurrentMeshMap(new Map(refreshedMeshes.map((mesh) => [mesh.layer_key, mesh])));
+              const appliedStats = applyViewMode(viewMode, refreshedMap);
         if (viewMode === "real") {
           visible = appliedStats.linkedVisible;
           hidden = appliedStats.linkedHidden;
@@ -2481,7 +2536,7 @@ export function Map3DView() {
       console.error("[Sync3D]", err);
       toast.error("Erro ao sincronizar");
     } finally { setIsSyncing(false); }
-  }, [canManage3D, projectId, meshHooks, currentProject, applyViewMode, viewMode, meshReviewOverrides]);
+  }, [buildCurrentMeshMap, canManage3D, projectId, meshHooks, currentProject, applyViewMode, viewMode, meshReviewOverrides, sanitizeGlbMeshForCurrentModel]);
 
   // Auto-sync após realtime, debounced (somente se já sincronizou ao menos 1x)
   const autoSync = useCallback(() => {
@@ -2706,6 +2761,8 @@ export function Map3DView() {
       if (error) { console.error('[3D] Load error:', error); return; }
       if (data) {
         if (data.model_3d_url && data.model_3d_type) {
+          setGlbLinkScope("preserve");
+          setTrustedGlbLinkKeys(new Set());
           setModelData({ url: data.model_3d_url, type: data.model_3d_type as "gltf" | "obj", mtlUrl: data.model_mtl_url || undefined });
         }
         if (data.house_markers_3d && Array.isArray(data.house_markers_3d) && data.house_markers_3d.length > 0)
@@ -2764,9 +2821,16 @@ export function Map3DView() {
     setIsLoading(true);
     setSceneReady(false);
     clearSmartLinkPreview("new GLB import");
+    setSelectedMeshKey(null);
+    setIsolatedKeys(null);
+    setPickedMesh(null);
+    setWalkInspection(null);
+    setMeshReviewOverrides(new Map());
     try {
       const url = await uploadFile(file, 'gltf');
       if (!url) return;
+      setTrustedGlbLinkKeys(new Set());
+      setGlbLinkScope(mode === "new" ? "fresh" : "preserve");
       let clearedGlbRecords = 0;
       if (mode === "new") {
         clearedGlbRecords = await meshHooks.clearGlbMeshes();
@@ -2855,6 +2919,9 @@ export function Map3DView() {
     if (!canDelete3D) { toast.error("Sem permissão para resetar o Mapa 3D."); return; }
     if (!projectId) return;
     setModelData(null); setMarkers([]); setSelectedMarker(null); setPendingObjFile(null);
+    setSelectedMeshKey(null); setIsolatedKeys(null); setPickedMesh(null); setWalkInspection(null);
+    setMeshReviewOverrides(new Map()); setTrustedGlbLinkKeys(new Set()); setGlbLinkScope("fresh");
+    clearSmartLinkPreview("map reset");
     setCameraMode("orbit");
     setSavedPos(null); setSavedTgt(null); setPendingPos(null); setPendingTgt(null);
     setSceneReady(false); setHasChanges(true);
@@ -3275,7 +3342,7 @@ export function Map3DView() {
         {canManage3D && reviewMode && selectedMeshKey && (
           <MeshReviewPanel
             meshKey={selectedMeshKey}
-            meshData={meshReviewOverrides.get(selectedMeshKey) ?? meshHooks.meshMap.get(selectedMeshKey) ?? null}
+            meshData={getCurrentMeshRecord(selectedMeshKey)}
             sceneRef={sceneObj}
             houses={houseNumbers}
             services={serviceOptions}
@@ -3314,6 +3381,11 @@ export function Map3DView() {
               const refreshedAfterUpdate = await meshHooks.refresh();
               const refreshedAfterUpdateMap = new Map((refreshedAfterUpdate || []).map((mesh) => [mesh.layer_key, mesh]));
               const effectiveSaved = (refreshedAfterUpdateMap.get(key) ?? directRead ?? saved) as ProjectModelMesh;
+              setTrustedGlbLinkKeys((prev) => {
+                const next = new Set(prev);
+                next.add(key);
+                return next;
+              });
               setMeshReviewOverrides((prev) => {
                 const next = new Map(prev);
                 next.set(key, effectiveSaved);

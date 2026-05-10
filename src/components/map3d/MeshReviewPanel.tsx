@@ -144,10 +144,6 @@ export function MeshReviewPanel({
     && hasServiceScope
     && !meshData?.ignored
     && !isContextProjectModelMesh(meshData);
-  const smartLinkStatusText = canFindSimilar
-    ? "Status: Pronta para encontrar similares"
-    : "Status: Vincule Casa e Serviço primeiro";
-
   useEffect(() => {
     setDraftHouse(currentHouse);
     setDraftService(currentService);
@@ -173,6 +169,12 @@ export function MeshReviewPanel({
 
   const selectedService = services.find((service) => service.id === draftService) ?? null;
   const selectedHouseNumber = draftHouse === "_none" ? null : parseInt(draftHouse, 10);
+  const hasDraftCompleteLink = Number.isFinite(selectedHouseNumber) && !!selectedService;
+  const smartLinkStatusText = canFindSimilar
+    ? "Status: Pronta para encontrar similares"
+    : hasDraftCompleteLink
+      ? "Status: Clique em Aplicar vínculo antes de encontrar similares"
+      : "Status: Vincule Casa e Serviço primeiro";
   const canApplyLink =
     !!meshKey &&
     !savingLink &&
@@ -552,7 +554,7 @@ export function MeshReviewPanel({
                 size="sm"
                 className="h-8 w-full text-[11px]"
                 disabled={!canFindSimilar || savingLink}
-                title={canFindSimilar ? "Encontrar meshes semelhantes para vincular em lote" : "Vincule Casa e Serviço primeiro."}
+                title={canFindSimilar ? "Encontrar meshes semelhantes para vincular em lote" : hasDraftCompleteLink ? "Clique em Aplicar vínculo antes de encontrar similares." : "Vincule Casa e Serviço primeiro."}
                 onClick={() => {
                   if (!onFindSimilar) {
                     toast.error("Busca de similares indisponível neste painel.");
@@ -562,7 +564,7 @@ export function MeshReviewPanel({
                 }}
               >
                 <Search className="h-3.5 w-3.5 mr-1" />
-                {canFindSimilar ? "Encontrar similares" : "Vincule Casa e Serviço primeiro."}
+                {canFindSimilar ? "Encontrar similares" : hasDraftCompleteLink ? "Aplique vínculo primeiro" : "Vincule Casa e Serviço primeiro."}
               </Button>
               <Button
                 type="button"
