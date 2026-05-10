@@ -465,7 +465,17 @@ function WalkControls({ onExit, height = 1.7 }: { onExit: () => void; height?: n
   );
 }
 
-function WalkMeshInspector({ enabled, onInspect }: { enabled: boolean; onInspect: (mesh: THREE.Mesh) => void }) {
+function WalkMeshInspector({
+  enabled,
+  panelOpen,
+  onClosePanel,
+  onInspect,
+}: {
+  enabled: boolean;
+  panelOpen: boolean;
+  onClosePanel: () => void;
+  onInspect: (mesh: THREE.Mesh) => void;
+}) {
   const { camera, scene } = useThree();
   const raycasterRef = useRef(new THREE.Raycaster());
   const centerRef = useRef(new THREE.Vector2(0, 0));
@@ -481,6 +491,12 @@ function WalkMeshInspector({ enabled, onInspect }: { enabled: boolean; onInspect
         return;
       }
       event.preventDefault();
+
+      if (panelOpen) {
+        console.log("[Walk Inspect Check] key E closed panel");
+        onClosePanel();
+        return;
+      }
 
       const visibleMeshes: THREE.Object3D[] = [];
       scene.traverse((child) => {
@@ -505,7 +521,7 @@ function WalkMeshInspector({ enabled, onInspect }: { enabled: boolean; onInspect
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [camera, enabled, onInspect, scene]);
+  }, [camera, enabled, onClosePanel, onInspect, panelOpen, scene]);
 
   return null;
 }
@@ -609,7 +625,7 @@ function AutoFitCamera({
 function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLegendItems,
   resetTrigger, fitTrigger, savedPosition, savedTarget, onCameraChange, sceneReady, onModelLoaded, onSceneReady,
   onMeshClick, selectedMeshKey, projectId, companyId, ifcRealModeActive, ifcHouseOptions, ifcServiceOptions,
-  cameraMode, onWalkExit, onWalkMeshInspect,
+  cameraMode, walkInspectOpen, onWalkExit, onWalkInspectClose, onWalkMeshInspect,
 }: {
   modelData: ModelData | null; markers: HouseMarker[]; selectedMarkerId: number | null;
   onMarkerClick: (m: HouseMarker) => void; customLegendItems: any[];
@@ -626,7 +642,9 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   ifcHouseOptions?: number[];
   ifcServiceOptions?: ServiceOption[];
   cameraMode: "orbit" | "walk";
+  walkInspectOpen: boolean;
   onWalkExit: () => void;
+  onWalkInspectClose: () => void;
   onWalkMeshInspect?: (mesh: THREE.Mesh) => void;
 }) {
   return (
@@ -636,7 +654,12 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
         savedPosition={savedPosition} savedTarget={savedTarget}
         onCameraChange={onCameraChange} sceneReady={sceneReady} enabled={cameraMode === "orbit"} />
       {cameraMode === "orbit" ? <ZoomToMouseControls /> : <WalkControls onExit={onWalkExit} />}
-      <WalkMeshInspector enabled={cameraMode === "walk"} onInspect={(mesh) => onWalkMeshInspect?.(mesh)} />
+      <WalkMeshInspector
+        enabled={cameraMode === "walk"}
+        panelOpen={walkInspectOpen}
+        onClosePanel={onWalkInspectClose}
+        onInspect={(mesh) => onWalkMeshInspect?.(mesh)}
+      />
       <ambientLight intensity={0.6} />
       <directionalLight position={[10, 10, 5]} intensity={1} castShadow />
       <directionalLight position={[-10, 10, -5]} intensity={0.5} />
@@ -911,6 +934,8 @@ export function Map3DView() {
   const [smartLinkCandidates, setSmartLinkCandidates] = useState<GlbSmartLinkCandidate[]>([]);
   const [smartLinkSelectedKeys, setSmartLinkSelectedKeys] = useState<Set<string>>(new Set());
   const [smartLinkPreviewEnabled, setSmartLinkPreviewEnabled] = useState(false);
+  const [smartLinkPreviewBarOpen, setSmartLinkPreviewBarOpen] = useState(false);
+  const [smartLinkPreviewMode, setSmartLinkPreviewMode] = useState<"show" | "isolate" | null>(null);
   const [smartLinkApplying, setSmartLinkApplying] = useState(false);
   const smartLinkPreviewMaterialsRef = useRef<Array<{ mesh: THREE.Mesh; originalMaterial: THREE.Material | THREE.Material[] }>>([]);
 
@@ -1176,7 +1201,7 @@ export function Map3DView() {
 
   useEffect(() => {
     clearSmartLinkPreviewHighlight();
-    if (!sceneObj || !smartLinkOpen || !smartLinkPreviewEnabled || !smartLinkBaseKey) return;
+    if (!sceneObj || !smartLinkPreviewEnabled || !smartLinkBaseKey) return;
 
     const candidateKeys = new Set(smartLinkCandidates.map((candidate) => candidate.layerKey));
     const selectedKeys = smartLinkSelectedKeys;
@@ -1229,7 +1254,6 @@ export function Map3DView() {
     sceneObj,
     smartLinkBaseKey,
     smartLinkCandidates,
-    smartLinkOpen,
     smartLinkPreviewEnabled,
     smartLinkSelectedKeys,
   ]);
@@ -1283,6 +1307,8 @@ export function Map3DView() {
     setSmartLinkCandidates(candidates);
     setSmartLinkSelectedKeys(selected);
     setSmartLinkPreviewEnabled(true);
+    setSmartLinkPreviewBarOpen(false);
+    setSmartLinkPreviewMode(null);
     setSmartLinkOpen(true);
   }, [meshHooks.meshMap, meshReviewOverrides, sceneObj]);
 
@@ -1302,6 +1328,9 @@ export function Map3DView() {
   const showSmartLinkCandidatesOnMap = useCallback(() => {
     setSmartLinkPreviewEnabled(true);
     setIsolatedKeys(null);
+    setSmartLinkPreviewMode("show");
+    setSmartLinkPreviewBarOpen(true);
+    setSmartLinkOpen(false);
     toast.info("Candidatas destacadas no mapa.");
   }, []);
 
@@ -1312,22 +1341,45 @@ export function Map3DView() {
     if (keys.size === 0) return;
     setSmartLinkPreviewEnabled(true);
     setIsolatedKeys(keys);
+    setSmartLinkPreviewMode("isolate");
+    setSmartLinkPreviewBarOpen(true);
+    setSmartLinkOpen(false);
     toast.info(`Isolando ${keys.size} mesh(es) da busca de similares.`);
   }, [smartLinkBaseKey, smartLinkCandidatePreviewKeys]);
 
   const clearSmartLinkPreview = useCallback(() => {
     setSmartLinkPreviewEnabled(false);
+    setSmartLinkPreviewBarOpen(false);
+    setSmartLinkPreviewMode(null);
+    setSmartLinkOpen(false);
+    setSmartLinkBase(null);
+    setSmartLinkBaseKey(null);
+    setSmartLinkCandidates([]);
+    setSmartLinkSelectedKeys(new Set());
     setIsolatedKeys(null);
-  }, []);
+    clearSmartLinkPreviewHighlight();
+  }, [clearSmartLinkPreviewHighlight]);
+
+  const returnToSmartLinkList = useCallback(() => {
+    if (!smartLinkBase || smartLinkCandidates.length === 0) return;
+    setSmartLinkOpen(true);
+    setSmartLinkPreviewBarOpen(false);
+  }, [smartLinkBase, smartLinkCandidates.length]);
 
   const handleSmartLinkOpenChange = useCallback((open: boolean) => {
     setSmartLinkOpen(open);
     if (!open) {
       setSmartLinkPreviewEnabled(false);
+      setSmartLinkPreviewBarOpen(false);
+      setSmartLinkPreviewMode(null);
+      setSmartLinkBase(null);
       setSmartLinkBaseKey(null);
+      setSmartLinkCandidates([]);
+      setSmartLinkSelectedKeys(new Set());
       setIsolatedKeys(null);
+      clearSmartLinkPreviewHighlight();
     }
-  }, []);
+  }, [clearSmartLinkPreviewHighlight]);
 
   const applySmartLinkSelection = useCallback(async () => {
     if (!projectId || !smartLinkBase?.saved) return;
@@ -2567,7 +2619,9 @@ export function Map3DView() {
               ifcHouseOptions={houseNumbers}
               ifcServiceOptions={serviceOptions}
               cameraMode={cameraMode}
+              walkInspectOpen={!!walkInspection}
               onWalkExit={exitWalkMode}
+              onWalkInspectClose={() => setWalkInspection(null)}
               onWalkMeshInspect={handleWalkMeshInspect} />
           </Canvas>
         </div>
@@ -2576,8 +2630,33 @@ export function Map3DView() {
           <div className="absolute top-4 left-1/2 z-30 flex -translate-x-1/2 flex-col items-center gap-1 rounded-lg border border-primary/30 bg-background/95 px-3 py-2 text-xs shadow-lg backdrop-blur pointer-events-none">
             <div className="font-semibold text-primary">Caminhar na Obra</div>
             <div className="text-muted-foreground">
-              Clique no mapa para capturar o mouse � WASD mover � Mouse olhar � E inspecionar � Shift acelerar � Esc sair
+              Clique no mapa para capturar o mouse | WASD mover | Mouse olhar | E inspecionar/fechar | Shift acelerar | Esc sair
             </div>
+          </div>
+        )}
+        {smartLinkPreviewBarOpen && smartLinkPreviewEnabled && (
+          <div className="absolute top-4 left-1/2 z-30 flex -translate-x-1/2 flex-wrap items-center gap-2 rounded-lg border border-primary/30 bg-background/95 px-3 py-2 text-xs shadow-lg backdrop-blur">
+            <div>
+              <p className="font-semibold text-primary">Previa de similares ativa</p>
+              <p className="text-muted-foreground">
+                {smartLinkPreviewMode === "isolate" ? "Candidatas isoladas no mapa" : "Candidatas destacadas no mapa"}
+              </p>
+            </div>
+            <Button type="button" size="sm" variant="outline" onClick={returnToSmartLinkList}>
+              Voltar para lista
+            </Button>
+            {smartLinkPreviewMode === "isolate" ? (
+              <Button type="button" size="sm" variant="outline" onClick={showSmartLinkCandidatesOnMap}>
+                Mostrar tudo
+              </Button>
+            ) : (
+              <Button type="button" size="sm" variant="outline" onClick={isolateSmartLinkCandidates}>
+                Isolar candidatas
+              </Button>
+            )}
+            <Button type="button" size="sm" variant="ghost" onClick={clearSmartLinkPreview}>
+              Limpar destaque
+            </Button>
           </div>
         )}
         {assignMode && (
