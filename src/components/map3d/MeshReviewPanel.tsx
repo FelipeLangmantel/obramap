@@ -13,6 +13,7 @@ import { X, Copy, Eye, EyeOff, Crosshair, EyeOff as Ignore, Box, Home, Save, Sea
 import { toast } from "sonner";
 import {
   GLB_CONTEXT_MESH_MARKER,
+  isCompleteProductionLink,
   isContextProjectModelMesh,
   type ProjectModelMesh,
 } from "@/hooks/useProjectModelMeshes";
@@ -139,11 +140,7 @@ export function MeshReviewPanel({
   const hasServiceScope = !!meshData?.service_scope_id && !isContextProjectModelMesh(meshData);
   const hasExistingLink = hasAssignedHouse || hasServiceMacro || hasServiceScope || isContextProjectModelMesh(meshData);
   const hasOnFindSimilar = !!onFindSimilar;
-  const canFindSimilar = hasAssignedHouse
-    && hasServiceMacro
-    && hasServiceScope
-    && !meshData?.ignored
-    && !isContextProjectModelMesh(meshData);
+  const canFindSimilar = isCompleteProductionLink(meshData);
   useEffect(() => {
     setDraftHouse(currentHouse);
     setDraftService(currentService);

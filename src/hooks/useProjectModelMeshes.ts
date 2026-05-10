@@ -36,6 +36,17 @@ export function isContextProjectModelMesh(
     && mesh?.service_scope_id === GLB_CONTEXT_MESH_MARKER;
 }
 
+export function isCompleteProductionLink(
+  mesh: Pick<ProjectModelMesh, "assigned_house_number" | "service_macro_id" | "service_scope_id" | "ignored"> | null | undefined,
+) {
+  return !!mesh
+    && mesh.assigned_house_number != null
+    && mesh.service_macro_id != null
+    && mesh.service_scope_id != null
+    && !mesh.ignored
+    && !isContextProjectModelMesh(mesh);
+}
+
 const WATCHED_GLB_MESH_KEYS = ["Geom3D_300", "Geom3D_302", "Geom3D_303"];
 const PROJECT_MODEL_MESHES_PAGE_SIZE = 1000;
 
