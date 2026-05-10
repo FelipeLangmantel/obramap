@@ -295,7 +295,7 @@ export function MeshReviewPanel({
   };
 
   return (
-    <Card className="absolute top-4 right-4 w-80 z-20 shadow-2xl border-primary/30">
+    <Card className="absolute top-4 right-4 z-20 flex max-h-[calc(100vh-2rem)] w-80 flex-col overflow-hidden shadow-2xl border-primary/30">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm flex items-center gap-1.5">
@@ -304,9 +304,9 @@ export function MeshReviewPanel({
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}><X className="h-3.5 w-3.5" /></Button>
         </div>
       </CardHeader>
-      <CardContent className="p-0">
-        <ScrollArea className="max-h-[calc(100vh-160px)]">
-          <div className="px-4 pb-4 space-y-3">
+      <CardContent className="min-h-0 flex-1 p-0">
+        <ScrollArea className="h-full max-h-[calc(100vh-96px)]">
+          <div className="px-4 pb-8 space-y-3">
             {/* Identifica√ß√£o */}
             <section className="space-y-1.5">
               <p className="text-[10px] uppercase font-semibold text-muted-foreground">Identifica√ß√£o</p>
@@ -441,33 +441,16 @@ export function MeshReviewPanel({
               {meshData?.ignored && (
                 <p className="text-[10px] text-destructive">Remova Ignorar mesh antes de vincular.</p>
               )}
-              <Button
-                type="button"
-                size="sm"
-                className="h-8 w-full text-[11px]"
-                disabled={!canApplyLink}
-                onClick={handleApplyLink}
-              >
-                <Save className="h-3.5 w-3.5 mr-1" />
-                {savingLink ? "Aplicando..." : "Aplicar v√≠nculo"}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-8 w-full text-[11px]"
-                disabled={!meshKey || savingLink}
-                onClick={handleClearLink}
-              >
-                Limpar v√≠nculo
-              </Button>
+              <p className={canFindSimilar ? "text-[10px] text-emerald-600" : "text-[10px] text-muted-foreground"}>
+                {smartLinkStatusText}
+              </p>
               <Button
                 type="button"
                 variant="secondary"
                 size="sm"
                 className="h-8 w-full text-[11px]"
                 disabled={!canFindSimilar || savingLink}
-                title={canFindSimilar ? "Encontrar meshes semelhantes para vincular em lote" : "Vincule Casa e Servi√ßo primeiro."}
+                title={canFindSimilar ? "Encontrar meshes semelhantes para vincular em lote" : "Vincule Casa e ServiÁo primeiro."}
                 onClick={() => {
                   if (!onFindSimilar) {
                     if (import.meta.env.DEV) {
@@ -478,18 +461,15 @@ export function MeshReviewPanel({
                         hasServiceScope,
                       });
                     }
-                    toast.error("Busca de similares indispon√≠vel neste painel.");
+                    toast.error("Busca de similares indisponÌvel neste painel.");
                     return;
                   }
                   onFindSimilar(meshKey);
                 }}
               >
                 <Search className="h-3.5 w-3.5 mr-1" />
-                {canFindSimilar ? "Encontrar similares" : "Vincule Casa e Servi√ßo primeiro."}
+                {canFindSimilar ? "Encontrar similares" : "Vincule Casa e ServiÁo primeiro."}
               </Button>
-              <p className={canFindSimilar ? "text-[10px] text-emerald-600" : "text-[10px] text-muted-foreground"}>
-                {smartLinkStatusText}
-              </p>
               <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 rounded-md bg-muted/30 px-2 py-1 text-[9px] text-muted-foreground">
                 <span>hasAssignedHouse: {String(hasAssignedHouse)}</span>
                 <span>hasServiceMacro: {String(hasServiceMacro)}</span>
@@ -497,6 +477,26 @@ export function MeshReviewPanel({
                 <span>hasOnFindSimilar: {String(hasOnFindSimilar)}</span>
                 <span className="col-span-2">canFindSimilar: {String(canFindSimilar)}</span>
               </div>
+              <Button
+                type="button"
+                size="sm"
+                className="h-8 w-full text-[11px]"
+                disabled={!canApplyLink}
+                onClick={handleApplyLink}
+              >
+                <Save className="h-3.5 w-3.5 mr-1" />
+                {savingLink ? "Aplicando..." : "Aplicar vÌnculo"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 w-full text-[11px]"
+                disabled={!meshKey || savingLink}
+                onClick={handleClearLink}
+              >
+                Limpar vÌnculo
+              </Button>
             </section>
 
             {/* Estado atual */}
