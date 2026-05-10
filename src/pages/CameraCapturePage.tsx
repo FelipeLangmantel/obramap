@@ -31,7 +31,11 @@ export default function CameraCapturePage() {
   const itemId = params.get("itemId") || null;
   const date = params.get("date") || null;
   const houseParam = params.get("house") || "all";
-  const returnTo = params.get("returnTo") || "/dashboard";
+  const rawReturnTo = params.get("returnTo") || "/dashboard";
+  // Only allow same-origin relative paths to prevent open redirect
+  const returnTo = rawReturnTo.startsWith("/") && !rawReturnTo.startsWith("//")
+    ? rawReturnTo
+    : "/dashboard";
   const companyId = params.get("companyId") || "";
 
   const houseNumber = useMemo(() => {
