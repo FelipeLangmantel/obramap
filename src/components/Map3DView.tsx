@@ -947,6 +947,7 @@ export function Map3DView() {
     applying: false,
     selectedCount: 0,
     isolatedCount: 0,
+    candidateCount: 0,
   });
 
   // Modo de visualização
@@ -976,6 +977,7 @@ export function Map3DView() {
       applying: smartLinkApplying,
       selectedCount: smartLinkSelectedKeys.size,
       isolatedCount: isolatedKeys?.size ?? 0,
+      candidateCount: smartLinkCandidates.length,
     };
   }, [
     isLoading,
@@ -984,6 +986,7 @@ export function Map3DView() {
     smartLinkOpen,
     smartLinkPreviewBarOpen,
     smartLinkPreviewEnabled,
+    smartLinkCandidates.length,
     smartLinkSelectedKeys,
   ]);
 
@@ -1431,6 +1434,16 @@ export function Map3DView() {
   }, [smartLinkCandidates]);
 
   const showSmartLinkCandidatesOnMap = useCallback(() => {
+    const beforeState = smartLinkPreviewStateRef.current;
+    console.log("[GLB Smart Dialog State]", {
+      action: "minimize-dialog",
+      reason: "show candidates on map",
+      dialogOpenBefore: beforeState.dialogOpen,
+      dialogOpenAfter: false,
+      previewActive: true,
+      cleanupCalled: false,
+      caller: "showSmartLinkCandidatesOnMap",
+    });
     setSmartLinkPreviewEnabled(true);
     setIsolatedKeys(null);
     setSmartLinkPreviewMode("show");
@@ -1444,6 +1457,16 @@ export function Map3DView() {
     if (smartLinkBaseKey) keys.add(smartLinkBaseKey);
     smartLinkCandidatePreviewKeys.forEach((key) => keys.add(key));
     if (keys.size === 0) return;
+    const beforeState = smartLinkPreviewStateRef.current;
+    console.log("[GLB Smart Dialog State]", {
+      action: "minimize-dialog",
+      reason: "isolate candidates",
+      dialogOpenBefore: beforeState.dialogOpen,
+      dialogOpenAfter: false,
+      previewActive: true,
+      cleanupCalled: false,
+      caller: "isolateSmartLinkCandidates",
+    });
     setSmartLinkPreviewEnabled(true);
     setIsolatedKeys(keys);
     setSmartLinkPreviewMode("isolate");
@@ -1452,14 +1475,14 @@ export function Map3DView() {
     toast.info(`Isolando ${keys.size} mesh(es) da busca de similares.`);
   }, [smartLinkBaseKey, smartLinkCandidatePreviewKeys]);
 
-  const clearSmartLinkPreview = useCallback((reason = "user/action") => {
+  const clearSmartLinkPreviewVisual = useCallback((reason = "visual cleanup") => {
     const beforeState = smartLinkPreviewStateRef.current;
     const restoredMaterials = smartLinkPreviewMaterialsRef.current.length;
     console.log("[GLB Smart Preview State]", {
-      action: "clear-start",
+      action: "visual-clear-start",
       reason,
       loadingBefore: beforeState.isLoading,
-      previewKeysCount: smartLinkCandidates.length,
+      previewKeysCount: beforeState.candidateCount,
       selectedKeysCount: beforeState.selectedCount,
       isolatedKeysCount: beforeState.isolatedCount,
       restoredMaterialsCount: restoredMaterials,
@@ -1467,18 +1490,57 @@ export function Map3DView() {
       isPreviewBarOpen: beforeState.previewBarOpen,
       applyingBefore: beforeState.applying,
     });
-    setSmartLinkApplying(false);
     setSmartLinkPreviewEnabled(false);
     setSmartLinkPreviewBarOpen(false);
     setSmartLinkPreviewMode(null);
+    setIsolatedKeys(null);
+    clearSmartLinkPreviewHighlight(reason);
+    setIsLoading(false);
+    console.log("[GLB Smart Preview State]", {
+      action: "visual-clear-end",
+      reason,
+      loadingBefore: beforeState.isLoading,
+      loadingAfter: false,
+      previewKeysCount: beforeState.candidateCount,
+      selectedKeysCount: beforeState.selectedCount,
+      isolatedKeysCount: 0,
+      restoredMaterialsCount: restoredMaterials,
+      isDialogOpen: beforeState.dialogOpen,
+      isPreviewBarOpen: false,
+      applyingAfter: beforeState.applying,
+    });
+  }, [clearSmartLinkPreviewHighlight]);
+
+  const clearSmartLinkPreview = useCallback((reason = "user/action") => {
+    const beforeState = smartLinkPreviewStateRef.current;
+    console.log("[GLB Smart Dialog State]", {
+      action: "close-flow-start",
+      reason,
+      dialogOpenBefore: beforeState.dialogOpen,
+      dialogOpenAfter: false,
+      previewActive: beforeState.previewEnabled,
+      cleanupCalled: true,
+      caller: "clearSmartLinkPreview",
+    });
+    console.log("[GLB Smart Preview State]", {
+      action: "clear-start",
+      reason,
+      loadingBefore: beforeState.isLoading,
+      previewKeysCount: beforeState.candidateCount,
+      selectedKeysCount: beforeState.selectedCount,
+      isolatedKeysCount: beforeState.isolatedCount,
+      restoredMaterialsCount: smartLinkPreviewMaterialsRef.current.length,
+      isDialogOpen: beforeState.dialogOpen,
+      isPreviewBarOpen: beforeState.previewBarOpen,
+      applyingBefore: beforeState.applying,
+    });
+    setSmartLinkApplying(false);
     setSmartLinkOpen(false);
     setSmartLinkBase(null);
     setSmartLinkBaseKey(null);
     setSmartLinkCandidates([]);
     setSmartLinkSelectedKeys(new Set());
-    setIsolatedKeys(null);
-    clearSmartLinkPreviewHighlight(reason);
-    setIsLoading(false);
+    clearSmartLinkPreviewVisual(reason);
     console.log("[GLB Smart Preview State]", {
       action: "clear-end",
       reason,
@@ -1487,22 +1549,52 @@ export function Map3DView() {
       previewKeysCount: 0,
       selectedKeysCount: 0,
       isolatedKeysCount: 0,
-      restoredMaterialsCount: restoredMaterials,
+      restoredMaterialsCount: smartLinkPreviewMaterialsRef.current.length,
       isDialogOpen: false,
       isPreviewBarOpen: false,
       applyingAfter: false,
     });
-  }, [clearSmartLinkPreviewHighlight, smartLinkCandidates.length]);
+    console.log("[GLB Smart Dialog State]", {
+      action: "close-flow-end",
+      reason,
+      dialogOpenBefore: beforeState.dialogOpen,
+      dialogOpenAfter: false,
+      previewActive: false,
+      cleanupCalled: true,
+      caller: "clearSmartLinkPreview",
+    });
+  }, [clearSmartLinkPreviewVisual]);
 
   const returnToSmartLinkList = useCallback(() => {
     if (!smartLinkBase || smartLinkCandidates.length === 0) return;
+    const beforeState = smartLinkPreviewStateRef.current;
+    console.log("[GLB Smart Dialog State]", {
+      action: "open-dialog",
+      reason: "return to list",
+      dialogOpenBefore: beforeState.dialogOpen,
+      dialogOpenAfter: true,
+      previewActive: beforeState.previewEnabled,
+      cleanupCalled: false,
+      caller: "returnToSmartLinkList",
+    });
     setSmartLinkOpen(true);
     setSmartLinkPreviewBarOpen(false);
   }, [smartLinkBase, smartLinkCandidates.length]);
 
   const handleSmartLinkOpenChange = useCallback((open: boolean) => {
-    setSmartLinkOpen(open);
-    if (!open) {
+    const beforeState = smartLinkPreviewStateRef.current;
+    console.log("[GLB Smart Dialog State]", {
+      action: open ? "open-dialog" : "request-close-dialog",
+      reason: open ? "dialog open change" : "dialog closed",
+      dialogOpenBefore: beforeState.dialogOpen,
+      dialogOpenAfter: open,
+      previewActive: beforeState.previewEnabled,
+      cleanupCalled: !open,
+      caller: "handleSmartLinkOpenChange",
+    });
+    if (open) {
+      setSmartLinkOpen(true);
+    } else {
       clearSmartLinkPreview("dialog closed");
     }
   }, [clearSmartLinkPreview]);
@@ -1590,7 +1682,6 @@ export function Map3DView() {
       });
       toast.success(`Vínculos aplicados: ${sent}. Clique em Sincronizar 3D Real para atualizar a produção.`);
       clearSmartLinkPreview("apply completed");
-      handleSmartLinkOpenChange(false);
     } catch (error) {
       console.error("[GLB Smart Link] apply error", error);
       clearSmartLinkPreview("apply error");
@@ -1599,10 +1690,9 @@ export function Map3DView() {
       setSmartLinkApplying(false);
       setIsLoading(false);
     }
-  }, [clearSmartLinkPreview, handleSmartLinkOpenChange, meshHooks, projectId, smartLinkBase, smartLinkCandidates, smartLinkSelectedKeys]);
+  }, [clearSmartLinkPreview, meshHooks, projectId, smartLinkBase, smartLinkCandidates, smartLinkSelectedKeys]);
 
   const applyViewMode = useCallback((mode: ViewMode, overrideMeshMap?: Map<string, ProjectModelMesh>) => {
-    clearSmartLinkPreview("view mode changed");
     setViewMode(mode);
     if (!sceneObj) return;
     const sourceMap = overrideMeshMap ?? meshHooks.meshMap;
@@ -1666,7 +1756,7 @@ export function Map3DView() {
       });
       console.log("[GLB Real Context]", stats);
     }
-  }, [clearSmartLinkPreview, sceneObj, meshHooks.meshMap]);
+  }, [sceneObj, meshHooks.meshMap]);
 
   // Re-aplica modo quando meshMap chega/atualiza ou cena fica pronta
   useEffect(() => {
@@ -2629,7 +2719,7 @@ export function Map3DView() {
                   setSelectedMeshKey(null);
                   setIsolatedKeys(null);
                   setQuickContextPanelOpen(false);
-                  clearSmartLinkPreview();
+                  clearSmartLinkPreview("review toggle");
                   if (!reviewMode) {
                     setAssignMode(false);
                     applyViewMode("complete");
@@ -2678,7 +2768,11 @@ export function Map3DView() {
                 type="single"
                 size="sm"
                 value={viewMode}
-                onValueChange={(v) => { if (v) applyViewMode(v as ViewMode); }}
+                onValueChange={(v) => {
+                  if (!v) return;
+                  clearSmartLinkPreview("view mode changed");
+                  applyViewMode(v as ViewMode);
+                }}
                 className="border border-input rounded-md p-0.5 bg-background"
               >
                 <ToggleGroupItem value="complete" className="h-7 px-2 text-xs gap-1" title="Mostrar todo o modelo">
@@ -2801,7 +2895,7 @@ export function Map3DView() {
                 Isolar candidatas
               </Button>
             )}
-            <Button type="button" size="sm" variant="ghost" onClick={clearSmartLinkPreview}>
+            <Button type="button" size="sm" variant="ghost" onClick={() => clearSmartLinkPreview("preview bar clear")}>
               Limpar destaque
             </Button>
           </div>
@@ -3125,7 +3219,7 @@ export function Map3DView() {
         onToggle={toggleSmartLinkCandidate}
         onShowCandidates={showSmartLinkCandidatesOnMap}
         onIsolateCandidates={isolateSmartLinkCandidates}
-        onClearPreview={clearSmartLinkPreview}
+        onClearPreview={() => clearSmartLinkPreview("dialog clear preview")}
         onApply={applySmartLinkSelection}
       />
 

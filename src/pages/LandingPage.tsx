@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import obraMapIcon from "@/assets/obramap-icon-dark.png";
 import {
@@ -53,8 +54,18 @@ function SectionBadge({ children }: { children: React.ReactNode }) {
 export default function LandingPage() {
   const navigate = useNavigate();
 
+  useEffect(() => {
+    document.documentElement.classList.add("scrollbar-none");
+    document.body.classList.add("scrollbar-none");
+
+    return () => {
+      document.documentElement.classList.remove("scrollbar-none");
+      document.body.classList.remove("scrollbar-none");
+    };
+  }, []);
+
   return (
-    <div className="min-h-screen bg-[#1a1a2e] text-white font-sans antialiased">
+    <div className="min-h-screen bg-[#1a1a2e] text-white font-sans antialiased scrollbar-none">
       {/* ═══ NAV ═══ */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-[#1a1a2e]/90 backdrop-blur-md border-b border-[#2a2a45]/60">
         <div className="max-w-6xl mx-auto flex items-center justify-between px-4 md:px-8 h-16">
