@@ -931,6 +931,7 @@ export function Map3DView() {
   const [contextBulkAction, setContextBulkAction] = useState<GlbContextPresetKey | null>(null);
   const [contextPreview, setContextPreview] = useState<GlbContextPreview | null>(null);
   const [quickContextPanelOpen, setQuickContextPanelOpen] = useState(false);
+  const [pendingGlbImport, setPendingGlbImport] = useState<{ file: File; existingGlbRecords: number } | null>(null);
   const [smartLinkOpen, setSmartLinkOpen] = useState(false);
   const [smartLinkBase, setSmartLinkBase] = useState<GlbMeshRuntimeInfo | null>(null);
   const [smartLinkBaseKey, setSmartLinkBaseKey] = useState<string | null>(null);
@@ -1066,6 +1067,11 @@ export function Map3DView() {
       console.log("[GLB Mesh Link Check] scene keys registered", {
         watchedKeys,
         duplicateNames,
+      });
+      console.log("[GLB Import Safety] current GLB inventory", {
+        projectId,
+        currentGlbMeshCount: meshesToUpsert.length,
+        previousMeshMapRecords: meshHooks.meshMap.size,
       });
     }
     if (meshesToUpsert.length > 0) {
@@ -1829,14 +1835,30 @@ export function Map3DView() {
 
   const applyViewMode = useCallback((mode: ViewMode, overrideMeshMap?: Map<string, ProjectModelMesh>) => {
     setViewMode(mode);
-    if (!sceneObj) return;
+    const realStats = {
+      contextVisible: 0,
+      linkedVisible: 0,
+      linkedHidden: 0,
+      unlinkedHidden: 0,
+      ignored: 0,
+      contextExamples: [] as Array<{ layer_key: string; mesh_name: string | null; material_name: string | null }>,
+    };
+    if (!sceneObj) return realStats;
     const sourceMap = overrideMeshMap ?? meshHooks.meshMap;
     sceneObj.traverse((child) => {
       if (!(child as THREE.Mesh).isMesh) return;
       const mesh = child as THREE.Mesh;
       const saved = sourceMap.get(getMeshLayerKey(mesh));
-      if (!saved) return;
-      if (saved.ignored) { child.visible = false; return; }
+      if (!saved) {
+        child.visible = mode !== "real";
+        if (mode === "real") realStats.unlinkedHidden++;
+        return;
+      }
+      if (saved.ignored) {
+        child.visible = false;
+        if (mode === "real") realStats.ignored++;
+        return;
+      }
       switch (mode) {
         case "complete":
           child.visible = saved.visible;
@@ -1844,10 +1866,21 @@ export function Map3DView() {
         case "real": {
           if (isContextProjectModelMesh(saved)) {
             child.visible = saved.visible;
+            if (saved.visible) realStats.contextVisible++;
+            if (realStats.contextExamples.length < 8) {
+              realStats.contextExamples.push({
+                layer_key: saved.layer_key,
+                mesh_name: saved.mesh_name,
+                material_name: saved.material_name,
+              });
+            }
             break;
           }
           const hasLink = saved.assigned_house_number != null && saved.service_macro_id != null && saved.service_scope_id != null;
           child.visible = hasLink && !!saved.production_visible;
+          if (!hasLink) realStats.unlinkedHidden++;
+          else if (saved.production_visible) realStats.linkedVisible++;
+          else realStats.linkedHidden++;
           break;
         }
         case "simulation":
@@ -1856,41 +1889,17 @@ export function Map3DView() {
       }
     });
     if (mode === "real") {
-      const stats = {
-        contextVisible: 0,
-        linkedVisible: 0,
-        linkedHidden: 0,
-        unlinkedHidden: 0,
-        ignored: 0,
-        contextExamples: [] as Array<{ layer_key: string; mesh_name: string | null; material_name: string | null }>,
-      };
-      sourceMap.forEach((mesh) => {
-        if (mesh.ignored) {
-          stats.ignored++;
-          return;
-        }
-        if (isContextProjectModelMesh(mesh)) {
-          if (mesh.visible) stats.contextVisible++;
-          if (stats.contextExamples.length < 8) {
-            stats.contextExamples.push({
-              layer_key: mesh.layer_key,
-              mesh_name: mesh.mesh_name,
-              material_name: mesh.material_name,
-            });
-          }
-          return;
-        }
-        const hasLink = mesh.assigned_house_number != null && mesh.service_macro_id != null && mesh.service_scope_id != null;
-        if (!hasLink) {
-          stats.unlinkedHidden++;
-        } else if (mesh.production_visible) {
-          stats.linkedVisible++;
-        } else {
-          stats.linkedHidden++;
-        }
-      });
-      console.log("[GLB Real Context]", stats);
+      console.log("[GLB Real Context]", realStats);
+      if (import.meta.env.DEV) {
+        console.log("[GLB Import Safety] real mode applied", {
+          visibleInReal: realStats.linkedVisible + realStats.contextVisible,
+          hiddenWithoutLink: realStats.unlinkedHidden,
+          linkedHidden: realStats.linkedHidden,
+          ignored: realStats.ignored,
+        });
+      }
     }
+    return realStats;
   }, [sceneObj, meshHooks.meshMap]);
 
   // Re-aplica modo quando meshMap chega/atualiza ou cena fica pronta
@@ -2446,14 +2455,28 @@ export function Map3DView() {
       }
 
       const refreshedMeshes = await meshHooks.refresh();
+      let contextApplied = contextCount;
+      let unlinkedApplied = unlinkedCount;
       if (refreshedMeshes?.length) {
         const refreshedMap = new Map(refreshedMeshes.map((mesh) => [mesh.layer_key, mesh]));
-        applyViewMode(viewMode, refreshedMap);
+        const appliedStats = applyViewMode(viewMode, refreshedMap);
+        if (viewMode === "real") {
+          visible = appliedStats.linkedVisible;
+          hidden = appliedStats.linkedHidden;
+          contextApplied = appliedStats.contextVisible;
+          unlinkedApplied = appliedStats.unlinkedHidden;
+        }
       } else {
-        applyViewMode(viewMode);
+        const appliedStats = applyViewMode(viewMode);
+        if (viewMode === "real") {
+          visible = appliedStats.linkedVisible;
+          hidden = appliedStats.linkedHidden;
+          contextApplied = appliedStats.contextVisible;
+          unlinkedApplied = appliedStats.unlinkedHidden;
+        }
       }
-      setLastSyncResult({ total: linkedCount, visible, hidden, unlinked: unlinkedCount, syncedAt: new Date() });
-      if (!options?.silent) toast.success(`Sincronizado: ${visible} produção visíveis · ${hidden} produção ocultas · ${contextCount} contextos · ${unlinkedCount} sem vínculo ignoradas`);
+      setLastSyncResult({ total: linkedCount, visible, hidden, unlinked: unlinkedApplied, syncedAt: new Date() });
+      if (!options?.silent) toast.success(`Sincronizado: ${visible} produção visíveis · ${hidden} produção ocultas · ${contextApplied} contextos · ${unlinkedApplied} sem vínculo ignoradas`);
     } catch (err) {
       console.error("[Sync3D]", err);
       toast.error("Erro ao sincronizar");
@@ -2733,6 +2756,46 @@ export function Map3DView() {
     return supabase.storage.from('3d-models').getPublicUrl(data.path).data.publicUrl;
   };
 
+  const importGltfFile = async (
+    file: File,
+    mode: "preserve" | "new",
+    existingGlbRecords = 0,
+  ) => {
+    setIsLoading(true);
+    setSceneReady(false);
+    clearSmartLinkPreview("new GLB import");
+    try {
+      const url = await uploadFile(file, 'gltf');
+      if (!url) return;
+      let clearedGlbRecords = 0;
+      if (mode === "new") {
+        clearedGlbRecords = await meshHooks.clearGlbMeshes();
+        setMeshReviewOverrides(new Map());
+      }
+      if (import.meta.env.DEV) {
+        console.log("[GLB Import Safety]", {
+          projectId,
+          fileName: file.name,
+          mode,
+          oldRecordsFound: existingGlbRecords,
+          preservedRecords: mode === "preserve" ? existingGlbRecords : 0,
+          clearedGlbRecords,
+        });
+      }
+      setModelData({ url, type: "gltf" });
+      setHasChanges(true);
+      toast.success(
+        mode === "new"
+          ? `Modelo carregado. ${clearedGlbRecords} vínculos GLB anteriores foram limpos.`
+          : "Modelo carregado preservando vínculos GLB existentes.",
+      );
+    } finally {
+      setPendingGlbImport(null);
+      setIsLoading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!canManage3D) {
       toast.error("Sem permissão para importar modelo 3D.");
@@ -2742,11 +2805,19 @@ export function Map3DView() {
     const file = e.target.files?.[0]; if (!file) return;
     const name = file.name.toLowerCase();
     if (name.endsWith(".gltf") || name.endsWith(".glb")) {
-      setIsLoading(true); setSceneReady(false);
       try {
-        const url = await uploadFile(file, 'gltf');
-        if (url) { setModelData({ url, type: "gltf" }); setHasChanges(true); toast.success("Modelo carregado!"); }
-      } finally { setIsLoading(false); }
+        const existingGlbRecords = await meshHooks.countGlbMeshes();
+        if (existingGlbRecords > 0) {
+          setPendingGlbImport({ file, existingGlbRecords });
+          if (fileInputRef.current) fileInputRef.current.value = '';
+          return;
+        }
+        await importGltfFile(file, "preserve", existingGlbRecords);
+      } catch (error) {
+        console.error("[GLB Import Safety] import check error", error);
+        toast.error("Erro ao preparar importação GLB.");
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
     } else if (name.endsWith(".ifc")) {
       setIsLoading(true); setSceneReady(false);
       try {
@@ -3374,6 +3445,47 @@ export function Map3DView() {
         onClearPreview={() => clearSmartLinkPreview("dialog clear preview")}
         onApply={applySmartLinkSelection}
       />
+
+      <AlertDialog open={!!pendingGlbImport} onOpenChange={(open) => {
+        if (!open) {
+          setPendingGlbImport(null);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Importar novo modelo GLB?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Este projeto já possui {pendingGlbImport?.existingGlbRecords ?? 0} registro(s) GLB em project_model_meshes.
+              Escolha se deseja reaproveitar vínculos existentes ou iniciar o inventário GLB limpo para este novo arquivo.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="sm:flex-col sm:items-stretch lg:flex-row lg:items-center">
+            <AlertDialogCancel
+              onClick={() => {
+                setPendingGlbImport(null);
+                if (fileInputRef.current) fileInputRef.current.value = '';
+              }}
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isLoading || !pendingGlbImport}
+              onClick={() => pendingGlbImport && void importGltfFile(pendingGlbImport.file, "preserve", pendingGlbImport.existingGlbRecords)}
+            >
+              Atualizar modelo atual e preservar vínculos
+            </Button>
+            <AlertDialogAction
+              disabled={isLoading || !pendingGlbImport}
+              onClick={() => pendingGlbImport && void importGltfFile(pendingGlbImport.file, "new", pendingGlbImport.existingGlbRecords)}
+            >
+              Importar como novo modelo e limpar vínculos GLB anteriores
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {canManage3D && projectId && (
         <LinkLayersDialog

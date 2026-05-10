@@ -351,6 +351,42 @@ export function useProjectModelMeshes(projectId: string | undefined) {
     [projectId, refresh],
   );
 
+  const countGlbMeshes = useCallback(async () => {
+    if (!projectId) return 0;
+    const { count, error } = await supabase
+      .from("project_model_meshes" as any)
+      .select("id", { count: "exact", head: true })
+      .eq("project_id", projectId)
+      .like("layer_key", "glb:%");
+    if (error) {
+      console.error("[useProjectModelMeshes] count GLB meshes error", error);
+      throw error;
+    }
+    return count ?? 0;
+  }, [projectId]);
+
+  const clearGlbMeshes = useCallback(async () => {
+    if (!projectId) return 0;
+    const beforeCount = await countGlbMeshes();
+    const { count, error } = await supabase
+      .from("project_model_meshes" as any)
+      .delete({ count: "exact" })
+      .eq("project_id", projectId)
+      .like("layer_key", "glb:%");
+    if (error) {
+      console.error("[useProjectModelMeshes] clear GLB meshes error", error);
+      throw error;
+    }
+    const deletedCount = count ?? beforeCount;
+    console.log("[GLB Import Safety] cleared old GLB mesh records", {
+      projectId,
+      beforeCount,
+      deletedCount,
+    });
+    await refresh();
+    return deletedCount;
+  }, [countGlbMeshes, projectId, refresh]);
+
   const setIgnored = useCallback(async (layerKey: string, ignored: boolean) => {
     if (!projectId) return;
     await supabase
@@ -371,5 +407,5 @@ export function useProjectModelMeshes(projectId: string | undefined) {
     await refresh();
   }, [projectId, refresh]);
 
-  return { meshes, meshMap, loading, refresh, upsertMesh, bulkUpsertMeshes, setIgnored, setVisible };
+  return { meshes, meshMap, loading, refresh, upsertMesh, bulkUpsertMeshes, countGlbMeshes, clearGlbMeshes, setIgnored, setVisible };
 }
