@@ -1356,6 +1356,24 @@ export function Map3DView() {
         .filter((candidate) => candidate.selectedByDefault)
         .map((candidate) => candidate.layerKey),
     );
+    const officialHouseSet = new Set(houseNumbers);
+    const invalidApplicableCandidates = candidates
+      .filter((candidate) =>
+        candidate.status === "applicable"
+        && (
+          candidate.suggestedHouseNumber == null
+          || !officialHouseSet.has(candidate.suggestedHouseNumber)
+        )
+      )
+      .map((candidate) => ({
+        layerKey: candidate.layerKey,
+        meshName: candidate.meshName,
+        suggestedHouseNumber: candidate.suggestedHouseNumber,
+        confidence: candidate.suggestionConfidence,
+        source: candidate.suggestionSource,
+        reason: candidate.suggestionReason,
+        rejectReason: candidate.houseSuggestionRejectReason,
+      }));
 
     console.log("[GLB Smart Link] preview built", {
       baseMesh: baseSaved,
@@ -1370,6 +1388,19 @@ export function Map3DView() {
         return acc;
       }, {} as Record<string, number>),
       sample: candidates.slice(0, 10),
+    });
+    console.log("[GLB Smart House Safety]", {
+      projectId,
+      projectName: currentProject?.name ?? null,
+      housesCount: houseNumbers.length,
+      validHouseNumbers: houseNumbers,
+      hasCasa99: officialHouseSet.has(99),
+      hasCasa71: officialHouseSet.has(71),
+      baseKey: layerKey,
+      baseMeshName: base.meshName,
+      candidatesApplicable: candidates.filter((candidate) => candidate.status === "applicable").length,
+      selectedByDefault: selected.size,
+      invalidApplicableCandidates,
     });
     console.log("[GLB Smart House Suggestion]", {
       totalCandidates: candidates.length,
@@ -1425,7 +1456,7 @@ export function Map3DView() {
     setSmartLinkPreviewBarOpen(false);
     setSmartLinkPreviewMode(null);
     setSmartLinkOpen(true);
-  }, [houseNumbers, meshHooks.meshMap, meshReviewOverrides, sceneObj]);
+  }, [currentProject?.name, houseNumbers, meshHooks.meshMap, meshReviewOverrides, projectId, sceneObj]);
 
   const toggleSmartLinkCandidate = useCallback((layerKey: string, checked: boolean) => {
     setSmartLinkSelectedKeys((prev) => {
