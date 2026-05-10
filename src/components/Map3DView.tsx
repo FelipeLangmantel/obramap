@@ -907,9 +907,12 @@ export function Map3DView() {
   const [quickContextPanelOpen, setQuickContextPanelOpen] = useState(false);
   const [smartLinkOpen, setSmartLinkOpen] = useState(false);
   const [smartLinkBase, setSmartLinkBase] = useState<GlbMeshRuntimeInfo | null>(null);
+  const [smartLinkBaseKey, setSmartLinkBaseKey] = useState<string | null>(null);
   const [smartLinkCandidates, setSmartLinkCandidates] = useState<GlbSmartLinkCandidate[]>([]);
   const [smartLinkSelectedKeys, setSmartLinkSelectedKeys] = useState<Set<string>>(new Set());
+  const [smartLinkPreviewEnabled, setSmartLinkPreviewEnabled] = useState(false);
   const [smartLinkApplying, setSmartLinkApplying] = useState(false);
+  const smartLinkPreviewMaterialsRef = useRef<Array<{ mesh: THREE.Mesh; originalMaterial: THREE.Material | THREE.Material[] }>>([]);
 
   // Modo de visualizaÃ§Ã£o
   type ViewMode = "complete" | "real" | "simulation";
@@ -1155,6 +1158,82 @@ export function Map3DView() {
     )?.label ?? `${mesh.service_macro_id} â†’ ${mesh.service_scope_id}`;
   }, [serviceOptions, smartLinkBase]);
 
+  const clearSmartLinkPreviewHighlight = useCallback(() => {
+    smartLinkPreviewMaterialsRef.current.forEach(({ mesh, originalMaterial }) => {
+      mesh.material = originalMaterial;
+      const materials = Array.isArray(originalMaterial) ? originalMaterial : [originalMaterial];
+      materials.forEach((material) => {
+        material.needsUpdate = true;
+      });
+    });
+    if (smartLinkPreviewMaterialsRef.current.length > 0) {
+      console.log("[GLB Smart Link] preview highlight restored", {
+        restored: smartLinkPreviewMaterialsRef.current.length,
+      });
+    }
+    smartLinkPreviewMaterialsRef.current = [];
+  }, []);
+
+  useEffect(() => {
+    clearSmartLinkPreviewHighlight();
+    if (!sceneObj || !smartLinkOpen || !smartLinkPreviewEnabled || !smartLinkBaseKey) return;
+
+    const candidateKeys = new Set(smartLinkCandidates.map((candidate) => candidate.layerKey));
+    const selectedKeys = smartLinkSelectedKeys;
+    const targetKeys = new Set([smartLinkBaseKey, ...candidateKeys]);
+    const previewed: Array<{ mesh: THREE.Mesh; originalMaterial: THREE.Material | THREE.Material[] }> = [];
+
+    const tintMaterial = (material: THREE.Material, color: THREE.ColorRepresentation, intensity = 1) => {
+      const clone = material.clone();
+      const anyClone = clone as any;
+      if (anyClone.emissive?.set) {
+        anyClone.emissive.set(color);
+        anyClone.emissiveIntensity = Math.max(Number(anyClone.emissiveIntensity || 0), 0.45 * intensity);
+      }
+      if (anyClone.color?.lerp) {
+        anyClone.color.lerp(new THREE.Color(color), 0.22 * intensity);
+      }
+      clone.needsUpdate = true;
+      return clone;
+    };
+
+    sceneObj.traverse((child) => {
+      if (!(child as THREE.Mesh).isMesh) return;
+      const mesh = child as THREE.Mesh;
+      const layerKey = getMeshLayerKey(mesh);
+      if (!targetKeys.has(layerKey)) return;
+      const originalMaterial = mesh.material as THREE.Material | THREE.Material[];
+      const color = layerKey === smartLinkBaseKey
+        ? "#38bdf8"
+        : selectedKeys.has(layerKey)
+          ? "#f472b6"
+          : "#facc15";
+      const intensity = selectedKeys.has(layerKey) || layerKey === smartLinkBaseKey ? 1.25 : 1;
+      mesh.material = Array.isArray(originalMaterial)
+        ? originalMaterial.map((material) => tintMaterial(material, color, intensity))
+        : tintMaterial(originalMaterial, color, intensity);
+      previewed.push({ mesh, originalMaterial });
+    });
+
+    smartLinkPreviewMaterialsRef.current = previewed;
+    console.log("[GLB Smart Link] preview highlight applied", {
+      baseKey: smartLinkBaseKey,
+      candidates: candidateKeys.size,
+      selected: selectedKeys.size,
+      highlighted: previewed.length,
+    });
+
+    return clearSmartLinkPreviewHighlight;
+  }, [
+    clearSmartLinkPreviewHighlight,
+    sceneObj,
+    smartLinkBaseKey,
+    smartLinkCandidates,
+    smartLinkOpen,
+    smartLinkPreviewEnabled,
+    smartLinkSelectedKeys,
+  ]);
+
   const openSmartLinkSimilar = useCallback((layerKey: string) => {
     if (!sceneObj) {
       toast.error("Cena 3D ainda nÃ£o estÃ¡ pronta.");
@@ -1200,8 +1279,10 @@ export function Map3DView() {
     });
 
     setSmartLinkBase({ ...base, saved: baseSaved });
+    setSmartLinkBaseKey(layerKey);
     setSmartLinkCandidates(candidates);
     setSmartLinkSelectedKeys(selected);
+    setSmartLinkPreviewEnabled(true);
     setSmartLinkOpen(true);
   }, [meshHooks.meshMap, meshReviewOverrides, sceneObj]);
 
@@ -1212,6 +1293,40 @@ export function Map3DView() {
       else next.delete(layerKey);
       return next;
     });
+  }, []);
+
+  const smartLinkCandidatePreviewKeys = useMemo(() => {
+    return smartLinkCandidates.map((candidate) => candidate.layerKey);
+  }, [smartLinkCandidates]);
+
+  const showSmartLinkCandidatesOnMap = useCallback(() => {
+    setSmartLinkPreviewEnabled(true);
+    setIsolatedKeys(null);
+    toast.info("Candidatas destacadas no mapa.");
+  }, []);
+
+  const isolateSmartLinkCandidates = useCallback(() => {
+    const keys = new Set<string>();
+    if (smartLinkBaseKey) keys.add(smartLinkBaseKey);
+    smartLinkCandidatePreviewKeys.forEach((key) => keys.add(key));
+    if (keys.size === 0) return;
+    setSmartLinkPreviewEnabled(true);
+    setIsolatedKeys(keys);
+    toast.info(`Isolando ${keys.size} mesh(es) da busca de similares.`);
+  }, [smartLinkBaseKey, smartLinkCandidatePreviewKeys]);
+
+  const clearSmartLinkPreview = useCallback(() => {
+    setSmartLinkPreviewEnabled(false);
+    setIsolatedKeys(null);
+  }, []);
+
+  const handleSmartLinkOpenChange = useCallback((open: boolean) => {
+    setSmartLinkOpen(open);
+    if (!open) {
+      setSmartLinkPreviewEnabled(false);
+      setSmartLinkBaseKey(null);
+      setIsolatedKeys(null);
+    }
   }, []);
 
   const applySmartLinkSelection = useCallback(async () => {
@@ -1280,14 +1395,14 @@ export function Map3DView() {
         return next;
       });
       toast.success(`VÃ­nculos aplicados: ${sent}. Clique em Sincronizar 3D Real para atualizar a produÃ§Ã£o.`);
-      setSmartLinkOpen(false);
+      handleSmartLinkOpenChange(false);
     } catch (error) {
       console.error("[GLB Smart Link] apply error", error);
       toast.error("Falha ao aplicar vÃ­nculos inteligentes.");
     } finally {
       setSmartLinkApplying(false);
     }
-  }, [meshHooks, projectId, smartLinkBase, smartLinkCandidates, smartLinkSelectedKeys]);
+  }, [handleSmartLinkOpenChange, meshHooks, projectId, smartLinkBase, smartLinkCandidates, smartLinkSelectedKeys]);
 
   const applyViewMode = useCallback((mode: ViewMode, overrideMeshMap?: Map<string, ProjectModelMesh>) => {
     setViewMode(mode);
@@ -2461,7 +2576,7 @@ export function Map3DView() {
           <div className="absolute top-4 left-1/2 z-30 flex -translate-x-1/2 flex-col items-center gap-1 rounded-lg border border-primary/30 bg-background/95 px-3 py-2 text-xs shadow-lg backdrop-blur pointer-events-none">
             <div className="font-semibold text-primary">Caminhar na Obra</div>
             <div className="text-muted-foreground">
-              Clique no mapa para capturar o mouse · WASD mover · Mouse olhar · E inspecionar · Shift acelerar · Esc sair
+              Clique no mapa para capturar o mouse ï¿½ WASD mover ï¿½ Mouse olhar ï¿½ E inspecionar ï¿½ Shift acelerar ï¿½ Esc sair
             </div>
           </div>
         )}
@@ -2780,8 +2895,11 @@ export function Map3DView() {
         selectedKeys={smartLinkSelectedKeys}
         applying={smartLinkApplying}
         serviceLabel={smartLinkServiceLabel}
-        onOpenChange={setSmartLinkOpen}
+        onOpenChange={handleSmartLinkOpenChange}
         onToggle={toggleSmartLinkCandidate}
+        onShowCandidates={showSmartLinkCandidatesOnMap}
+        onIsolateCandidates={isolateSmartLinkCandidates}
+        onClearPreview={clearSmartLinkPreview}
         onApply={applySmartLinkSelection}
       />
 

@@ -22,6 +22,9 @@ interface Props {
   serviceLabel: string;
   onOpenChange: (open: boolean) => void;
   onToggle: (layerKey: string, checked: boolean) => void;
+  onShowCandidates: () => void;
+  onIsolateCandidates: () => void;
+  onClearPreview: () => void;
   onApply: () => void;
 }
 
@@ -43,6 +46,9 @@ export function GlbSmartLinkDialog({
   serviceLabel,
   onOpenChange,
   onToggle,
+  onShowCandidates,
+  onIsolateCandidates,
+  onClearPreview,
   onApply,
 }: Props) {
   const counts = useMemo(() => {
@@ -89,6 +95,18 @@ export function GlbSmartLinkDialog({
             <div className="rounded-md border p-2"><p className="text-muted-foreground">Ign./contexto</p><p className="text-base font-semibold">{counts.ignored + counts.context}</p></div>
           </div>
 
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={onShowCandidates}>
+              Mostrar candidatas no mapa
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={onIsolateCandidates}>
+              Isolar candidatas
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={onClearPreview}>
+              Limpar destaque
+            </Button>
+          </div>
+
           <ScrollArea className="h-[420px] rounded-md border">
             <div className="divide-y">
               {candidates.length === 0 ? (
@@ -96,7 +114,7 @@ export function GlbSmartLinkDialog({
               ) : candidates.map((item) => {
                 const canSelect = item.status === "applicable";
                 return (
-                  <div key={item.layerKey} className="grid grid-cols-[32px_1fr_92px_86px_96px] gap-3 p-3 text-xs">
+                  <div key={item.layerKey} className="grid grid-cols-[32px_1fr_92px_112px_96px] gap-3 p-3 text-xs">
                     <Checkbox
                       checked={selectedKeys.has(item.layerKey)}
                       disabled={!canSelect || applying}
@@ -117,6 +135,10 @@ export function GlbSmartLinkDialog({
                     <div>
                       <p className="text-muted-foreground">Casa</p>
                       <p className="font-semibold">{item.suggestedHouseNumber ?? "—"}</p>
+                      <p className="text-[10px] text-muted-foreground">{item.suggestionReason}</p>
+                      {item.currentAssignedHouseNumber != null && (
+                        <p className="text-[10px] text-muted-foreground">atual: {item.currentAssignedHouseNumber}</p>
+                      )}
                     </div>
                     <div>
                       <p className="text-muted-foreground">Status</p>

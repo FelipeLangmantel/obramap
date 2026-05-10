@@ -22,7 +22,9 @@ export interface GlbSmartLinkCandidate extends GlbMeshRuntimeInfo {
   confidence: "alta" | "media" | "baixa";
   reasons: string[];
   status: GlbSmartLinkStatus;
+  currentAssignedHouseNumber: number | null;
   suggestedHouseNumber: number | null;
+  suggestionReason: string;
   selectedByDefault: boolean;
 }
 
@@ -119,7 +121,14 @@ export function scoreGlbSimilarCandidates(base: GlbMeshRuntimeInfo, meshes: GlbM
         && saved.service_macro_id != null
         && saved.service_scope_id != null
         && !isContextProjectModelMesh(saved);
-      const suggestedHouseNumber = saved?.detected_house_number ?? parseHouseNumberFromMesh(mesh.meshName);
+      const currentAssignedHouseNumber = saved?.assigned_house_number ?? null;
+      const parsedHouseNumber = parseHouseNumberFromMesh(mesh.meshName);
+      const suggestedHouseNumber = saved?.detected_house_number ?? parsedHouseNumber;
+      const suggestionReason = saved?.detected_house_number != null
+        ? "casa detectada salva"
+        : parsedHouseNumber != null
+          ? "nÃºmero encontrado no nome da mesh"
+          : "sem casa sugerida confiÃ¡vel";
       const status: GlbSmartLinkStatus = mesh.layerKey === base.layerKey
         ? "self"
         : saved?.ignored
@@ -146,7 +155,9 @@ export function scoreGlbSimilarCandidates(base: GlbMeshRuntimeInfo, meshes: GlbM
         confidence: confidenceFromScore(score),
         reasons,
         status,
+        currentAssignedHouseNumber,
         suggestedHouseNumber,
+        suggestionReason,
         selectedByDefault: status === "applicable" && score >= 70,
       };
     })
