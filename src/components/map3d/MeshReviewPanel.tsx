@@ -9,7 +9,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { X, Copy, Eye, EyeOff, Crosshair, EyeOff as Ignore, Box, Home, Save, Search } from "lucide-react";
+import { X, Copy, Eye, EyeOff, Crosshair, EyeOff as Ignore, Box, Home, Save, Search, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import {
   GLB_CONTEXT_MESH_MARKER,
@@ -40,6 +40,8 @@ interface Props {
   onFindSimilar?: (key: string) => void;
 }
 
+type PendingTypeChange = "production" | "context" | "ignored" | null;
+
 export function MeshReviewPanel({
   meshKey, meshData, sceneRef, houses, services, isolated,
   onClose, onIsolate, onShowAll, onUpdate, onIgnore, onFindSimilar,
@@ -48,6 +50,8 @@ export function MeshReviewPanel({
   const [draftHouse, setDraftHouse] = useState("_none");
   const [draftService, setDraftService] = useState("_none");
   const [savingLink, setSavingLink] = useState(false);
+  const [identExpanded, setIdentExpanded] = useState(false);
+  const [pendingTypeChange, setPendingTypeChange] = useState<PendingTypeChange>(null);
 
   const selectedSceneMesh = useMemo(() => {
     if (!meshKey || !sceneRef) return null;
@@ -102,6 +106,7 @@ export function MeshReviewPanel({
   const hasAssignedHouse = meshData?.assigned_house_number != null;
   const hasServiceMacro = !!meshData?.service_macro_id && !isContextProjectModelMesh(meshData);
   const hasServiceScope = !!meshData?.service_scope_id && !isContextProjectModelMesh(meshData);
+  const hasExistingLink = hasAssignedHouse || hasServiceMacro || hasServiceScope || isContextProjectModelMesh(meshData);
   const hasOnFindSimilar = !!onFindSimilar;
   const canFindSimilar = hasAssignedHouse
     && hasServiceMacro
@@ -115,30 +120,8 @@ export function MeshReviewPanel({
   useEffect(() => {
     setDraftHouse(currentHouse);
     setDraftService(currentService);
+    setIdentExpanded(false);
   }, [currentHouse, currentService, meshKey]);
-
-  useEffect(() => {
-    if (!import.meta.env.DEV || !meshKey) return;
-    console.log("[GLB Mesh Link] panel values", {
-      meshKey,
-      meshData,
-      currentHouse,
-      currentService,
-    });
-    if (meshKey.includes("Geom3D_302") || meshKey.includes("Geom3D_303")) {
-      console.log("[GLB Mesh Link Check] panel values", {
-        meshKey,
-        meshData,
-        currentHouse,
-        currentService,
-        draftHouse,
-        draftService,
-        sceneMeshUuid: selectedSceneMesh?.uuid ?? null,
-        sceneMeshName: selectedSceneMesh?.name ?? null,
-        sceneLayerKey: selectedSceneMesh?.userData?.obramapLayerKey ?? null,
-      });
-    }
-  }, [currentHouse, currentService, draftHouse, draftService, meshData, meshKey, selectedSceneMesh]);
 
   if (!meshKey) return null;
 
@@ -166,7 +149,7 @@ export function MeshReviewPanel({
     Number.isFinite(selectedHouseNumber) &&
     !!selectedService;
 
-  const handleSetProductionType = async () => {
+  const applySetProductionType = async () => {
     if (!meshKey) return;
     await onUpdate(meshKey, {
       ignored: false,
@@ -180,7 +163,7 @@ export function MeshReviewPanel({
     toast.success("Mesh marcada como produção. Escolha Casa e Serviço para vincular.");
   };
 
-  const handleSetContextType = async () => {
+  const applySetContextType = async () => {
     if (!meshKey) return;
     await onUpdate(meshKey, {
       ignored: false,
@@ -194,6 +177,37 @@ export function MeshReviewPanel({
     toast.success("Mesh marcada como contexto do 3D Real.");
   };
 
+  const applySetIgnoredType = async () => {
+    if (!meshKey) return;
+    await onUpdate(meshKey, {
+      ignored: true,
+      visible: false,
+      production_visible: false,
+      progress_percent: 0,
+    });
+    toast.success("Mesh marcada como ignorada.");
+  };
+
+  const requestTypeChange = (next: "production" | "context" | "ignored") => {
+    if (meshType === next) return;
+    if (hasExistingLink) {
+      setPendingTypeChange(next);
+      return;
+    }
+    if (next === "production") void applySetProductionType();
+    else if (next === "context") void applySetContextType();
+    else void applySetIgnoredType();
+  };
+
+  const confirmPendingTypeChange = async () => {
+    const next = pendingTypeChange;
+    setPendingTypeChange(null);
+    if (!next) return;
+    if (next === "production") await applySetProductionType();
+    else if (next === "context") await applySetContextType();
+    else await applySetIgnoredType();
+  };
+
   const handleRemoveContextType = async () => {
     if (!meshKey) return;
     await onUpdate(meshKey, {
@@ -205,17 +219,6 @@ export function MeshReviewPanel({
       progress_percent: 0,
     });
     toast.success("Contexto removido da mesh.");
-  };
-
-  const handleSetIgnoredType = async () => {
-    if (!meshKey) return;
-    await onUpdate(meshKey, {
-      ignored: true,
-      visible: false,
-      production_visible: false,
-      progress_percent: 0,
-    });
-    toast.success("Mesh marcada como ignorada.");
   };
 
   const handleApplyLink = async () => {
@@ -241,26 +244,6 @@ export function MeshReviewPanel({
       detected_house_number:
         meshData?.detected_house_number ?? parseHouseNumberFromMesh(selectedSceneMesh?.name || ""),
     };
-    if (import.meta.env.DEV) {
-      console.log("[GLB Mesh Link] panel apply", {
-        meshKey,
-        sceneMeshUuid: selectedSceneMesh?.uuid ?? null,
-        selectedHouseNumber,
-        selectedService,
-        payload,
-      });
-      if (meshKey.includes("Geom3D_302") || meshKey.includes("Geom3D_303")) {
-        console.log("[GLB Mesh Link Check] panel apply", {
-          meshKey,
-          sceneMeshUuid: selectedSceneMesh?.uuid ?? null,
-          sceneMeshName: selectedSceneMesh?.name ?? null,
-          sceneLayerKey: selectedSceneMesh?.userData?.obramapLayerKey ?? null,
-          selectedHouseNumber,
-          selectedService,
-          payload,
-        });
-      }
-    }
     try {
       await onUpdate(meshKey, payload);
       toast.success("Vínculo aplicado à mesh. Clique em Sincronizar 3D Real para atualizar a produção.");
@@ -294,9 +277,17 @@ export function MeshReviewPanel({
     }
   };
 
+  const pendingLabel = pendingTypeChange === "production"
+    ? "Produção"
+    : pendingTypeChange === "context"
+      ? "Contexto"
+      : pendingTypeChange === "ignored"
+        ? "Ignorar"
+        : "";
+
   return (
     <Card className="absolute top-4 right-4 z-20 flex max-h-[calc(100vh-2rem)] w-80 flex-col overflow-hidden shadow-2xl border-primary/30">
-      <CardHeader className="pb-2">
+      <CardHeader className="pb-2 shrink-0">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm flex items-center gap-1.5">
             <Box className="h-4 w-4 text-primary" /> Revisar Mesh
@@ -304,29 +295,43 @@ export function MeshReviewPanel({
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}><X className="h-3.5 w-3.5" /></Button>
         </div>
       </CardHeader>
-      <CardContent className="min-h-0 flex-1 p-0">
-        <ScrollArea className="h-full max-h-[calc(100vh-96px)]">
-          <div className="px-4 pb-8 space-y-3">
-            {/* Identificação */}
+      <CardContent className="min-h-0 flex-1 p-0 overflow-hidden">
+        <ScrollArea className="h-full">
+          <div className="px-4 pb-8 pt-1 space-y-3">
+            {/* Identificação (recolhível) */}
             <section className="space-y-1.5">
-              <p className="text-[10px] uppercase font-semibold text-muted-foreground">Identificação</p>
-              <div className="flex items-center gap-1.5 text-[10px]">
-                <span className="text-muted-foreground shrink-0">UUID:</span>
-                <span className="font-mono truncate flex-1" title={meshKey}>{meshKey}</span>
-                <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" onClick={() => copy(meshKey)}>
-                  <Copy className="h-3 w-3" />
-                </Button>
-              </div>
-              <div className="text-[11px]">
-                <span className="text-muted-foreground">Nome: </span>
-                <span className="font-medium">{meshData?.mesh_name || "—"}</span>
-              </div>
-              <div className="text-[11px]">
-                <span className="text-muted-foreground">Material: </span>
-                <span className="font-medium">{meshData?.material_name || "—"}</span>
-              </div>
-              {meshData?.detected_house_number != null && (
-                <Badge variant="secondary" className="text-[10px]">Casa detectada: {meshData.detected_house_number}</Badge>
+              <button
+                type="button"
+                onClick={() => setIdentExpanded(v => !v)}
+                className="flex items-center gap-1 text-[10px] uppercase font-semibold text-muted-foreground hover:text-foreground transition-colors w-full"
+              >
+                {identExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                Identificação
+                {!identExpanded && meshData?.mesh_name && (
+                  <span className="ml-1 normal-case font-normal text-muted-foreground/80 truncate">— {meshData.mesh_name}</span>
+                )}
+              </button>
+              {identExpanded && (
+                <div className="space-y-1.5 pl-4">
+                  <div className="flex items-center gap-1.5 text-[10px]">
+                    <span className="text-muted-foreground shrink-0">UUID:</span>
+                    <span className="font-mono truncate flex-1" title={meshKey}>{meshKey}</span>
+                    <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" onClick={() => copy(meshKey)}>
+                      <Copy className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <div className="text-[11px]">
+                    <span className="text-muted-foreground">Nome: </span>
+                    <span className="font-medium">{meshData?.mesh_name || "—"}</span>
+                  </div>
+                  <div className="text-[11px]">
+                    <span className="text-muted-foreground">Material: </span>
+                    <span className="font-medium">{meshData?.material_name || "—"}</span>
+                  </div>
+                  {meshData?.detected_house_number != null && (
+                    <Badge variant="secondary" className="text-[10px]">Casa detectada: {meshData.detected_house_number}</Badge>
+                  )}
+                </div>
               )}
             </section>
 
@@ -338,7 +343,7 @@ export function MeshReviewPanel({
                   variant={meshType === "production" ? "default" : "outline"}
                   size="sm"
                   className="h-8 text-[11px]"
-                  onClick={handleSetProductionType}
+                  onClick={() => requestTypeChange("production")}
                 >
                   Produção
                 </Button>
@@ -347,7 +352,7 @@ export function MeshReviewPanel({
                   variant={meshType === "context" ? "default" : "outline"}
                   size="sm"
                   className="h-8 text-[11px]"
-                  onClick={handleSetContextType}
+                  onClick={() => requestTypeChange("context")}
                 >
                   Contexto
                 </Button>
@@ -356,7 +361,7 @@ export function MeshReviewPanel({
                   variant={meshType === "ignored" ? "destructive" : "outline"}
                   size="sm"
                   className="h-8 text-[11px]"
-                  onClick={handleSetIgnoredType}
+                  onClick={() => requestTypeChange("ignored")}
                 >
                   Ignorar
                 </Button>
@@ -450,33 +455,18 @@ export function MeshReviewPanel({
                 size="sm"
                 className="h-8 w-full text-[11px]"
                 disabled={!canFindSimilar || savingLink}
-                title={canFindSimilar ? "Encontrar meshes semelhantes para vincular em lote" : "Vincule Casa e Servi�o primeiro."}
+                title={canFindSimilar ? "Encontrar meshes semelhantes para vincular em lote" : "Vincule Casa e Serviço primeiro."}
                 onClick={() => {
                   if (!onFindSimilar) {
-                    if (import.meta.env.DEV) {
-                      console.error("[GLB Smart Link] onFindSimilar ausente no MeshReviewPanel", {
-                        meshKey,
-                        hasAssignedHouse,
-                        hasServiceMacro,
-                        hasServiceScope,
-                      });
-                    }
-                    toast.error("Busca de similares indispon�vel neste painel.");
+                    toast.error("Busca de similares indisponível neste painel.");
                     return;
                   }
                   onFindSimilar(meshKey);
                 }}
               >
                 <Search className="h-3.5 w-3.5 mr-1" />
-                {canFindSimilar ? "Encontrar similares" : "Vincule Casa e Servi�o primeiro."}
+                {canFindSimilar ? "Encontrar similares" : "Vincule Casa e Serviço primeiro."}
               </Button>
-              <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 rounded-md bg-muted/30 px-2 py-1 text-[9px] text-muted-foreground">
-                <span>hasAssignedHouse: {String(hasAssignedHouse)}</span>
-                <span>hasServiceMacro: {String(hasServiceMacro)}</span>
-                <span>hasServiceScope: {String(hasServiceScope)}</span>
-                <span>hasOnFindSimilar: {String(hasOnFindSimilar)}</span>
-                <span className="col-span-2">canFindSimilar: {String(canFindSimilar)}</span>
-              </div>
               <Button
                 type="button"
                 size="sm"
@@ -485,7 +475,7 @@ export function MeshReviewPanel({
                 onClick={handleApplyLink}
               >
                 <Save className="h-3.5 w-3.5 mr-1" />
-                {savingLink ? "Aplicando..." : "Aplicar v�nculo"}
+                {savingLink ? "Aplicando..." : "Aplicar vínculo"}
               </Button>
               <Button
                 type="button"
@@ -495,7 +485,7 @@ export function MeshReviewPanel({
                 disabled={!meshKey || savingLink}
                 onClick={handleClearLink}
               >
-                Limpar v�nculo
+                Limpar vínculo
               </Button>
             </section>
 
@@ -556,6 +546,21 @@ export function MeshReviewPanel({
           </div>
         </ScrollArea>
       </CardContent>
+
+      <AlertDialog open={pendingTypeChange !== null} onOpenChange={(open) => { if (!open) setPendingTypeChange(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Mudar tipo para "{pendingLabel}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta mesh já possui vínculo (Casa/Serviço ou Contexto). Ao mudar o tipo, o vínculo atual será removido. Deseja continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPendingTypeChange(null)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmPendingTypeChange}>Sim, mudar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
