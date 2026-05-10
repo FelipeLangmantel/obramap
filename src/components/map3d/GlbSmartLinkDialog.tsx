@@ -151,6 +151,9 @@ export function GlbSmartLinkDialog({
                       {item.suggestionSource !== "none" && (
                         <p className="text-[10px] text-muted-foreground">fonte: {item.suggestionSource}</p>
                       )}
+                      {item.houseSuggestionRejectReason && (
+                        <p className="text-[10px] text-amber-600">motivo: {item.houseSuggestionRejectReason}</p>
+                      )}
                       {item.currentAssignedHouseNumber != null && (
                         <p className="text-[10px] text-muted-foreground">atual: {item.currentAssignedHouseNumber}</p>
                       )}

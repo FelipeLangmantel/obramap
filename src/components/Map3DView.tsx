@@ -1171,7 +1171,8 @@ export function Map3DView() {
   const houseNumbers = useMemo(() => {
     const arr = (currentProject?.houses || [])
       .map((h: any) => h.houseNumber ?? h.house_number ?? h.number ?? h.id)
-      .filter((n: any) => typeof n === "number");
+      .map((n: any) => Number(n))
+      .filter((n: number) => Number.isFinite(n));
     return Array.from(new Set(arr)).sort((a, b) => a - b);
   }, [currentProject?.houses]);
 
@@ -1372,6 +1373,8 @@ export function Map3DView() {
     });
     console.log("[GLB Smart House Suggestion]", {
       totalCandidates: candidates.length,
+      officialHouseTotal: houseNumbers.length,
+      officialHouseSample: houseNumbers.slice(0, 20),
       linkedAnchorTotal: houseAnchorDiagnostics.linkedAnchors.length,
       textAnchorTotal: houseAnchorDiagnostics.textAnchors.length,
       linkedAnchorSample: houseAnchorDiagnostics.linkedAnchors.slice(0, 10),
@@ -1382,6 +1385,10 @@ export function Map3DView() {
       suggestedMedium: candidates.filter((candidate) => candidate.suggestionConfidence === "media").length,
       suggestedLow: candidates.filter((candidate) => candidate.suggestionConfidence === "baixa").length,
       withoutSuggestion: candidates.filter((candidate) => candidate.suggestionConfidence === "nenhuma").length,
+      rejectedOutsideProject: candidates.filter((candidate) => candidate.houseSuggestionRejectReason === "casa fora do projeto").length,
+      rejectedAmbiguous: candidates.filter((candidate) => candidate.houseSuggestionRejectReason === "ancora ambigua").length,
+      rejectedDuplicate: candidates.filter((candidate) => candidate.houseSuggestionRejectReason === "duplicada para o mesmo servico").length,
+      rejectedFar: candidates.filter((candidate) => candidate.houseSuggestionRejectReason === "ancora distante").length,
       sourceCounts: candidates.reduce((acc, candidate) => {
         acc[candidate.suggestionSource] = (acc[candidate.suggestionSource] ?? 0) + 1;
         return acc;
@@ -1619,11 +1626,13 @@ export function Map3DView() {
     if (!projectId || !smartLinkBase?.saved) return;
     const baseSaved = smartLinkBase.saved;
     if (!baseSaved.service_macro_id || !baseSaved.service_scope_id) return;
+    const validHouseNumbers = new Set(houseNumbers);
 
     const selectedCandidates = smartLinkCandidates.filter((candidate) =>
       smartLinkSelectedKeys.has(candidate.layerKey)
       && candidate.status === "applicable"
       && candidate.suggestedHouseNumber != null
+      && validHouseNumbers.has(candidate.suggestedHouseNumber)
     );
     if (selectedCandidates.length === 0) {
       toast.error("Nenhuma candidata aplicável com casa sugerida foi selecionada.");
@@ -1690,7 +1699,7 @@ export function Map3DView() {
       setSmartLinkApplying(false);
       setIsLoading(false);
     }
-  }, [clearSmartLinkPreview, meshHooks, projectId, smartLinkBase, smartLinkCandidates, smartLinkSelectedKeys]);
+  }, [clearSmartLinkPreview, houseNumbers, meshHooks, projectId, smartLinkBase, smartLinkCandidates, smartLinkSelectedKeys]);
 
   const applyViewMode = useCallback((mode: ViewMode, overrideMeshMap?: Map<string, ProjectModelMesh>) => {
     setViewMode(mode);
