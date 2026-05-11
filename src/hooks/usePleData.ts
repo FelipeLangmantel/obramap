@@ -380,29 +380,39 @@ export function usePleData() {
       const { data: userData } = await supabase.auth.getUser();
       const userName = getUserName();
       if (!measurementId) {
-        await supabase.from("ple_entries").delete().eq("event_id", eventId).eq("house_number", houseNumber);
+        const { error } = await supabase
+          .from("ple_entries")
+          .delete()
+          .eq("ple_project_id", currentProjectId)
+          .eq("event_id", eventId)
+          .eq("house_number", houseNumber);
+        if (error) {
+          toast.error("Erro ao apagar lancamento da medicao");
+          throw error;
+        }
         setEntries(prev => prev.filter(e => !(e.event_id === eventId && e.house_number === houseNumber)));
       } else {
-        const existing = entries.find(e => e.event_id === eventId && e.house_number === houseNumber);
-        if (existing) {
-          await supabase.from("ple_entries").update({ measurement_id: measurementId } as any).eq("id", existing.id);
-          setEntries(prev => prev.map(e => e.id === existing.id ? { ...e, measurement_id: measurementId } : e));
-        } else {
-          const { data, error } = await supabase
-            .from("ple_entries")
-            .insert({ 
-              ple_project_id: currentProjectId, event_id: eventId, house_number: houseNumber, 
-              measurement_id: measurementId, created_by: userData?.user?.id, created_by_name: userName 
-            } as any)
-            .select()
-            .single();
-          if (!error && data) setEntries(prev => [...prev, data as any]);
+        const { data, error } = await supabase
+          .from("ple_entries")
+          .upsert({
+            ple_project_id: currentProjectId, event_id: eventId, house_number: houseNumber,
+            measurement_id: measurementId, created_by: userData?.user?.id, created_by_name: userName
+          } as any, { onConflict: "event_id,house_number" })
+          .select()
+          .single();
+        if (error || !data) {
+          toast.error("Erro ao salvar lancamento da medicao");
+          throw error || new Error("PLE entry upsert returned no data");
         }
+        setEntries(prev => {
+          const withoutCell = prev.filter(e => !(e.event_id === eventId && e.house_number === houseNumber));
+          return [...withoutCell, data as any];
+        });
       }
     } finally {
       setIsSaving(false);
     }
-  }, [currentProjectId, entries, getUserName]);
+  }, [canEdit, currentProjectId, getUserName]);
 
   // Delete group + cascading deletion of child substages and events under them
   const deleteGroup = useCallback(async (id: string) => {

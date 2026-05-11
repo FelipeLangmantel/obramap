@@ -226,6 +226,7 @@ export function PleGridTab({ groups, events, measurements, entries, glosses, cur
   // Flush pending DB operations in batch
   const flushPendingOps = useCallback(async () => {
     const ops = new Map(pendingOpsRef.current);
+    if (ops.size === 0) return;
     pendingOpsRef.current.clear();
     try {
       await Promise.all(
@@ -235,6 +236,13 @@ export function PleGridTab({ groups, events, measurements, entries, glosses, cur
       );
     } catch (error) {
       console.error("Error saving PLE grid entries:", error);
+      ops.forEach((op, key) => pendingOpsRef.current.set(key, op));
+      setLocalEntries(prev => {
+        const next = new Map(prev);
+        ops.forEach((_, key) => next.delete(key));
+        return next;
+      });
+      toast.error("Nao foi possivel salvar alguns lancamentos da medicao.");
     }
   }, [setEntry]);
 
