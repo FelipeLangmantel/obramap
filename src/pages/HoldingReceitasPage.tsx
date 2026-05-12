@@ -717,6 +717,11 @@ export default function HoldingReceitasPage() {
             td.value, th.value { text-align: right; white-space: nowrap; }
             .total { font-weight: 700; background: #f9fafb; }
             .premise { margin-bottom: 18px; font-size: 12px; color: #374151; }
+            .column-guide { margin-top: 20px; page-break-inside: avoid; }
+            .column-guide h2 { margin-top: 0; }
+            .column-guide ul { margin: 0 0 14px 18px; padding: 0; }
+            .column-guide li { margin-bottom: 6px; font-size: 11px; color: #374151; line-height: 1.35; }
+            .column-guide .note { margin-top: 10px; font-size: 11px; color: #374151; }
             .report-footer { margin-top: 28px; padding-top: 10px; border-top: 1px solid #d1d5db; font-size: 11px; color: #4b5563; text-align: center; }
             @media print { body { margin: 12mm; } }
           </style>
@@ -735,11 +740,26 @@ export default function HoldingReceitasPage() {
           </table>
           <h2>Detalhamento por medição</h2>
           <table>
-            <thead><tr><th>Mês previsto</th><th>Obra</th><th>Medição</th><th>Status</th><th>Data base</th><th>Prazo aprovação</th><th>Prazo pagamento</th><th>Data prevista de recebimento</th><th class="value">Valor</th></tr></thead>
+            <thead><tr><th>Mês previsto</th><th>Obra</th><th>Medição</th><th>Status</th><th>Data de referência</th><th>Prazo aprovação</th><th>Prazo pagamento</th><th>Data prevista de recebimento</th><th class="value">Valor</th></tr></thead>
             <tbody>
               ${reportRows.map(row => `<tr><td>${escapeHtml(row.mesLabel)}</td><td>${escapeHtml(row.obra)}</td><td>${escapeHtml(row.medicao)}</td><td>${escapeHtml(row.status)}</td><td>${escapeHtml(row.dataBase)}</td><td>${escapeHtml(row.prazoAprovacao)}</td><td>${escapeHtml(row.prazoPagamento)}</td><td>${escapeHtml(row.dataRecebimento)}</td><td class="value">${BRL.format(row.valor)}</td></tr>`).join("")}
             </tbody>
           </table>
+          <section class="column-guide">
+            <h2>Entendimento das colunas</h2>
+            <ul>
+              <li><strong>Mês previsto de recebimento:</strong> mês em que o valor da medição está previsto para entrar no caixa.</li>
+              <li><strong>Obra:</strong> empreendimento ao qual a medição pertence.</li>
+              <li><strong>Medição:</strong> número ou identificação da medição.</li>
+              <li><strong>Status:</strong> situação atual da medição, podendo ser recebida, aprovada, enviada ou prevista.</li>
+              <li><strong>Data de referência:</strong> data usada como ponto inicial do cálculo. Para medições aprovadas, considera a data de aprovação. Para medições enviadas ou previstas, considera a data de envio ou previsão da medição.</li>
+              <li><strong>Prazo de aprovação:</strong> prazo estimado entre envio/previsão da medição e sua aprovação. Esse prazo é aplicado somente para medições ainda não aprovadas.</li>
+              <li><strong>Prazo de pagamento:</strong> prazo cadastrado na obra para recebimento após aprovação da medição.</li>
+              <li><strong>Data prevista de recebimento:</strong> data calculada para entrada do valor no caixa, conforme status da medição e prazos aplicáveis.</li>
+              <li><strong>Valor previsto/aprovado:</strong> valor considerado na projeção de recebimento. Para medições aprovadas, utiliza o valor aprovado/acatado. Para medições previstas, utiliza o valor previsto, descontando impactos financeiros registrados, quando houver.</li>
+            </ul>
+            <p class="note"><strong>Observação:</strong> as datas são projeções gerenciais para apoio ao planejamento financeiro. Medições já recebidas ou aprovadas utilizam datas reais cadastradas. Medições enviadas ou previstas utilizam prazo estimado de aprovação somado ao prazo de pagamento de cada obra.</p>
+          </section>
           <div class="report-footer">© 2026 ObraMap — Gestão de obras habitacionais horizontais e verticais</div>
         </body>
       </html>`);
