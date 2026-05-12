@@ -113,6 +113,11 @@ export default function HoldingReceitasPage() {
   const [reprogramarMedicao, setReprogramarMedicao] = useState<MedicaoCompleta | null>(null);
   const [reprogramarForm, setReprogramarForm] = useState({ motivo: "", novaData: "", novoValor: 0 });
   const [savingReprogramar, setSavingReprogramar] = useState(false);
+  const [prazoAprovacaoEstimado, setPrazoAprovacaoEstimado] = useState(() => {
+    if (typeof window === "undefined") return 15;
+    const saved = Number(window.localStorage.getItem("obramap:holding-receitas:prazo-aprovacao-estimado"));
+    return Number.isFinite(saved) && saved > 0 ? saved : 15;
+  });
 
   // Abrir aba correta quando vindo de notificação
   useEffect(() => {
@@ -124,6 +129,10 @@ export default function HoldingReceitasPage() {
       window.history.replaceState({}, "", location.pathname);
     }
   }, [location.state]);
+
+  useEffect(() => {
+    window.localStorage.setItem("obramap:holding-receitas:prazo-aprovacao-estimado", String(prazoAprovacaoEstimado));
+  }, [prazoAprovacaoEstimado]);
   
 
   // ─── Data Fetching ───
@@ -428,23 +437,23 @@ export default function HoldingReceitasPage() {
         statusEntrada = "aprovado";
         calculo = `Aprovada ${formatDateBR(m.data_aprovacao)} + ${prazo} dias = ${formatDateBR(dataRef)}`;
       } else if (m.status_medicao === "enviada" && m.data_envio) {
-        // Sent without approval date → estimate approval in ~15 days, then + prazo_pagamento
-        const diasAprovacao = 15;
+        // Sent without approval date → estimate approval, then + prazo_pagamento
+        const diasAprovacao = prazoAprovacaoEstimado;
         dataRef = addDays(new Date(m.data_envio + "T12:00:00"), diasAprovacao + prazo);
         statusEntrada = "enviado";
         calculo = `Enviada ${formatDateBR(m.data_envio)} + ~${diasAprovacao}d aprovacao + ${prazo}d pgto = ${formatDateBR(dataRef)}`;
       } else if (m.data_previsao_medicao) {
-        // Planned — estimate: previsao + 15 days approval + prazo_pagamento
-        const diasAprovacao = 15;
+        // Planned — estimate: previsao + approval estimate + prazo_pagamento
+        const diasAprovacao = prazoAprovacaoEstimado;
         dataRef = addDays(new Date(m.data_previsao_medicao + "T12:00:00"), diasAprovacao + prazo);
         statusEntrada = "previsto";
         calculo = `Prev. envio ${formatDateBR(m.data_previsao_medicao)} + ~${diasAprovacao}d + ${prazo}d = ${formatDateBR(dataRef)}`;
       } else if (m.mes_referencia && m.ano_referencia) {
         const mesIdx = MONTHS.findIndex(mn => mn.toLowerCase() === m.mes_referencia!.substring(0, 3).toLowerCase());
         if (mesIdx >= 0) {
-          dataRef = addDays(new Date(m.ano_referencia, mesIdx, 15), 15 + prazo);
+          dataRef = addDays(new Date(m.ano_referencia, mesIdx, 15), prazoAprovacaoEstimado + prazo);
           statusEntrada = "estimado";
-          calculo = `Ref. ${m.mes_referencia}/${m.ano_referencia} + ~15d + ${prazo}d pgto (estimativa)`;
+          calculo = `Ref. ${m.mes_referencia}/${m.ano_referencia} + ~${prazoAprovacaoEstimado}d + ${prazo}d pgto (estimativa)`;
         }
       }
 
@@ -534,7 +543,7 @@ export default function HoldingReceitasPage() {
         };
       });
     }
-  }, [medicoesFiltradasGlobal, agrupamento, valorPrevLiquido]);
+  }, [medicoesFiltradasGlobal, agrupamento, valorPrevLiquido, prazoAprovacaoEstimado]);
 
   // ─── Insights ───
   const insights = useMemo(() => {
@@ -650,7 +659,7 @@ export default function HoldingReceitasPage() {
           m.statusEntrada === "aprovado" ? m.data_aprovacao :
           m.statusEntrada === "enviado" ? m.data_envio :
           m.data_previsao_medicao || null;
-        const prazoAprovacao = m.statusEntrada === "enviado" || m.statusEntrada === "previsto" || m.statusEntrada === "estimado" ? "~15 dias" : "—";
+        const prazoAprovacao = m.statusEntrada === "enviado" || m.statusEntrada === "previsto" || m.statusEntrada === "estimado" ? `~${prazoAprovacaoEstimado} dias` : "—";
         return {
           mesKey: m.dataRef ? format(m.dataRef, "yyyy-MM") : "",
           mesLabel: m.dataRef ? format(m.dataRef, "MMM/yy", { locale: ptBR }) : "Sem data",
@@ -697,12 +706,15 @@ export default function HoldingReceitasPage() {
             th { background: #f3f4f6; text-align: left; }
             td.value, th.value { text-align: right; white-space: nowrap; }
             .total { font-weight: 700; background: #f9fafb; }
+            .premise { margin-bottom: 18px; font-size: 12px; color: #374151; }
+            .report-footer { margin-top: 28px; padding-top: 10px; border-top: 1px solid #d1d5db; font-size: 11px; color: #4b5563; text-align: center; }
             @media print { body { margin: 12mm; } }
           </style>
         </head>
         <body>
           <h1>Relatório de Previsão de Recebimentos por Medição</h1>
           <p>Data de emissão: ${formatDateBR(new Date())}</p>
+          <p class="premise">Premissa: prazo estimado de aprovação/envio de ${prazoAprovacaoEstimado} dias, somado ao prazo de pagamento cadastrado em cada obra.</p>
           <h2>Resumo por mês</h2>
           <table>
             <thead><tr><th>Mês</th><th>Quantidade de medições</th><th class="value">Total previsto a receber</th></tr></thead>
@@ -718,6 +730,7 @@ export default function HoldingReceitasPage() {
               ${reportRows.map(row => `<tr><td>${escapeHtml(row.mesLabel)}</td><td>${escapeHtml(row.obra)}</td><td>${escapeHtml(row.medicao)}</td><td>${escapeHtml(row.status)}</td><td>${escapeHtml(row.dataBase)}</td><td>${escapeHtml(row.prazoAprovacao)}</td><td>${escapeHtml(row.prazoPagamento)}</td><td>${escapeHtml(row.dataRecebimento)}</td><td class="value">${BRL.format(row.valor)}</td></tr>`).join("")}
             </tbody>
           </table>
+          <div class="report-footer">© 2026 ObraMap — Gestão de obras habitacionais horizontais e verticais</div>
         </body>
       </html>`);
     printWindow.document.close();
@@ -1266,7 +1279,21 @@ export default function HoldingReceitasPage() {
                           <p className="text-xs text-muted-foreground">Entradas previstas por período para planejamento de pagamentos</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-2 flex-wrap justify-end">
+                        <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                          Prazo estimado de aprovação
+                          <Input
+                            type="number"
+                            min={1}
+                            value={prazoAprovacaoEstimado}
+                            onChange={(e) => {
+                              const next = Number(e.target.value);
+                              setPrazoAprovacaoEstimado(Number.isFinite(next) && next > 0 ? next : 15);
+                            }}
+                            className="h-7 w-16 text-xs"
+                          />
+                          dias
+                        </label>
                         <Button
                           size="sm"
                           variant="outline"
@@ -1470,8 +1497,8 @@ export default function HoldingReceitasPage() {
                       <p className="text-[11px] text-muted-foreground">
                         <strong>Recebido:</strong> data real de pagamento. {" "}
                         <strong>Aprovada:</strong> data aprovação + prazo de pagamento da obra. {" "}
-                        <strong>Enviada:</strong> data envio + ~15 dias (aprovação estimada) + prazo pgto. {" "}
-                        <strong>Prevista:</strong> data previsão + ~15d + prazo pgto. {" "}
+                        <strong>Enviada:</strong> data envio + ~{prazoAprovacaoEstimado} dias (aprovação estimada) + prazo pgto. {" "}
+                        <strong>Prevista:</strong> data previsão + ~{prazoAprovacaoEstimado}d + prazo pgto. {" "}
                         O prazo de pagamento vem do cadastro de cada obra (padrão: 30 dias se não informado).
                       </p>
                     </div>
