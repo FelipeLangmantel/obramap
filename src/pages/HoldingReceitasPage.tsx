@@ -24,7 +24,7 @@ import {
 } from "recharts";
 import {
   TrendingUp, DollarSign, Clock, CheckCircle2, AlertCircle, Download,
-  Search, Calendar, FileText, X, Wallet, ChevronRight, ChevronDown, AlertTriangle, Ban, Loader2, RotateCcw
+  Search, Calendar, FileText, X, Wallet, ChevronRight, ChevronDown, AlertTriangle, Ban, Loader2, RotateCcw, Printer
 } from "lucide-react";
 import { format, addMonths, startOfMonth, startOfWeek, endOfWeek, addWeeks, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -68,6 +68,12 @@ function parsePrazoDias(prazo: string | null): number {
 // ─── Formatters ───
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const BRL_SHORT = (v: number) => v >= 1e6 ? `R$ ${(v / 1e6).toFixed(1)}M` : v >= 1000 ? `R$ ${(v / 1000).toFixed(0)}k` : BRL.format(v);
+const parseLocalDate = (value: string | null | undefined) => value ? new Date(`${value}T12:00:00`) : null;
+const formatDateBR = (value: string | Date | null | undefined, pattern = "dd/MM/yyyy") => {
+  if (!value) return "—";
+  const date = value instanceof Date ? value : parseLocalDate(value);
+  return date ? format(date, pattern, { locale: ptBR }) : "—";
+};
 
 const STATUS_MED_CONFIG: Record<string, { label: string; cls: string }> = {
   aprovada: { label: "Aprovada", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
@@ -184,7 +190,8 @@ export default function HoldingReceitasPage() {
       return { obras: obrasList, medicoes: joined, restricoes: (restricoes || []) as any[] };
     },
     enabled: !!company?.id,
-    refetchOnWindowFocus: false, // realtime cobre mudanças de outros usuários
+    refetchOnWindowFocus: true,
+    refetchOnMount: "always",
     staleTime: 30_000,
     gcTime: 120_000,
   });
@@ -414,24 +421,24 @@ export default function HoldingReceitasPage() {
         // Already received — use actual payment date
         dataRef = new Date(m.data_pagamento + "T12:00:00");
         statusEntrada = "recebido";
-        calculo = `Pagamento confirmado em ${m.data_pagamento}`;
+        calculo = `Pagamento confirmado em ${formatDateBR(m.data_pagamento)}`;
       } else if ((m.status_medicao === "aprovada" || m.data_aprovacao) && m.data_aprovacao) {
         // Approved (or enviada with data_aprovacao filled) → use real approval date
         dataRef = addDays(new Date(m.data_aprovacao + "T12:00:00"), prazo);
         statusEntrada = "aprovado";
-        calculo = `Aprovada ${m.data_aprovacao} + ${prazo} dias = ${format(dataRef, "dd/MM/yy")}`;
+        calculo = `Aprovada ${formatDateBR(m.data_aprovacao)} + ${prazo} dias = ${formatDateBR(dataRef)}`;
       } else if (m.status_medicao === "enviada" && m.data_envio) {
         // Sent without approval date → estimate approval in ~15 days, then + prazo_pagamento
         const diasAprovacao = 15;
         dataRef = addDays(new Date(m.data_envio + "T12:00:00"), diasAprovacao + prazo);
         statusEntrada = "enviado";
-        calculo = `Enviada ${m.data_envio} + ~${diasAprovacao}d aprovação + ${prazo}d pgto = ${format(dataRef, "dd/MM/yy")}`;
+        calculo = `Enviada ${formatDateBR(m.data_envio)} + ~${diasAprovacao}d aprovacao + ${prazo}d pgto = ${formatDateBR(dataRef)}`;
       } else if (m.data_previsao_medicao) {
         // Planned — estimate: previsao + 15 days approval + prazo_pagamento
         const diasAprovacao = 15;
         dataRef = addDays(new Date(m.data_previsao_medicao + "T12:00:00"), diasAprovacao + prazo);
         statusEntrada = "previsto";
-        calculo = `Prev. envio ${m.data_previsao_medicao} + ~${diasAprovacao}d + ${prazo}d = ${format(dataRef, "dd/MM/yy")}`;
+        calculo = `Prev. envio ${formatDateBR(m.data_previsao_medicao)} + ~${diasAprovacao}d + ${prazo}d = ${formatDateBR(dataRef)}`;
       } else if (m.mes_referencia && m.ano_referencia) {
         const mesIdx = MONTHS.findIndex(mn => mn.toLowerCase() === m.mes_referencia!.substring(0, 3).toLowerCase());
         if (mesIdx >= 0) {
@@ -619,6 +626,105 @@ export default function HoldingReceitasPage() {
   };
 
   // ─── Programação summary KPIs ───
+  const imprimirRelatorioRecebimentos = () => {
+    const uniqueMedicoes = new Map<string, any>();
+    programacaoData.forEach(periodo => {
+      periodo.medicoes.forEach((m: any) => uniqueMedicoes.set(m.id, m));
+    });
+
+    const reportRows = Array.from(uniqueMedicoes.values())
+      .sort((a, b) => {
+        const da = a.dataRef ? a.dataRef.getTime() : 0;
+        const db = b.dataRef ? b.dataRef.getTime() : 0;
+        if (da !== db) return da - db;
+        return String(a.obra_nome || "").localeCompare(String(b.obra_nome || ""), "pt-BR");
+      })
+      .map((m: any) => {
+        const valor = m.statusEntrada === "recebido" || m.statusEntrada === "aprovado"
+          ? (Number(m.valor_acatado ?? m.valor_medicao) || 0)
+          : m.statusEntrada === "enviado"
+          ? (Number(m.valor_medicao) || 0)
+          : valorPrevLiquido(m);
+        const dataBase =
+          m.statusEntrada === "recebido" ? m.data_pagamento :
+          m.statusEntrada === "aprovado" ? m.data_aprovacao :
+          m.statusEntrada === "enviado" ? m.data_envio :
+          m.data_previsao_medicao || null;
+        const prazoAprovacao = m.statusEntrada === "enviado" || m.statusEntrada === "previsto" || m.statusEntrada === "estimado" ? "~15 dias" : "—";
+        return {
+          mesKey: m.dataRef ? format(m.dataRef, "yyyy-MM") : "",
+          mesLabel: m.dataRef ? format(m.dataRef, "MMM/yy", { locale: ptBR }) : "Sem data",
+          obra: m.obra_nome || "—",
+          medicao: m.num_medicao || "—",
+          status: m.statusEntrada === "recebido" ? "Recebido" : m.statusEntrada === "aprovado" ? "Medição Aprovada" : m.statusEntrada === "enviado" ? "Medição Enviada" : "Prevista",
+          dataBase: formatDateBR(dataBase),
+          prazoAprovacao,
+          prazoPagamento: `${m.obra_prazo_pagamento || 30} dias`,
+          dataRecebimento: formatDateBR(m.dataRef),
+          valor,
+        };
+      });
+
+    const summary = Array.from(reportRows.reduce((map, row) => {
+      const current = map.get(row.mesKey) || { mesKey: row.mesKey, mesLabel: row.mesLabel, count: 0, total: 0 };
+      current.count += 1;
+      current.total += row.valor;
+      map.set(row.mesKey, current);
+      return map;
+    }, new Map<string, { mesKey: string; mesLabel: string; count: number; total: number }>()).values())
+      .sort((a, b) => a.mesKey.localeCompare(b.mesKey));
+
+    const totalGeral = summary.reduce((sum, row) => sum + row.total, 0);
+    const htmlEntities: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" };
+    const escapeHtml = (value: string) => value.replace(/[&<>"']/g, char => htmlEntities[char] || char);
+    const printWindow = window.open("", "_blank", "width=1200,height=800");
+    if (!printWindow) {
+      toast.error("Não foi possível abrir a janela de impressão.");
+      return;
+    }
+
+    printWindow.document.write(`<!doctype html>
+      <html>
+        <head>
+          <title>Relatório de Previsão de Recebimentos por Medição</title>
+          <style>
+            body { font-family: Arial, sans-serif; color: #111827; margin: 24px; }
+            h1 { font-size: 20px; margin: 0 0 4px; }
+            h2 { font-size: 14px; margin: 24px 0 8px; }
+            p { margin: 0 0 16px; color: #4b5563; font-size: 12px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+            th, td { border: 1px solid #d1d5db; padding: 6px 8px; font-size: 11px; vertical-align: top; }
+            th { background: #f3f4f6; text-align: left; }
+            td.value, th.value { text-align: right; white-space: nowrap; }
+            .total { font-weight: 700; background: #f9fafb; }
+            @media print { body { margin: 12mm; } }
+          </style>
+        </head>
+        <body>
+          <h1>Relatório de Previsão de Recebimentos por Medição</h1>
+          <p>Data de emissão: ${formatDateBR(new Date())}</p>
+          <h2>Resumo por mês</h2>
+          <table>
+            <thead><tr><th>Mês</th><th>Quantidade de medições</th><th class="value">Total previsto a receber</th></tr></thead>
+            <tbody>
+              ${summary.map(row => `<tr><td>${escapeHtml(row.mesLabel)}</td><td>${row.count}</td><td class="value">${BRL.format(row.total)}</td></tr>`).join("")}
+              <tr class="total"><td colspan="2">Total geral previsto</td><td class="value">${BRL.format(totalGeral)}</td></tr>
+            </tbody>
+          </table>
+          <h2>Detalhamento por medição</h2>
+          <table>
+            <thead><tr><th>Mês previsto</th><th>Obra</th><th>Medição</th><th>Status</th><th>Data base</th><th>Prazo aprovação</th><th>Prazo pagamento</th><th>Data prevista de recebimento</th><th class="value">Valor</th></tr></thead>
+            <tbody>
+              ${reportRows.map(row => `<tr><td>${escapeHtml(row.mesLabel)}</td><td>${escapeHtml(row.obra)}</td><td>${escapeHtml(row.medicao)}</td><td>${escapeHtml(row.status)}</td><td>${escapeHtml(row.dataBase)}</td><td>${escapeHtml(row.prazoAprovacao)}</td><td>${escapeHtml(row.prazoPagamento)}</td><td>${escapeHtml(row.dataRecebimento)}</td><td class="value">${BRL.format(row.valor)}</td></tr>`).join("")}
+            </tbody>
+          </table>
+        </body>
+      </html>`);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  };
+
   const progSummary = useMemo(() => {
     const totalRecebido = programacaoData.reduce((s, p) => s + p.recebido, 0);
     const totalAprovado = programacaoData.reduce((s, p) => s + p.aprovado, 0);
@@ -1161,6 +1267,15 @@ export default function HoldingReceitasPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs gap-1.5"
+                          onClick={imprimirRelatorioRecebimentos}
+                        >
+                          <Printer className="h-3.5 w-3.5" />
+                          Relatório diretoria
+                        </Button>
                         <Button
                           size="sm"
                           variant={agrupamento === "semanal" ? "default" : "outline"}
