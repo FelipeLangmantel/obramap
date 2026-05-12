@@ -425,6 +425,7 @@ export default function HoldingReceitasPage() {
       let dataRef: Date | null = null;
       let statusEntrada = "previsto";
       let calculo = "";
+      let approvalDateMissing = false;
 
       if (m.status_nf === "recebido" && m.data_pagamento) {
         // Already received — use actual payment date
@@ -436,6 +437,15 @@ export default function HoldingReceitasPage() {
         dataRef = addDays(new Date(m.data_aprovacao + "T12:00:00"), prazo);
         statusEntrada = "aprovado";
         calculo = `Aprovada ${formatDateBR(m.data_aprovacao)} + ${prazo} dias = ${formatDateBR(dataRef)}`;
+      } else if (m.status_medicao === "aprovada") {
+        // Approved without approval date: keep it as approved, but make the missing date explicit.
+        const fallbackBase = m.data_envio || m.data_previsao_medicao;
+        approvalDateMissing = true;
+        if (fallbackBase) {
+          dataRef = addDays(new Date(fallbackBase + "T12:00:00"), prazo);
+          statusEntrada = "aprovado";
+          calculo = `Aprovada sem data de aprovacao. Base ${formatDateBR(fallbackBase)} + ${prazo} dias = ${formatDateBR(dataRef)}`;
+        }
       } else if (m.status_medicao === "enviada" && m.data_envio) {
         // Sent without approval date → estimate approval, then + prazo_pagamento
         const diasAprovacao = prazoAprovacaoEstimado;
@@ -457,7 +467,7 @@ export default function HoldingReceitasPage() {
         }
       }
 
-      return { ...m, dataRef, statusEntrada, calculo };
+      return { ...m, dataRef, statusEntrada, calculo, approvalDateMissing };
     }).filter(m => m.dataRef !== null);
 
     if (agrupamento === "semanal") {
@@ -656,7 +666,7 @@ export default function HoldingReceitasPage() {
           : valorPrevLiquido(m);
         const dataBase =
           m.statusEntrada === "recebido" ? m.data_pagamento :
-          m.statusEntrada === "aprovado" ? m.data_aprovacao :
+          m.statusEntrada === "aprovado" ? (m.data_aprovacao || m.data_envio || m.data_previsao_medicao) :
           m.statusEntrada === "enviado" ? m.data_envio :
           m.data_previsao_medicao || null;
         const prazoAprovacao = m.statusEntrada === "enviado" || m.statusEntrada === "previsto" || m.statusEntrada === "estimado" ? `~${prazoAprovacaoEstimado} dias` : "—";
@@ -665,7 +675,7 @@ export default function HoldingReceitasPage() {
           mesLabel: m.dataRef ? format(m.dataRef, "MMM/yy", { locale: ptBR }) : "Sem data",
           obra: m.obra_nome || "—",
           medicao: m.num_medicao || "—",
-          status: m.statusEntrada === "recebido" ? "Recebido" : m.statusEntrada === "aprovado" ? "Medição Aprovada" : m.statusEntrada === "enviado" ? "Medição Enviada" : "Prevista",
+          status: m.approvalDateMissing ? "Medicao Aprovada (sem data de aprovacao)" : m.statusEntrada === "recebido" ? "Recebido" : m.statusEntrada === "aprovado" ? "Medição Aprovada" : m.statusEntrada === "enviado" ? "Medição Enviada" : "Prevista",
           dataBase: formatDateBR(dataBase),
           prazoAprovacao,
           prazoPagamento: `${m.obra_prazo_pagamento || 30} dias`,
@@ -1447,7 +1457,9 @@ export default function HoldingReceitasPage() {
                                       estimado: { label: "Estimada", cls: "bg-muted text-muted-foreground" },
                                       pendente: { label: "Pendente", cls: "bg-muted text-muted-foreground" },
                                     };
-                                    const statusCfg = STATUS_ENTRADA_BADGE[m.statusEntrada] || STATUS_ENTRADA_BADGE.pendente;
+                                    const statusCfg = m.approvalDateMissing
+                                      ? { label: "Aprovada sem data", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" }
+                                      : STATUS_ENTRADA_BADGE[m.statusEntrada] || STATUS_ENTRADA_BADGE.pendente;
                                     const statusColors: Record<string, string> = {
                                       recebido: "border-l-emerald-500",
                                       aprovado: "border-l-emerald-400",
