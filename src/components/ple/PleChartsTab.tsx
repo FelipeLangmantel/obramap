@@ -9,6 +9,13 @@ const COLORS = ["#f97316", "#3b82f6", "#22c55e", "#a855f7", "#ec4899", "#06b6d4"
 
 export function PleChartsTab({ groups, events, measurements, entries, currentProject }: PleDataReturn) {
   const contractValue = currentProject?.contract_value || 0;
+  const totalHouses = Math.max(1, Number(currentProject?.total_houses) || 1);
+  const eventContractValue = (event: typeof events[number]) => {
+    const factor = (event.billing_type || "per_house") === "per_house" ? totalHouses : 1;
+    return (event.quantity || 0) * (event.unit_value || 0) * factor;
+  };
+  const eventMeasuredValue = (event: typeof events[number], measuredQty: number) =>
+    measuredQty * ((event.quantity || 0) * (event.unit_value || 0));
 
   // Line chart: progress per measurement
   const lineData = useMemo(() => {
@@ -17,7 +24,7 @@ export function PleChartsTab({ groups, events, measurements, entries, currentPro
       let valorMedido = 0;
       measuredEntries.forEach(entry => {
         const event = events.find(ev => ev.id === entry.event_id);
-        if (event) valorMedido += event.unit_value;
+        if (event) valorMedido += eventMeasuredValue(event, 1);
       });
 
       // Accumulated up to this measurement
@@ -27,7 +34,7 @@ export function PleChartsTab({ groups, events, measurements, entries, currentPro
       let valorAcum = 0;
       acumEntries.forEach(entry => {
         const event = events.find(ev => ev.id === entry.event_id);
-        if (event) valorAcum += event.unit_value;
+        if (event) valorAcum += eventMeasuredValue(event, 1);
       });
 
       const pctRealizado = contractValue > 0 ? (valorAcum / contractValue) * 100 : 0;
@@ -40,14 +47,27 @@ export function PleChartsTab({ groups, events, measurements, entries, currentPro
     });
   }, [measurements, entries, events, contractValue]);
 
+  const groupEventsMap = useMemo(() => {
+    const map = new Map<string, typeof events>();
+    groups.forEach(group => {
+      const childIds = new Set(groups.filter(child => child.parent_id === group.id).map(child => child.id));
+      map.set(group.id, events.filter(event => event.group_id === group.id || (event.group_id ? childIds.has(event.group_id) : false)));
+    });
+    return map;
+  }, [groups, events]);
+  const chartGroups = useMemo(() => {
+    const stages = groups.filter(group => !group.parent_id);
+    return stages.length > 0 ? stages : groups;
+  }, [groups]);
+
   // Pie chart: distribution by group
   const pieData = useMemo(() => {
-    return groups.map(g => {
-      const groupEvents = events.filter(e => e.group_id === g.id);
-      const totalValue = groupEvents.reduce((sum, ev) => sum + ev.quantity * ev.unit_value, 0);
+    return chartGroups.map(g => {
+      const groupEvents = groupEventsMap.get(g.id) || [];
+      const totalValue = groupEvents.reduce((sum, ev) => sum + eventContractValue(ev), 0);
       return { name: g.name, value: totalValue };
     }).filter(d => d.value > 0);
-  }, [groups, events]);
+  }, [chartGroups, groupEventsMap]);
 
   // Bar chart: top services by measured value
   const barData = useMemo(() => {
@@ -55,8 +75,8 @@ export function PleChartsTab({ groups, events, measurements, entries, currentPro
       const measuredQty = entries.filter(e => e.event_id === ev.id).length;
       return {
         name: ev.description.substring(0, 20),
-        contratado: ev.quantity * ev.unit_value,
-        medido: measuredQty * ev.unit_value,
+        contratado: eventContractValue(ev),
+        medido: eventMeasuredValue(ev, measuredQty),
       };
     })
     .sort((a, b) => b.contratado - a.contratado)
@@ -65,19 +85,20 @@ export function PleChartsTab({ groups, events, measurements, entries, currentPro
 
   // Bar chart: execution % by group
   const execData = useMemo(() => {
-    return groups.map(g => {
-      const groupEvents = events.filter(e => e.group_id === g.id);
-      let totalQty = 0, measuredQty = 0;
+    return chartGroups.map(g => {
+      const groupEvents = groupEventsMap.get(g.id) || [];
+      let totalValue = 0, measuredValue = 0;
       groupEvents.forEach(ev => {
-        totalQty += ev.quantity;
-        measuredQty += entries.filter(e => e.event_id === ev.id).length;
+        const measuredQty = entries.filter(e => e.event_id === ev.id).length;
+        totalValue += eventContractValue(ev);
+        measuredValue += eventMeasuredValue(ev, measuredQty);
       });
       return {
         name: g.code,
-        executado: totalQty > 0 ? (measuredQty / totalQty) * 100 : 0,
+        executado: totalValue > 0 ? (measuredValue / totalValue) * 100 : 0,
       };
     });
-  }, [groups, events, entries]);
+  }, [chartGroups, groupEventsMap, entries]);
 
   const fmtCur = (v: number) => `R$ ${(v * 1000).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}`;
 
