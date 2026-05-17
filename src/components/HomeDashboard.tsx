@@ -229,6 +229,7 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
   const [totalCost, setTotalCost] = useState(0);
   const [totalProductions, setTotalProductions] = useState(0);
   const [recentAlerts, setRecentAlerts] = useState(0);
+  const [mapObras, setMapObras] = useState<MapObra[]>([]);
 
   // First accessible project ID for the 3D preview
   const accessibleProjects = projects.filter((p: any) => authCanAccessProject(p.id));
