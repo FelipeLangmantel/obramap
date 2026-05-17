@@ -547,6 +547,46 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
         )}
       </div>
 
+      {/* Mapa das Obras */}
+      <Card className="border-border/50 shadow-sm">
+        <CardHeader className="pb-3">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <CardTitle className="text-base font-semibold text-foreground flex items-center gap-2">
+                <MapPin className="h-5 w-5 text-primary" />
+                Mapa das obras
+              </CardTitle>
+              <p className="text-xs text-muted-foreground mt-1">
+                Visualização geográfica dos empreendimentos em andamento
+              </p>
+            </div>
+            {mapObras.length > 0 && (
+              <Badge variant="secondary" className="text-xs">
+                {mapObras.length} obra{mapObras.length !== 1 ? "s" : ""} mapeada{mapObras.length !== 1 ? "s" : ""}
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {mapObras.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-2 text-center">
+              <MapPin className="h-8 w-8 text-muted-foreground/40" />
+              <p className="text-sm text-muted-foreground">
+                Nenhuma obra com coordenadas cadastradas.
+              </p>
+              <p className="text-xs text-muted-foreground/70">
+                Informe latitude/longitude ou município ao cadastrar a obra para visualizá-la aqui.
+              </p>
+            </div>
+          ) : (
+            <HoldingMap
+              obras={mapObras}
+              onObraClick={() => onNavigateToProject("holding-dashboard")}
+            />
+          )}
+        </CardContent>
+      </Card>
+
       {/* Quick Stats Row */}
       {projectSummaries.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
