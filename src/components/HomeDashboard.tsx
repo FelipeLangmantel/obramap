@@ -16,7 +16,9 @@ import {
   Home,
   Layers,
   AlertTriangle,
+  MapPin,
 } from "lucide-react";
+import HoldingMap, { MapObra } from "@/components/holding/HoldingMap";
 import { Canvas, useThree, useLoader } from "@react-three/fiber";
 import { OrbitControls, useGLTF, PerspectiveCamera } from "@react-three/drei";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
