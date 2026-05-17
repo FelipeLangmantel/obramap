@@ -317,6 +317,44 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
     fetchFinancialData();
   }, [company?.id]);
 
+  // Fetch obras (holding portfolio) com coordenadas para o mapa
+  useEffect(() => {
+    const fetchMapObras = async () => {
+      if (!company?.id) return;
+      try {
+        const { data } = await supabase
+          .from("obras_portfolio")
+          .select("id, nome, municipio, latitude, longitude, status, valor_contrato, percentual_andamento")
+          .eq("company_id", company.id);
+        if (!data) return;
+        const pins: MapObra[] = data
+          .filter((o: any) => o.latitude != null && o.longitude != null)
+          .map((o: any) => {
+            // health simples derivado do status (sem cálculo pesado de docs/medições)
+            const health: string =
+              o.status === "concluida" ? "green" :
+              o.status === "paralisada" ? "red" :
+              o.status === "em_andamento" ? "green" :
+              "gray";
+            return {
+              id: o.id,
+              nome: o.nome,
+              municipio: o.municipio || "",
+              lat: Number(o.latitude),
+              lng: Number(o.longitude),
+              health,
+              valor_contrato: Number(o.valor_contrato) || 0,
+              status: o.status || "nao_iniciada",
+            };
+          });
+        setMapObras(pins);
+      } catch (err) {
+        console.error("Error fetching map obras:", err);
+      }
+    };
+    fetchMapObras();
+  }, [company?.id]);
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
