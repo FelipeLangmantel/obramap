@@ -1,4 +1,4 @@
-import React, { useEffect, useState, Suspense, useRef, useCallback } from "react";
+import React, { useEffect, useState, Suspense, useRef, useCallback, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -229,7 +229,6 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
   const [totalCost, setTotalCost] = useState(0);
   const [totalProductions, setTotalProductions] = useState(0);
   const [recentAlerts, setRecentAlerts] = useState(0);
-  const [mapObras, setMapObras] = useState<MapObra[]>([]);
 
   // First accessible project ID for the 3D preview
   const accessibleProjects = projects.filter((p: any) => authCanAccessProject(p.id));
@@ -270,6 +269,30 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
 
     setProjectSummaries(summaries);
   }, [projects, authCanAccessProject]);
+
+  const mapObras = useMemo<MapObra[]>(() => {
+    const summaryByProjectId = new Map(projectSummaries.map((project) => [project.id, project]));
+
+    return accessibleProjects
+      .filter((project: any) => project.lat != null && project.lng != null)
+      .map((project: any) => {
+        const summary = summaryByProjectId.get(project.id);
+        const progress = summary?.progress ?? 0;
+        const health = progress >= 100 ? "green" : progress >= 50 ? "green" : progress > 0 ? "yellow" : "gray";
+        const status = progress >= 100 ? "concluida" : progress > 0 ? "em_andamento" : "nao_iniciada";
+
+        return {
+          id: project.id,
+          nome: project.name,
+          municipio: project.municipio || project.location || "",
+          lat: Number(project.lat),
+          lng: Number(project.lng),
+          health,
+          valor_contrato: 0,
+          status,
+        };
+      });
+  }, [accessibleProjects, projectSummaries]);
 
   // Fetch aggregate financial data
   useEffect(() => {
@@ -315,44 +338,6 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
     };
 
     fetchFinancialData();
-  }, [company?.id]);
-
-  // Fetch obras (holding portfolio) com coordenadas para o mapa
-  useEffect(() => {
-    const fetchMapObras = async () => {
-      if (!company?.id) return;
-      try {
-        const { data } = await supabase
-          .from("obras_portfolio")
-          .select("id, nome, municipio, latitude, longitude, status, valor_contrato, percentual_andamento")
-          .eq("company_id", company.id);
-        if (!data) return;
-        const pins: MapObra[] = data
-          .filter((o: any) => o.latitude != null && o.longitude != null)
-          .map((o: any) => {
-            // health simples derivado do status (sem cálculo pesado de docs/medições)
-            const health: string =
-              o.status === "concluida" ? "green" :
-              o.status === "paralisada" ? "red" :
-              o.status === "em_andamento" ? "green" :
-              "gray";
-            return {
-              id: o.id,
-              nome: o.nome,
-              municipio: o.municipio || "",
-              lat: Number(o.latitude),
-              lng: Number(o.longitude),
-              health,
-              valor_contrato: Number(o.valor_contrato) || 0,
-              status: o.status || "nao_iniciada",
-            };
-          });
-        setMapObras(pins);
-      } catch (err) {
-        console.error("Error fetching map obras:", err);
-      }
-    };
-    fetchMapObras();
   }, [company?.id]);
 
   const formatCurrency = (value: number) => {
@@ -572,16 +557,19 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
             <div className="flex flex-col items-center justify-center py-10 gap-2 text-center">
               <MapPin className="h-8 w-8 text-muted-foreground/40" />
               <p className="text-sm text-muted-foreground">
-                Nenhuma obra com coordenadas cadastradas.
+                Nenhuma obra ativa com coordenadas cadastradas.
               </p>
               <p className="text-xs text-muted-foreground/70">
-                Informe latitude/longitude ou município ao cadastrar a obra para visualizá-la aqui.
+                Informe latitude/longitude nos empreendimentos ativos para visualizá-los aqui.
               </p>
             </div>
           ) : (
             <HoldingMap
               obras={mapObras}
-              onObraClick={() => onNavigateToProject("holding-dashboard")}
+              onObraClick={(projectId) => {
+                setCurrentProject(projectId);
+                onNavigateToProject("map");
+              }}
             />
           )}
         </CardContent>

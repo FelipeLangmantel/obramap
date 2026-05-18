@@ -34,6 +34,10 @@ export interface Project {
   id: string;
   name: string;
   location: string;
+  municipio?: string | null;
+  estado?: string | null;
+  lat?: number | null;
+  lng?: number | null;
   contractor: string;
   startDate: string;
   expectedEndDate: string;
@@ -332,7 +336,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         // hidratadas para o currentProjectId no useEffect abaixo.
         const { data: projectsData, error: projectsError } = await supabase
           .from("projects")
-          .select("id, name, location, contractor, start_date, expected_end_date, total_houses, unit_size, project_type, macros_template, created_at, setup_complete, setup_step, legend_follow_macros, custom_legend_items, display_order, weight_mode, logo_url, company_id")
+          .select("id, name, location, municipio, estado, lat, lng, contractor, start_date, expected_end_date, total_houses, unit_size, project_type, macros_template, created_at, setup_complete, setup_step, legend_follow_macros, custom_legend_items, display_order, weight_mode, logo_url, company_id")
           .order("display_order", { ascending: true });
 
         if (projectsError) {
@@ -347,6 +351,10 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
             id: p.id,
             name: p.name,
             location: p.location,
+            municipio: p.municipio,
+            estado: p.estado,
+            lat: p.lat,
+            lng: p.lng,
             contractor: p.contractor,
             startDate: p.start_date,
             expectedEndDate: p.expected_end_date,
