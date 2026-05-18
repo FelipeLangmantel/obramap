@@ -175,7 +175,7 @@ export function LinkPortfolioDialog({ open, onOpenChange, onLinked }: LinkPortfo
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl h-[calc(100dvh-2rem)] sm:h-[90vh] max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="sm:max-w-4xl h-[calc(100dvh-2rem)] sm:h-[90vh] max-h-[90vh] overflow-hidden !flex flex-col">
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Link2 className="h-5 w-5" />
@@ -204,7 +204,7 @@ export function LinkPortfolioDialog({ open, onOpenChange, onLinked }: LinkPortfo
               />
             </div>
 
-            <ScrollArea className="min-h-0 flex-1 -mx-1 px-1 pr-3">
+            <ScrollArea className="h-[calc(100dvh-14rem)] min-h-[220px] sm:h-[calc(90vh-13rem)] sm:min-h-0 -mx-1 px-1 pr-3">
               {loading ? (
                 <div className="py-12 flex items-center justify-center">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
