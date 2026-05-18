@@ -204,7 +204,7 @@ export function LinkPortfolioDialog({ open, onOpenChange, onLinked }: LinkPortfo
               />
             </div>
 
-            <ScrollArea className="flex-1 -mx-1 px-1">
+            <ScrollArea className="flex-1 min-h-0 -mx-1 px-1 h-full">
               {loading ? (
                 <div className="py-12 flex items-center justify-center">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
