@@ -175,8 +175,8 @@ export function LinkPortfolioDialog({ open, onOpenChange, onLinked }: LinkPortfo
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-4xl h-[calc(100dvh-2rem)] sm:h-[90vh] max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Link2 className="h-5 w-5" />
             Vincular Obras do Painel ao ObraMap
@@ -193,8 +193,8 @@ export function LinkPortfolioDialog({ open, onOpenChange, onLinked }: LinkPortfo
             Apenas administradores podem gerenciar vínculos.
           </div>
         ) : (
-          <>
-            <div className="relative">
+          <div className="flex min-h-0 flex-1 flex-col gap-4">
+            <div className="relative shrink-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Buscar por nome, município ou empresa..."
@@ -204,7 +204,7 @@ export function LinkPortfolioDialog({ open, onOpenChange, onLinked }: LinkPortfo
               />
             </div>
 
-            <ScrollArea className="flex-1 min-h-0 -mx-1 px-1 h-full">
+            <ScrollArea className="min-h-0 flex-1 -mx-1 px-1 pr-3">
               {loading ? (
                 <div className="py-12 flex items-center justify-center">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -324,10 +324,10 @@ export function LinkPortfolioDialog({ open, onOpenChange, onLinked }: LinkPortfo
                 </div>
               )}
             </ScrollArea>
-          </>
+          </div>
         )}
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Fechar
           </Button>
