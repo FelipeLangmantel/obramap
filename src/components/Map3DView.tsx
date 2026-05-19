@@ -261,9 +261,11 @@ function GLTFModel({ url, onLoaded, onSceneReady, onMeshClick, selectedMeshKey }
 function SupplementalGLTFPart({
   part,
   onMeshClick,
+  onSceneReady,
 }: {
   part: SupplementalGlbPart;
   onMeshClick?: (part: SupplementalGlbPart, mesh: THREE.Object3D) => void;
+  onSceneReady?: (part: SupplementalGlbPart, scene: THREE.Object3D) => void;
 }) {
   const { scene } = useGLTF(part.url);
 
@@ -273,7 +275,8 @@ function SupplementalGLTFPart({
       child.userData.obramapSupplementalPart = true;
       child.userData.obramapSupplementalPartId = part.id;
     });
-  }, [part.id, scene]);
+    onSceneReady?.(part, scene);
+  }, [onSceneReady, part, scene]);
 
   return (
     <primitive
@@ -664,7 +667,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   resetTrigger, fitTrigger, savedPosition, savedTarget, onCameraChange, sceneReady, onModelLoaded, onSceneReady,
   onMeshClick, selectedMeshKey, projectId, companyId, ifcRealModeActive, ifcHouseOptions, ifcServiceOptions,
   cameraMode, walkInspectOpen, onWalkExit, onWalkInspectClose, onWalkMeshInspect,
-  supplementalGlbParts, onSupplementalMeshClick,
+  supplementalGlbParts, onSupplementalMeshClick, onSupplementalSceneReady,
 }: {
   modelData: ModelData | null; markers: HouseMarker[]; selectedMarkerId: number | null;
   onMarkerClick: (m: HouseMarker) => void; customLegendItems: any[];
@@ -687,6 +690,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   onWalkMeshInspect?: (mesh: THREE.Mesh) => void;
   supplementalGlbParts: SupplementalGlbPart[];
   onSupplementalMeshClick?: (part: SupplementalGlbPart, mesh: THREE.Object3D) => void;
+  onSupplementalSceneReady?: (part: SupplementalGlbPart, scene: THREE.Object3D) => void;
 }) {
   return (
     <>
@@ -720,7 +724,11 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
 
       {supplementalGlbParts.filter((part) => part.visible).map((part) => (
         <Suspense key={part.id} fallback={null}>
-          <SupplementalGLTFPart part={part} onMeshClick={onSupplementalMeshClick} />
+          <SupplementalGLTFPart
+            part={part}
+            onMeshClick={onSupplementalMeshClick}
+            onSceneReady={onSupplementalSceneReady}
+          />
         </Suspense>
       ))}
 
@@ -1106,6 +1114,7 @@ export function Map3DView() {
   const mtlInputRef = useRef<HTMLInputElement>(null);
   const [pendingObjFile, setPendingObjFile] = useState<File | null>(null);
   const supplementalGlbPartsRef = useRef<SupplementalGlbPart[]>([]);
+  const supplementalGlbScenesRef = useRef<Map<string, THREE.Object3D>>(new Map());
 
   useEffect(() => {
     supplementalGlbPartsRef.current = supplementalGlbParts;
@@ -1115,6 +1124,7 @@ export function Map3DView() {
     return () => {
       supplementalGlbPartsRef.current.forEach((part) => URL.revokeObjectURL(part.url));
       supplementalGlbPartsRef.current = [];
+      supplementalGlbScenesRef.current.clear();
     };
   }, []);
 
@@ -1122,6 +1132,7 @@ export function Map3DView() {
     setSupplementalGlbParts((current) => {
       if (current.length === 0) return current;
       current.forEach((part) => URL.revokeObjectURL(part.url));
+      supplementalGlbScenesRef.current.clear();
       if (showToast) {
         toast.info("Partes complementares removidas da sessao.");
       }
@@ -1156,9 +1167,135 @@ export function Map3DView() {
     setSupplementalGlbParts((current) => {
       const part = current.find((item) => item.id === id);
       if (part) URL.revokeObjectURL(part.url);
+      supplementalGlbScenesRef.current.delete(id);
       return current.filter((item) => item.id !== id);
     });
   }, []);
+
+  const handleSupplementalSceneReady = useCallback((part: SupplementalGlbPart, scene: THREE.Object3D) => {
+    supplementalGlbScenesRef.current.set(part.id, scene);
+  }, []);
+
+  const auditGlbMeshParts = useCallback(() => {
+    type MeshAuditRow = {
+      originId: string;
+      originLabel: string;
+      meshName: string;
+      materialName: string;
+      localLayerKey: string;
+    };
+
+    const rows: MeshAuditRow[] = [];
+    const collectMeshes = (originId: string, originLabel: string, root: THREE.Object3D | null | undefined) => {
+      if (!root) return;
+      const nameCounts = new Map<string, number>();
+      root.traverse((child) => {
+        if (!(child as THREE.Mesh).isMesh) return;
+        const mesh = child as THREE.Mesh;
+        const meshName = mesh.name || "mesh";
+        const occurrence = nameCounts.get(meshName) ?? 0;
+        nameCounts.set(meshName, occurrence + 1);
+        rows.push({
+          originId,
+          originLabel,
+          meshName,
+          materialName: getMeshMaterialName(mesh),
+          localLayerKey: `glb:${meshName}:${occurrence}`,
+        });
+      });
+    };
+
+    collectMeshes("principal", "principal", sceneObj);
+    supplementalGlbParts
+      .filter((part) => part.visible)
+      .forEach((part) => {
+        collectMeshes(part.id, part.name, supplementalGlbScenesRef.current.get(part.id));
+      });
+
+    const byOrigin = new Map<string, { label: string; totalMeshes: number; materialCounts: Map<string, number>; nameCounts: Map<string, number> }>();
+    const localKeyOrigins = new Map<string, Set<string>>();
+    const localKeyRows = new Map<string, MeshAuditRow[]>();
+
+    rows.forEach((row) => {
+      const origin = byOrigin.get(row.originId) ?? {
+        label: row.originLabel,
+        totalMeshes: 0,
+        materialCounts: new Map<string, number>(),
+        nameCounts: new Map<string, number>(),
+      };
+      origin.totalMeshes += 1;
+      origin.materialCounts.set(row.materialName || "(sem material)", (origin.materialCounts.get(row.materialName || "(sem material)") ?? 0) + 1);
+      origin.nameCounts.set(row.meshName || "(sem nome)", (origin.nameCounts.get(row.meshName || "(sem nome)") ?? 0) + 1);
+      byOrigin.set(row.originId, origin);
+
+      const origins = localKeyOrigins.get(row.localLayerKey) ?? new Set<string>();
+      origins.add(row.originId);
+      localKeyOrigins.set(row.localLayerKey, origins);
+      const keyRows = localKeyRows.get(row.localLayerKey) ?? [];
+      keyRows.push(row);
+      localKeyRows.set(row.localLayerKey, keyRows);
+    });
+
+    const duplicatedNamesByOrigin = Array.from(byOrigin.entries()).map(([originId, data]) => ({
+      originId,
+      origin: data.label,
+      duplicatedNames: Array.from(data.nameCounts.entries())
+        .filter(([, count]) => count > 1)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 20)
+        .map(([name, count]) => ({ name, count })),
+    }));
+
+    const localLayerKeyCollisionsAcrossOrigins = Array.from(localKeyOrigins.entries())
+      .filter(([, origins]) => origins.size > 1)
+      .map(([localLayerKey, origins]) => ({
+        localLayerKey,
+        origins: Array.from(origins).map((originId) => byOrigin.get(originId)?.label ?? originId),
+        count: localKeyRows.get(localLayerKey)?.length ?? 0,
+      }));
+
+    const materialCounts = new Map<string, number>();
+    rows.forEach((row) => {
+      const material = row.materialName || "(sem material)";
+      materialCounts.set(material, (materialCounts.get(material) ?? 0) + 1);
+    });
+
+    const auditResult = {
+      totalMeshes: rows.length,
+      byOrigin: Array.from(byOrigin.entries()).map(([originId, data]) => ({
+        originId,
+        origin: data.label,
+        totalMeshes: data.totalMeshes,
+        topMaterials: Array.from(data.materialCounts.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 10)
+          .map(([materialName, count]) => ({ materialName, count })),
+      })),
+      duplicatedNamesByOrigin,
+      localLayerKeyCollisionsAcrossOrigins,
+      topMaterials: Array.from(materialCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 15)
+        .map(([materialName, count]) => ({ materialName, count })),
+      sampleCollisions: localLayerKeyCollisionsAcrossOrigins.slice(0, 20).map((collision) => ({
+        ...collision,
+        samples: (localKeyRows.get(collision.localLayerKey) ?? []).map((row) => ({
+          origin: row.originLabel,
+          meshName: row.meshName,
+          materialName: row.materialName,
+        })),
+      })),
+      warning: "Conflito de mesh entre partes nao afeta esta versao visual, mas impede uso seguro de vinculos/3D Real sem prefixo por parte.",
+    };
+
+    console.log("[GLB Parts Mesh Audit]", auditResult);
+    console.table(auditResult.localLayerKeyCollisionsAcrossOrigins.slice(0, 30));
+    toast.info(
+      auditResult.localLayerKeyCollisionsAcrossOrigins.length > 0
+        ? `Auditoria concluida: ${auditResult.totalMeshes} meshes, ${auditResult.localLayerKeyCollisionsAcrossOrigins.length} conflitos entre partes.`
+        : `Auditoria concluida: ${auditResult.totalMeshes} meshes, nenhum conflito local encontrado.`,
+    );
+  }, [sceneObj, supplementalGlbParts]);
 
   const handleCameraChange = useCallback((p: [number, number, number], t: [number, number, number]) => {
     setPendingPos(p); setPendingTgt(t);
@@ -3256,9 +3393,14 @@ export function Map3DView() {
                     Partes GLB complementares sao apenas visuais nesta versao. Elas nao participam de vinculos, SmartLink ou 3D Real.
                   </p>
                 </div>
-                <Button type="button" variant="ghost" size="sm" onClick={() => clearSupplementalGlbParts(true)}>
-                  Remover todas
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={auditGlbMeshParts}>
+                    Auditar meshes
+                  </Button>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => clearSupplementalGlbParts(true)}>
+                    Remover todas
+                  </Button>
+                </div>
               </div>
               <div className="mt-2 flex flex-wrap gap-2">
                 {supplementalGlbParts.map((part) => (
@@ -3326,7 +3468,8 @@ export function Map3DView() {
               onWalkInspectClose={() => setWalkInspection(null)}
               onWalkMeshInspect={handleWalkMeshInspect}
               supplementalGlbParts={viewMode === "real" ? [] : supplementalGlbParts}
-              onSupplementalMeshClick={handleSupplementalMeshClick} />
+              onSupplementalMeshClick={handleSupplementalMeshClick}
+              onSupplementalSceneReady={handleSupplementalSceneReady} />
           </Canvas>
         </div>
         <div id="map3d-ifc-panel-slot" className="pointer-events-none absolute bottom-3 left-0 right-3 top-3 z-40 overflow-hidden" />
