@@ -220,18 +220,32 @@ interface ProjectSummary {
   completedHouses: number;
 }
 
+type LinkedPortfolioCoords = {
+  id: string;
+  nome: string;
+  municipio: string | null;
+  estado: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  obramap_project_id: string | null;
+};
+
 export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (view: string) => void }) {
   const { profile, company, canAccessProject: authCanAccessProject } = useAuth();
   const { projects, setCurrentProject } = useConstruction() as any;
 
   const [projectSummaries, setProjectSummaries] = useState<ProjectSummary[]>([]);
+  const [linkedPortfolioByProjectId, setLinkedPortfolioByProjectId] = useState<Map<string, LinkedPortfolioCoords>>(new Map());
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [totalCost, setTotalCost] = useState(0);
   const [totalProductions, setTotalProductions] = useState(0);
   const [recentAlerts, setRecentAlerts] = useState(0);
 
   // First accessible project ID for the 3D preview
-  const accessibleProjects = projects.filter((p: any) => authCanAccessProject(p.id));
+  const accessibleProjects = useMemo(
+    () => projects.filter((p: any) => authCanAccessProject(p.id)),
+    [projects, authCanAccessProject]
+  );
   const firstProjectId = accessibleProjects.length > 0 ? accessibleProjects[0].id : null;
 
   const getGreeting = () => {
@@ -268,31 +282,83 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
     });
 
     setProjectSummaries(summaries);
-  }, [projects, authCanAccessProject]);
+  }, [accessibleProjects]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchLinkedPortfolioCoords = async () => {
+      const projectIds = accessibleProjects.map((project: any) => project.id).filter(Boolean);
+
+      if (projectIds.length === 0) {
+        setLinkedPortfolioByProjectId(new Map());
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("obras_portfolio")
+        .select("id, nome, municipio, estado, latitude, longitude, obramap_project_id")
+        .in("obramap_project_id", projectIds);
+
+      if (cancelled) return;
+
+      if (error) {
+        console.error("Error loading linked portfolio coordinates:", error);
+        setLinkedPortfolioByProjectId(new Map());
+        return;
+      }
+
+      const next = new Map<string, LinkedPortfolioCoords>();
+      ((data || []) as LinkedPortfolioCoords[]).forEach((obra) => {
+        if (obra.obramap_project_id) {
+          next.set(obra.obramap_project_id, obra);
+        }
+      });
+
+      setLinkedPortfolioByProjectId(next);
+    };
+
+    fetchLinkedPortfolioCoords();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessibleProjects]);
 
   const mapObras = useMemo<MapObra[]>(() => {
     const summaryByProjectId = new Map(projectSummaries.map((project) => [project.id, project]));
 
     return accessibleProjects
-      .filter((project: any) => project.lat != null && project.lng != null)
       .map((project: any) => {
+        const linkedPortfolio = linkedPortfolioByProjectId.get(project.id);
+        const latitude = project.lat ?? linkedPortfolio?.latitude;
+        const longitude = project.lng ?? linkedPortfolio?.longitude;
+
+        return { project, linkedPortfolio, latitude, longitude };
+      })
+      .filter(({ latitude, longitude }) => latitude != null && longitude != null)
+      .map(({ project, linkedPortfolio, latitude, longitude }) => {
         const summary = summaryByProjectId.get(project.id);
         const progress = summary?.progress ?? 0;
         const health = progress >= 100 ? "green" : progress >= 50 ? "green" : progress > 0 ? "yellow" : "gray";
         const status = progress >= 100 ? "concluida" : progress > 0 ? "em_andamento" : "nao_iniciada";
+        const locationParts = [
+          project.municipio || linkedPortfolio?.municipio || project.location,
+          project.estado || linkedPortfolio?.estado,
+        ].filter(Boolean);
 
         return {
           id: project.id,
           nome: project.name,
-          municipio: project.municipio || project.location || "",
-          lat: Number(project.lat),
-          lng: Number(project.lng),
+          municipio: locationParts.join(" / "),
+          lat: Number(latitude),
+          lng: Number(longitude),
           health,
           valor_contrato: 0,
           status,
         };
       });
-  }, [accessibleProjects, projectSummaries]);
+  }, [accessibleProjects, linkedPortfolioByProjectId, projectSummaries]);
 
   // Fetch aggregate financial data
   useEffect(() => {
