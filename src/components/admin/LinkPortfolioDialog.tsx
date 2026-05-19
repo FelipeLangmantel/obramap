@@ -123,7 +123,10 @@ export function LinkPortfolioDialog({ open, onOpenChange, onLinked }: LinkPortfo
       // 1) Cria o vínculo
       const { error } = await supabase
         .from("obras_portfolio")
-        .update({ obramap_project_id: moduleDialog.projectId } as any)
+        .update({
+          obramap_project_id: moduleDialog.projectId,
+          modo_integracao: "linkado",
+        } as any)
         .eq("id", moduleDialog.obraId);
       if (error) throw error;
 
@@ -157,7 +160,10 @@ export function LinkPortfolioDialog({ open, onOpenChange, onLinked }: LinkPortfo
     try {
       const { error } = await supabase
         .from("obras_portfolio")
-        .update({ obramap_project_id: null } as any)
+        .update({
+          obramap_project_id: null,
+          modo_integracao: "standalone",
+        } as any)
         .eq("id", obraId);
       if (error) throw error;
       toast.success("Vínculo removido.");

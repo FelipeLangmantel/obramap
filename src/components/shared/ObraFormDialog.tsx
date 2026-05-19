@@ -191,7 +191,10 @@ export function ObraFormDialog({ open, onOpenChange, onSaved }: ObraFormDialogPr
 
       const { error: linkErr } = await supabase
         .from("obras_portfolio")
-        .update({ obramap_project_id: projectId } as any)
+        .update({
+          obramap_project_id: projectId,
+          modo_integracao: "linkado",
+        } as any)
         .eq("id", selectedObra.id);
       if (linkErr) throw linkErr;
 
@@ -226,6 +229,7 @@ export function ObraFormDialog({ open, onOpenChange, onSaved }: ObraFormDialogPr
         prazo_dias: Number(form.prazo_dias) || 0,
         status: form.status,
         percentual_andamento: 0,
+        modo_integracao: "standalone",
         periodo_medicao: form.periodo_medicao || null,
         prazo_pagamento: form.prazo_pagamento || null,
         municipio: form.municipio || null,
@@ -284,10 +288,14 @@ export function ObraFormDialog({ open, onOpenChange, onSaved }: ObraFormDialogPr
               .eq("id", projectId);
           }
           // 3) Vincular obra portfolio ao projeto
-          await supabase
+          const { error: linkErr } = await supabase
             .from("obras_portfolio")
-            .update({ obramap_project_id: projectId } as any)
+            .update({
+              obramap_project_id: projectId,
+              modo_integracao: "linkado",
+            } as any)
             .eq("id", obra.id);
+          if (linkErr) throw linkErr;
           await setCurrentProject(projectId);
         } else {
           toast.warning("Obra cadastrada no portfólio, mas não foi possível criar o projeto operacional. Tente vincular manualmente.");
