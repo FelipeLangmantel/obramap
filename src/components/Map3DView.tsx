@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Upload, RotateCcw, Move3D, X, ChevronDown, ChevronRight, Save, Loader2, Home, AlertTriangle, Target, Layers, Camera, MousePointerClick, ScanSearch, RefreshCw, Eye, Boxes, Sparkles } from "lucide-react";
+import { Upload, RotateCcw, Move3D, X, ChevronDown, ChevronRight, Save, Loader2, Home, AlertTriangle, Target, Layers, Camera, MousePointerClick, ScanSearch, RefreshCw, Eye, EyeOff, Boxes, Sparkles } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -45,6 +45,13 @@ interface ModelData {
   type: "gltf" | "obj" | "ifc";
   mtlUrl?: string;
 }
+
+type SupplementalGlbPart = {
+  id: string;
+  name: string;
+  url: string;
+  visible: boolean;
+};
 
 interface HouseMarker {
   id: number;
@@ -246,6 +253,34 @@ function GLTFModel({ url, onLoaded, onSceneReady, onMeshClick, selectedMeshKey }
         if (!onMeshClick) return;
         e.stopPropagation();
         if (e.object) onMeshClick(e.object);
+      }}
+    />
+  );
+}
+
+function SupplementalGLTFPart({
+  part,
+  onMeshClick,
+}: {
+  part: SupplementalGlbPart;
+  onMeshClick?: (part: SupplementalGlbPart, mesh: THREE.Object3D) => void;
+}) {
+  const { scene } = useGLTF(part.url);
+
+  useEffect(() => {
+    scene.traverse((child) => {
+      if (!(child as THREE.Mesh).isMesh) return;
+      child.userData.obramapSupplementalPart = true;
+      child.userData.obramapSupplementalPartId = part.id;
+    });
+  }, [part.id, scene]);
+
+  return (
+    <primitive
+      object={scene}
+      onClick={(e: any) => {
+        e.stopPropagation();
+        if (e.object) onMeshClick?.(part, e.object);
       }}
     />
   );
@@ -629,6 +664,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   resetTrigger, fitTrigger, savedPosition, savedTarget, onCameraChange, sceneReady, onModelLoaded, onSceneReady,
   onMeshClick, selectedMeshKey, projectId, companyId, ifcRealModeActive, ifcHouseOptions, ifcServiceOptions,
   cameraMode, walkInspectOpen, onWalkExit, onWalkInspectClose, onWalkMeshInspect,
+  supplementalGlbParts, onSupplementalMeshClick,
 }: {
   modelData: ModelData | null; markers: HouseMarker[]; selectedMarkerId: number | null;
   onMarkerClick: (m: HouseMarker) => void; customLegendItems: any[];
@@ -649,6 +685,8 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   onWalkExit: () => void;
   onWalkInspectClose: () => void;
   onWalkMeshInspect?: (mesh: THREE.Mesh) => void;
+  supplementalGlbParts: SupplementalGlbPart[];
+  onSupplementalMeshClick?: (part: SupplementalGlbPart, mesh: THREE.Object3D) => void;
 }) {
   return (
     <>
@@ -679,6 +717,12 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
           )}
         </Suspense>
       )}
+
+      {supplementalGlbParts.filter((part) => part.visible).map((part) => (
+        <Suspense key={part.id} fallback={null}>
+          <SupplementalGLTFPart part={part} onMeshClick={onSupplementalMeshClick} />
+        </Suspense>
+      ))}
 
       {markers.map((m) => (
         <HouseMarker3D key={m.id} marker={m} onClick={() => onMarkerClick(m)}
@@ -897,6 +941,7 @@ export function Map3DView() {
   const canDelete3D = canDelete3DAssets(profile);
   
   const [modelData, setModelData] = useState<ModelData | null>(null);
+  const [supplementalGlbParts, setSupplementalGlbParts] = useState<SupplementalGlbPart[]>([]);
   const [markers, setMarkers] = useState<HouseMarker[]>([]);
   const [selectedMarker, setSelectedMarker] = useState<HouseMarker | null>(null);
   const [photoHistoryOpen, setPhotoHistoryOpen] = useState(false);
@@ -1057,8 +1102,63 @@ export function Map3DView() {
   }, [meshReviewOverrides, sanitizeGlbMeshForCurrentModel]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const supplementalGlbInputRef = useRef<HTMLInputElement>(null);
   const mtlInputRef = useRef<HTMLInputElement>(null);
   const [pendingObjFile, setPendingObjFile] = useState<File | null>(null);
+  const supplementalGlbPartsRef = useRef<SupplementalGlbPart[]>([]);
+
+  useEffect(() => {
+    supplementalGlbPartsRef.current = supplementalGlbParts;
+  }, [supplementalGlbParts]);
+
+  useEffect(() => {
+    return () => {
+      supplementalGlbPartsRef.current.forEach((part) => URL.revokeObjectURL(part.url));
+      supplementalGlbPartsRef.current = [];
+    };
+  }, []);
+
+  const clearSupplementalGlbParts = useCallback((showToast = false) => {
+    setSupplementalGlbParts((current) => {
+      if (current.length === 0) return current;
+      current.forEach((part) => URL.revokeObjectURL(part.url));
+      if (showToast) {
+        toast.info("Partes complementares removidas da sessao.");
+      }
+      return [];
+    });
+  }, []);
+
+  const handleSupplementalGlbUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".glb")) {
+      toast.error("Selecione um arquivo .glb para adicionar como parte complementar.");
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    const id = `supplemental-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setSupplementalGlbParts((current) => [
+      ...current,
+      { id, name: file.name, url, visible: true },
+    ]);
+    toast.success("Parte GLB complementar adicionada apenas nesta sessao.");
+  }, []);
+
+  const toggleSupplementalGlbPart = useCallback((id: string) => {
+    setSupplementalGlbParts((current) =>
+      current.map((part) => part.id === id ? { ...part, visible: !part.visible } : part),
+    );
+  }, []);
+
+  const removeSupplementalGlbPart = useCallback((id: string) => {
+    setSupplementalGlbParts((current) => {
+      const part = current.find((item) => item.id === id);
+      if (part) URL.revokeObjectURL(part.url);
+      return current.filter((item) => item.id !== id);
+    });
+  }, []);
 
   const handleCameraChange = useCallback((p: [number, number, number], t: [number, number, number]) => {
     setPendingPos(p); setPendingTgt(t);
@@ -1140,6 +1240,10 @@ export function Map3DView() {
     if (!reviewMode) return;
     if (!(obj as THREE.Mesh).isMesh) return;
     const mesh = obj as THREE.Mesh;
+    if (mesh.userData?.obramapSupplementalPart) {
+      toast.info("Parte complementar visual: vinculos serao suportados em etapa futura.");
+      return;
+    }
     const layerKey = getMeshLayerKey(mesh);
     if (import.meta.env.DEV) {
       const matchingKeys: string[] = [];
@@ -1196,7 +1300,17 @@ export function Map3DView() {
     setSelectedMeshKey(layerKey);
   }, [meshHooks.meshMap, reviewMode, sceneObj, smartLinkCandidates, smartLinkIsolationFilter, smartLinkPreviewEnabled, smartLinkSelectedKeys]);
 
+  const handleSupplementalMeshClick = useCallback(() => {
+    if (reviewMode || assignMode) {
+      toast.info("Parte complementar visual: vinculos serao suportados em etapa futura.");
+    }
+  }, [assignMode, reviewMode]);
+
   const handleWalkMeshInspect = useCallback((mesh: THREE.Mesh) => {
+    if (mesh.userData?.obramapSupplementalPart) {
+      toast.info("Parte complementar visual: vinculos serao suportados em etapa futura.");
+      return;
+    }
     const layerKey = getMeshLayerKey(mesh);
     const meshData = getCurrentMeshRecord(layerKey);
     console.log("[Walk Inspect Check] mesh inspected", {
@@ -2828,6 +2942,9 @@ export function Map3DView() {
     try {
       const url = await uploadFile(file, 'gltf');
       if (!url) return;
+      if (supplementalGlbPartsRef.current.length > 0) {
+        clearSupplementalGlbParts(true);
+      }
       setTrustedGlbLinkKeys(new Set());
       setGlbLinkScope(mode === "new" ? "fresh" : "preserve");
       let clearedGlbRecords = 0;
@@ -2885,7 +3002,10 @@ export function Map3DView() {
       setIsLoading(true); setSceneReady(false);
       try {
         const url = await uploadFile(file, 'ifc');
-        if (url) { setModelData({ url, type: "ifc" }); setHasChanges(true); toast.success("Modelo IFC carregado!"); }
+        if (url) {
+          if (supplementalGlbPartsRef.current.length > 0) clearSupplementalGlbParts(true);
+          setModelData({ url, type: "ifc" }); setHasChanges(true); toast.success("Modelo IFC carregado!");
+        }
       } finally { setIsLoading(false); }
     } else if (name.endsWith(".obj")) {
       setPendingObjFile(file); toast.info("OBJ selecionado. Selecione MTL ou 'Sem MTL'");
@@ -2900,7 +3020,10 @@ export function Map3DView() {
     try {
       const objUrl = await uploadFile(pendingObjFile, 'obj');
       const mtlUrl = file ? await uploadFile(file, 'mtl') : undefined;
-      if (objUrl) { setModelData({ url: objUrl, type: "obj", mtlUrl }); setHasChanges(true); toast.success("Modelo OBJ carregado!"); }
+      if (objUrl) {
+        if (supplementalGlbPartsRef.current.length > 0) clearSupplementalGlbParts(true);
+        setModelData({ url: objUrl, type: "obj", mtlUrl }); setHasChanges(true); toast.success("Modelo OBJ carregado!");
+      }
     } finally { setPendingObjFile(null); setIsLoading(false); if (mtlInputRef.current) mtlInputRef.current.value = ''; }
   };
 
@@ -2910,7 +3033,10 @@ export function Map3DView() {
     setIsLoading(true); setSceneReady(false);
     try {
       const url = await uploadFile(pendingObjFile, 'obj');
-      if (url) { setModelData({ url, type: "obj" }); setHasChanges(true); toast.success("OBJ carregado sem materiais"); }
+      if (url) {
+        if (supplementalGlbPartsRef.current.length > 0) clearSupplementalGlbParts(true);
+        setModelData({ url, type: "obj" }); setHasChanges(true); toast.success("OBJ carregado sem materiais");
+      }
     } finally { setPendingObjFile(null); setIsLoading(false); }
   };
 
@@ -2920,6 +3046,7 @@ export function Map3DView() {
     setModelData(null); setMarkers([]); setSelectedMarker(null); setPendingObjFile(null);
     setSelectedMeshKey(null); setIsolatedKeys(null); setPickedMesh(null); setWalkInspection(null);
     setMeshReviewOverrides(new Map()); setTrustedGlbLinkKeys(new Set()); setGlbLinkScope("fresh");
+    clearSupplementalGlbParts(false);
     clearSmartLinkPreview("map reset");
     setCameraMode("orbit");
     setSavedPos(null); setSavedTgt(null); setPendingPos(null); setPendingTgt(null);
@@ -2937,6 +3064,21 @@ export function Map3DView() {
                 <Input ref={fileInputRef} type="file" accept=".gltf,.glb,.obj,.ifc" onChange={handleFileUpload} className="hidden" disabled={isLoading} />
                 <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isLoading}>
                   {isLoading ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Upload className="h-4 w-4 mr-1.5" />}Importar 3D
+                </Button>
+              </>
+            )}
+            {canManage3D && modelData && (
+              <>
+                <Input ref={supplementalGlbInputRef} type="file" accept=".glb" onChange={handleSupplementalGlbUpload} className="hidden" disabled={isLoading} />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => supplementalGlbInputRef.current?.click()}
+                  disabled={isLoading}
+                  title="Adicionar GLB complementar apenas visual nesta sessao"
+                >
+                  <Upload className="h-4 w-4 mr-1.5" />
+                  Adicionar parte GLB
                 </Button>
               </>
             )}
@@ -3101,6 +3243,52 @@ export function Map3DView() {
               <strong>Arrastar</strong> rotacionar • <strong>Scroll</strong> zoom • <strong>Direito</strong> mover • <strong>Duplo clique</strong> centralizar
             </span>
           </div>
+          {supplementalGlbParts.length > 0 && (
+            <div className="mt-3 rounded-md border border-dashed border-border bg-muted/30 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <Boxes className="h-4 w-4" />
+                    Partes GLB complementares
+                    <Badge variant="secondary">{supplementalGlbParts.length}</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Partes GLB complementares sao apenas visuais nesta versao. Elas nao participam de vinculos, SmartLink ou 3D Real.
+                  </p>
+                </div>
+                <Button type="button" variant="ghost" size="sm" onClick={() => clearSupplementalGlbParts(true)}>
+                  Remover todas
+                </Button>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {supplementalGlbParts.map((part) => (
+                  <div key={part.id} className="flex items-center gap-2 rounded-md border bg-background px-2 py-1">
+                    <span className="max-w-[220px] truncate text-xs" title={part.name}>{part.name}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2"
+                      onClick={() => toggleSupplementalGlbPart(part.id)}
+                    >
+                      {part.visible ? <EyeOff className="h-3.5 w-3.5 mr-1" /> : <Eye className="h-3.5 w-3.5 mr-1" />}
+                      {part.visible ? "Ocultar" : "Mostrar"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      title="Remover parte complementar"
+                      onClick={() => removeSupplementalGlbPart(part.id)}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -3136,7 +3324,9 @@ export function Map3DView() {
               walkInspectOpen={!!walkInspection}
               onWalkExit={exitWalkMode}
               onWalkInspectClose={() => setWalkInspection(null)}
-              onWalkMeshInspect={handleWalkMeshInspect} />
+              onWalkMeshInspect={handleWalkMeshInspect}
+              supplementalGlbParts={viewMode === "real" ? [] : supplementalGlbParts}
+              onSupplementalMeshClick={handleSupplementalMeshClick} />
           </Canvas>
         </div>
         <div id="map3d-ifc-panel-slot" className="pointer-events-none absolute bottom-3 left-0 right-3 top-3 z-40 overflow-hidden" />
