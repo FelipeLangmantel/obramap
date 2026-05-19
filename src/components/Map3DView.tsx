@@ -51,6 +51,10 @@ type SupplementalGlbPart = {
   name: string;
   url: string;
   visible: boolean;
+  persisted: boolean;
+  fileName?: string | null;
+  storagePath?: string | null;
+  partOrder?: number;
 };
 
 interface HouseMarker {
@@ -942,7 +946,7 @@ function HouseWalkInspectPanel({
 export function Map3DView() {
   const { currentProject, refreshHousesFromDB } = useConstruction();
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const projectId = currentProject?.id;
   const companyId = (currentProject as any)?.company_id || profile?.company_id || null;
   const canManage3D = canManage3DMap(profile);
@@ -1122,40 +1126,149 @@ export function Map3DView() {
 
   useEffect(() => {
     return () => {
-      supplementalGlbPartsRef.current.forEach((part) => URL.revokeObjectURL(part.url));
+      supplementalGlbPartsRef.current
+        .filter((part) => !part.persisted)
+        .forEach((part) => URL.revokeObjectURL(part.url));
       supplementalGlbPartsRef.current = [];
       supplementalGlbScenesRef.current.clear();
     };
   }, []);
 
-  const clearSupplementalGlbParts = useCallback((showToast = false) => {
+  const clearSupplementalGlbPartsFromState = useCallback(() => {
     setSupplementalGlbParts((current) => {
       if (current.length === 0) return current;
-      current.forEach((part) => URL.revokeObjectURL(part.url));
+      current
+        .filter((part) => !part.persisted)
+        .forEach((part) => URL.revokeObjectURL(part.url));
       supplementalGlbScenesRef.current.clear();
-      if (showToast) {
-        toast.info("Partes complementares removidas da sessao.");
-      }
       return [];
     });
   }, []);
 
-  const handleSupplementalGlbUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+  const toSupplementalGlbPart = useCallback((row: any): SupplementalGlbPart => ({
+    id: row.id,
+    name: row.name || row.file_name || "Parte GLB",
+    url: row.public_url,
+    visible: true,
+    persisted: true,
+    fileName: row.file_name ?? null,
+    storagePath: row.storage_path ?? null,
+    partOrder: row.part_order ?? 0,
+  }), []);
+
+  const loadSupplementalGlbParts = useCallback(async () => {
+    if (!projectId) {
+      clearSupplementalGlbPartsFromState();
+      return;
+    }
+    const { data, error } = await supabase
+      .from("project_model_parts" as any)
+      .select("id, name, file_name, storage_path, public_url, part_order, is_active")
+      .eq("project_id", projectId)
+      .eq("is_active", true)
+      .order("part_order", { ascending: true })
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error("[GLB Parts] load error", error);
+      toast.error("Nao foi possivel carregar partes GLB complementares.");
+      return;
+    }
+
+    setSupplementalGlbParts((current) => {
+      current
+        .filter((part) => !part.persisted)
+        .forEach((part) => URL.revokeObjectURL(part.url));
+      const currentVisibility = new Map(current.map((part) => [part.id, part.visible]));
+      supplementalGlbScenesRef.current.clear();
+      return ((data || []) as any[]).map((row) => {
+        const part = toSupplementalGlbPart(row);
+        return { ...part, visible: currentVisibility.get(part.id) ?? true };
+      });
+    });
+  }, [clearSupplementalGlbPartsFromState, projectId, toSupplementalGlbPart]);
+
+  useEffect(() => {
+    void loadSupplementalGlbParts();
+  }, [loadSupplementalGlbParts]);
+
+  const uploadFileTo3DStorage = async (file: File, folder: string): Promise<{ publicUrl: string; storagePath: string } | null> => {
+    if (!projectId) return null;
+    const companyId = profile?.company_id;
+    if (!companyId) { toast.error("Empresa nao identificada para upload."); return null; }
+    const ext = file.name.split('.').pop();
+    const safeName = file.name
+      .replace(/\.[^/.]+$/, "")
+      .replace(/[^a-zA-Z0-9-_]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80) || "modelo";
+    const path = `${companyId}/${projectId}/${folder}/${Date.now()}-${safeName}.${ext}`;
+    const { data, error } = await supabase.storage.from('3d-models').upload(path, file, { cacheControl: '3600', upsert: true });
+    if (error) { toast.error(`Upload falhou: ${error.message}`); return null; }
+    return {
+      publicUrl: supabase.storage.from('3d-models').getPublicUrl(data.path).data.publicUrl,
+      storagePath: data.path,
+    };
+  };
+
+  const handleSupplementalGlbUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
+    if (!canManage3D) {
+      toast.error("Sem permissao para adicionar parte GLB.");
+      return;
+    }
     if (!file.name.toLowerCase().endsWith(".glb")) {
       toast.error("Selecione um arquivo .glb para adicionar como parte complementar.");
       return;
     }
-    const url = URL.createObjectURL(file);
-    const id = `supplemental-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    setSupplementalGlbParts((current) => [
-      ...current,
-      { id, name: file.name, url, visible: true },
-    ]);
-    toast.success("Parte GLB complementar adicionada apenas nesta sessao.");
-  }, []);
+    if (!projectId || !companyId) {
+      toast.error("Projeto ou empresa nao identificados.");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const upload = await uploadFileTo3DStorage(file, "gltf-parts");
+      if (!upload) return;
+
+      const nextOrder = supplementalGlbPartsRef.current.length > 0
+        ? Math.max(...supplementalGlbPartsRef.current.map((part) => part.partOrder ?? 0)) + 1
+        : 0;
+      const displayName = file.name.replace(/\.[^/.]+$/, "") || file.name;
+
+      const { data, error } = await supabase
+        .from("project_model_parts" as any)
+        .insert({
+          project_id: projectId,
+          company_id: companyId,
+          name: displayName,
+          file_name: file.name,
+          storage_path: upload.storagePath,
+          public_url: upload.publicUrl,
+          model_type: "glb",
+          part_order: nextOrder,
+          is_active: true,
+          is_primary: false,
+          metadata: { source: "map3d_supplemental_part" },
+          created_by: user?.id ?? null,
+        })
+        .select("*")
+        .single();
+
+      if (error) throw error;
+
+      const part = toSupplementalGlbPart(data);
+      setSupplementalGlbParts((current) => [...current, part]);
+      toast.success("Parte GLB complementar salva e carregada.");
+    } catch (error) {
+      console.error("[GLB Parts] add error", error);
+      toast.error("Erro ao salvar parte GLB complementar.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [canManage3D, companyId, projectId, toSupplementalGlbPart, user?.id]);
 
   const toggleSupplementalGlbPart = useCallback((id: string) => {
     setSupplementalGlbParts((current) =>
@@ -1163,13 +1276,52 @@ export function Map3DView() {
     );
   }, []);
 
-  const removeSupplementalGlbPart = useCallback((id: string) => {
-    setSupplementalGlbParts((current) => {
-      const part = current.find((item) => item.id === id);
-      if (part) URL.revokeObjectURL(part.url);
-      supplementalGlbScenesRef.current.delete(id);
-      return current.filter((item) => item.id !== id);
-    });
+  const removeSupplementalGlbPart = useCallback(async (id: string) => {
+    const part = supplementalGlbPartsRef.current.find((item) => item.id === id);
+    if (!part) return;
+
+    if (part.persisted) {
+      const { error } = await supabase
+        .from("project_model_parts" as any)
+        .update({ is_active: false })
+        .eq("id", id);
+      if (error) {
+        console.error("[GLB Parts] remove error", error);
+        toast.error("Erro ao remover parte GLB complementar.");
+        return;
+      }
+    } else {
+      URL.revokeObjectURL(part.url);
+    }
+
+    supplementalGlbScenesRef.current.delete(id);
+    setSupplementalGlbParts((current) => current.filter((item) => item.id !== id));
+    toast.success("Parte GLB complementar removida.");
+  }, []);
+
+  const removeAllSupplementalGlbParts = useCallback(async () => {
+    const parts = supplementalGlbPartsRef.current;
+    if (parts.length === 0) return;
+
+    const persistedIds = parts.filter((part) => part.persisted).map((part) => part.id);
+    if (persistedIds.length > 0) {
+      const { error } = await supabase
+        .from("project_model_parts" as any)
+        .update({ is_active: false })
+        .in("id", persistedIds);
+      if (error) {
+        console.error("[GLB Parts] remove all error", error);
+        toast.error("Erro ao remover partes GLB complementares.");
+        return;
+      }
+    }
+
+    parts
+      .filter((part) => !part.persisted)
+      .forEach((part) => URL.revokeObjectURL(part.url));
+    supplementalGlbScenesRef.current.clear();
+    setSupplementalGlbParts([]);
+    toast.success("Partes GLB complementares removidas.");
   }, []);
 
   const handleSupplementalSceneReady = useCallback((part: SupplementalGlbPart, scene: THREE.Object3D) => {
@@ -3052,15 +3204,8 @@ export function Map3DView() {
   };
 
   const uploadFile = async (file: File, folder: string): Promise<string | null> => {
-    if (!projectId) return null;
-    const companyId = profile?.company_id;
-    if (!companyId) { toast.error("Empresa não identificada para upload."); return null; }
-    const ext = file.name.split('.').pop();
-    // RLS exige que a primeira pasta seja o company_id
-    const path = `${companyId}/${projectId}/${folder}/${Date.now()}.${ext}`;
-    const { data, error } = await supabase.storage.from('3d-models').upload(path, file, { cacheControl: '3600', upsert: true });
-    if (error) { toast.error(`Upload falhou: ${error.message}`); return null; }
-    return supabase.storage.from('3d-models').getPublicUrl(data.path).data.publicUrl;
+    const uploaded = await uploadFileTo3DStorage(file, folder);
+    return uploaded?.publicUrl ?? null;
   };
 
   const importGltfFile = async (
@@ -3080,7 +3225,7 @@ export function Map3DView() {
       const url = await uploadFile(file, 'gltf');
       if (!url) return;
       if (supplementalGlbPartsRef.current.length > 0) {
-        clearSupplementalGlbParts(true);
+        toast.info("As partes GLB complementares permanecem salvas e podem ser removidas separadamente.");
       }
       setTrustedGlbLinkKeys(new Set());
       setGlbLinkScope(mode === "new" ? "fresh" : "preserve");
@@ -3140,7 +3285,7 @@ export function Map3DView() {
       try {
         const url = await uploadFile(file, 'ifc');
         if (url) {
-          if (supplementalGlbPartsRef.current.length > 0) clearSupplementalGlbParts(true);
+          if (supplementalGlbPartsRef.current.length > 0) toast.info("As partes GLB complementares permanecem salvas e podem ser removidas separadamente.");
           setModelData({ url, type: "ifc" }); setHasChanges(true); toast.success("Modelo IFC carregado!");
         }
       } finally { setIsLoading(false); }
@@ -3158,7 +3303,7 @@ export function Map3DView() {
       const objUrl = await uploadFile(pendingObjFile, 'obj');
       const mtlUrl = file ? await uploadFile(file, 'mtl') : undefined;
       if (objUrl) {
-        if (supplementalGlbPartsRef.current.length > 0) clearSupplementalGlbParts(true);
+        if (supplementalGlbPartsRef.current.length > 0) toast.info("As partes GLB complementares permanecem salvas e podem ser removidas separadamente.");
         setModelData({ url: objUrl, type: "obj", mtlUrl }); setHasChanges(true); toast.success("Modelo OBJ carregado!");
       }
     } finally { setPendingObjFile(null); setIsLoading(false); if (mtlInputRef.current) mtlInputRef.current.value = ''; }
@@ -3171,7 +3316,7 @@ export function Map3DView() {
     try {
       const url = await uploadFile(pendingObjFile, 'obj');
       if (url) {
-        if (supplementalGlbPartsRef.current.length > 0) clearSupplementalGlbParts(true);
+        if (supplementalGlbPartsRef.current.length > 0) toast.info("As partes GLB complementares permanecem salvas e podem ser removidas separadamente.");
         setModelData({ url, type: "obj" }); setHasChanges(true); toast.success("OBJ carregado sem materiais");
       }
     } finally { setPendingObjFile(null); setIsLoading(false); }
@@ -3183,7 +3328,6 @@ export function Map3DView() {
     setModelData(null); setMarkers([]); setSelectedMarker(null); setPendingObjFile(null);
     setSelectedMeshKey(null); setIsolatedKeys(null); setPickedMesh(null); setWalkInspection(null);
     setMeshReviewOverrides(new Map()); setTrustedGlbLinkKeys(new Set()); setGlbLinkScope("fresh");
-    clearSupplementalGlbParts(false);
     clearSmartLinkPreview("map reset");
     setCameraMode("orbit");
     setSavedPos(null); setSavedTgt(null); setPendingPos(null); setPendingTgt(null);
@@ -3390,14 +3534,14 @@ export function Map3DView() {
                     <Badge variant="secondary">{supplementalGlbParts.length}</Badge>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Partes GLB complementares sao apenas visuais nesta versao. Elas nao participam de vinculos, SmartLink ou 3D Real.
+                    Partes GLB complementares sao persistidas para visualizacao. Vinculos, SmartLink e 3D Real por partes serao liberados em etapa futura.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
                   <Button type="button" variant="outline" size="sm" onClick={auditGlbMeshParts}>
                     Auditar meshes
                   </Button>
-                  <Button type="button" variant="ghost" size="sm" onClick={() => clearSupplementalGlbParts(true)}>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => void removeAllSupplementalGlbParts()}>
                     Remover todas
                   </Button>
                 </div>
@@ -3406,6 +3550,9 @@ export function Map3DView() {
                 {supplementalGlbParts.map((part) => (
                   <div key={part.id} className="flex items-center gap-2 rounded-md border bg-background px-2 py-1">
                     <span className="max-w-[220px] truncate text-xs" title={part.name}>{part.name}</span>
+                    <Badge variant={part.persisted ? "secondary" : "outline"} className="h-5 text-[10px]">
+                      {part.persisted ? "Persistida" : "Sessao"}
+                    </Badge>
                     <Button
                       type="button"
                       variant="ghost"
@@ -3422,7 +3569,7 @@ export function Map3DView() {
                       size="icon"
                       className="h-7 w-7"
                       title="Remover parte complementar"
-                      onClick={() => removeSupplementalGlbPart(part.id)}
+                      onClick={() => void removeSupplementalGlbPart(part.id)}
                     >
                       <X className="h-3.5 w-3.5" />
                     </Button>
@@ -3825,7 +3972,7 @@ export function Map3DView() {
           projectId={projectId ?? null}
           houseLabel={walkHistoryHouseNumber != null ? `Casa ${String(walkHistoryHouseNumber).padStart(2, "0")}` : undefined}
         />
-        {!modelData && markers.length === 0 && !isLoading && (
+        {!modelData && markers.length === 0 && supplementalGlbParts.length === 0 && !isLoading && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="text-center space-y-4 p-8 bg-background/80 rounded-xl border border-border">
               <Move3D className="h-16 w-16 mx-auto text-muted-foreground" />
