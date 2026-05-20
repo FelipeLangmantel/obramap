@@ -57,6 +57,13 @@ type SupplementalGlbPart = {
   partOrder?: number;
 };
 
+type GlbMeshInventoryInput = {
+  layer_key: string;
+  mesh_name: string;
+  material_name: string;
+  detected_house_number: number | null;
+};
+
 interface HouseMarker {
   id: number;
   houseNumber: number;
@@ -69,6 +76,14 @@ function getMeshLayerKey(mesh: THREE.Mesh): string {
   return typeof mesh.userData?.obramapLayerKey === "string" && mesh.userData.obramapLayerKey
     ? mesh.userData.obramapLayerKey
     : mesh.uuid;
+}
+
+function getLocalGlbLayerKey(meshName: string, occurrence: number): string {
+  return `glb:${meshName || "mesh"}:${occurrence}`;
+}
+
+function getSupplementalPartLayerKey(partId: string, localLayerKey: string): string {
+  return `glbpart:${partId}:${localLayerKey}`;
 }
 
 const GLB_REAL_SYNC_WATCH_KEYS = [
@@ -266,21 +281,45 @@ function SupplementalGLTFPart({
   part,
   onMeshClick,
   onSceneReady,
+  onInventoryReady,
 }: {
   part: SupplementalGlbPart;
   onMeshClick?: (part: SupplementalGlbPart, mesh: THREE.Object3D) => void;
   onSceneReady?: (part: SupplementalGlbPart, scene: THREE.Object3D) => void;
+  onInventoryReady?: (part: SupplementalGlbPart, meshes: GlbMeshInventoryInput[]) => void;
 }) {
   const { scene } = useGLTF(part.url);
 
   useEffect(() => {
+    const nameCounts = new Map<string, number>();
+    const meshesToUpsert: GlbMeshInventoryInput[] = [];
     scene.traverse((child) => {
       if (!(child as THREE.Mesh).isMesh) return;
-      child.userData.obramapSupplementalPart = true;
-      child.userData.obramapSupplementalPartId = part.id;
+      const mesh = child as THREE.Mesh;
+      const meshName = mesh.name || "mesh";
+      const occurrence = nameCounts.get(meshName) ?? 0;
+      nameCounts.set(meshName, occurrence + 1);
+      const localLayerKey = getLocalGlbLayerKey(meshName, occurrence);
+      const partLayerKey = getSupplementalPartLayerKey(part.id, localLayerKey);
+      mesh.userData.obramapSupplementalPart = true;
+      mesh.userData.obramapSupplementalPartId = part.id;
+      mesh.userData.obramapPartLocalLayerKey = localLayerKey;
+      mesh.userData.obramapPartLayerKey = partLayerKey;
+      if (part.persisted) {
+        mesh.userData.obramapLayerKey = partLayerKey;
+        meshesToUpsert.push({
+          layer_key: partLayerKey,
+          mesh_name: meshName,
+          material_name: getMeshMaterialName(mesh),
+          detected_house_number: parseHouseNumberFromMesh(meshName),
+        });
+      } else {
+        delete mesh.userData.obramapLayerKey;
+      }
     });
     onSceneReady?.(part, scene);
-  }, [onSceneReady, part, scene]);
+    if (part.persisted) onInventoryReady?.(part, meshesToUpsert);
+  }, [onInventoryReady, onSceneReady, part, scene]);
 
   return (
     <primitive
@@ -671,7 +710,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   resetTrigger, fitTrigger, savedPosition, savedTarget, onCameraChange, sceneReady, onModelLoaded, onSceneReady,
   onMeshClick, selectedMeshKey, projectId, companyId, ifcRealModeActive, ifcHouseOptions, ifcServiceOptions,
   cameraMode, walkInspectOpen, onWalkExit, onWalkInspectClose, onWalkMeshInspect,
-  supplementalGlbParts, onSupplementalMeshClick, onSupplementalSceneReady,
+  supplementalGlbParts, onSupplementalMeshClick, onSupplementalSceneReady, onSupplementalInventoryReady,
 }: {
   modelData: ModelData | null; markers: HouseMarker[]; selectedMarkerId: number | null;
   onMarkerClick: (m: HouseMarker) => void; customLegendItems: any[];
@@ -695,6 +734,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   supplementalGlbParts: SupplementalGlbPart[];
   onSupplementalMeshClick?: (part: SupplementalGlbPart, mesh: THREE.Object3D) => void;
   onSupplementalSceneReady?: (part: SupplementalGlbPart, scene: THREE.Object3D) => void;
+  onSupplementalInventoryReady?: (part: SupplementalGlbPart, meshes: GlbMeshInventoryInput[]) => void;
 }) {
   return (
     <>
@@ -732,6 +772,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
             part={part}
             onMeshClick={onSupplementalMeshClick}
             onSceneReady={onSupplementalSceneReady}
+            onInventoryReady={onSupplementalInventoryReady}
           />
         </Suspense>
       ))}
@@ -1063,6 +1104,7 @@ export function Map3DView() {
 
   const sanitizeGlbMeshForCurrentModel = useCallback((mesh: ProjectModelMesh | null | undefined): ProjectModelMesh | null => {
     if (!mesh) return null;
+    if (mesh.layer_key.startsWith("glbpart:")) return mesh;
     if (modelData?.type !== "gltf" || glbLinkScope === "preserve" || trustedGlbLinkKeys.has(mesh.layer_key)) return mesh;
     const hasPossiblyStaleState = mesh.assigned_house_number != null
       || mesh.service_macro_id != null
@@ -1119,6 +1161,7 @@ export function Map3DView() {
   const [pendingObjFile, setPendingObjFile] = useState<File | null>(null);
   const supplementalGlbPartsRef = useRef<SupplementalGlbPart[]>([]);
   const supplementalGlbScenesRef = useRef<Map<string, THREE.Object3D>>(new Map());
+  const supplementalInventoriedPartIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     supplementalGlbPartsRef.current = supplementalGlbParts;
@@ -1131,6 +1174,7 @@ export function Map3DView() {
         .forEach((part) => URL.revokeObjectURL(part.url));
       supplementalGlbPartsRef.current = [];
       supplementalGlbScenesRef.current.clear();
+      supplementalInventoriedPartIdsRef.current.clear();
     };
   }, []);
 
@@ -1141,6 +1185,7 @@ export function Map3DView() {
         .filter((part) => !part.persisted)
         .forEach((part) => URL.revokeObjectURL(part.url));
       supplementalGlbScenesRef.current.clear();
+      supplementalInventoriedPartIdsRef.current.clear();
       return [];
     });
   }, []);
@@ -1181,6 +1226,7 @@ export function Map3DView() {
         .forEach((part) => URL.revokeObjectURL(part.url));
       const currentVisibility = new Map(current.map((part) => [part.id, part.visible]));
       supplementalGlbScenesRef.current.clear();
+      supplementalInventoriedPartIdsRef.current.clear();
       return ((data || []) as any[]).map((row) => {
         const part = toSupplementalGlbPart(row);
         return { ...part, visible: currentVisibility.get(part.id) ?? true };
@@ -1295,6 +1341,7 @@ export function Map3DView() {
     }
 
     supplementalGlbScenesRef.current.delete(id);
+    supplementalInventoriedPartIdsRef.current.delete(id);
     setSupplementalGlbParts((current) => current.filter((item) => item.id !== id));
     toast.success("Parte GLB complementar removida.");
   }, []);
@@ -1320,6 +1367,7 @@ export function Map3DView() {
       .filter((part) => !part.persisted)
       .forEach((part) => URL.revokeObjectURL(part.url));
     supplementalGlbScenesRef.current.clear();
+    supplementalInventoriedPartIdsRef.current.clear();
     setSupplementalGlbParts([]);
     toast.success("Partes GLB complementares removidas.");
   }, []);
@@ -1327,6 +1375,17 @@ export function Map3DView() {
   const handleSupplementalSceneReady = useCallback((part: SupplementalGlbPart, scene: THREE.Object3D) => {
     supplementalGlbScenesRef.current.set(part.id, scene);
   }, []);
+
+  const handleSupplementalInventoryReady = useCallback((part: SupplementalGlbPart, meshes: GlbMeshInventoryInput[]) => {
+    if (!part.persisted || meshes.length === 0) return;
+    if (supplementalInventoriedPartIdsRef.current.has(part.id)) return;
+    supplementalInventoriedPartIdsRef.current.add(part.id);
+    void meshHooks.bulkUpsertMeshes(meshes).catch((error) => {
+      supplementalInventoriedPartIdsRef.current.delete(part.id);
+      console.error("[GLB Parts] inventory error", error);
+      toast.error("Erro ao inventariar parte GLB complementar.");
+    });
+  }, [meshHooks.bulkUpsertMeshes]);
 
   const auditGlbMeshParts = useCallback(() => {
     type MeshAuditRow = {
@@ -1437,7 +1496,8 @@ export function Map3DView() {
           materialName: row.materialName,
         })),
       })),
-      warning: "Conflito de mesh entre partes nao afeta esta versao visual, mas impede uso seguro de vinculos/3D Real sem prefixo por parte.",
+      productiveKeyPolicy: "Partes persistidas usam glbpart:<part_id>:<localLayerKey>, eliminando colisao produtiva para vinculos manuais e 3D Real basico.",
+      warning: "Conflitos locais ainda importam para SmartLink por partes; ele permanece bloqueado ate uma etapa futura.",
     };
 
     console.log("[GLB Parts Mesh Audit]", auditResult);
@@ -1483,7 +1543,7 @@ export function Map3DView() {
       const meshName = mesh.name || "mesh";
       const occurrence = nameCounts.get(meshName) ?? 0;
       nameCounts.set(meshName, occurrence + 1);
-      const layerKey = `glb:${meshName}:${occurrence}`;
+      const layerKey = getLocalGlbLayerKey(meshName, occurrence);
       mesh.userData.obramapLayerKey = layerKey;
       const materialName = Array.isArray(mesh.material)
         ? mesh.material.map((m: any) => m.name).filter(Boolean).join(", ")
@@ -1529,7 +1589,8 @@ export function Map3DView() {
     if (!reviewMode) return;
     if (!(obj as THREE.Mesh).isMesh) return;
     const mesh = obj as THREE.Mesh;
-    if (mesh.userData?.obramapSupplementalPart) {
+    const supplementalLayerKey = typeof mesh.userData?.obramapLayerKey === "string" ? mesh.userData.obramapLayerKey : "";
+    if (mesh.userData?.obramapSupplementalPart && !supplementalLayerKey.startsWith("glbpart:")) {
       toast.info("Parte complementar visual: vinculos serao suportados em etapa futura.");
       return;
     }
@@ -1589,18 +1650,29 @@ export function Map3DView() {
     setSelectedMeshKey(layerKey);
   }, [meshHooks.meshMap, reviewMode, sceneObj, smartLinkCandidates, smartLinkIsolationFilter, smartLinkPreviewEnabled, smartLinkSelectedKeys]);
 
-  const handleSupplementalMeshClick = useCallback(() => {
-    if (reviewMode || assignMode) {
-      toast.info("Parte complementar visual: vinculos serao suportados em etapa futura.");
+  const handleSupplementalMeshClick = useCallback((part: SupplementalGlbPart, obj: THREE.Object3D) => {
+    if (!(obj as THREE.Mesh).isMesh) return;
+    const mesh = obj as THREE.Mesh;
+    const layerKey = getMeshLayerKey(mesh);
+    if (assignMode) {
+      toast.info("Partes GLB complementares nao entram no modo Atribuir Casas nesta etapa.");
+      return;
     }
-  }, [assignMode, reviewMode]);
-
-  const handleWalkMeshInspect = useCallback((mesh: THREE.Mesh) => {
-    if (mesh.userData?.obramapSupplementalPart) {
+    if (!reviewMode) return;
+    if (!part.persisted || !layerKey.startsWith("glbpart:")) {
       toast.info("Parte complementar visual: vinculos serao suportados em etapa futura.");
       return;
     }
+    setSmartLinkFocusedCandidateKey(null);
+    setSelectedMeshKey(layerKey);
+  }, [assignMode, reviewMode]);
+
+  const handleWalkMeshInspect = useCallback((mesh: THREE.Mesh) => {
     const layerKey = getMeshLayerKey(mesh);
+    if (mesh.userData?.obramapSupplementalPart && !layerKey.startsWith("glbpart:")) {
+      toast.info("Parte complementar visual: vinculos serao suportados em etapa futura.");
+      return;
+    }
     const meshData = getCurrentMeshRecord(layerKey);
     console.log("[Walk Inspect Check] mesh inspected", {
       meshName: mesh.name || "",
@@ -1807,6 +1879,10 @@ export function Map3DView() {
   ]);
 
   const openSmartLinkSimilar = useCallback((layerKey: string) => {
+    if (layerKey.startsWith("glbpart:")) {
+      toast.info("SmartLink por partes sera liberado em etapa futura.");
+      return;
+    }
     if (!sceneObj) {
       toast.error("Cena 3D ainda não está pronta.");
       return;
@@ -2289,6 +2365,28 @@ export function Map3DView() {
     }
   }, [clearSmartLinkPreview, houseNumbers, meshHooks, projectId, smartLinkBase, smartLinkCandidates, smartLinkSelectedKeys]);
 
+  const traverseActiveModelMeshes = useCallback((visitor: (mesh: THREE.Mesh) => void) => {
+    const traverseRoot = (root: THREE.Object3D | null | undefined) => {
+      if (!root) return;
+      root.traverse((child) => {
+        if (!(child as THREE.Mesh).isMesh) return;
+        visitor(child as THREE.Mesh);
+      });
+    };
+    traverseRoot(sceneObj);
+    supplementalGlbParts
+      .filter((part) => part.visible)
+      .forEach((part) => traverseRoot(supplementalGlbScenesRef.current.get(part.id)));
+  }, [sceneObj, supplementalGlbParts]);
+
+  const collectActiveModelLayerKeys = useCallback(() => {
+    const keys = new Set<string>();
+    traverseActiveModelMeshes((mesh) => {
+      keys.add(getMeshLayerKey(mesh));
+    });
+    return keys;
+  }, [traverseActiveModelMeshes]);
+
   const applyViewMode = useCallback((mode: ViewMode, overrideMeshMap?: Map<string, ProjectModelMesh>) => {
     setViewMode(mode);
     const realStats = {
@@ -2299,29 +2397,28 @@ export function Map3DView() {
       ignored: 0,
       contextExamples: [] as Array<{ layer_key: string; mesh_name: string | null; material_name: string | null }>,
     };
-    if (!sceneObj) return realStats;
     const sourceMap = buildCurrentMeshMap(overrideMeshMap ?? meshHooks.meshMap);
-    sceneObj.traverse((child) => {
-      if (!(child as THREE.Mesh).isMesh) return;
-      const mesh = child as THREE.Mesh;
+    let visitedMeshes = 0;
+    traverseActiveModelMeshes((mesh) => {
+      visitedMeshes++;
       const saved = sourceMap.get(getMeshLayerKey(mesh));
       if (!saved) {
-        child.visible = mode !== "real";
+        mesh.visible = mode !== "real";
         if (mode === "real") realStats.unlinkedHidden++;
         return;
       }
       if (saved.ignored) {
-        child.visible = false;
+        mesh.visible = false;
         if (mode === "real") realStats.ignored++;
         return;
       }
       switch (mode) {
         case "complete":
-          child.visible = saved.visible;
+          mesh.visible = saved.visible;
           break;
         case "real": {
           if (isContextProjectModelMesh(saved)) {
-            child.visible = saved.visible;
+            mesh.visible = saved.visible;
             if (saved.visible) realStats.contextVisible++;
             if (realStats.contextExamples.length < 8) {
               realStats.contextExamples.push({
@@ -2333,17 +2430,18 @@ export function Map3DView() {
             break;
           }
           const hasLink = isCompleteProductionLink(saved);
-          child.visible = hasLink && !!saved.production_visible;
+          mesh.visible = hasLink && !!saved.production_visible;
           if (!hasLink) realStats.unlinkedHidden++;
           else if (saved.production_visible) realStats.linkedVisible++;
           else realStats.linkedHidden++;
           break;
         }
         case "simulation":
-          child.visible = saved.visible;
+          mesh.visible = saved.visible;
           break;
       }
     });
+    if (visitedMeshes === 0) return realStats;
     if (mode === "real") {
       console.log("[GLB Real Context]", realStats);
       if (import.meta.env.DEV) {
@@ -2356,22 +2454,20 @@ export function Map3DView() {
       }
     }
     return realStats;
-  }, [buildCurrentMeshMap, isCompleteProductionLink, sceneObj, meshHooks.meshMap]);
+  }, [buildCurrentMeshMap, isCompleteProductionLink, meshHooks.meshMap, traverseActiveModelMeshes]);
 
   // Re-aplica modo quando meshMap chega/atualiza ou cena fica pronta
   useEffect(() => {
-    if (meshHooks.meshMap.size > 0 && sceneObj) applyViewMode(viewMode);
-  }, [meshHooks.meshMap, sceneObj, viewMode, applyViewMode]);
+    if (meshHooks.meshMap.size > 0 && (sceneObj || supplementalGlbParts.length > 0)) applyViewMode(viewMode);
+  }, [meshHooks.meshMap, sceneObj, supplementalGlbParts.length, viewMode, applyViewMode]);
 
   // Aplica isolamento (sobrepõe modo de visão)
   useEffect(() => {
-    if (!sceneObj) return;
     if (!isolatedKeys) { applyViewMode(viewMode); return; }
-    sceneObj.traverse((child) => {
-      if (!(child as THREE.Mesh).isMesh) return;
-      child.visible = isolatedKeys.has(getMeshLayerKey(child as THREE.Mesh));
+    traverseActiveModelMeshes((mesh) => {
+      mesh.visible = isolatedKeys.has(getMeshLayerKey(mesh));
     });
-  }, [isolatedKeys, sceneObj, applyViewMode, viewMode]);
+  }, [isolatedKeys, applyViewMode, viewMode, traverseActiveModelMeshes]);
 
   // Desabilita autoMode (LayersPanel) fora do modo simulação
   useEffect(() => {
@@ -2719,7 +2815,9 @@ export function Map3DView() {
         })),
       });
 
-      const allMeshes = Array.from(sourceMeshMap.values());
+      const activeSceneLayerKeys = collectActiveModelLayerKeys();
+      const allMeshes = Array.from(sourceMeshMap.values())
+        .filter((mesh) => activeSceneLayerKeys.has(mesh.layer_key));
       const meshes = allMeshes.filter(m => !m.ignored);
       if (meshes.length === 0) {
         if (!options?.silent) toast.info("Nenhuma mesh registrada.");
@@ -2938,7 +3036,7 @@ export function Map3DView() {
       console.error("[Sync3D]", err);
       toast.error("Erro ao sincronizar");
     } finally { setIsSyncing(false); }
-  }, [buildCurrentMeshMap, canManage3D, projectId, meshHooks, currentProject, applyViewMode, viewMode, meshReviewOverrides, sanitizeGlbMeshForCurrentModel, isCompleteProductionLink]);
+  }, [buildCurrentMeshMap, canManage3D, projectId, meshHooks, currentProject, applyViewMode, viewMode, meshReviewOverrides, sanitizeGlbMeshForCurrentModel, isCompleteProductionLink, collectActiveModelLayerKeys]);
 
   // Auto-sync após realtime, debounced (somente se já sincronizou ao menos 1x)
   const autoSync = useCallback(() => {
@@ -3534,7 +3632,7 @@ export function Map3DView() {
                     <Badge variant="secondary">{supplementalGlbParts.length}</Badge>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Partes GLB complementares sao persistidas para visualizacao. Vinculos, SmartLink e 3D Real por partes serao liberados em etapa futura.
+                    Partes GLB complementares sao persistidas para visualizacao. Vinculo manual e 3D Real basico usam identidade por parte; SmartLink por partes sera liberado em etapa futura.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -3614,9 +3712,10 @@ export function Map3DView() {
               onWalkExit={exitWalkMode}
               onWalkInspectClose={() => setWalkInspection(null)}
               onWalkMeshInspect={handleWalkMeshInspect}
-              supplementalGlbParts={viewMode === "real" ? [] : supplementalGlbParts}
+              supplementalGlbParts={supplementalGlbParts}
               onSupplementalMeshClick={handleSupplementalMeshClick}
-              onSupplementalSceneReady={handleSupplementalSceneReady} />
+              onSupplementalSceneReady={handleSupplementalSceneReady}
+              onSupplementalInventoryReady={handleSupplementalInventoryReady} />
           </Canvas>
         </div>
         <div id="map3d-ifc-panel-slot" className="pointer-events-none absolute bottom-3 left-0 right-3 top-3 z-40 overflow-hidden" />

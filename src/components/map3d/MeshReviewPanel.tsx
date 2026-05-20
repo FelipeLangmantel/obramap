@@ -140,7 +140,8 @@ export function MeshReviewPanel({
   const hasServiceScope = !!meshData?.service_scope_id && !isContextProjectModelMesh(meshData);
   const hasExistingLink = hasAssignedHouse || hasServiceMacro || hasServiceScope || isContextProjectModelMesh(meshData);
   const hasOnFindSimilar = !!onFindSimilar;
-  const canFindSimilar = isCompleteProductionLink(meshData);
+  const isGlbPartMesh = meshKey.startsWith("glbpart:");
+  const canFindSimilar = !isGlbPartMesh && isCompleteProductionLink(meshData);
   useEffect(() => {
     setDraftHouse(currentHouse);
     setDraftService(currentService);
@@ -169,9 +170,11 @@ export function MeshReviewPanel({
   const hasDraftCompleteLink = Number.isFinite(selectedHouseNumber) && !!selectedService;
   const smartLinkStatusText = canFindSimilar
     ? "Status: Pronta para encontrar similares"
-    : hasDraftCompleteLink
-      ? "Status: Clique em Aplicar vínculo antes de encontrar similares"
-      : "Status: Vincule Casa e Serviço primeiro";
+    : isGlbPartMesh
+      ? "Status: SmartLink por partes sera liberado em etapa futura"
+      : hasDraftCompleteLink
+        ? "Status: Clique em Aplicar vínculo antes de encontrar similares"
+        : "Status: Vincule Casa e Serviço primeiro";
   const canApplyLink =
     !!meshKey &&
     !savingLink &&
@@ -542,6 +545,11 @@ export function MeshReviewPanel({
               {meshData?.ignored && (
                 <p className="text-[10px] text-destructive">Remova Ignorar mesh antes de vincular.</p>
               )}
+              {isGlbPartMesh && (
+                <p className="text-[10px] text-blue-600">
+                  Mesh de parte GLB: vínculo salvo com identidade da parte.
+                </p>
+              )}
               <p className={canFindSimilar ? "text-[10px] text-emerald-600" : "text-[10px] text-muted-foreground"}>
                 {smartLinkStatusText}
               </p>
@@ -551,7 +559,7 @@ export function MeshReviewPanel({
                 size="sm"
                 className="h-8 w-full text-[11px]"
                 disabled={!canFindSimilar || savingLink}
-                title={canFindSimilar ? "Encontrar meshes semelhantes para vincular em lote" : hasDraftCompleteLink ? "Clique em Aplicar vínculo antes de encontrar similares." : "Vincule Casa e Serviço primeiro."}
+                title={canFindSimilar ? "Encontrar meshes semelhantes para vincular em lote" : isGlbPartMesh ? "SmartLink por partes sera liberado em etapa futura." : hasDraftCompleteLink ? "Clique em Aplicar vínculo antes de encontrar similares." : "Vincule Casa e Serviço primeiro."}
                 onClick={() => {
                   if (!onFindSimilar) {
                     toast.error("Busca de similares indisponível neste painel.");
@@ -561,7 +569,7 @@ export function MeshReviewPanel({
                 }}
               >
                 <Search className="h-3.5 w-3.5 mr-1" />
-                {canFindSimilar ? "Encontrar similares" : hasDraftCompleteLink ? "Aplique vínculo primeiro" : "Vincule Casa e Serviço primeiro."}
+                {canFindSimilar ? "Encontrar similares" : isGlbPartMesh ? "SmartLink por partes em breve" : hasDraftCompleteLink ? "Aplique vínculo primeiro" : "Vincule Casa e Serviço primeiro."}
               </Button>
               <Button
                 type="button"
