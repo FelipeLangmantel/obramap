@@ -481,7 +481,7 @@ function ZoomToMouseControls({ focusPoint }: { focusPoint?: [number, number, num
   );
 }
 
-function WalkControls({ onExit, height = 1.7 }: { onExit: () => void; height?: number }) {
+function WalkControls({ onExit, height = 1.7, startPoint = null }: { onExit: () => void; height?: number; startPoint?: [number, number, number] | null }) {
   const { camera, scene } = useThree();
   const controlsRef = useRef<any>(null);
   const floorRaycasterRef = useRef(new THREE.Raycaster());
@@ -500,16 +500,20 @@ function WalkControls({ onExit, height = 1.7 }: { onExit: () => void; height?: n
 
   useEffect(() => {
     const before = camera.position.clone();
-    const floorOrigin = new THREE.Vector3(camera.position.x, camera.position.y + 30, camera.position.z);
+    const basePoint = startPoint ? new THREE.Vector3(startPoint[0], startPoint[1], startPoint[2]) : camera.position.clone();
+    const floorOrigin = new THREE.Vector3(basePoint.x, basePoint.y + 30, basePoint.z);
     floorRaycasterRef.current.set(floorOrigin, new THREE.Vector3(0, -1, 0));
     const floorHit = floorRaycasterRef.current
       .intersectObjects(scene.children, true)
-      .find((hit) => hit.object.visible && hit.point.y <= before.y + 0.5);
-    camera.position.y = floorHit ? floorHit.point.y + height : Math.max(camera.position.y, height);
+      .find((hit) => hit.object.visible && hit.point.y <= basePoint.y + 0.5);
+    camera.position.x = basePoint.x;
+    camera.position.z = basePoint.z;
+    camera.position.y = floorHit ? floorHit.point.y + height : Math.max(basePoint.y + height, height);
     console.log("[Walk Mode Check] walk controls mounted", {
       before: before.toArray(),
       after: camera.position.toArray(),
       observerHeight: height,
+      startPoint,
       floorY: floorHit?.point.y ?? null,
       pointerLockActive: typeof document !== "undefined" ? !!document.pointerLockElement : false,
     });
@@ -537,7 +541,7 @@ function WalkControls({ onExit, height = 1.7 }: { onExit: () => void; height?: n
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [camera, height, scene]);
+  }, [camera, height, scene, startPoint]);
 
   useFrame((_, delta) => {
     const controls = controlsRef.current;
@@ -743,7 +747,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   orbitFocusPoint, onMeshClick, onMeshDoubleClick, selectedMeshKey, projectId, companyId, ifcRealModeActive, ifcHouseOptions, ifcServiceOptions,
   cameraMode, walkInspectOpen, onWalkExit, onWalkInspectClose, onWalkMeshInspect,
   supplementalGlbParts, onSupplementalMeshClick, onSupplementalMeshDoubleClick, onSupplementalSceneReady, onSupplementalInventoryReady,
-  observerHeight, performanceMode,
+  observerHeight, walkStartPoint, performanceMode,
 }: {
   modelData: ModelData | null; markers: HouseMarker[]; selectedMarkerId: number | null;
   onMarkerClick: (m: HouseMarker) => void; customLegendItems: any[];
@@ -772,6 +776,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   onSupplementalSceneReady?: (part: SupplementalGlbPart, scene: THREE.Object3D) => void;
   onSupplementalInventoryReady?: (part: SupplementalGlbPart, meshes: GlbMeshInventoryInput[]) => void;
   observerHeight: number;
+  walkStartPoint?: [number, number, number] | null;
   performanceMode: boolean;
 }) {
   return (
@@ -780,7 +785,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
       <AutoFitCamera fitTrigger={fitTrigger} resetTrigger={resetTrigger}
         savedPosition={savedPosition} savedTarget={savedTarget}
         onCameraChange={onCameraChange} sceneReady={sceneReady} enabled={cameraMode === "orbit"} />
-      {cameraMode === "orbit" ? <ZoomToMouseControls focusPoint={orbitFocusPoint} /> : <WalkControls onExit={onWalkExit} height={observerHeight} />}
+      {cameraMode === "orbit" ? <ZoomToMouseControls focusPoint={orbitFocusPoint} /> : <WalkControls onExit={onWalkExit} height={observerHeight} startPoint={walkStartPoint} />}
       <WalkMeshInspector
         enabled={cameraMode === "walk"}
         panelOpen={walkInspectOpen}
@@ -1055,6 +1060,8 @@ export function Map3DView() {
   });
   const [performanceMode, setPerformanceMode] = useState(() => localStorage.getItem("obramap:map3d:performance-mode") !== "false");
   const [supplementalPartsExpanded, setSupplementalPartsExpanded] = useState(() => localStorage.getItem("obramap:map3d:parts-expanded") === "true");
+  const [walkStartPoint, setWalkStartPoint] = useState<[number, number, number] | null>(null);
+  const [walkStartPickMode, setWalkStartPickMode] = useState(false);
   const [sceneReady, setSceneReady] = useState(false);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [ifcSuggestionsOpen, setIfcSuggestionsOpen] = useState(false);
@@ -1239,6 +1246,28 @@ export function Map3DView() {
   useEffect(() => {
     localStorage.setItem("obramap:map3d:parts-expanded", String(supplementalPartsExpanded));
   }, [supplementalPartsExpanded]);
+
+  useEffect(() => {
+    if (!projectId) {
+      setWalkStartPoint(null);
+      return;
+    }
+    const raw = localStorage.getItem(`obramap:map3d:${projectId}:walk-start`);
+    if (!raw) {
+      setWalkStartPoint(null);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length === 3 && parsed.every((value) => Number.isFinite(Number(value)))) {
+        setWalkStartPoint([Number(parsed[0]), Number(parsed[1]), Number(parsed[2])]);
+      } else {
+        setWalkStartPoint(null);
+      }
+    } catch {
+      setWalkStartPoint(null);
+    }
+  }, [projectId]);
 
   useEffect(() => {
     return () => {
@@ -1679,6 +1708,15 @@ export function Map3DView() {
     if (point) toast.info("Ponto de rotacao fixado na parte GLB.");
   }, [focusOrbitOnPoint]);
 
+  const saveWalkStartPoint = useCallback((point: THREE.Vector3 | [number, number, number]) => {
+    if (!projectId) return;
+    const tuple: [number, number, number] = Array.isArray(point) ? point : [point.x, point.y, point.z];
+    setWalkStartPoint(tuple);
+    localStorage.setItem(`obramap:map3d:${projectId}:walk-start`, JSON.stringify(tuple));
+    setWalkStartPickMode(false);
+    toast.success("Ponto inicial do Caminhar definido.");
+  }, [projectId]);
+
   const handleReviewMeshClick = useCallback((obj: THREE.Object3D, point?: THREE.Vector3) => {
     if (!reviewMode) return;
     if (!(obj as THREE.Mesh).isMesh) return;
@@ -1762,6 +1800,15 @@ export function Map3DView() {
     setSelectedMeshKey(layerKey);
     focusOrbitOnPoint(point);
   }, [assignMode, focusOrbitOnPoint, reviewMode]);
+
+  const handleWalkStartPick = useCallback((obj: THREE.Object3D, point?: THREE.Vector3) => {
+    if (!walkStartPickMode || !point) return;
+    saveWalkStartPoint(point);
+  }, [saveWalkStartPoint, walkStartPickMode]);
+
+  const handleSupplementalWalkStartPick = useCallback((_part: SupplementalGlbPart, obj: THREE.Object3D, point?: THREE.Vector3) => {
+    handleWalkStartPick(obj, point);
+  }, [handleWalkStartPick]);
 
   const handleWalkMeshInspect = useCallback((mesh: THREE.Mesh) => {
     const layerKey = getMeshLayerKey(mesh);
