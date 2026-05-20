@@ -664,31 +664,57 @@ export function WeeklyProductionView() {
 
         await updateBatchScopeProgress(selectedHouses, macro.id, scope.id, 100, progressMap);
 
+        let createdProductionId: string | null = null;
         try {
         // 1. Save to new productions table — SKIP when Initial Database to avoid double-counting
         if (!isInitialDatabase) {
-          const { error: newProductionError } = await supabase
-            .from('productions')
-            .insert({
-              project_id: currentProject.id,
-              measurement_id: measurementId,
-              measurement_service_id: measurementServiceId,
-              macro_id: macro.id,
-              macro_name: macro.name,
-              macro_color: macro.color,
-              scope_id: scope.id,
-              scope_name: scope.name,
-              house_ids: selectedHouses,
-              houses_count: selectedHouses.length,
-              production_date: format(new Date(), 'yyyy-MM-dd'),
-              is_initial_database: isInitialDatabase,
-              is_unplanned: isUnplanned,
-              notes: null
+          const productionPayload = {
+            project_id: currentProject.id,
+            measurement_id: measurementId,
+            measurement_service_id: measurementServiceId,
+            macro_id: macro.id,
+            macro_name: macro.name,
+            macro_color: macro.color,
+            scope_id: scope.id,
+            scope_name: scope.name,
+            house_ids: selectedHouses,
+            houses_count: selectedHouses.length,
+            production_date: format(new Date(), 'yyyy-MM-dd'),
+            is_initial_database: isInitialDatabase,
+            is_unplanned: isUnplanned,
+            notes: null,
+            created_by: user?.id || null,
+          };
+
+          if (import.meta.env.DEV) {
+            console.info('[Production Insert Payload]', {
+              project_id: productionPayload.project_id,
+              user_id: productionPayload.created_by,
+              macro_id: productionPayload.macro_id,
+              scope_id: productionPayload.scope_id,
+              houses_count: productionPayload.houses_count,
+              production_date: productionPayload.production_date,
+              measurement_id: productionPayload.measurement_id,
+              measurement_service_id: productionPayload.measurement_service_id,
+              is_unplanned: productionPayload.is_unplanned,
             });
+          }
+
+          const { data: insertedProduction, error: newProductionError } = await supabase
+            .from('productions')
+            .insert(productionPayload)
+            .select('id')
+            .maybeSingle();
 
           if (newProductionError) {
-            console.error('Error saving to new productions table:', newProductionError);
-            throw newProductionError;
+            if (newProductionError.code === '42501') {
+              console.warn('Productions auxiliary insert skipped by RLS; weekly production remains the source of truth.', newProductionError);
+            } else {
+              console.error('Error saving to new productions table:', newProductionError);
+              throw newProductionError;
+            }
+          } else {
+            createdProductionId = insertedProduction?.id || null;
           }
         }
 
@@ -713,6 +739,16 @@ export function WeeklyProductionView() {
 
         if (error) throw error;
         } catch (insertError) {
+          if (createdProductionId) {
+            await supabase
+              .from('productions')
+              .update({
+                deleted_at: new Date().toISOString(),
+                deleted_by: user?.id || null,
+                deleted_reason: 'Falha ao criar weekly_productions; rollback automatico do lancamento.',
+              })
+              .eq('id', createdProductionId);
+          }
           await updateBatchScopeProgress(selectedHouses, macro.id, scope.id, 0, revertMap);
           throw insertError;
         }
