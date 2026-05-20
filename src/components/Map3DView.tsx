@@ -392,53 +392,18 @@ function HouseMarker3D({ marker, onClick, isSelected, customLegendItems }: {
 
 // Zoom to mouse position controls
 function ZoomToMouseControls() {
-  const { camera, gl, scene } = useThree();
+  const { gl } = useThree();
   const controlsRef = useRef<any>(null);
-  const raycaster = useRef(new THREE.Raycaster());
-  const mouse = useRef(new THREE.Vector2());
 
   useEffect(() => {
     const domElement = gl.domElement;
-    
     const onWheel = (event: WheelEvent) => {
-      if (!controlsRef.current) return;
-      
       event.preventDefault();
-      
-      const rect = domElement.getBoundingClientRect();
-      mouse.current.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-      mouse.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-      
-      raycaster.current.setFromCamera(mouse.current, camera);
-      
-      const intersects = raycaster.current.intersectObjects(scene.children, true);
-      const target = controlsRef.current.target as THREE.Vector3;
-      
-      let zoomPoint: THREE.Vector3;
-      if (intersects.length > 0) {
-        zoomPoint = intersects[0].point.clone();
-      } else {
-        const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-        const intersection = new THREE.Vector3();
-        raycaster.current.ray.intersectPlane(plane, intersection);
-        zoomPoint = intersection || target.clone();
-      }
-      
-      const zoomFactor = event.deltaY > 0 ? 1.12 : 0.89;
-      const direction = new THREE.Vector3().subVectors(camera.position, zoomPoint);
-      
-      camera.position.copy(zoomPoint).add(direction.multiplyScalar(zoomFactor));
-      
-      // Move target toward zoom point for smooth entry into houses
-      const targetShift = new THREE.Vector3().subVectors(zoomPoint, target).multiplyScalar(0.08 * (event.deltaY > 0 ? -1 : 1));
-      target.add(targetShift);
-      
-      controlsRef.current.update();
     };
-    
+
     domElement.addEventListener('wheel', onWheel, { passive: false });
     return () => domElement.removeEventListener('wheel', onWheel);
-  }, [camera, gl, scene]);
+  }, [gl]);
 
   return (
     <OrbitControls
@@ -1077,6 +1042,15 @@ export function Map3DView() {
   // Cena ref para aplicar visibilidade fora do JSX
   const [sceneObj, setSceneObj] = useState<THREE.Object3D | null>(null);
 
+  const clearMeshSelection = useCallback((reason = "manual") => {
+    setSelectedMeshKey(null);
+    setIsolatedKeys(null);
+    setSmartLinkFocusedCandidateKey(null);
+    if (import.meta.env.DEV) {
+      console.log("[Map3D Selection] cleared", { reason });
+    }
+  }, []);
+
   useEffect(() => {
     smartLinkPreviewStateRef.current = {
       isLoading,
@@ -1321,10 +1295,13 @@ export function Map3DView() {
   }, [canManage3D, companyId, projectId, toSupplementalGlbPart, user?.id]);
 
   const toggleSupplementalGlbPart = useCallback((id: string) => {
+    if (selectedMeshKey?.startsWith(`glbpart:${id}:`)) {
+      clearMeshSelection("supplemental part visibility toggled");
+    }
     setSupplementalGlbParts((current) =>
       current.map((part) => part.id === id ? { ...part, visible: !part.visible } : part),
     );
-  }, []);
+  }, [clearMeshSelection, selectedMeshKey]);
 
   const removeSupplementalGlbPart = useCallback(async (id: string) => {
     const part = supplementalGlbPartsRef.current.find((item) => item.id === id);
@@ -1344,11 +1321,14 @@ export function Map3DView() {
       URL.revokeObjectURL(part.url);
     }
 
+    if (selectedMeshKey?.startsWith(`glbpart:${id}:`)) {
+      clearMeshSelection("supplemental part removed");
+    }
     supplementalGlbScenesRef.current.delete(id);
     supplementalInventoriedPartIdsRef.current.delete(id);
     setSupplementalGlbParts((current) => current.filter((item) => item.id !== id));
     toast.success("Parte GLB complementar removida.");
-  }, []);
+  }, [clearMeshSelection, selectedMeshKey]);
 
   const removeAllSupplementalGlbParts = useCallback(async () => {
     const parts = supplementalGlbPartsRef.current;
@@ -1372,9 +1352,10 @@ export function Map3DView() {
       .forEach((part) => URL.revokeObjectURL(part.url));
     supplementalGlbScenesRef.current.clear();
     supplementalInventoriedPartIdsRef.current.clear();
+    clearMeshSelection("all supplemental parts removed");
     setSupplementalGlbParts([]);
     toast.success("Partes GLB complementares removidas.");
-  }, []);
+  }, [clearMeshSelection]);
 
   const handleSupplementalSceneReady = useCallback((part: SupplementalGlbPart, scene: THREE.Object3D) => {
     supplementalGlbScenesRef.current.set(part.id, scene);
@@ -1523,9 +1504,8 @@ export function Map3DView() {
     setReviewMode(false);
     setIfcSuggestionsOpen(false);
     setPickedMesh(null);
-    setSelectedMeshKey(null);
-    setIsolatedKeys(null);
-  }, [canManage3D]);
+    clearMeshSelection("3D permission lost");
+  }, [canManage3D, clearMeshSelection]);
 
   const handleModelLoaded = useCallback(() => {
     console.log('[3D] Model geometry loaded in scene');
@@ -1717,15 +1697,14 @@ export function Map3DView() {
         setAssignMode(false);
         setReviewMode(false);
         setPickedMesh(null);
-        setSelectedMeshKey(null);
-        setIsolatedKeys(null);
+        clearMeshSelection("walk mode entered");
         setSelectedMarker(null);
       } else {
         setWalkInspection(null);
       }
       return nextMode;
     });
-  }, []);
+  }, [clearMeshSelection]);
 
   const houseNumbers = useMemo(() => {
     const arr = (currentProject?.houses || [])
@@ -2892,6 +2871,7 @@ export function Map3DView() {
     if (!canManage3D) { toast.error("Sem permissão para sincronizar o 3D Real."); return; }
     if (!projectId) return;
     setIsSyncing(true);
+    clearMeshSelection("3D Real sync started");
     try {
       const meshMapBeforeRefresh = buildCurrentMeshMap(meshHooks.meshMap);
       const refreshedAtSync = await meshHooks.refresh();
@@ -3133,7 +3113,7 @@ export function Map3DView() {
       console.error("[Sync3D]", err);
       toast.error("Erro ao sincronizar");
     } finally { setIsSyncing(false); }
-  }, [buildCurrentMeshMap, canManage3D, projectId, meshHooks, currentProject, applyViewMode, viewMode, meshReviewOverrides, sanitizeGlbMeshForCurrentModel, isCompleteProductionLink, collectActiveModelLayerKeys]);
+  }, [buildCurrentMeshMap, canManage3D, projectId, meshHooks, currentProject, applyViewMode, viewMode, meshReviewOverrides, sanitizeGlbMeshForCurrentModel, isCompleteProductionLink, collectActiveModelLayerKeys, clearMeshSelection]);
 
   // Auto-sync após realtime, debounced (somente se já sincronizou ao menos 1x)
   const autoSync = useCallback(() => {
@@ -3411,8 +3391,7 @@ export function Map3DView() {
     setIsLoading(true);
     setSceneReady(false);
     clearSmartLinkPreview("new GLB import");
-    setSelectedMeshKey(null);
-    setIsolatedKeys(null);
+    clearMeshSelection("new GLB import");
     setPickedMesh(null);
     setWalkInspection(null);
     setMeshReviewOverrides(new Map());
@@ -3521,7 +3500,7 @@ export function Map3DView() {
     if (!canDelete3D) { toast.error("Sem permissão para resetar o Mapa 3D."); return; }
     if (!projectId) return;
     setModelData(null); setMarkers([]); setSelectedMarker(null); setPendingObjFile(null);
-    setSelectedMeshKey(null); setIsolatedKeys(null); setPickedMesh(null); setWalkInspection(null);
+    clearMeshSelection("map reset"); setPickedMesh(null); setWalkInspection(null);
     setMeshReviewOverrides(new Map()); setTrustedGlbLinkKeys(new Set()); setGlbLinkScope("fresh");
     clearSmartLinkPreview("map reset");
     setCameraMode("orbit");
@@ -3586,7 +3565,7 @@ export function Map3DView() {
               <Button
                 variant={assignMode ? "default" : "outline"}
                 size="sm"
-                onClick={() => { setCameraMode("orbit"); setAssignMode(p => !p); setPickedMesh(null); }}
+                onClick={() => { setCameraMode("orbit"); setAssignMode(p => !p); setPickedMesh(null); clearMeshSelection("assign mode toggled"); }}
                 disabled={isLoading}
                 title="Clique nas malhas do modelo para batizar cada casa"
               >
@@ -3606,8 +3585,7 @@ export function Map3DView() {
                 onClick={() => {
                   setCameraMode("orbit");
                   setReviewMode(p => !p);
-                  setSelectedMeshKey(null);
-                  setIsolatedKeys(null);
+                  clearMeshSelection("review mode toggled");
                   setQuickContextPanelOpen(false);
                   clearSmartLinkPreview("review toggle");
                   if (!reviewMode) {
@@ -3661,7 +3639,7 @@ export function Map3DView() {
                 onValueChange={(v) => {
                   if (!v) return;
                   clearSmartLinkPreview("view mode changed");
-                  setIsolatedKeys(null);
+                  clearMeshSelection("view mode changed");
                   applyViewMode(v as ViewMode);
                 }}
                 className="border border-input rounded-md p-0.5 bg-background"
@@ -3787,11 +3765,15 @@ export function Map3DView() {
         )}
         <div
           className="map3d-walk-lock-target absolute inset-0"
-          style={assignMode ? { cursor: "crosshair" } : undefined}
+          style={assignMode ? { cursor: "crosshair", overscrollBehavior: "contain" } : { overscrollBehavior: "contain" }}
+          onWheel={(event) => event.preventDefault()}
         >
           <Canvas shadows dpr={[1, 1.5]} frameloop="always"
             gl={{ antialias: true, powerPreference: "high-performance", stencil: false, depth: true }}
             onDoubleClick={cameraMode === "orbit" ? centerCamera : undefined}
+            onPointerMissed={() => {
+              if (reviewMode && selectedMeshKey) clearMeshSelection("canvas empty click");
+            }}
             style={{ width: "100%", height: "100%", background: "#f0f4f8" }}
           >
             <Scene modelData={modelData} markers={markers} selectedMarkerId={selectedMarker?.id || null}
@@ -4031,7 +4013,7 @@ export function Map3DView() {
             onSmartLinkToggleCandidate={toggleSmartLinkCandidate}
             onSmartLinkClearFocus={() => setSmartLinkFocusedCandidateKey(null)}
             onSmartLinkReturnToList={returnToSmartLinkList}
-            onClose={() => { setSelectedMeshKey(null); setIsolatedKeys(null); setSmartLinkFocusedCandidateKey(null); }}
+            onClose={() => clearMeshSelection("review panel closed")}
             onIsolate={handleIsolate}
             onShowAll={handleClearIsolation}
             onFindSimilar={openSmartLinkSimilar}
@@ -4114,8 +4096,7 @@ export function Map3DView() {
             onIgnore={async (key) => {
               if (!canDelete3D) { toast.error("Sem permissão para remover ou ignorar itens do Mapa 3D."); return; }
               await meshHooks.setIgnored(key, true);
-              setSelectedMeshKey(null);
-              setIsolatedKeys(null);
+              clearMeshSelection("mesh ignored");
               toast.success("Mesh marcada como ignorada");
             }}
           />
