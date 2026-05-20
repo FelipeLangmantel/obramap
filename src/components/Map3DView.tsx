@@ -64,6 +64,22 @@ type GlbMeshInventoryInput = {
   detected_house_number: number | null;
 };
 
+const MAP3D_STORAGE_BUCKET = "3d-models";
+
+function sanitize3DStorageFileName(fileName: string): string {
+  const extension = fileName.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "glb";
+  const baseName = fileName
+    .replace(/\.[^/.]+$/, "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9-_]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || "modelo";
+  return `${baseName}.${extension}`;
+}
+
 interface HouseMarker {
   id: number;
   houseNumber: number;
@@ -1344,24 +1360,71 @@ export function Map3DView() {
     if (!projectId) return null;
     const companyId = profile?.company_id;
     if (!companyId) { toast.error("Empresa nao identificada para upload."); return null; }
-    const ext = file.name.split('.').pop();
-    const safeName = file.name
-      .replace(/\.[^/.]+$/, "")
-      .replace(/[^a-zA-Z0-9-_]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 80) || "modelo";
-    const path = `${companyId}/${projectId}/${folder}/${Date.now()}-${safeName}.${ext}`;
-    const { data, error } = await supabase.storage.from('3d-models').upload(path, file, { cacheControl: '3600', upsert: true });
-    if (error) { toast.error(`Upload falhou: ${error.message}`); return null; }
-    return {
-      publicUrl: supabase.storage.from('3d-models').getPublicUrl(data.path).data.publicUrl,
-      storagePath: data.path,
-    };
+    const safeName = sanitize3DStorageFileName(file.name);
+    const uniquePrefix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const path = `${companyId}/${projectId}/${folder}/${uniquePrefix}-${safeName}`;
+
+    if (import.meta.env.DEV) {
+      console.info(folder === "gltf-parts" ? "[GLB Part Upload]" : "[3D Import]", {
+        action: "upload-start",
+        bucket: MAP3D_STORAGE_BUCKET,
+        fileName: file.name,
+        sanitizedName: safeName,
+        storagePath: path,
+      });
+    }
+
+    try {
+      const { data, error } = await supabase.storage
+        .from(MAP3D_STORAGE_BUCKET)
+        .upload(path, file, { cacheControl: "3600", upsert: false });
+      if (error) {
+        if (import.meta.env.DEV) {
+          console.error(folder === "gltf-parts" ? "[GLB Part Upload]" : "[3D Import]", {
+            action: "upload-error",
+            bucket: MAP3D_STORAGE_BUCKET,
+            storagePath: path,
+            error,
+          });
+        }
+        toast.error(`Upload falhou: ${error.message}`);
+        return null;
+      }
+
+      const publicUrl = supabase.storage.from(MAP3D_STORAGE_BUCKET).getPublicUrl(data.path).data.publicUrl;
+      if (!publicUrl) {
+        toast.error("Upload concluido, mas nao foi possivel gerar a URL publica do modelo.");
+        return null;
+      }
+
+      if (import.meta.env.DEV) {
+        console.info(folder === "gltf-parts" ? "[GLB Part Upload]" : "[3D Import]", {
+          action: "upload-success",
+          bucket: MAP3D_STORAGE_BUCKET,
+          storagePath: data.path,
+          publicUrl,
+        });
+      }
+
+      return { publicUrl, storagePath: data.path };
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error(folder === "gltf-parts" ? "[GLB Part Upload]" : "[3D Import]", {
+          action: "upload-fetch-error",
+          bucket: MAP3D_STORAGE_BUCKET,
+          storagePath: path,
+          error,
+        });
+      }
+      toast.error("Upload falhou por erro de rede/CORS no Supabase Storage.");
+      return null;
+    }
   };
 
   const handleSupplementalGlbUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    input.value = "";
     if (!file) return;
     if (!canManage3D) {
       toast.error("Sem permissao para adicionar parte GLB.");
@@ -1405,7 +1468,18 @@ export function Map3DView() {
         .select("*")
         .single();
 
-      if (error) throw error;
+      if (error) {
+        if (import.meta.env.DEV) {
+          console.error("[GLB Part Upload]", {
+            action: "insert-error",
+            fileName: file.name,
+            storagePath: upload.storagePath,
+            publicUrl: upload.publicUrl,
+            error,
+          });
+        }
+        throw error;
+      }
 
       const part = toSupplementalGlbPart(data);
       setSupplementalGlbParts((current) => [...current, part]);
@@ -3619,12 +3693,15 @@ export function Map3DView() {
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.currentTarget;
+    const file = input.files?.[0];
+    input.value = "";
     if (!canManage3D) {
       toast.error("Sem permissão para importar modelo 3D.");
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
-    const file = e.target.files?.[0]; if (!file) return;
+    if (!file) return;
     const name = file.name.toLowerCase();
     if (name.endsWith(".gltf") || name.endsWith(".glb")) {
       try {
@@ -3703,7 +3780,16 @@ export function Map3DView() {
             {canManage3D && (
               <>
                 <Input ref={fileInputRef} type="file" accept=".gltf,.glb,.obj,.ifc" onChange={handleFileUpload} className="hidden" disabled={isLoading} />
-                <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isLoading}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (!fileInputRef.current) return;
+                    fileInputRef.current.value = "";
+                    fileInputRef.current.click();
+                  }}
+                  disabled={isLoading}
+                >
                   {isLoading ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Upload className="h-4 w-4 mr-1.5" />}Importar 3D
                 </Button>
               </>
@@ -3714,7 +3800,11 @@ export function Map3DView() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => supplementalGlbInputRef.current?.click()}
+                  onClick={() => {
+                    if (!supplementalGlbInputRef.current) return;
+                    supplementalGlbInputRef.current.value = "";
+                    supplementalGlbInputRef.current.click();
+                  }}
                   disabled={isLoading}
                   title="Adicionar GLB complementar apenas visual nesta sessao"
                 >
