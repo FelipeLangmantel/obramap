@@ -68,6 +68,16 @@ function distance(a: GlbMeshRuntimeInfo["center"], b: GlbMeshRuntimeInfo["center
   return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2);
 }
 
+function anchorDistance(mesh: GlbMeshRuntimeInfo, anchor: HouseAnchor, source: HouseAnchor["source"]) {
+  if (source !== "text_anchor") return distance(mesh.center, anchor.center);
+  const dx = mesh.center.x - anchor.center.x;
+  const dz = mesh.center.z - anchor.center.z;
+  const dy = Math.abs(mesh.center.y - anchor.center.y);
+  // Textos de casa costumam estar na frente/divisa do lote; use X/Z como
+  // criterio principal e mantenha Y apenas como penalizacao leve.
+  return Math.sqrt(dx ** 2 + dz ** 2) + dy * 0.15;
+}
+
 function validHouseOrNull(value: unknown, validHouseNumbers?: Set<number>) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0 || parsed >= 10000) return null;
@@ -114,7 +124,9 @@ function parseTextAnchorHouseNumber(mesh: GlbMeshRuntimeInfo, validHouseNumbers?
       : geometryNumberMatches;
 
   for (let index = matches.length - 1; index >= 0; index -= 1) {
-    const valid = validHouseOrNull(matches[index], validHouseNumbers);
+    const token = matches[index];
+    if (!new RegExp(`(^|\\D)0*${token}(\\D|$)`).test(sanitized)) continue;
+    const valid = validHouseOrNull(token, validHouseNumbers);
     if (valid != null) return valid;
   }
   return null;
@@ -173,7 +185,7 @@ function nearestAnchor(
 ) {
   const ranked = anchors
     .filter((anchor) => anchor.layerKey !== excludeLayerKey)
-    .map((anchor) => ({ anchor, distance: distance(mesh.center, anchor.center) }))
+    .map((anchor) => ({ anchor, distance: anchorDistance(mesh, anchor, source) }))
     .sort((a, b) => a.distance - b.distance);
   const nearest = ranked[0];
   if (!nearest) return null;
@@ -489,7 +501,7 @@ export function scoreGlbSimilarCandidates(
     }
   });
 
-  return scored.map((candidate) => {
+  const result = scored.map((candidate) => {
     if (candidate.status !== "applicable" || candidate.suggestedHouseNumber == null) return candidate;
     const best = bestApplicableByHouse.get(candidate.suggestedHouseNumber);
     if (best && best.layerKey !== candidate.layerKey) {
@@ -511,4 +523,21 @@ export function scoreGlbSimilarCandidates(
         && candidate.acceptedDominantAnchor !== false,
     };
   });
+
+  if (import.meta.env.DEV) {
+    console.log("[SmartLink Anchor Debug]", result.slice(0, 10).map((candidate) => ({
+      layer_key: candidate.layerKey,
+      suggestedHouse: candidate.suggestedHouseNumber,
+      serviceSource: candidate.suggestionSource,
+      distance: candidate.suggestionDistance,
+      secondDistance: candidate.secondSuggestionDistance,
+      gap: candidate.suggestionDistanceGap,
+      ratio: candidate.suggestionDistanceRatio,
+      score: candidate.score,
+      confidence: candidate.suggestionConfidence,
+      reason: candidate.houseSuggestionRejectReason || candidate.suggestionReason,
+    })));
+  }
+
+  return result;
 }

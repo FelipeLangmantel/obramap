@@ -159,6 +159,21 @@ type WalkInspection = {
   materialName: string;
 };
 
+type SmartLinkHoverTooltip = {
+  candidate: GlbSmartLinkCandidate;
+  x: number;
+  y: number;
+} | null;
+
+const SMART_LINK_STATUS_LABEL: Record<GlbSmartLinkCandidate["status"], string> = {
+  applicable: "aplicavel",
+  missing_house: "sem casa",
+  linked: "ja vinculada",
+  context: "contexto",
+  ignored: "ignorada",
+  self: "mesh base",
+};
+
 const GLB_CONTEXT_SUSPECT_TERMS = [
   "laje",
   "slab",
@@ -307,7 +322,7 @@ function useSelectionHighlight(scene: THREE.Object3D | null, selectedKey: string
 }
 
 // GLTF model - calls onLoaded after it's in the scene
-function GLTFModel({ url, onLoaded, onSceneReady, onMeshClick, onMeshDoubleClick, selectedMeshKey }: { url: string; onLoaded: () => void; onSceneReady?: (scene: THREE.Object3D) => void; onMeshClick?: (mesh: THREE.Object3D, point?: THREE.Vector3) => void; onMeshDoubleClick?: (mesh: THREE.Object3D, point?: THREE.Vector3) => void; selectedMeshKey?: string | null }) {
+function GLTFModel({ url, onLoaded, onSceneReady, onMeshClick, onMeshDoubleClick, onMeshHover, onMeshHoverEnd, selectedMeshKey }: { url: string; onLoaded: () => void; onSceneReady?: (scene: THREE.Object3D) => void; onMeshClick?: (mesh: THREE.Object3D, point?: THREE.Vector3) => void; onMeshDoubleClick?: (mesh: THREE.Object3D, point?: THREE.Vector3) => void; onMeshHover?: (mesh: THREE.Object3D, event: any) => void; onMeshHoverEnd?: () => void; selectedMeshKey?: string | null }) {
   const { scene } = useGLTF(url);
   const calledRef = useRef(false);
   useSelectionHighlight(scene, selectedMeshKey ?? null);
@@ -339,6 +354,12 @@ function GLTFModel({ url, onLoaded, onSceneReady, onMeshClick, onMeshDoubleClick
         const hit = getSelectableRaycastHit(e);
         if (hit) onMeshDoubleClick(hit.object, hit.point);
       }}
+      onPointerMove={(e: any) => {
+        if (!onMeshHover) return;
+        const hit = getSelectableRaycastHit(e);
+        if (hit) onMeshHover(hit.object, e);
+      }}
+      onPointerOut={() => onMeshHoverEnd?.()}
     />
   );
 }
@@ -347,6 +368,8 @@ function SupplementalGLTFPart({
   part,
   onMeshClick,
   onMeshDoubleClick,
+  onMeshHover,
+  onMeshHoverEnd,
   onSceneReady,
   onInventoryReady,
   selectedMeshKey,
@@ -354,6 +377,8 @@ function SupplementalGLTFPart({
   part: SupplementalGlbPart;
   onMeshClick?: (part: SupplementalGlbPart, mesh: THREE.Object3D, point?: THREE.Vector3) => void;
   onMeshDoubleClick?: (part: SupplementalGlbPart, mesh: THREE.Object3D, point?: THREE.Vector3) => void;
+  onMeshHover?: (part: SupplementalGlbPart, mesh: THREE.Object3D, event: any) => void;
+  onMeshHoverEnd?: () => void;
   onSceneReady?: (part: SupplementalGlbPart, scene: THREE.Object3D) => void;
   onInventoryReady?: (part: SupplementalGlbPart, meshes: GlbMeshInventoryInput[]) => void;
   selectedMeshKey?: string | null;
@@ -406,12 +431,18 @@ function SupplementalGLTFPart({
         const hit = getSelectableRaycastHit(e);
         if (hit) onMeshDoubleClick(part, hit.object, hit.point);
       }}
+      onPointerMove={(e: any) => {
+        if (!onMeshHover) return;
+        const hit = getSelectableRaycastHit(e);
+        if (hit) onMeshHover(part, hit.object, e);
+      }}
+      onPointerOut={() => onMeshHoverEnd?.()}
     />
   );
 }
 
 // OBJ model - calls onLoaded after it's in the scene
-function OBJModel({ url, mtlUrl, onLoaded, onSceneReady, onMeshClick, onMeshDoubleClick, selectedMeshKey }: { url: string; mtlUrl?: string; onLoaded: () => void; onSceneReady?: (scene: THREE.Object3D) => void; onMeshClick?: (mesh: THREE.Object3D, point?: THREE.Vector3) => void; onMeshDoubleClick?: (mesh: THREE.Object3D, point?: THREE.Vector3) => void; selectedMeshKey?: string | null }) {
+function OBJModel({ url, mtlUrl, onLoaded, onSceneReady, onMeshClick, onMeshDoubleClick, onMeshHover, onMeshHoverEnd, selectedMeshKey }: { url: string; mtlUrl?: string; onLoaded: () => void; onSceneReady?: (scene: THREE.Object3D) => void; onMeshClick?: (mesh: THREE.Object3D, point?: THREE.Vector3) => void; onMeshDoubleClick?: (mesh: THREE.Object3D, point?: THREE.Vector3) => void; onMeshHover?: (mesh: THREE.Object3D, event: any) => void; onMeshHoverEnd?: () => void; selectedMeshKey?: string | null }) {
   const materials = mtlUrl ? useLoader(MTLLoader, mtlUrl) : null;
   const obj = useLoader(OBJLoader, url, (loader) => {
     if (materials) { materials.preload(); loader.setMaterials(materials); }
@@ -442,6 +473,12 @@ function OBJModel({ url, mtlUrl, onLoaded, onSceneReady, onMeshClick, onMeshDoub
         const hit = getSelectableRaycastHit(e);
         if (hit) onMeshDoubleClick(hit.object, hit.point);
       }}
+      onPointerMove={(e: any) => {
+        if (!onMeshHover) return;
+        const hit = getSelectableRaycastHit(e);
+        if (hit) onMeshHover(hit.object, e);
+      }}
+      onPointerOut={() => onMeshHoverEnd?.()}
     />
   );
 }
@@ -803,9 +840,9 @@ function AutoFitCamera({
 // Scene
 function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLegendItems,
   resetTrigger, fitTrigger, savedPosition, savedTarget, onCameraChange, sceneReady, onModelLoaded, onSceneReady,
-  orbitFocusPoint, onMeshClick, onMeshDoubleClick, selectedMeshKey, projectId, companyId, ifcRealModeActive, ifcHouseOptions, ifcServiceOptions,
+  orbitFocusPoint, onMeshClick, onMeshDoubleClick, onMeshHover, onMeshHoverEnd, selectedMeshKey, projectId, companyId, ifcRealModeActive, ifcHouseOptions, ifcServiceOptions,
   cameraMode, walkInspectOpen, onWalkExit, onWalkInspectClose, onWalkMeshInspect,
-  supplementalGlbParts, onSupplementalMeshClick, onSupplementalMeshDoubleClick, onSupplementalSceneReady, onSupplementalInventoryReady,
+  supplementalGlbParts, onSupplementalMeshClick, onSupplementalMeshDoubleClick, onSupplementalMeshHover, onSupplementalMeshHoverEnd, onSupplementalSceneReady, onSupplementalInventoryReady,
   observerHeight, walkStartPoint, performanceMode, zoomSpeed,
 }: {
   modelData: ModelData | null; markers: HouseMarker[]; selectedMarkerId: number | null;
@@ -819,6 +856,8 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   zoomSpeed: number;
   onMeshClick?: (mesh: THREE.Object3D, point?: THREE.Vector3) => void;
   onMeshDoubleClick?: (mesh: THREE.Object3D, point?: THREE.Vector3) => void;
+  onMeshHover?: (mesh: THREE.Object3D, event: any) => void;
+  onMeshHoverEnd?: () => void;
   selectedMeshKey?: string | null;
   projectId?: string | null;
   companyId?: string | null;
@@ -833,6 +872,8 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   supplementalGlbParts: SupplementalGlbPart[];
   onSupplementalMeshClick?: (part: SupplementalGlbPart, mesh: THREE.Object3D, point?: THREE.Vector3) => void;
   onSupplementalMeshDoubleClick?: (part: SupplementalGlbPart, mesh: THREE.Object3D, point?: THREE.Vector3) => void;
+  onSupplementalMeshHover?: (part: SupplementalGlbPart, mesh: THREE.Object3D, event: any) => void;
+  onSupplementalMeshHoverEnd?: () => void;
   onSupplementalSceneReady?: (part: SupplementalGlbPart, scene: THREE.Object3D) => void;
   onSupplementalInventoryReady?: (part: SupplementalGlbPart, meshes: GlbMeshInventoryInput[]) => void;
   observerHeight: number;
@@ -861,11 +902,11 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
       {modelData && (
         <Suspense fallback={<Html center><div className="bg-background/90 px-4 py-2 rounded-lg border border-border">Carregando modelo...</div></Html>}>
           {modelData.type === "gltf" ? (
-            <GLTFModel url={modelData.url} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} onMeshDoubleClick={onMeshDoubleClick} selectedMeshKey={selectedMeshKey} />
+            <GLTFModel url={modelData.url} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} onMeshDoubleClick={onMeshDoubleClick} onMeshHover={onMeshHover} onMeshHoverEnd={onMeshHoverEnd} selectedMeshKey={selectedMeshKey} />
           ) : modelData.type === "ifc" ? (
             <IFCModel url={modelData.url} projectId={projectId} companyId={companyId} ifcRealModeActive={ifcRealModeActive} houseOptions={ifcHouseOptions} serviceOptions={ifcServiceOptions} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} selectedMeshKey={selectedMeshKey} />
           ) : (
-            <OBJModel url={modelData.url} mtlUrl={modelData.mtlUrl} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} onMeshDoubleClick={onMeshDoubleClick} selectedMeshKey={selectedMeshKey} />
+            <OBJModel url={modelData.url} mtlUrl={modelData.mtlUrl} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} onMeshDoubleClick={onMeshDoubleClick} onMeshHover={onMeshHover} onMeshHoverEnd={onMeshHoverEnd} selectedMeshKey={selectedMeshKey} />
           )}
         </Suspense>
       )}
@@ -876,6 +917,8 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
             part={part}
             onMeshClick={onSupplementalMeshClick}
             onMeshDoubleClick={onSupplementalMeshDoubleClick}
+            onMeshHover={onSupplementalMeshHover}
+            onMeshHoverEnd={onSupplementalMeshHoverEnd}
             onSceneReady={onSupplementalSceneReady}
             onInventoryReady={onSupplementalInventoryReady}
             selectedMeshKey={selectedMeshKey}
@@ -1162,6 +1205,7 @@ export function Map3DView() {
   const [smartLinkPreviewMode, setSmartLinkPreviewMode] = useState<"show" | "isolate" | null>(null);
   const [smartLinkIsolationFilter, setSmartLinkIsolationFilter] = useState<SmartLinkIsolationFilter>("all");
   const [smartLinkFocusedCandidateKey, setSmartLinkFocusedCandidateKey] = useState<string | null>(null);
+  const [smartLinkHoverTooltip, setSmartLinkHoverTooltip] = useState<SmartLinkHoverTooltip>(null);
   const [smartLinkApplying, setSmartLinkApplying] = useState(false);
   const smartLinkPreviewMaterialsRef = useRef<Array<{ mesh: THREE.Mesh; originalMaterial: THREE.Material | THREE.Material[] }>>([]);
   const smartLinkPreviewStateRef = useRef({
@@ -1926,6 +1970,30 @@ export function Map3DView() {
     setSelectedMeshKey(layerKey);
   }, [assignMode, reviewMode]);
 
+  const handleSmartLinkCandidateHover = useCallback((obj: THREE.Object3D, event: any) => {
+    if (!smartLinkPreviewEnabled || !(obj as THREE.Mesh).isMesh) return;
+    const layerKey = getMeshLayerKey(obj as THREE.Mesh);
+    const candidate = smartLinkCandidates.find((item) => item.layerKey === layerKey);
+    if (!candidate) {
+      setSmartLinkHoverTooltip(null);
+      return;
+    }
+    const sourceEvent = event?.nativeEvent ?? event;
+    setSmartLinkHoverTooltip({
+      candidate,
+      x: Number(sourceEvent?.clientX ?? 0),
+      y: Number(sourceEvent?.clientY ?? 0),
+    });
+  }, [smartLinkCandidates, smartLinkPreviewEnabled]);
+
+  const handleSupplementalSmartLinkCandidateHover = useCallback((_part: SupplementalGlbPart, obj: THREE.Object3D, event: any) => {
+    handleSmartLinkCandidateHover(obj, event);
+  }, [handleSmartLinkCandidateHover]);
+
+  const clearSmartLinkCandidateHover = useCallback(() => {
+    setSmartLinkHoverTooltip(null);
+  }, []);
+
   const handleWalkStartPick = useCallback((obj: THREE.Object3D, point?: THREE.Vector3) => {
     if (!walkStartPickMode || !point) return;
     saveWalkStartPoint(point);
@@ -2458,8 +2526,10 @@ export function Map3DView() {
     setSmartLinkPreviewEnabled(false);
     setSmartLinkPreviewBarOpen(false);
     setSmartLinkPreviewMode(null);
+    setSmartLinkHoverTooltip(null);
     setIsolatedKeys(null);
     clearSmartLinkPreviewHighlight(reason);
+    clearMeshSelection(`smartlink visual cleanup: ${reason}`);
     setIsLoading(false);
     console.log("[GLB Smart Preview State]", {
       action: "visual-clear-end",
@@ -2474,7 +2544,7 @@ export function Map3DView() {
       isPreviewBarOpen: false,
       applyingAfter: beforeState.applying,
     });
-  }, [clearSmartLinkPreviewHighlight]);
+  }, [clearMeshSelection, clearSmartLinkPreviewHighlight]);
 
   const clearSmartLinkPreview = useCallback((reason = "user/action") => {
     const beforeState = smartLinkPreviewStateRef.current;
@@ -2506,6 +2576,7 @@ export function Map3DView() {
     setSmartLinkCandidates([]);
     setSmartLinkSelectedKeys(new Set());
     setSmartLinkFocusedCandidateKey(null);
+    setSmartLinkHoverTooltip(null);
     setSmartLinkIsolationFilter("all");
     clearSmartLinkPreviewVisual(reason);
     console.log("[GLB Smart Preview State]", {
@@ -4265,6 +4336,7 @@ export function Map3DView() {
           <Canvas shadows={!performanceMode} dpr={[1, performanceMode ? 1 : 1.25]} frameloop="always"
             gl={{ antialias: !performanceMode, powerPreference: "high-performance", stencil: false, depth: true }}
             onPointerMissed={() => {
+              clearSmartLinkCandidateHover();
               if (reviewMode && selectedMeshKey) clearMeshSelection("canvas empty click");
             }}
             style={{ width: "100%", height: "100%", background: "#d8ecff" }}
@@ -4278,6 +4350,8 @@ export function Map3DView() {
               orbitFocusPoint={orbitFocusPoint}
               onMeshClick={cameraMode === "walk" ? undefined : reviewMode ? handleReviewMeshClick : assignMode ? handleMeshClick : undefined}
               onMeshDoubleClick={cameraMode === "orbit" ? handleMeshDoubleClickFocus : undefined}
+              onMeshHover={smartLinkPreviewEnabled ? handleSmartLinkCandidateHover : undefined}
+              onMeshHoverEnd={clearSmartLinkCandidateHover}
               selectedMeshKey={cameraMode === "walk" ? null : reviewMode ? selectedMeshKey : null}
               projectId={projectId}
               companyId={companyId}
@@ -4292,6 +4366,8 @@ export function Map3DView() {
               supplementalGlbParts={supplementalGlbParts}
               onSupplementalMeshClick={handleSupplementalMeshClick}
               onSupplementalMeshDoubleClick={cameraMode === "orbit" ? handleSupplementalMeshDoubleClickFocus : undefined}
+              onSupplementalMeshHover={smartLinkPreviewEnabled ? handleSupplementalSmartLinkCandidateHover : undefined}
+              onSupplementalMeshHoverEnd={clearSmartLinkCandidateHover}
               onSupplementalSceneReady={handleSupplementalSceneReady}
               onSupplementalInventoryReady={handleSupplementalInventoryReady}
               observerHeight={observerHeight}
@@ -4343,6 +4419,33 @@ export function Map3DView() {
             <Button type="button" size="sm" variant="ghost" onClick={() => clearSmartLinkPreview("preview bar clear")}>
               Limpar destaque
             </Button>
+          </div>
+        )}
+        {smartLinkHoverTooltip && (
+          <div
+            className="pointer-events-none fixed z-[80] max-w-xs rounded-md border border-primary/30 bg-background/95 px-3 py-2 text-xs shadow-xl backdrop-blur"
+            style={{
+              left: Math.min(smartLinkHoverTooltip.x + 14, window.innerWidth - 280),
+              top: Math.min(smartLinkHoverTooltip.y + 14, window.innerHeight - 180),
+            }}
+          >
+            <p className="font-semibold text-primary">{smartLinkHoverTooltip.candidate.meshName || "Candidata SmartLink"}</p>
+            <p>
+              Casa: {smartLinkHoverTooltip.candidate.suggestedHouseNumber != null
+                ? `Casa ${smartLinkHoverTooltip.candidate.suggestedHouseNumber}`
+                : "sem sugestao confiavel"}
+            </p>
+            <p>Servico: {smartLinkServiceLabel}</p>
+            <p>Status: {SMART_LINK_STATUS_LABEL[smartLinkHoverTooltip.candidate.status]}</p>
+            <p>
+              Confianca: {smartLinkHoverTooltip.candidate.suggestionConfidence}
+              {smartLinkHoverTooltip.candidate.suggestionDistance != null
+                ? ` | ${smartLinkHoverTooltip.candidate.suggestionDistance.toFixed(1)}m`
+                : ""}
+            </p>
+            <p className="text-muted-foreground">
+              {smartLinkHoverTooltip.candidate.houseSuggestionRejectReason || smartLinkHoverTooltip.candidate.suggestionReason}
+            </p>
           </div>
         )}
         {assignMode && (
