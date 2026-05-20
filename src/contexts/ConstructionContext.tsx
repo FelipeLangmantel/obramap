@@ -1930,7 +1930,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
   const getHouseProgress = useCallback((houseId: number): number => {
     if (!currentProject) return 0;
     const house = currentProject.houses.find(h => h.id === houseId);
-    return house ? calculateHouseProgress(house) : 0;
+    return house ? calculateHouseProgress(house, currentProject.macrosTemplate) : 0;
   }, [currentProject]);
 
   const getDaysRemaining = useCallback(() => {

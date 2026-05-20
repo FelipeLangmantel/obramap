@@ -13,8 +13,24 @@ export function ScopesList({ house }: ScopesListProps) {
   const [openMacros, setOpenMacros] = useState<Set<string>>(new Set());
   
   const legendItems = currentProject?.customLegendItems ?? DEFAULT_LEGEND_ITEMS;
+  const displayMacros = (currentProject?.macrosTemplate?.length ? currentProject.macrosTemplate : house.macros).map(macro => {
+    const houseMacro = house.macros.find(item => item.id === macro.id);
+    return {
+      ...macro,
+      scopes: macro.scopes.map(scope => {
+        const houseScope = houseMacro?.scopes?.find(item => item.id === scope.id)
+          ?? house.macros.flatMap(item => item.scopes).find(item => item.id === scope.id);
+        return {
+          ...scope,
+          progress: Number(houseScope?.progress ?? 0),
+          startDate: houseScope?.startDate ?? scope.startDate ?? null,
+          endDate: houseScope?.endDate ?? scope.endDate ?? null,
+        };
+      }),
+    };
+  });
 
-  const getMacroProgress = (macro: typeof house.macros[0]) => {
+  const getMacroProgress = (macro: typeof displayMacros[0]) => {
     if (macro.scopes.length === 0) return 0;
     const totalWeight = macro.scopes.reduce((sum, s) => sum + s.weight, 0);
     if (totalWeight === 0) return 0;
@@ -54,7 +70,7 @@ export function ScopesList({ house }: ScopesListProps) {
       </div>
       
       <div className="space-y-2">
-        {house.macros.map(macro => {
+        {displayMacros.map(macro => {
           const macroProgress = getMacroProgress(macro);
           const isOpen = openMacros.has(macro.id);
           

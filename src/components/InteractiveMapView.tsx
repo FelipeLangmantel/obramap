@@ -95,6 +95,22 @@ function HouseDetailsDialogContent({
   macrosTemplate?: any[];
 }) {
   const [openMacros, setOpenMacros] = useState<Set<string>>(new Set());
+  const displayMacros = (macrosTemplate?.length ? macrosTemplate : house.macros).map((macro: any) => {
+    const houseMacro = house.macros.find((item: any) => item.id === macro.id);
+    return {
+      ...macro,
+      scopes: macro.scopes.map((scope: any) => {
+        const houseScope = houseMacro?.scopes?.find((item: any) => item.id === scope.id)
+          ?? house.macros.flatMap((item: any) => item.scopes).find((item: any) => item.id === scope.id);
+        return {
+          ...scope,
+          progress: Number(houseScope?.progress ?? 0),
+          startDate: houseScope?.startDate ?? scope.startDate ?? null,
+          endDate: houseScope?.endDate ?? scope.endDate ?? null,
+        };
+      }),
+    };
+  });
 
   const getProgressBarColor = (progress: number) => {
     for (const item of legendItems) {
@@ -155,7 +171,7 @@ function HouseDetailsDialogContent({
         
         <ScrollArea className="h-60">
           <div className="space-y-2 pr-3">
-            {house.macros.map((macro: any) => {
+            {displayMacros.map((macro: any) => {
               const macroProgress = getMacroProgress(macro);
               const isOpen = openMacros.has(macro.id);
               
