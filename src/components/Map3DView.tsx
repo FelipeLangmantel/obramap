@@ -415,7 +415,7 @@ function ZoomToMouseControls() {
       maxDistance={Infinity}
       panSpeed={1.5}
       rotateSpeed={1.0}
-      zoomSpeed={1.0}
+      zoomSpeed={2.2}
       enableDamping
       dampingFactor={0.08}
       zoomToCursor
