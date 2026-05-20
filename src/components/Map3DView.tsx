@@ -2467,6 +2467,92 @@ export function Map3DView() {
     return realStats;
   }, [buildCurrentMeshMap, isCompleteProductionLink, meshHooks.meshMap, traverseActiveModelMeshes]);
 
+  const diagnoseGlbPartRealMode = useCallback(() => {
+    const sourceMap = buildCurrentMeshMap(meshHooks.meshMap);
+    const samples: Array<{
+      layer_key: string;
+      mesh_name: string | null;
+      material_name: string | null;
+      assigned_house_number: number | null;
+      service_macro_id: string | null;
+      service_scope_id: string | null;
+      production_visible: boolean;
+      progress_percent: number | null;
+      bucket: string;
+      actual_visible: boolean;
+    }> = [];
+    let glbPartMeshesInScene = 0;
+    let linkedComplete = 0;
+    let unlinked = 0;
+    let visibleInReal = 0;
+    let hiddenInReal = 0;
+    let contextVisible = 0;
+    let ignored = 0;
+
+    traverseActiveModelMeshes((mesh) => {
+      const layerKey = getMeshLayerKey(mesh);
+      if (!layerKey.startsWith("glbpart:")) return;
+      glbPartMeshesInScene++;
+      const saved = sourceMap.get(layerKey) ?? null;
+      const isContext = isContextProjectModelMesh(saved);
+      const hasCompleteLink = isCompleteProductionLink(saved);
+      let bucket = "sem vinculo";
+      let wouldBeVisibleInReal = false;
+
+      if (!saved) {
+        unlinked++;
+      } else if (saved.ignored) {
+        ignored++;
+        bucket = "ignorada";
+      } else if (isContext) {
+        contextVisible += saved.visible ? 1 : 0;
+        wouldBeVisibleInReal = saved.visible;
+        bucket = saved.visible ? "contexto visivel" : "contexto oculto";
+      } else if (hasCompleteLink) {
+        linkedComplete++;
+        wouldBeVisibleInReal = !!saved.production_visible;
+        bucket = saved.production_visible ? "producao visivel" : "producao oculta";
+      } else {
+        unlinked++;
+      }
+
+      if (wouldBeVisibleInReal) visibleInReal++;
+      else hiddenInReal++;
+
+      if (samples.length < 10) {
+        samples.push({
+          layer_key: layerKey,
+          mesh_name: saved?.mesh_name ?? mesh.name ?? null,
+          material_name: saved?.material_name ?? getMeshMaterialName(mesh) ?? null,
+          assigned_house_number: saved?.assigned_house_number ?? null,
+          service_macro_id: saved?.service_macro_id ?? null,
+          service_scope_id: saved?.service_scope_id ?? null,
+          production_visible: !!saved?.production_visible,
+          progress_percent: saved?.progress_percent ?? null,
+          bucket,
+          actual_visible: mesh.visible,
+        });
+      }
+    });
+
+    const result = {
+      activeLoadedParts: supplementalGlbParts.filter((part) => part.visible && supplementalGlbScenesRef.current.has(part.id)).length,
+      totalPersistedParts: supplementalGlbParts.filter((part) => part.persisted).length,
+      glbPartMeshesInScene,
+      linkedComplete,
+      unlinked,
+      contextVisible,
+      ignored,
+      visibleInReal,
+      hiddenInReal,
+      viewMode,
+      sample: samples,
+    };
+
+    console.log("[GLB Parts Real Diagnostic]", result);
+    toast.info(`Diagnostico 3D Real: ${glbPartMeshesInScene} meshes de partes, ${linkedComplete} vinculadas, ${visibleInReal} visiveis no Real.`);
+  }, [buildCurrentMeshMap, meshHooks.meshMap, supplementalGlbParts, traverseActiveModelMeshes, viewMode]);
+
   // Re-aplica modo quando meshMap chega/atualiza ou cena fica pronta
   useEffect(() => {
     if (meshHooks.meshMap.size > 0 && (sceneObj || supplementalGlbParts.length > 0)) applyViewMode(viewMode);
@@ -3649,6 +3735,9 @@ export function Map3DView() {
                 <div className="flex items-center gap-2">
                   <Button type="button" variant="outline" size="sm" onClick={auditGlbMeshParts}>
                     Auditar meshes
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={diagnoseGlbPartRealMode}>
+                    Diagnosticar 3D Real
                   </Button>
                   <Button type="button" variant="ghost" size="sm" onClick={() => void removeAllSupplementalGlbParts()}>
                     Remover todas
