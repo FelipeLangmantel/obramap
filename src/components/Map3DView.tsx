@@ -3659,7 +3659,7 @@ export function Map3DView() {
                 size="sm"
                 onClick={toggleWalkMode}
                 disabled={isLoading}
-                title="Caminhar pelo modelo em primeira pessoa"
+                title="Use Caminhar para entrar nas casas e olhar ao redor"
               >
                 <Move3D className="h-4 w-4 mr-1.5" />
                 {cameraMode === "walk" ? "Sair do caminhar" : "Caminhar"}
@@ -3803,7 +3803,7 @@ export function Map3DView() {
             )}
             <div className="flex-1" />
             <span className="text-xs text-muted-foreground hidden lg:inline">
-              <strong>Arrastar</strong> rotacionar | <strong>Scroll</strong> zoom | <strong>Direito</strong> mover | <strong>Duplo clique na peca</strong> fixa o ponto de rotacao
+              <strong>Arrastar</strong> rotacionar | <strong>Scroll</strong> zoom | <strong>Direito</strong> mover | <strong>Duplo clique</strong> fixa ponto de rotacao | <strong>Centralizar</strong> ajusta a obra inteira
             </span>
           </div>
           {supplementalGlbParts.length > 0 && (
@@ -3879,7 +3879,6 @@ export function Map3DView() {
         >
           <Canvas shadows dpr={[1, 1.25]} frameloop="always"
             gl={{ antialias: true, powerPreference: "high-performance", stencil: false, depth: true }}
-            onDoubleClick={cameraMode === "orbit" ? centerCamera : undefined}
             onPointerMissed={() => {
               if (reviewMode && selectedMeshKey) clearMeshSelection("canvas empty click");
             }}
