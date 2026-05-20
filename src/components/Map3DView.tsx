@@ -3179,14 +3179,40 @@ export function Map3DView() {
       }
 
       const progressMap = new Map<string, number>();
+      const progressSourceMap = new Map<string, "houses.macros" | "weekly_productions">();
       housesForSync.forEach((h: any) => {
         const hn = h.houseNumber ?? h.house_number ?? h.number ?? h.id;
         (h.macros || []).forEach((macro: any) => {
           (macro.scopes || []).forEach((scope: any) => {
-            progressMap.set(`${hn}::${macro.id}::${scope.id}`, Number(scope.progress || 0));
+            const progressKey = `${hn}::${macro.id}::${scope.id}`;
+            const progress = Number(scope.progress || 0);
+            progressMap.set(progressKey, progress);
+            if (progress > 0) progressSourceMap.set(progressKey, "houses.macros");
           });
         });
       });
+
+      const { data: weeklyProductionRows, error: weeklyProductionError } = await supabase
+        .from("weekly_productions")
+        .select("macro_id, scope_id, house_ids")
+        .eq("project_id", projectId)
+        .is("deleted_at", null);
+
+      if (weeklyProductionError) {
+        console.error("[GLB Real Sync] weekly productions load error", weeklyProductionError);
+      } else {
+        (weeklyProductionRows || []).forEach((row: any) => {
+          const houseIds = ((row.house_ids as number[]) || []);
+          houseIds.forEach((houseId) => {
+            const progressKey = `${houseId}::${row.macro_id}::${row.scope_id}`;
+            const currentProgress = progressMap.get(progressKey) ?? 0;
+            if (currentProgress <= 0) {
+              progressMap.set(progressKey, 100);
+              progressSourceMap.set(progressKey, "weekly_productions");
+            }
+          });
+        });
+      }
 
       const ignoredCount = allMeshes.filter((mesh) => mesh.ignored).length;
       const contextCount = allMeshes.filter((mesh) => !mesh.ignored && isContextProjectModelMesh(mesh)).length;
@@ -3214,6 +3240,7 @@ export function Map3DView() {
           ? `${mesh.assigned_house_number}::${mesh.service_macro_id}::${mesh.service_scope_id}`
           : null;
         const progress = progressKey ? (progressMap.get(progressKey) ?? 0) : 0;
+        const progressSource = progressKey ? (progressSourceMap.get(progressKey) ?? "none") : "none";
         const calculatedProductionVisible = progress > 0;
         const counterBucket = mesh.ignored
           ? "ignored"
@@ -3234,6 +3261,7 @@ export function Map3DView() {
           progress_percent_before_sync: mesh.progress_percent,
           progress_key: progressKey,
           progress_found_in_houses_macros: progress,
+          progress_source: progressSource,
           calculated_production_visible: calculatedProductionVisible,
           calculated_progress_percent: progress,
           counter_bucket: counterBucket,
@@ -3265,6 +3293,7 @@ export function Map3DView() {
         console.log("[GLB Real Sync] inputs", {
           projectId,
           totalHouses: housesForSync.length,
+          weeklyProductionsForFallback: weeklyProductionRows?.length ?? 0,
           house20Found: !!house20,
           house20Scopes: house20
             ? (house20.macros || []).flatMap((macro: any) =>
@@ -3289,6 +3318,7 @@ export function Map3DView() {
       linkedProductionMeshes.forEach((mesh) => {
         const progressKey = `${mesh.assigned_house_number}::${mesh.service_macro_id}::${mesh.service_scope_id}`;
         const progress = progressMap.get(progressKey) ?? 0;
+        const progressSource = progressSourceMap.get(progressKey) ?? "none";
         const pv = progress > 0;
         if (pv) visible++; else hidden++;
         if (import.meta.env.DEV && mesh.assigned_house_number === 20) {
@@ -3300,6 +3330,7 @@ export function Map3DView() {
             service_scope_id: mesh.service_scope_id,
             progressKey,
             progress,
+            progressSource,
             production_visible: pv,
           });
         }
@@ -3338,6 +3369,23 @@ export function Map3DView() {
         batchSize,
         errors: syncErrors.length,
       });
+      if (import.meta.env.DEV) {
+        console.log("[GLB Real Visibility Debug]", linkedProductionMeshes.slice(0, 10).map((mesh) => {
+          const progressKey = `${mesh.assigned_house_number}::${mesh.service_macro_id}::${mesh.service_scope_id}`;
+          const progress = progressMap.get(progressKey) ?? 0;
+          const progressSource = progressSourceMap.get(progressKey) ?? "none";
+          return {
+            layer_key: mesh.layer_key,
+            house_number: mesh.assigned_house_number,
+            macro_id: mesh.service_macro_id,
+            scope_id: mesh.service_scope_id,
+            progress,
+            progressSource,
+            production_visible: progress > 0,
+            hidden_reason: progress > 0 ? null : "sem progresso para este servico/casa",
+          };
+        }));
+      }
       if (syncErrors.length > 0) {
         console.error("[GLB Real Sync Optimized] update errors", syncErrors);
         throw syncErrors[0];
