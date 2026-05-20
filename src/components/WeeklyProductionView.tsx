@@ -192,6 +192,7 @@ export function WeeklyProductionView() {
   const queryClient = useQueryClient();
   const { canEdit, profile, isCompanyAdmin, isSystemAdmin, user } = useAuth();
   const podeExcluir = isCompanyAdmin || isSystemAdmin;
+  const canUseInitialDatabase = canEdit || isCompanyAdmin || isSystemAdmin;
   
   // Load saved tab from localStorage
   const [activeTab, setActiveTab] = useState<"register" | "analysis" | "diario" | "historico" | "obra">(() => {
@@ -643,6 +644,27 @@ export function WeeklyProductionView() {
 
       // Função interna que executa a inserção propriamente dita
       const executarInsercao = async () => {
+        const progressMap: Record<number, number> = {};
+        const revertMap: Record<number, number> = {};
+        for (const houseId of selectedHouses) {
+          const house = houses.find(h => h.id === houseId);
+          const houseMacros = (house?.macros as any[]) || [];
+          const houseMacro = houseMacros.find(m => m.id === macro.id);
+          const houseScope = houseMacro?.scopes?.find((s: any) => s.id === scope.id);
+          const currentProgress = houseScope?.progress || 0;
+          const remainingPercent = 100 - currentProgress;
+
+          const percentToAdd = customPercentMode
+            ? Math.min(housePercentages[houseId] ?? massPercentage, remainingPercent)
+            : remainingPercent;
+
+          revertMap[houseId] = currentProgress;
+          progressMap[houseId] = Math.min(100, currentProgress + percentToAdd);
+        }
+
+        await updateBatchScopeProgress(selectedHouses, macro.id, scope.id, 100, progressMap);
+
+        try {
         // 1. Save to new productions table — SKIP when Initial Database to avoid double-counting
         if (!isInitialDatabase) {
           const { error: newProductionError } = await supabase
@@ -666,6 +688,7 @@ export function WeeklyProductionView() {
 
           if (newProductionError) {
             console.error('Error saving to new productions table:', newProductionError);
+            throw newProductionError;
           }
         }
 
@@ -689,25 +712,10 @@ export function WeeklyProductionView() {
           });
 
         if (error) throw error;
-
-        // Build percentage map - add to existing progress instead of replacing
-        const progressMap: Record<number, number> = {};
-        for (const houseId of selectedHouses) {
-          const house = houses.find(h => h.id === houseId);
-          const houseMacros = (house?.macros as any[]) || [];
-          const houseMacro = houseMacros.find(m => m.id === macro.id);
-          const houseScope = houseMacro?.scopes?.find((s: any) => s.id === scope.id);
-          const currentProgress = houseScope?.progress || 0;
-          const remainingPercent = 100 - currentProgress;
-
-          const percentToAdd = customPercentMode
-            ? Math.min(housePercentages[houseId] ?? massPercentage, remainingPercent)
-            : remainingPercent;
-
-          progressMap[houseId] = Math.min(100, currentProgress + percentToAdd);
+        } catch (insertError) {
+          await updateBatchScopeProgress(selectedHouses, macro.id, scope.id, 0, revertMap);
+          throw insertError;
         }
-
-        await updateBatchScopeProgress(selectedHouses, macro.id, scope.id, 100, progressMap);
 
         const message = isInitialDatabase
           ? `Banco de atividades atualizado: ${scope.name} em ${selectedHouses.length} casas.`
@@ -715,6 +723,11 @@ export function WeeklyProductionView() {
         toast.success(message);
 
         await reloadProductions();
+        await refreshHousesFromDB();
+        queryClient.invalidateQueries({ queryKey: ["houses"] });
+        window.dispatchEvent(new CustomEvent("obramap:progress-recomputed", {
+          detail: { projectId: currentProject.id },
+        }));
 
         // C2: Deviation tracking after save
         if (selectedReleasedService && !isInitialDatabase) {
@@ -1549,14 +1562,14 @@ export function WeeklyProductionView() {
                       id="initial-database"
                       checked={isInitialDatabase}
                       onCheckedChange={(checked) => handleInitialDatabaseChange(checked as boolean)}
-                      disabled={!podeExcluir}
+                      disabled={!canUseInitialDatabase}
                     />
                     <Label
                       htmlFor="initial-database"
-                      className={cn("text-xs", podeExcluir ? "cursor-pointer" : "cursor-not-allowed text-muted-foreground")}
-                      title={!podeExcluir ? "Banco Inicial — somente administradores" : undefined}
+                      className={cn("text-xs", canUseInitialDatabase ? "cursor-pointer" : "cursor-not-allowed text-muted-foreground")}
+                      title={!canUseInitialDatabase ? "Banco Inicial indisponível para este usuário" : undefined}
                     >
-                      Banco Inicial {!podeExcluir && <span className="ml-1">🔒</span>}
+                      Banco Inicial {!canUseInitialDatabase && <span className="ml-1">🔒</span>}
                     </Label>
                   </div>
                 </div>

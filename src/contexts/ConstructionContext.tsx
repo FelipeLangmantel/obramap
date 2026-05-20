@@ -1610,6 +1610,13 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     if (!currentProjectId || houseIds.length === 0) return;
 
     try {
+      const project = projectsRef.current?.find((p) => p.id === currentProjectId);
+      const templateMacro = project?.macrosTemplate?.find((macro) => macro.id === macroId);
+      const templateScope = templateMacro?.scopes?.find((scope) => scope.id === scopeId);
+      if (!templateMacro || !templateScope) {
+        throw new Error(`Serviço não encontrado no modelo do projeto: macro=${macroId}, scope=${scopeId}`);
+      }
+
       // Fetch all houses data in one query
       const { data: housesData, error: fetchError } = await supabase
         .from('houses')
@@ -1618,8 +1625,13 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         .in('house_number', houseIds);
 
       if (fetchError || !housesData) {
-        console.error('Error fetching houses data:', fetchError);
-        return;
+        throw fetchError || new Error("Erro ao buscar casas para atualizar produção.");
+      }
+
+      if (housesData.length !== houseIds.length) {
+        const found = new Set(housesData.map((house) => house.house_number));
+        const missing = houseIds.filter((houseId) => !found.has(houseId));
+        throw new Error(`Casas não encontradas para atualizar produção: ${missing.join(", ")}`);
       }
 
       // Prepare all updates
@@ -1630,17 +1642,42 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         const houseProgress = houseProgressMap?.[houseData.house_number] ?? progress;
         
         const currentMacros = jsonToMacros(houseData.macros);
+        let macroFound = false;
         const updatedMacros = currentMacros.map(macro => {
           if (macro.id !== macroId) return macro;
+          macroFound = true;
+          const hasScope = macro.scopes.some((scope) => scope.id === scopeId);
+          const scopes = hasScope
+            ? macro.scopes
+            : [...macro.scopes, { ...templateScope, progress: 0, startDate: null, endDate: null }];
           return {
             ...macro,
-            scopes: macro.scopes.map(scope => {
+            scopes: scopes.map(scope => {
               if (scope.id !== scopeId) return scope;
               return { ...scope, progress: houseProgress };
             })
           };
         });
-        updates.push({ houseNumber: houseData.house_number, updatedMacros });
+
+        if (!macroFound) {
+          updates.push({
+            houseNumber: houseData.house_number,
+            updatedMacros: [
+              ...currentMacros,
+              {
+                ...templateMacro,
+                scopes: templateMacro.scopes.map((scope) => ({
+                  ...scope,
+                  progress: scope.id === scopeId ? houseProgress : 0,
+                  startDate: null,
+                  endDate: null,
+                })),
+              },
+            ],
+          });
+        } else {
+          updates.push({ houseNumber: houseData.house_number, updatedMacros });
+        }
       }
 
       // Execute database updates in batches of 10 for better performance
@@ -1659,7 +1696,9 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
             .eq('project_id', currentProjectId)
             .eq('house_number', houseNumber)
         );
-        await Promise.all(batchPromises);
+        const batchResults = await Promise.all(batchPromises);
+        const batchError = batchResults.find((result) => result.error)?.error;
+        if (batchError) throw batchError;
       }
 
       // Update local state with all changes at once
@@ -1682,8 +1721,12 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
           setSelectedHouse(prev => prev ? { ...prev, macros: update.updatedMacros, lastUpdate: new Date().toLocaleDateString("pt-BR") } : null);
         }
       }
+      window.dispatchEvent(new CustomEvent("obramap:progress-recomputed", {
+        detail: { projectId: currentProjectId },
+      }));
     } catch (error) {
       console.error('Error batch updating scope progress:', error);
+      throw error;
     }
   }, [currentProjectId, selectedHouse]);
 
