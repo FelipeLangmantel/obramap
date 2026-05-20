@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Upload, RotateCcw, Move3D, X, ChevronDown, ChevronRight, Save, Loader2, Home, AlertTriangle, Target, Layers, Camera, MousePointerClick, ScanSearch, RefreshCw, Eye, EyeOff, Boxes, Sparkles } from "lucide-react";
+import { Upload, RotateCcw, Move3D, X, ChevronDown, ChevronRight, Save, Loader2, Home, AlertTriangle, Target, Layers, Camera, MousePointerClick, ScanSearch, RefreshCw, Eye, EyeOff, Boxes, Sparkles, SlidersHorizontal } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -65,6 +65,16 @@ type GlbMeshInventoryInput = {
 };
 
 const MAP3D_STORAGE_BUCKET = "3d-models";
+const MAP3D_ZOOM_SENSITIVITY_KEY = "obramap:map3d:zoom-sensitivity";
+
+type ZoomSensitivity = "low" | "normal" | "high" | "very_high";
+
+const ZOOM_SENSITIVITY_OPTIONS: Array<{ value: ZoomSensitivity; label: string; multiplier: number }> = [
+  { value: "low", label: "Baixa", multiplier: 0.7 },
+  { value: "normal", label: "Normal", multiplier: 1 },
+  { value: "high", label: "Alta", multiplier: 1.4 },
+  { value: "very_high", label: "Muito alta", multiplier: 1.8 },
+];
 
 function sanitize3DStorageFileName(fileName: string): string {
   const extension = fileName.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "glb";
@@ -168,6 +178,33 @@ function getMeshMaterialName(mesh: THREE.Mesh): string {
   if (!material) return "";
   if (Array.isArray(material)) return material.map((m: any) => m?.name).filter(Boolean).join(" ");
   return (material as any).name || "";
+}
+
+function isMeshSelectableFromRaycast(mesh: THREE.Object3D): boolean {
+  let node: THREE.Object3D | null = mesh;
+  while (node) {
+    if (!node.visible) return false;
+    node = node.parent;
+  }
+  const material = (mesh as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
+  const materials = Array.isArray(material) ? material : material ? [material] : [];
+  if (materials.length > 0 && materials.every((mat: any) => mat.transparent && Number(mat.opacity ?? 1) <= 0.02)) {
+    return false;
+  }
+  return true;
+}
+
+function getSelectableRaycastHit(event: any): { object: THREE.Object3D; point?: THREE.Vector3 } | null {
+  const intersections = Array.isArray(event?.intersections) ? event.intersections : [];
+  const hit = intersections.find((item: any) => {
+    const object = item?.object as THREE.Object3D | undefined;
+    return !!object && (object as THREE.Mesh).isMesh && isMeshSelectableFromRaycast(object);
+  });
+  if (hit?.object) return { object: hit.object, point: hit.point?.clone?.() };
+  if (event?.object && (event.object as THREE.Mesh).isMesh && isMeshSelectableFromRaycast(event.object)) {
+    return { object: event.object, point: event.point?.clone?.() };
+  }
+  return null;
 }
 
 function isContextMesh(saved: ProjectModelMesh | null | undefined, mesh: THREE.Mesh): boolean {
@@ -293,12 +330,14 @@ function GLTFModel({ url, onLoaded, onSceneReady, onMeshClick, onMeshDoubleClick
       onClick={(e: any) => {
         if (!onMeshClick) return;
         e.stopPropagation();
-        if (e.object) onMeshClick(e.object, e.point?.clone?.());
+        const hit = getSelectableRaycastHit(e);
+        if (hit) onMeshClick(hit.object, hit.point);
       }}
       onDoubleClick={(e: any) => {
         if (!onMeshDoubleClick) return;
         e.stopPropagation();
-        if (e.object) onMeshDoubleClick(e.object, e.point?.clone?.());
+        const hit = getSelectableRaycastHit(e);
+        if (hit) onMeshDoubleClick(hit.object, hit.point);
       }}
     />
   );
@@ -358,12 +397,14 @@ function SupplementalGLTFPart({
       object={scene}
       onClick={(e: any) => {
         e.stopPropagation();
-        if (e.object) onMeshClick?.(part, e.object, e.point?.clone?.());
+        const hit = getSelectableRaycastHit(e);
+        if (hit) onMeshClick?.(part, hit.object, hit.point);
       }}
       onDoubleClick={(e: any) => {
         if (!onMeshDoubleClick) return;
         e.stopPropagation();
-        if (e.object) onMeshDoubleClick(part, e.object, e.point?.clone?.());
+        const hit = getSelectableRaycastHit(e);
+        if (hit) onMeshDoubleClick(part, hit.object, hit.point);
       }}
     />
   );
@@ -392,12 +433,14 @@ function OBJModel({ url, mtlUrl, onLoaded, onSceneReady, onMeshClick, onMeshDoub
       onClick={(e: any) => {
         if (!onMeshClick) return;
         e.stopPropagation();
-        if (e.object) onMeshClick(e.object, e.point?.clone?.());
+        const hit = getSelectableRaycastHit(e);
+        if (hit) onMeshClick(hit.object, hit.point);
       }}
       onDoubleClick={(e: any) => {
         if (!onMeshDoubleClick) return;
         e.stopPropagation();
-        if (e.object) onMeshDoubleClick(e.object, e.point?.clone?.());
+        const hit = getSelectableRaycastHit(e);
+        if (hit) onMeshDoubleClick(hit.object, hit.point);
       }}
     />
   );
@@ -430,7 +473,7 @@ function HouseMarker3D({ marker, onClick, isSelected, customLegendItems }: {
 }
 
 // Zoom to mouse position controls
-function ZoomToMouseControls({ focusPoint }: { focusPoint?: [number, number, number] | null }) {
+function ZoomToMouseControls({ focusPoint, zoomSpeed }: { focusPoint?: [number, number, number] | null; zoomSpeed: number }) {
   const { gl, invalidate } = useThree();
   const controlsRef = useRef<any>(null);
 
@@ -486,7 +529,7 @@ function ZoomToMouseControls({ focusPoint }: { focusPoint?: [number, number, num
       panSpeed={1.2}
       rotateSpeed={0.9}
       // zoom mais suave: menos "salto" + damping curto = sensação fluida
-      zoomSpeed={2.8}
+      zoomSpeed={zoomSpeed}
       enableDamping
       dampingFactor={0.06}
       zoomToCursor
@@ -763,7 +806,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   orbitFocusPoint, onMeshClick, onMeshDoubleClick, selectedMeshKey, projectId, companyId, ifcRealModeActive, ifcHouseOptions, ifcServiceOptions,
   cameraMode, walkInspectOpen, onWalkExit, onWalkInspectClose, onWalkMeshInspect,
   supplementalGlbParts, onSupplementalMeshClick, onSupplementalMeshDoubleClick, onSupplementalSceneReady, onSupplementalInventoryReady,
-  observerHeight, walkStartPoint, performanceMode,
+  observerHeight, walkStartPoint, performanceMode, zoomSpeed,
 }: {
   modelData: ModelData | null; markers: HouseMarker[]; selectedMarkerId: number | null;
   onMarkerClick: (m: HouseMarker) => void; customLegendItems: any[];
@@ -773,6 +816,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   sceneReady: boolean; onModelLoaded: () => void;
   onSceneReady?: (scene: THREE.Object3D) => void;
   orbitFocusPoint?: [number, number, number] | null;
+  zoomSpeed: number;
   onMeshClick?: (mesh: THREE.Object3D, point?: THREE.Vector3) => void;
   onMeshDoubleClick?: (mesh: THREE.Object3D, point?: THREE.Vector3) => void;
   selectedMeshKey?: string | null;
@@ -801,7 +845,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
       <AutoFitCamera fitTrigger={fitTrigger} resetTrigger={resetTrigger}
         savedPosition={savedPosition} savedTarget={savedTarget}
         onCameraChange={onCameraChange} sceneReady={sceneReady} enabled={cameraMode === "orbit"} />
-      {cameraMode === "orbit" ? <ZoomToMouseControls focusPoint={orbitFocusPoint} /> : <WalkControls onExit={onWalkExit} height={observerHeight} startPoint={walkStartPoint} />}
+      {cameraMode === "orbit" ? <ZoomToMouseControls focusPoint={orbitFocusPoint} zoomSpeed={zoomSpeed} /> : <WalkControls onExit={onWalkExit} height={observerHeight} startPoint={walkStartPoint} />}
       <WalkMeshInspector
         enabled={cameraMode === "walk"}
         panelOpen={walkInspectOpen}
@@ -1075,6 +1119,10 @@ export function Map3DView() {
     return Number.isFinite(saved) && saved >= 1.2 && saved <= 2.2 ? saved : 1.7;
   });
   const [performanceMode, setPerformanceMode] = useState(() => localStorage.getItem("obramap:map3d:performance-mode") !== "false");
+  const [zoomSensitivity, setZoomSensitivity] = useState<ZoomSensitivity>(() => {
+    const saved = localStorage.getItem(MAP3D_ZOOM_SENSITIVITY_KEY);
+    return ZOOM_SENSITIVITY_OPTIONS.some((option) => option.value === saved) ? saved as ZoomSensitivity : "normal";
+  });
   const [supplementalPartsExpanded, setSupplementalPartsExpanded] = useState(() => localStorage.getItem("obramap:map3d:parts-expanded") === "true");
   const [walkStartPoint, setWalkStartPoint] = useState<[number, number, number] | null>(null);
   const [walkStartPickMode, setWalkStartPickMode] = useState(false);
@@ -1095,6 +1143,7 @@ export function Map3DView() {
   // Modo "Revisar Modelo"
   const [reviewMode, setReviewMode] = useState(false);
   const [selectedMeshKey, setSelectedMeshKey] = useState<string | null>(null);
+  const [hideLinkedInReview, setHideLinkedInReview] = useState(false);
   const [isolatedKeys, setIsolatedKeys] = useState<Set<string> | null>(null);
   const [meshReviewOverrides, setMeshReviewOverrides] = useState<Map<string, ProjectModelMesh>>(new Map());
   const [contextBulkAction, setContextBulkAction] = useState<GlbContextPresetKey | null>(null);
@@ -1258,6 +1307,10 @@ export function Map3DView() {
   useEffect(() => {
     localStorage.setItem("obramap:map3d:performance-mode", String(performanceMode));
   }, [performanceMode]);
+
+  useEffect(() => {
+    localStorage.setItem(MAP3D_ZOOM_SENSITIVITY_KEY, zoomSensitivity);
+  }, [zoomSensitivity]);
 
   useEffect(() => {
     localStorage.setItem("obramap:map3d:parts-expanded", String(supplementalPartsExpanded));
@@ -1854,8 +1907,7 @@ export function Map3DView() {
       }
     }
     setSelectedMeshKey(layerKey);
-    focusOrbitOnPoint(point);
-  }, [focusOrbitOnPoint, meshHooks.meshMap, reviewMode, sceneObj, smartLinkCandidates, smartLinkIsolationFilter, smartLinkPreviewEnabled, smartLinkSelectedKeys]);
+  }, [meshHooks.meshMap, reviewMode, sceneObj, smartLinkCandidates, smartLinkIsolationFilter, smartLinkPreviewEnabled, smartLinkSelectedKeys]);
 
   const handleSupplementalMeshClick = useCallback((part: SupplementalGlbPart, obj: THREE.Object3D, point?: THREE.Vector3) => {
     if (!(obj as THREE.Mesh).isMesh) return;
@@ -1872,8 +1924,7 @@ export function Map3DView() {
     }
     setSmartLinkFocusedCandidateKey(null);
     setSelectedMeshKey(layerKey);
-    focusOrbitOnPoint(point);
-  }, [assignMode, focusOrbitOnPoint, reviewMode]);
+  }, [assignMode, reviewMode]);
 
   const handleWalkStartPick = useCallback((obj: THREE.Object3D, point?: THREE.Vector3) => {
     if (!walkStartPickMode || !point) return;
@@ -2637,6 +2688,32 @@ export function Map3DView() {
     return keys;
   }, [traverseActiveModelMeshes]);
 
+  const reviewVisibilityStats = useMemo(() => {
+    const stats = { total: 0, linked: 0, pending: 0, context: 0, ignored: 0 };
+    const sourceMap = buildCurrentMeshMap(meshHooks.meshMap);
+    traverseActiveModelMeshes((mesh) => {
+      stats.total++;
+      const saved = sourceMap.get(getMeshLayerKey(mesh));
+      if (saved?.ignored) {
+        stats.ignored++;
+        return;
+      }
+      if (isContextProjectModelMesh(saved)) {
+        stats.context++;
+        return;
+      }
+      if (isCompleteProductionLink(saved)) {
+        stats.linked++;
+        return;
+      }
+      stats.pending++;
+    });
+    return stats;
+  }, [buildCurrentMeshMap, isCompleteProductionLink, meshHooks.meshMap, supplementalGlbParts, traverseActiveModelMeshes]);
+
+  const selectedZoomOption = ZOOM_SENSITIVITY_OPTIONS.find((option) => option.value === zoomSensitivity) ?? ZOOM_SENSITIVITY_OPTIONS[1];
+  const orbitZoomSpeed = 2.8 * selectedZoomOption.multiplier;
+
   const applyViewMode = useCallback((mode: ViewMode, overrideMeshMap?: Map<string, ProjectModelMesh>) => {
     setViewMode(mode);
     const realStats = {
@@ -2660,6 +2737,10 @@ export function Map3DView() {
       if (saved.ignored) {
         mesh.visible = false;
         if (mode === "real") realStats.ignored++;
+        return;
+      }
+      if (mode !== "real" && reviewMode && hideLinkedInReview && isCompleteProductionLink(saved) && !isContextProjectModelMesh(saved)) {
+        mesh.visible = false;
         return;
       }
       switch (mode) {
@@ -2704,7 +2785,7 @@ export function Map3DView() {
       }
     }
     return realStats;
-  }, [buildCurrentMeshMap, isCompleteProductionLink, meshHooks.meshMap, traverseActiveModelMeshes]);
+  }, [buildCurrentMeshMap, hideLinkedInReview, isCompleteProductionLink, meshHooks.meshMap, reviewMode, traverseActiveModelMeshes]);
 
   const diagnoseGlbPartRealMode = useCallback(() => {
     const sourceMap = buildCurrentMeshMap(meshHooks.meshMap);
@@ -2804,6 +2885,14 @@ export function Map3DView() {
       mesh.visible = isolatedKeys.has(getMeshLayerKey(mesh));
     });
   }, [isolatedKeys, applyViewMode, viewMode, traverseActiveModelMeshes]);
+
+  useEffect(() => {
+    if (!hideLinkedInReview || !selectedMeshKey) return;
+    const saved = getCurrentMeshRecord(selectedMeshKey);
+    if (isCompleteProductionLink(saved) && !isContextProjectModelMesh(saved)) {
+      clearMeshSelection("review linked filter");
+    }
+  }, [clearMeshSelection, getCurrentMeshRecord, hideLinkedInReview, isCompleteProductionLink, selectedMeshKey]);
 
   // Desabilita autoMode (LayersPanel) fora do modo simulação
   useEffect(() => {
@@ -3909,6 +3998,31 @@ export function Map3DView() {
                 Modo desempenho
               </Button>
             )}
+            {modelData && (
+              <div className="flex items-center gap-1 rounded-md border border-input bg-background px-1 py-1">
+                <span className="hidden items-center gap-1 px-1 text-xs text-muted-foreground sm:flex">
+                  <SlidersHorizontal className="h-3.5 w-3.5" />
+                  Zoom
+                </span>
+                <ToggleGroup
+                  type="single"
+                  size="sm"
+                  value={zoomSensitivity}
+                  onValueChange={(value) => {
+                    if (ZOOM_SENSITIVITY_OPTIONS.some((option) => option.value === value)) {
+                      setZoomSensitivity(value as ZoomSensitivity);
+                    }
+                  }}
+                  className="gap-0"
+                >
+                  {ZOOM_SENSITIVITY_OPTIONS.map((option) => (
+                    <ToggleGroupItem key={option.value} value={option.value} className="h-7 px-2 text-[11px]" title={`Sensibilidade do zoom: ${option.label}`}>
+                      {option.label}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+              </div>
+            )}
             {canManage3D && layerManager.layers.length > 0 && (
               <Button variant={showLayers ? "default" : "outline"} size="sm" onClick={() => setShowLayers(p => !p)} disabled={isLoading}>
                 <Layers className="h-4 w-4 mr-1.5" />Camadas ({layerManager.layers.length})
@@ -3957,6 +4071,25 @@ export function Map3DView() {
                   </Badge>
                 )}
               </Button>
+            )}
+            {canManage3D && reviewMode && (
+              <div className="flex items-center gap-2 rounded-md border border-input bg-background px-2 py-1 text-xs">
+                <Button
+                  type="button"
+                  variant={hideLinkedInReview ? "default" : "outline"}
+                  size="sm"
+                  className="h-7"
+                  onClick={() => setHideLinkedInReview((value) => !value)}
+                  disabled={isLoading}
+                  title="Filtro visual local: esconde meshes com Casa e Servico completos"
+                >
+                  {hideLinkedInReview ? <Eye className="h-3.5 w-3.5 mr-1.5" /> : <EyeOff className="h-3.5 w-3.5 mr-1.5" />}
+                  {hideLinkedInReview ? "Mostrar vinculadas" : "Ocultar vinculadas"}
+                </Button>
+                <span className="whitespace-nowrap text-muted-foreground">
+                  {reviewVisibilityStats.total} total · {reviewVisibilityStats.linked} vinc. · {reviewVisibilityStats.pending} pend. · {reviewVisibilityStats.context} ctx · {reviewVisibilityStats.ignored} ign.
+                </span>
+              </div>
             )}
             {canManage3D && reviewMode && sceneObj && (
               <Button
@@ -4128,7 +4261,6 @@ export function Map3DView() {
         <div
           className="map3d-walk-lock-target absolute inset-0"
           style={assignMode ? { cursor: "crosshair", overscrollBehavior: "contain" } : { overscrollBehavior: "contain" }}
-          onWheel={(event) => event.preventDefault()}
         >
           <Canvas shadows={!performanceMode} dpr={[1, performanceMode ? 1 : 1.25]} frameloop="always"
             gl={{ antialias: !performanceMode, powerPreference: "high-performance", stencil: false, depth: true }}
@@ -4163,6 +4295,7 @@ export function Map3DView() {
               onSupplementalSceneReady={handleSupplementalSceneReady}
               onSupplementalInventoryReady={handleSupplementalInventoryReady}
               observerHeight={observerHeight}
+              zoomSpeed={orbitZoomSpeed}
               performanceMode={performanceMode} />
           </Canvas>
         </div>
