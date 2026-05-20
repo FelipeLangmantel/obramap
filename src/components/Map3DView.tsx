@@ -398,18 +398,41 @@ function HouseMarker3D({ marker, onClick, isSelected, customLegendItems }: {
 
 // Zoom to mouse position controls
 function ZoomToMouseControls() {
-  const { gl } = useThree();
+  const { gl, invalidate } = useThree();
   const controlsRef = useRef<any>(null);
 
+  // Wheel: normaliza delta entre mouse/trackpad e faz throttle por rAF
+  // para evitar surtos de eventos que travam o render com muitas meshes.
   useEffect(() => {
     const domElement = gl.domElement;
+    let queuedDelta = 0;
+    let rafId: number | null = null;
+
+    const flush = () => {
+      rafId = null;
+      if (queuedDelta === 0) return;
+      const ctrl = controlsRef.current;
+      queuedDelta = 0;
+      if (ctrl) invalidate();
+    };
+
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
+      // Normaliza: linhas/páginas viram px aproximados
+      let dy = event.deltaY;
+      if (event.deltaMode === 1) dy *= 16;
+      else if (event.deltaMode === 2) dy *= 100;
+      // Limita o passo por tick — evita "saltos" longos que travam
+      queuedDelta += Math.max(-120, Math.min(120, dy));
+      if (rafId == null) rafId = requestAnimationFrame(flush);
     };
 
     domElement.addEventListener('wheel', onWheel, { passive: false });
-    return () => domElement.removeEventListener('wheel', onWheel);
-  }, [gl]);
+    return () => {
+      domElement.removeEventListener('wheel', onWheel);
+      if (rafId != null) cancelAnimationFrame(rafId);
+    };
+  }, [gl, invalidate]);
 
   return (
     <OrbitControls
@@ -417,14 +440,16 @@ function ZoomToMouseControls() {
       makeDefault enablePan enableRotate
       enableZoom={true}
       maxPolarAngle={Math.PI / 2 - 0.02}
-      minDistance={0.1}
-      maxDistance={Infinity}
-      panSpeed={1.5}
-      rotateSpeed={1.0}
-      zoomSpeed={2.2}
+      minDistance={0.5}
+      maxDistance={2000}
+      panSpeed={1.2}
+      rotateSpeed={0.9}
+      // zoom mais suave: menos "salto" + damping curto = sensação fluida
+      zoomSpeed={0.9}
       enableDamping
-      dampingFactor={0.05}
+      dampingFactor={0.12}
       zoomToCursor
+      screenSpacePanning
       touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
       mouseButtons={{ LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN }}
     />
