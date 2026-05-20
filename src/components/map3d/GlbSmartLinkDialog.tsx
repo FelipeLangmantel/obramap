@@ -67,6 +67,7 @@ export function GlbSmartLinkDialog({
       { applicable: 0, missing_house: 0, linked: 0, context: 0, ignored: 0, self: 0, suggested: 0 },
     );
   }, [candidates]);
+  const isPartScoped = base?.layerKey.startsWith("glbpart:") ?? false;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -75,6 +76,11 @@ export function GlbSmartLinkDialog({
           <DialogTitle>Encontrar similares GLB</DialogTitle>
           <DialogDescription>
             Revise antes de aplicar. O servico sera copiado da mesh base e vinculos existentes nao serao sobrescritos.
+            {isPartScoped && (
+              <span className="mt-1 block">
+                SmartLink limitado a mesma parte GLB para evitar conflitos entre arquivos.
+              </span>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -118,7 +124,9 @@ export function GlbSmartLinkDialog({
           <ScrollArea className="h-[420px] rounded-md border">
             <div className="divide-y">
               {candidates.length === 0 ? (
-                <p className="p-4 text-sm text-muted-foreground">Nenhuma similar encontrada.</p>
+                <p className="p-4 text-sm text-muted-foreground">
+                  {isPartScoped ? "Nenhuma candidata compativel encontrada nesta parte GLB." : "Nenhuma similar encontrada."}
+                </p>
               ) : candidates.map((item) => {
                 const canSelect = item.status === "applicable";
                 return (

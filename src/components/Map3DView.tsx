@@ -86,6 +86,12 @@ function getSupplementalPartLayerKey(partId: string, localLayerKey: string): str
   return `glbpart:${partId}:${localLayerKey}`;
 }
 
+function getGlbPartIdFromLayerKey(layerKey: string): string | null {
+  if (!layerKey.startsWith("glbpart:")) return null;
+  const [, partId] = layerKey.split(":");
+  return partId || null;
+}
+
 const GLB_REAL_SYNC_WATCH_KEYS = [
   "glb:Geom3D_300:0",
   "glb:Geom3D_302:0",
@@ -1482,7 +1488,7 @@ export function Map3DView() {
         })),
       })),
       productiveKeyPolicy: "Partes persistidas usam glbpart:<part_id>:<localLayerKey>, eliminando colisao produtiva para vinculos manuais e 3D Real basico.",
-      warning: "Conflitos locais ainda importam para SmartLink por partes; ele permanece bloqueado ate uma etapa futura.",
+      warning: "Conflitos locais ainda impedem SmartLink entre partes diferentes; o SmartLink fica limitado a mesma parte GLB.",
     };
 
     console.log("[GLB Parts Mesh Audit]", auditResult);
@@ -1821,7 +1827,16 @@ export function Map3DView() {
       return clone;
     };
 
-    sceneObj.traverse((child) => {
+    const traversePreviewRoots = (visitor: (child: THREE.Object3D) => void) => {
+      sceneObj.traverse(visitor);
+      supplementalGlbParts
+        .filter((part) => part.visible)
+        .forEach((part) => {
+          supplementalGlbScenesRef.current.get(part.id)?.traverse(visitor);
+        });
+    };
+
+    traversePreviewRoots((child) => {
       if (!(child as THREE.Mesh).isMesh) return;
       const mesh = child as THREE.Mesh;
       const layerKey = getMeshLayerKey(mesh);
@@ -1866,20 +1881,23 @@ export function Map3DView() {
     smartLinkFocusedCandidateKey,
     smartLinkPreviewEnabled,
     smartLinkSelectedKeys,
+    supplementalGlbParts,
   ]);
 
   const openSmartLinkSimilar = useCallback((layerKey: string) => {
-    if (layerKey.startsWith("glbpart:")) {
-      toast.info("SmartLink por partes sera liberado em etapa futura.");
-      return;
-    }
-    if (!sceneObj) {
+    const partId = getGlbPartIdFromLayerKey(layerKey);
+    const analysisRoot = partId ? supplementalGlbScenesRef.current.get(partId) ?? null : sceneObj;
+
+    if (!analysisRoot) {
       toast.error("Cena 3D ainda não está pronta.");
       return;
     }
 
     const sourceMap = buildCurrentMeshMap(meshHooks.meshMap);
-    const runtimeMeshes = getSceneMeshInfo(sceneObj, sourceMap, getMeshLayerKey);
+    const runtimeMeshes = getSceneMeshInfo(analysisRoot, sourceMap, getMeshLayerKey)
+      .filter((mesh) => partId
+        ? getGlbPartIdFromLayerKey(mesh.layerKey) === partId
+        : mesh.layerKey.startsWith("glb:"));
     const houseAnchorDiagnostics = getGlbHouseSuggestionDiagnostics(runtimeMeshes, houseNumbers);
     const base = runtimeMeshes.find((mesh) => mesh.layerKey === layerKey) ?? null;
     const baseSaved = sourceMap.get(layerKey) ?? null;
@@ -1902,6 +1920,15 @@ export function Map3DView() {
         .filter((candidate) => candidate.selectedByDefault)
         .map((candidate) => candidate.layerKey),
     );
+    if (partId && import.meta.env.DEV) {
+      console.log("[GLB Part SmartLink]", {
+        baseLayerKey: layerKey,
+        partId,
+        runtimeMeshesInPart: runtimeMeshes.length,
+        candidatesInPart: candidates.length,
+        selectedByDefault: selected.size,
+      });
+    }
     const officialHouseSet = new Set(houseNumbers);
     const invalidApplicableCandidates = candidates
       .filter((candidate) =>
@@ -3707,7 +3734,7 @@ export function Map3DView() {
                     <Badge variant="secondary">{supplementalGlbParts.length}</Badge>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Partes GLB complementares sao persistidas para visualizacao. Vinculo manual e 3D Real basico usam identidade por parte; SmartLink por partes sera liberado em etapa futura.
+                    Partes GLB complementares sao persistidas para visualizacao. Vinculo manual, 3D Real basico e SmartLink limitado a mesma parte usam identidade por parte.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
