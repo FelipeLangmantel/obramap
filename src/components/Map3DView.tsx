@@ -254,7 +254,7 @@ function useSelectionHighlight(scene: THREE.Object3D | null, selectedKey: string
 }
 
 // GLTF model - calls onLoaded after it's in the scene
-function GLTFModel({ url, onLoaded, onSceneReady, onMeshClick, selectedMeshKey }: { url: string; onLoaded: () => void; onSceneReady?: (scene: THREE.Object3D) => void; onMeshClick?: (mesh: THREE.Object3D) => void; selectedMeshKey?: string | null }) {
+function GLTFModel({ url, onLoaded, onSceneReady, onMeshClick, onMeshDoubleClick, selectedMeshKey }: { url: string; onLoaded: () => void; onSceneReady?: (scene: THREE.Object3D) => void; onMeshClick?: (mesh: THREE.Object3D, point?: THREE.Vector3) => void; onMeshDoubleClick?: (mesh: THREE.Object3D, point?: THREE.Vector3) => void; selectedMeshKey?: string | null }) {
   const { scene } = useGLTF(url);
   const calledRef = useRef(false);
   useSelectionHighlight(scene, selectedMeshKey ?? null);
@@ -277,7 +277,12 @@ function GLTFModel({ url, onLoaded, onSceneReady, onMeshClick, selectedMeshKey }
       onClick={(e: any) => {
         if (!onMeshClick) return;
         e.stopPropagation();
-        if (e.object) onMeshClick(e.object);
+        if (e.object) onMeshClick(e.object, e.point?.clone?.());
+      }}
+      onDoubleClick={(e: any) => {
+        if (!onMeshDoubleClick) return;
+        e.stopPropagation();
+        if (e.object) onMeshDoubleClick(e.object, e.point?.clone?.());
       }}
     />
   );
@@ -286,12 +291,14 @@ function GLTFModel({ url, onLoaded, onSceneReady, onMeshClick, selectedMeshKey }
 function SupplementalGLTFPart({
   part,
   onMeshClick,
+  onMeshDoubleClick,
   onSceneReady,
   onInventoryReady,
   selectedMeshKey,
 }: {
   part: SupplementalGlbPart;
-  onMeshClick?: (part: SupplementalGlbPart, mesh: THREE.Object3D) => void;
+  onMeshClick?: (part: SupplementalGlbPart, mesh: THREE.Object3D, point?: THREE.Vector3) => void;
+  onMeshDoubleClick?: (part: SupplementalGlbPart, mesh: THREE.Object3D, point?: THREE.Vector3) => void;
   onSceneReady?: (part: SupplementalGlbPart, scene: THREE.Object3D) => void;
   onInventoryReady?: (part: SupplementalGlbPart, meshes: GlbMeshInventoryInput[]) => void;
   selectedMeshKey?: string | null;
@@ -335,14 +342,19 @@ function SupplementalGLTFPart({
       object={scene}
       onClick={(e: any) => {
         e.stopPropagation();
-        if (e.object) onMeshClick?.(part, e.object);
+        if (e.object) onMeshClick?.(part, e.object, e.point?.clone?.());
+      }}
+      onDoubleClick={(e: any) => {
+        if (!onMeshDoubleClick) return;
+        e.stopPropagation();
+        if (e.object) onMeshDoubleClick(part, e.object, e.point?.clone?.());
       }}
     />
   );
 }
 
 // OBJ model - calls onLoaded after it's in the scene
-function OBJModel({ url, mtlUrl, onLoaded, onSceneReady, onMeshClick, selectedMeshKey }: { url: string; mtlUrl?: string; onLoaded: () => void; onSceneReady?: (scene: THREE.Object3D) => void; onMeshClick?: (mesh: THREE.Object3D) => void; selectedMeshKey?: string | null }) {
+function OBJModel({ url, mtlUrl, onLoaded, onSceneReady, onMeshClick, onMeshDoubleClick, selectedMeshKey }: { url: string; mtlUrl?: string; onLoaded: () => void; onSceneReady?: (scene: THREE.Object3D) => void; onMeshClick?: (mesh: THREE.Object3D, point?: THREE.Vector3) => void; onMeshDoubleClick?: (mesh: THREE.Object3D, point?: THREE.Vector3) => void; selectedMeshKey?: string | null }) {
   const materials = mtlUrl ? useLoader(MTLLoader, mtlUrl) : null;
   const obj = useLoader(OBJLoader, url, (loader) => {
     if (materials) { materials.preload(); loader.setMaterials(materials); }
@@ -364,7 +376,12 @@ function OBJModel({ url, mtlUrl, onLoaded, onSceneReady, onMeshClick, selectedMe
       onClick={(e: any) => {
         if (!onMeshClick) return;
         e.stopPropagation();
-        if (e.object) onMeshClick(e.object);
+        if (e.object) onMeshClick(e.object, e.point?.clone?.());
+      }}
+      onDoubleClick={(e: any) => {
+        if (!onMeshDoubleClick) return;
+        e.stopPropagation();
+        if (e.object) onMeshDoubleClick(e.object, e.point?.clone?.());
       }}
     />
   );
@@ -397,7 +414,7 @@ function HouseMarker3D({ marker, onClick, isSelected, customLegendItems }: {
 }
 
 // Zoom to mouse position controls
-function ZoomToMouseControls() {
+function ZoomToMouseControls({ focusPoint }: { focusPoint?: [number, number, number] | null }) {
   const { gl, invalidate } = useThree();
   const controlsRef = useRef<any>(null);
 
@@ -434,20 +451,28 @@ function ZoomToMouseControls() {
     };
   }, [gl, invalidate]);
 
+  useEffect(() => {
+    const controls = controlsRef.current;
+    if (!controls || !focusPoint) return;
+    controls.target.set(focusPoint[0], focusPoint[1], focusPoint[2]);
+    controls.update();
+    invalidate();
+  }, [focusPoint, invalidate]);
+
   return (
     <OrbitControls
       ref={controlsRef}
       makeDefault enablePan enableRotate
       enableZoom={true}
       maxPolarAngle={Math.PI / 2 - 0.02}
-      minDistance={0.5}
+      minDistance={0.05}
       maxDistance={2000}
       panSpeed={1.2}
       rotateSpeed={0.9}
       // zoom mais suave: menos "salto" + damping curto = sensação fluida
-      zoomSpeed={0.9}
+      zoomSpeed={2.8}
       enableDamping
-      dampingFactor={0.12}
+      dampingFactor={0.06}
       zoomToCursor
       screenSpacePanning
       touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
@@ -707,9 +732,9 @@ function AutoFitCamera({
 // Scene
 function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLegendItems,
   resetTrigger, fitTrigger, savedPosition, savedTarget, onCameraChange, sceneReady, onModelLoaded, onSceneReady,
-  onMeshClick, selectedMeshKey, projectId, companyId, ifcRealModeActive, ifcHouseOptions, ifcServiceOptions,
+  orbitFocusPoint, onMeshClick, onMeshDoubleClick, selectedMeshKey, projectId, companyId, ifcRealModeActive, ifcHouseOptions, ifcServiceOptions,
   cameraMode, walkInspectOpen, onWalkExit, onWalkInspectClose, onWalkMeshInspect,
-  supplementalGlbParts, onSupplementalMeshClick, onSupplementalSceneReady, onSupplementalInventoryReady,
+  supplementalGlbParts, onSupplementalMeshClick, onSupplementalMeshDoubleClick, onSupplementalSceneReady, onSupplementalInventoryReady,
 }: {
   modelData: ModelData | null; markers: HouseMarker[]; selectedMarkerId: number | null;
   onMarkerClick: (m: HouseMarker) => void; customLegendItems: any[];
@@ -718,7 +743,9 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   onCameraChange?: (p: [number, number, number], t: [number, number, number]) => void;
   sceneReady: boolean; onModelLoaded: () => void;
   onSceneReady?: (scene: THREE.Object3D) => void;
-  onMeshClick?: (mesh: THREE.Object3D) => void;
+  orbitFocusPoint?: [number, number, number] | null;
+  onMeshClick?: (mesh: THREE.Object3D, point?: THREE.Vector3) => void;
+  onMeshDoubleClick?: (mesh: THREE.Object3D, point?: THREE.Vector3) => void;
   selectedMeshKey?: string | null;
   projectId?: string | null;
   companyId?: string | null;
@@ -731,17 +758,18 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   onWalkInspectClose: () => void;
   onWalkMeshInspect?: (mesh: THREE.Mesh) => void;
   supplementalGlbParts: SupplementalGlbPart[];
-  onSupplementalMeshClick?: (part: SupplementalGlbPart, mesh: THREE.Object3D) => void;
+  onSupplementalMeshClick?: (part: SupplementalGlbPart, mesh: THREE.Object3D, point?: THREE.Vector3) => void;
+  onSupplementalMeshDoubleClick?: (part: SupplementalGlbPart, mesh: THREE.Object3D, point?: THREE.Vector3) => void;
   onSupplementalSceneReady?: (part: SupplementalGlbPart, scene: THREE.Object3D) => void;
   onSupplementalInventoryReady?: (part: SupplementalGlbPart, meshes: GlbMeshInventoryInput[]) => void;
 }) {
   return (
     <>
-      <PerspectiveCamera makeDefault position={[0, 50, 50]} fov={50} />
+      <PerspectiveCamera makeDefault position={[0, 50, 50]} fov={50} near={0.05} far={5000} />
       <AutoFitCamera fitTrigger={fitTrigger} resetTrigger={resetTrigger}
         savedPosition={savedPosition} savedTarget={savedTarget}
         onCameraChange={onCameraChange} sceneReady={sceneReady} enabled={cameraMode === "orbit"} />
-      {cameraMode === "orbit" ? <ZoomToMouseControls /> : <WalkControls onExit={onWalkExit} />}
+      {cameraMode === "orbit" ? <ZoomToMouseControls focusPoint={orbitFocusPoint} /> : <WalkControls onExit={onWalkExit} />}
       <WalkMeshInspector
         enabled={cameraMode === "walk"}
         panelOpen={walkInspectOpen}
@@ -756,11 +784,11 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
       {modelData && (
         <Suspense fallback={<Html center><div className="bg-background/90 px-4 py-2 rounded-lg border border-border">Carregando modelo...</div></Html>}>
           {modelData.type === "gltf" ? (
-            <GLTFModel url={modelData.url} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} selectedMeshKey={selectedMeshKey} />
+            <GLTFModel url={modelData.url} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} onMeshDoubleClick={onMeshDoubleClick} selectedMeshKey={selectedMeshKey} />
           ) : modelData.type === "ifc" ? (
             <IFCModel url={modelData.url} projectId={projectId} companyId={companyId} ifcRealModeActive={ifcRealModeActive} houseOptions={ifcHouseOptions} serviceOptions={ifcServiceOptions} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} selectedMeshKey={selectedMeshKey} />
           ) : (
-            <OBJModel url={modelData.url} mtlUrl={modelData.mtlUrl} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} selectedMeshKey={selectedMeshKey} />
+            <OBJModel url={modelData.url} mtlUrl={modelData.mtlUrl} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} onMeshDoubleClick={onMeshDoubleClick} selectedMeshKey={selectedMeshKey} />
           )}
         </Suspense>
       )}
@@ -770,6 +798,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
           <SupplementalGLTFPart
             part={part}
             onMeshClick={onSupplementalMeshClick}
+            onMeshDoubleClick={onSupplementalMeshDoubleClick}
             onSceneReady={onSupplementalSceneReady}
             onInventoryReady={onSupplementalInventoryReady}
             selectedMeshKey={selectedMeshKey}
@@ -1007,6 +1036,7 @@ export function Map3DView() {
   const [savedTgt, setSavedTgt] = useState<[number, number, number] | null>(null);
   const [pendingPos, setPendingPos] = useState<[number, number, number] | null>(null);
   const [pendingTgt, setPendingTgt] = useState<[number, number, number] | null>(null);
+  const [orbitFocusPoint, setOrbitFocusPoint] = useState<[number, number, number] | null>(null);
   const [sceneReady, setSceneReady] = useState(false);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [ifcSuggestionsOpen, setIfcSuggestionsOpen] = useState(false);
@@ -1175,6 +1205,10 @@ export function Map3DView() {
   useEffect(() => {
     supplementalGlbPartsRef.current = supplementalGlbParts;
   }, [supplementalGlbParts]);
+
+  useEffect(() => {
+    setOrbitFocusPoint(null);
+  }, [modelData?.url, projectId]);
 
   useEffect(() => {
     return () => {
@@ -1600,7 +1634,22 @@ export function Map3DView() {
   // ====================================================
   // Modo "Revisar Modelo": clique destaca a mesh
   // ====================================================
-  const handleReviewMeshClick = useCallback((obj: THREE.Object3D) => {
+  const focusOrbitOnPoint = useCallback((point?: THREE.Vector3 | null) => {
+    if (!point) return;
+    setOrbitFocusPoint([point.x, point.y, point.z]);
+  }, []);
+
+  const handleMeshDoubleClickFocus = useCallback((_obj: THREE.Object3D, point?: THREE.Vector3) => {
+    focusOrbitOnPoint(point);
+    if (point) toast.info("Ponto de rotacao fixado na peca.");
+  }, [focusOrbitOnPoint]);
+
+  const handleSupplementalMeshDoubleClickFocus = useCallback((_part: SupplementalGlbPart, _obj: THREE.Object3D, point?: THREE.Vector3) => {
+    focusOrbitOnPoint(point);
+    if (point) toast.info("Ponto de rotacao fixado na parte GLB.");
+  }, [focusOrbitOnPoint]);
+
+  const handleReviewMeshClick = useCallback((obj: THREE.Object3D, point?: THREE.Vector3) => {
     if (!reviewMode) return;
     if (!(obj as THREE.Mesh).isMesh) return;
     const mesh = obj as THREE.Mesh;
@@ -1663,9 +1712,10 @@ export function Map3DView() {
       }
     }
     setSelectedMeshKey(layerKey);
-  }, [meshHooks.meshMap, reviewMode, sceneObj, smartLinkCandidates, smartLinkIsolationFilter, smartLinkPreviewEnabled, smartLinkSelectedKeys]);
+    focusOrbitOnPoint(point);
+  }, [focusOrbitOnPoint, meshHooks.meshMap, reviewMode, sceneObj, smartLinkCandidates, smartLinkIsolationFilter, smartLinkPreviewEnabled, smartLinkSelectedKeys]);
 
-  const handleSupplementalMeshClick = useCallback((part: SupplementalGlbPart, obj: THREE.Object3D) => {
+  const handleSupplementalMeshClick = useCallback((part: SupplementalGlbPart, obj: THREE.Object3D, point?: THREE.Vector3) => {
     if (!(obj as THREE.Mesh).isMesh) return;
     const mesh = obj as THREE.Mesh;
     const layerKey = getMeshLayerKey(mesh);
@@ -1680,7 +1730,8 @@ export function Map3DView() {
     }
     setSmartLinkFocusedCandidateKey(null);
     setSelectedMeshKey(layerKey);
-  }, [assignMode, reviewMode]);
+    focusOrbitOnPoint(point);
+  }, [assignMode, focusOrbitOnPoint, reviewMode]);
 
   const handleWalkMeshInspect = useCallback((mesh: THREE.Mesh) => {
     const layerKey = getMeshLayerKey(mesh);
@@ -3377,8 +3428,8 @@ export function Map3DView() {
     if (markers.length > 0 && !modelData) setSceneReady(true);
   }, [markers.length, modelData]);
 
-  const centerCamera = () => { setFitTrigger(p => p + 1); toast.success("Centralizado"); };
-  const resetCameraView = () => { setResetTrigger(p => p + 1); toast.success("Visão resetada"); };
+  const centerCamera = () => { setOrbitFocusPoint(null); setFitTrigger(p => p + 1); toast.success("Centralizado"); };
+  const resetCameraView = () => { setOrbitFocusPoint(null); setResetTrigger(p => p + 1); toast.success("Visão resetada"); };
 
   const customLegendItems = currentProject?.customLegendItems || [
     { minPercent: 0, maxPercent: 49, color: "#ef4444" },
@@ -3562,7 +3613,7 @@ export function Map3DView() {
     setMeshReviewOverrides(new Map()); setTrustedGlbLinkKeys(new Set()); setGlbLinkScope("fresh");
     clearSmartLinkPreview("map reset");
     setCameraMode("orbit");
-    setSavedPos(null); setSavedTgt(null); setPendingPos(null); setPendingTgt(null);
+    setSavedPos(null); setSavedTgt(null); setPendingPos(null); setPendingTgt(null); setOrbitFocusPoint(null);
     setSceneReady(false); setHasChanges(true);
     toast.success("Mapa resetado. Salve para confirmar.");
   };
@@ -3752,7 +3803,7 @@ export function Map3DView() {
             )}
             <div className="flex-1" />
             <span className="text-xs text-muted-foreground hidden lg:inline">
-              <strong>Arrastar</strong> rotacionar • <strong>Scroll</strong> zoom • <strong>Direito</strong> mover • <strong>Duplo clique</strong> centralizar
+              <strong>Arrastar</strong> rotacionar | <strong>Scroll</strong> zoom | <strong>Direito</strong> mover | <strong>Duplo clique na peca</strong> fixa o ponto de rotacao
             </span>
           </div>
           {supplementalGlbParts.length > 0 && (
@@ -3840,7 +3891,9 @@ export function Map3DView() {
               savedPosition={savedPos} savedTarget={savedTgt}
               onCameraChange={handleCameraChange} sceneReady={sceneReady}
               onModelLoaded={handleModelLoaded} onSceneReady={handleSceneReady}
+              orbitFocusPoint={orbitFocusPoint}
               onMeshClick={cameraMode === "walk" ? undefined : reviewMode ? handleReviewMeshClick : assignMode ? handleMeshClick : undefined}
+              onMeshDoubleClick={cameraMode === "orbit" ? handleMeshDoubleClickFocus : undefined}
               selectedMeshKey={cameraMode === "walk" ? null : reviewMode ? selectedMeshKey : null}
               projectId={projectId}
               companyId={companyId}
@@ -3854,6 +3907,7 @@ export function Map3DView() {
               onWalkMeshInspect={handleWalkMeshInspect}
               supplementalGlbParts={supplementalGlbParts}
               onSupplementalMeshClick={handleSupplementalMeshClick}
+              onSupplementalMeshDoubleClick={cameraMode === "orbit" ? handleSupplementalMeshDoubleClickFocus : undefined}
               onSupplementalSceneReady={handleSupplementalSceneReady}
               onSupplementalInventoryReady={handleSupplementalInventoryReady} />
           </Canvas>
