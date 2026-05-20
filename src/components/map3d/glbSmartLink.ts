@@ -81,16 +81,37 @@ function diagonal(info: GlbMeshRuntimeInfo) {
 
 function parseTextAnchorHouseNumber(mesh: GlbMeshRuntimeInfo, validHouseNumbers?: Set<number>) {
   const rawText = `${mesh.meshName} ${mesh.materialName}`;
-  if (!/(3dtext|text|texto|numero|numeracao|number)/i.test(rawText)) return null;
+  const hasTextMarker = /(3dtext|text|texto|numero|numeracao|number)/i.test(rawText);
+  const exactNumber = [mesh.meshName, mesh.materialName]
+    .map((value) => value.trim().match(/^(\d{1,4})$/)?.[1])
+    .find(Boolean);
+  if (exactNumber) {
+    const valid = validHouseOrNull(exactNumber, validHouseNumbers);
+    if (valid != null) return valid;
+  }
+
+  const dims = sortedDimensions(mesh);
+  const isSmallFlatGeometry = dims[0] <= 0.25 && dims[2] <= 4.5 && mesh.volume <= 2.5;
+  if (!hasTextMarker && !isSmallFlatGeometry) return null;
+
   const sanitized = rawText
     .toLowerCase()
     .replace(/geom3d/gi, " ")
     .replace(/3dtext/gi, " ")
     .replace(/\b3d\b/gi, " ");
   const explicitTextNumber = rawText.match(/(?:3dtext|text|texto|numero|numeracao|number)[_\-\s]*(\d{1,4})(?:\D*$|$)/i);
+  const geometryNumberMatches = isSmallFlatGeometry
+    ? mesh.meshName
+      .toLowerCase()
+      .replace(/geom3d/gi, " ")
+      .replace(/\b3d\b/gi, " ")
+      .match(/\d{1,4}/g) ?? []
+    : [];
   const matches = explicitTextNumber?.[1]
     ? [explicitTextNumber[1]]
-    : sanitized.match(/\d{1,4}/g) ?? [];
+    : hasTextMarker
+      ? sanitized.match(/\d{1,4}/g) ?? []
+      : geometryNumberMatches;
 
   for (let index = matches.length - 1; index >= 0; index -= 1) {
     const valid = validHouseOrNull(matches[index], validHouseNumbers);

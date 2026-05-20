@@ -423,7 +423,7 @@ function ZoomToMouseControls() {
       rotateSpeed={1.0}
       zoomSpeed={2.2}
       enableDamping
-      dampingFactor={0.08}
+      dampingFactor={0.05}
       zoomToCursor
       touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
       mouseButtons={{ LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN }}
@@ -1925,6 +1925,12 @@ export function Map3DView() {
         baseLayerKey: layerKey,
         partId,
         runtimeMeshesInPart: runtimeMeshes.length,
+        anchorsInPart: {
+          text: houseAnchorDiagnostics.textAnchors.length,
+          linked: houseAnchorDiagnostics.linkedAnchors.length,
+          textSample: houseAnchorDiagnostics.textAnchors.slice(0, 10),
+          linkedSample: houseAnchorDiagnostics.linkedAnchors.slice(0, 10),
+        },
         candidatesInPart: candidates.length,
         selectedByDefault: selected.size,
       });
@@ -3795,7 +3801,7 @@ export function Map3DView() {
           style={assignMode ? { cursor: "crosshair", overscrollBehavior: "contain" } : { overscrollBehavior: "contain" }}
           onWheel={(event) => event.preventDefault()}
         >
-          <Canvas shadows dpr={[1, 1.5]} frameloop="always"
+          <Canvas shadows dpr={[1, 1.25]} frameloop="always"
             gl={{ antialias: true, powerPreference: "high-performance", stencil: false, depth: true }}
             onDoubleClick={cameraMode === "orbit" ? centerCamera : undefined}
             onPointerMissed={() => {
