@@ -282,11 +282,13 @@ function SupplementalGLTFPart({
   onMeshClick,
   onSceneReady,
   onInventoryReady,
+  selectedMeshKey,
 }: {
   part: SupplementalGlbPart;
   onMeshClick?: (part: SupplementalGlbPart, mesh: THREE.Object3D) => void;
   onSceneReady?: (part: SupplementalGlbPart, scene: THREE.Object3D) => void;
   onInventoryReady?: (part: SupplementalGlbPart, meshes: GlbMeshInventoryInput[]) => void;
+  selectedMeshKey?: string | null;
 }) {
   const { scene } = useGLTF(part.url);
 
@@ -320,6 +322,7 @@ function SupplementalGLTFPart({
     onSceneReady?.(part, scene);
     if (part.persisted) onInventoryReady?.(part, meshesToUpsert);
   }, [onInventoryReady, onSceneReady, part, scene]);
+  useSelectionHighlight(scene, selectedMeshKey ?? null);
 
   return (
     <primitive
@@ -773,6 +776,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
             onMeshClick={onSupplementalMeshClick}
             onSceneReady={onSupplementalSceneReady}
             onInventoryReady={onSupplementalInventoryReady}
+            selectedMeshKey={selectedMeshKey}
           />
         </Suspense>
       ))}
@@ -1759,6 +1763,13 @@ export function Map3DView() {
     if (houseNumber == null) return null;
     return currentProject?.houses?.find((house: any) => Number(house.id) === Number(houseNumber)) ?? null;
   }, [currentProject?.houses, walkMeshData?.assigned_house_number]);
+
+  const selectedMeshSceneRoot = useMemo(() => {
+    if (!selectedMeshKey) return sceneObj;
+    if (!selectedMeshKey.startsWith("glbpart:")) return sceneObj;
+    const partId = selectedMeshKey.split(":")[1];
+    return supplementalGlbScenesRef.current.get(partId) ?? sceneObj;
+  }, [selectedMeshKey, sceneObj, supplementalGlbParts]);
 
   const openDashboardView = useCallback((targetView: "diario-obra" | "production") => {
     navigate("/dashboard", { state: { targetView } });
@@ -3922,7 +3933,7 @@ export function Map3DView() {
           <MeshReviewPanel
             meshKey={selectedMeshKey}
             meshData={getCurrentMeshRecord(selectedMeshKey)}
-            sceneRef={sceneObj}
+            sceneRef={selectedMeshSceneRoot}
             houses={houseNumbers}
             services={serviceOptions}
             isolated={!!isolatedKeys?.has(selectedMeshKey)}
