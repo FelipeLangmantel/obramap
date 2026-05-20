@@ -482,8 +482,9 @@ function ZoomToMouseControls({ focusPoint }: { focusPoint?: [number, number, num
 }
 
 function WalkControls({ onExit, height = 1.7 }: { onExit: () => void; height?: number }) {
-  const { camera } = useThree();
+  const { camera, scene } = useThree();
   const controlsRef = useRef<any>(null);
+  const floorRaycasterRef = useRef(new THREE.Raycaster());
   const keysRef = useRef({
     forward: false,
     backward: false,
@@ -499,10 +500,17 @@ function WalkControls({ onExit, height = 1.7 }: { onExit: () => void; height?: n
 
   useEffect(() => {
     const before = camera.position.clone();
-    camera.position.y = Math.max(camera.position.y, height);
+    const floorOrigin = new THREE.Vector3(camera.position.x, camera.position.y + 30, camera.position.z);
+    floorRaycasterRef.current.set(floorOrigin, new THREE.Vector3(0, -1, 0));
+    const floorHit = floorRaycasterRef.current
+      .intersectObjects(scene.children, true)
+      .find((hit) => hit.object.visible && hit.point.y <= before.y + 0.5);
+    camera.position.y = floorHit ? floorHit.point.y + height : Math.max(camera.position.y, height);
     console.log("[Walk Mode Check] walk controls mounted", {
       before: before.toArray(),
       after: camera.position.toArray(),
+      observerHeight: height,
+      floorY: floorHit?.point.y ?? null,
       pointerLockActive: typeof document !== "undefined" ? !!document.pointerLockElement : false,
     });
 
@@ -529,7 +537,7 @@ function WalkControls({ onExit, height = 1.7 }: { onExit: () => void; height?: n
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [camera, height]);
+  }, [camera, height, scene]);
 
   useFrame((_, delta) => {
     const controls = controlsRef.current;
@@ -735,6 +743,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   orbitFocusPoint, onMeshClick, onMeshDoubleClick, selectedMeshKey, projectId, companyId, ifcRealModeActive, ifcHouseOptions, ifcServiceOptions,
   cameraMode, walkInspectOpen, onWalkExit, onWalkInspectClose, onWalkMeshInspect,
   supplementalGlbParts, onSupplementalMeshClick, onSupplementalMeshDoubleClick, onSupplementalSceneReady, onSupplementalInventoryReady,
+  observerHeight, performanceMode,
 }: {
   modelData: ModelData | null; markers: HouseMarker[]; selectedMarkerId: number | null;
   onMarkerClick: (m: HouseMarker) => void; customLegendItems: any[];
@@ -762,6 +771,8 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   onSupplementalMeshDoubleClick?: (part: SupplementalGlbPart, mesh: THREE.Object3D, point?: THREE.Vector3) => void;
   onSupplementalSceneReady?: (part: SupplementalGlbPart, scene: THREE.Object3D) => void;
   onSupplementalInventoryReady?: (part: SupplementalGlbPart, meshes: GlbMeshInventoryInput[]) => void;
+  observerHeight: number;
+  performanceMode: boolean;
 }) {
   return (
     <>
@@ -769,17 +780,18 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
       <AutoFitCamera fitTrigger={fitTrigger} resetTrigger={resetTrigger}
         savedPosition={savedPosition} savedTarget={savedTarget}
         onCameraChange={onCameraChange} sceneReady={sceneReady} enabled={cameraMode === "orbit"} />
-      {cameraMode === "orbit" ? <ZoomToMouseControls focusPoint={orbitFocusPoint} /> : <WalkControls onExit={onWalkExit} />}
+      {cameraMode === "orbit" ? <ZoomToMouseControls focusPoint={orbitFocusPoint} /> : <WalkControls onExit={onWalkExit} height={observerHeight} />}
       <WalkMeshInspector
         enabled={cameraMode === "walk"}
         panelOpen={walkInspectOpen}
         onClosePanel={onWalkInspectClose}
         onInspect={(mesh) => onWalkMeshInspect?.(mesh)}
       />
-      <ambientLight intensity={0.6} />
-      <directionalLight position={[10, 10, 5]} intensity={1} castShadow />
-      <directionalLight position={[-10, 10, -5]} intensity={0.5} />
-      <hemisphereLight args={["#87ceeb", "#4a7c59", 0.4]} />
+      <color attach="background" args={["#d8ecff"]} />
+      <ambientLight intensity={0.72} />
+      <directionalLight position={[10, 10, 5]} intensity={0.9} castShadow={!performanceMode} />
+      <directionalLight position={[-10, 10, -5]} intensity={0.45} />
+      <hemisphereLight args={["#bfe3ff", "#6f8f6b", 0.55]} />
 
       {modelData && (
         <Suspense fallback={<Html center><div className="bg-background/90 px-4 py-2 rounded-lg border border-border">Carregando modelo...</div></Html>}>
@@ -1037,6 +1049,12 @@ export function Map3DView() {
   const [pendingPos, setPendingPos] = useState<[number, number, number] | null>(null);
   const [pendingTgt, setPendingTgt] = useState<[number, number, number] | null>(null);
   const [orbitFocusPoint, setOrbitFocusPoint] = useState<[number, number, number] | null>(null);
+  const [observerHeight, setObserverHeight] = useState(() => {
+    const saved = Number(localStorage.getItem("obramap:map3d:observer-height"));
+    return Number.isFinite(saved) && saved >= 1.2 && saved <= 2.2 ? saved : 1.7;
+  });
+  const [performanceMode, setPerformanceMode] = useState(() => localStorage.getItem("obramap:map3d:performance-mode") !== "false");
+  const [supplementalPartsExpanded, setSupplementalPartsExpanded] = useState(() => localStorage.getItem("obramap:map3d:parts-expanded") === "true");
   const [sceneReady, setSceneReady] = useState(false);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [ifcSuggestionsOpen, setIfcSuggestionsOpen] = useState(false);
@@ -1209,6 +1227,18 @@ export function Map3DView() {
   useEffect(() => {
     setOrbitFocusPoint(null);
   }, [modelData?.url, projectId]);
+
+  useEffect(() => {
+    localStorage.setItem("obramap:map3d:observer-height", observerHeight.toFixed(2));
+  }, [observerHeight]);
+
+  useEffect(() => {
+    localStorage.setItem("obramap:map3d:performance-mode", String(performanceMode));
+  }, [performanceMode]);
+
+  useEffect(() => {
+    localStorage.setItem("obramap:map3d:parts-expanded", String(supplementalPartsExpanded));
+  }, [supplementalPartsExpanded]);
 
   useEffect(() => {
     return () => {
@@ -3665,6 +3695,35 @@ export function Map3DView() {
                 {cameraMode === "walk" ? "Sair do caminhar" : "Caminhar"}
               </Button>
             )}
+            {modelData && (
+              <label className="flex items-center gap-1 rounded-md border bg-background px-2 py-1 text-xs">
+                <span className="text-muted-foreground">Altura do observador</span>
+                <Input
+                  type="number"
+                  min={1.2}
+                  max={2.2}
+                  step={0.05}
+                  value={observerHeight}
+                  onChange={(event) => {
+                    const value = Number(event.target.value);
+                    if (Number.isFinite(value)) setObserverHeight(Math.min(2.2, Math.max(1.2, value)));
+                  }}
+                  className="h-7 w-16 px-2 text-xs"
+                />
+                <span className="text-muted-foreground">m</span>
+              </label>
+            )}
+            {modelData && (
+              <Button
+                variant={performanceMode ? "default" : "outline"}
+                size="sm"
+                onClick={() => setPerformanceMode((value) => !value)}
+                disabled={isLoading}
+                title="Reduz custo visual para navegar melhor em modelos pesados"
+              >
+                Modo desempenho
+              </Button>
+            )}
             {canManage3D && layerManager.layers.length > 0 && (
               <Button variant={showLayers ? "default" : "outline"} size="sm" onClick={() => setShowLayers(p => !p)} disabled={isLoading}>
                 <Layers className="h-4 w-4 mr-1.5" />Camadas ({layerManager.layers.length})
@@ -3807,61 +3866,70 @@ export function Map3DView() {
             </span>
           </div>
           {supplementalGlbParts.length > 0 && (
-            <div className="mt-3 rounded-md border border-dashed border-border bg-muted/30 p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-sm font-medium">
-                    <Boxes className="h-4 w-4" />
-                    Partes GLB complementares
-                    <Badge variant="secondary">{supplementalGlbParts.length}</Badge>
+            <Collapsible open={supplementalPartsExpanded} onOpenChange={setSupplementalPartsExpanded}>
+              <div className="mt-3 rounded-md border border-dashed border-border bg-muted/30">
+                <CollapsibleTrigger asChild>
+                  <button type="button" className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left">
+                    <span className="flex items-center gap-2 text-sm font-medium">
+                      <Boxes className="h-4 w-4" />
+                      Partes GLB complementares
+                      <Badge variant="secondary">{supplementalGlbParts.length}</Badge>
+                    </span>
+                    {supplementalPartsExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="space-y-2 border-t px-3 py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs text-muted-foreground">
+                        Partes GLB complementares sao persistidas para visualizacao. Vinculo manual, 3D Real basico e SmartLink limitado a mesma parte usam identidade por parte.
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <Button type="button" variant="outline" size="sm" onClick={auditGlbMeshParts}>
+                          Auditar meshes
+                        </Button>
+                        <Button type="button" variant="outline" size="sm" onClick={diagnoseGlbPartRealMode}>
+                          Diagnosticar 3D Real
+                        </Button>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => void removeAllSupplementalGlbParts()}>
+                          Remover todas
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {supplementalGlbParts.map((part) => (
+                        <div key={part.id} className="flex items-center gap-2 rounded-md border bg-background px-2 py-1">
+                          <span className="max-w-[220px] truncate text-xs" title={part.name}>{part.name}</span>
+                          <Badge variant={part.persisted ? "secondary" : "outline"} className="h-5 text-[10px]">
+                            {part.persisted ? "Persistida" : "Sessao"}
+                          </Badge>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2"
+                            onClick={() => toggleSupplementalGlbPart(part.id)}
+                          >
+                            {part.visible ? <EyeOff className="h-3.5 w-3.5 mr-1" /> : <Eye className="h-3.5 w-3.5 mr-1" />}
+                            {part.visible ? "Ocultar" : "Mostrar"}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            title="Remover parte complementar"
+                            onClick={() => void removeSupplementalGlbPart(part.id)}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Partes GLB complementares sao persistidas para visualizacao. Vinculo manual, 3D Real basico e SmartLink limitado a mesma parte usam identidade por parte.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button type="button" variant="outline" size="sm" onClick={auditGlbMeshParts}>
-                    Auditar meshes
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" onClick={diagnoseGlbPartRealMode}>
-                    Diagnosticar 3D Real
-                  </Button>
-                  <Button type="button" variant="ghost" size="sm" onClick={() => void removeAllSupplementalGlbParts()}>
-                    Remover todas
-                  </Button>
-                </div>
+                </CollapsibleContent>
               </div>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {supplementalGlbParts.map((part) => (
-                  <div key={part.id} className="flex items-center gap-2 rounded-md border bg-background px-2 py-1">
-                    <span className="max-w-[220px] truncate text-xs" title={part.name}>{part.name}</span>
-                    <Badge variant={part.persisted ? "secondary" : "outline"} className="h-5 text-[10px]">
-                      {part.persisted ? "Persistida" : "Sessao"}
-                    </Badge>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2"
-                      onClick={() => toggleSupplementalGlbPart(part.id)}
-                    >
-                      {part.visible ? <EyeOff className="h-3.5 w-3.5 mr-1" /> : <Eye className="h-3.5 w-3.5 mr-1" />}
-                      {part.visible ? "Ocultar" : "Mostrar"}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      title="Remover parte complementar"
-                      onClick={() => void removeSupplementalGlbPart(part.id)}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
+            </Collapsible>
           )}
         </CardContent>
       </Card>
@@ -3877,12 +3945,12 @@ export function Map3DView() {
           style={assignMode ? { cursor: "crosshair", overscrollBehavior: "contain" } : { overscrollBehavior: "contain" }}
           onWheel={(event) => event.preventDefault()}
         >
-          <Canvas shadows dpr={[1, 1.25]} frameloop="always"
-            gl={{ antialias: true, powerPreference: "high-performance", stencil: false, depth: true }}
+          <Canvas shadows={!performanceMode} dpr={[1, performanceMode ? 1 : 1.25]} frameloop="always"
+            gl={{ antialias: !performanceMode, powerPreference: "high-performance", stencil: false, depth: true }}
             onPointerMissed={() => {
               if (reviewMode && selectedMeshKey) clearMeshSelection("canvas empty click");
             }}
-            style={{ width: "100%", height: "100%", background: "#f0f4f8" }}
+            style={{ width: "100%", height: "100%", background: "#d8ecff" }}
           >
             <Scene modelData={modelData} markers={markers} selectedMarkerId={selectedMarker?.id || null}
               onMarkerClick={setSelectedMarker} customLegendItems={customLegendItems}
@@ -3908,7 +3976,9 @@ export function Map3DView() {
               onSupplementalMeshClick={handleSupplementalMeshClick}
               onSupplementalMeshDoubleClick={cameraMode === "orbit" ? handleSupplementalMeshDoubleClickFocus : undefined}
               onSupplementalSceneReady={handleSupplementalSceneReady}
-              onSupplementalInventoryReady={handleSupplementalInventoryReady} />
+              onSupplementalInventoryReady={handleSupplementalInventoryReady}
+              observerHeight={observerHeight}
+              performanceMode={performanceMode} />
           </Canvas>
         </div>
         <div id="map3d-ifc-panel-slot" className="pointer-events-none absolute bottom-3 left-0 right-3 top-3 z-40 overflow-hidden" />
