@@ -70,6 +70,7 @@ const MAP3D_ZOOM_SENSITIVITY_KEY = "obramap:map3d:zoom-sensitivity";
 const MAP3D_WALK_HELP_HIDDEN_KEY = "obramap:map3d:walk-help-hidden";
 
 type ZoomSensitivity = "low" | "normal" | "high" | "very_high";
+type LightingMode = "day" | "night";
 
 function getRealServiceFilterKey(mesh: ProjectModelMesh | null | undefined) {
   if (!mesh?.service_macro_id || !mesh.service_scope_id) return null;
@@ -882,6 +883,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   cameraMode, walkInspectOpen, onWalkExit, onWalkInspectClose, onWalkMeshInspect,
   supplementalGlbParts, onSupplementalMeshClick, onSupplementalMeshDoubleClick, onSupplementalMeshHover, onSupplementalMeshHoverEnd, onSupplementalSceneReady, onSupplementalInventoryReady,
   observerHeight, walkStartPoint, performanceMode, zoomSpeed,
+  lightingMode,
 }: {
   modelData: ModelData | null; markers: HouseMarker[]; selectedMarkerId: number | null;
   onMarkerClick: (m: HouseMarker) => void; customLegendItems: any[];
@@ -918,7 +920,9 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   observerHeight: number;
   walkStartPoint?: [number, number, number] | null;
   performanceMode: boolean;
+  lightingMode: LightingMode;
 }) {
+  const isNight = lightingMode === "night";
   return (
     <>
       <PerspectiveCamera makeDefault position={[0, 50, 50]} fov={50} near={0.05} far={5000} />
@@ -932,11 +936,22 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
         onClosePanel={onWalkInspectClose}
         onInspect={(mesh) => onWalkMeshInspect?.(mesh)}
       />
-      <color attach="background" args={["#d8ecff"]} />
-      <ambientLight intensity={0.72} />
-      <directionalLight position={[10, 10, 5]} intensity={0.9} castShadow={!performanceMode} />
-      <directionalLight position={[-10, 10, -5]} intensity={0.45} />
-      <hemisphereLight args={["#bfe3ff", "#6f8f6b", 0.55]} />
+      <color attach="background" args={[isNight ? "#07111f" : "#d8ecff"]} />
+      <ambientLight intensity={isNight ? 0.82 : 0.72} color={isNight ? "#d8e8ff" : "#ffffff"} />
+      <directionalLight
+        position={isNight ? [-12, 18, -8] : [10, 10, 5]}
+        intensity={isNight ? 0.52 : 0.9}
+        color={isNight ? "#b8d6ff" : "#ffffff"}
+        castShadow={!performanceMode && !isNight}
+      />
+      <directionalLight
+        position={isNight ? [8, 8, 10] : [-10, 10, -5]}
+        intensity={isNight ? 0.32 : 0.45}
+        color={isNight ? "#eef6ff" : "#ffffff"}
+      />
+      <hemisphereLight
+        args={isNight ? ["#92bfff", "#35435c", 0.78] : ["#bfe3ff", "#6f8f6b", 0.55]}
+      />
 
       {modelData && (
         <Suspense fallback={<Html center><div className="bg-background/90 px-4 py-2 rounded-lg border border-border">Carregando modelo...</div></Html>}>
@@ -1221,6 +1236,7 @@ export function Map3DView() {
     return Number.isFinite(saved) && saved >= 1.2 && saved <= 2.2 ? saved : 1.7;
   });
   const [performanceMode, setPerformanceMode] = useState(() => localStorage.getItem("obramap:map3d:performance-mode") !== "false");
+  const [lightingMode, setLightingMode] = useState<LightingMode>("day");
   const [zoomSensitivity, setZoomSensitivity] = useState<ZoomSensitivity>(() => {
     const saved = localStorage.getItem(MAP3D_ZOOM_SENSITIVITY_KEY);
     return ZOOM_SENSITIVITY_OPTIONS.some((option) => option.value === saved) ? saved as ZoomSensitivity : "normal";
@@ -1428,6 +1444,19 @@ export function Map3DView() {
   useEffect(() => {
     localStorage.setItem("obramap:map3d:performance-mode", String(performanceMode));
   }, [performanceMode]);
+
+  const lightingModeStorageKey = useMemo(() => (
+    projectId ? `obramap:map3d:${projectId}:lighting-mode` : "obramap:map3d:lighting-mode"
+  ), [projectId]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem(lightingModeStorageKey);
+    setLightingMode(saved === "night" ? "night" : "day");
+  }, [lightingModeStorageKey]);
+
+  useEffect(() => {
+    localStorage.setItem(lightingModeStorageKey, lightingMode);
+  }, [lightingMode, lightingModeStorageKey]);
 
   useEffect(() => {
     localStorage.setItem(MAP3D_ZOOM_SENSITIVITY_KEY, zoomSensitivity);
@@ -4484,6 +4513,17 @@ export function Map3DView() {
                 Modo desempenho
               </Button>
             )}
+            {modelData && (
+              <Button
+                variant={lightingMode === "night" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setLightingMode((mode) => mode === "night" ? "day" : "night")}
+                disabled={isLoading}
+                title={lightingMode === "night" ? "Voltar para iluminação de dia" : "Usar visualização noturna legível"}
+              >
+                {lightingMode === "night" ? "Noite" : "Dia"}
+              </Button>
+            )}
             {canChangeZoomSensitivity && modelData && (
               <div className="flex items-center gap-1 rounded-md border border-input bg-background px-1 py-1">
                 <span className="hidden items-center gap-1 px-1 text-xs text-muted-foreground sm:flex">
@@ -4889,7 +4929,8 @@ export function Map3DView() {
               onSupplementalInventoryReady={handleSupplementalInventoryReady}
               observerHeight={observerHeight}
               zoomSpeed={orbitZoomSpeed}
-              performanceMode={performanceMode} />
+              performanceMode={performanceMode}
+              lightingMode={lightingMode} />
           </Canvas>
         </div>
         <div id="map3d-ifc-panel-slot" className="pointer-events-none absolute bottom-3 left-0 right-3 top-3 z-40 overflow-hidden" />
