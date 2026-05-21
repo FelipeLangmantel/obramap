@@ -1,12 +1,17 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   format,
   differenceInDays,
   addDays,
   startOfWeek,
+  startOfMonth,
   eachWeekOfInterval,
+  eachDayOfInterval,
+  eachMonthOfInterval,
+  isWeekend,
 } from 'date-fns';
+import { toast } from 'sonner';
 import { ptBR } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -45,6 +50,10 @@ import {
   Settings2,
   Link2,
   Home,
+  CalendarDays,
+  ZoomIn,
+  ZoomOut,
+  MoveHorizontal,
 } from 'lucide-react';
 import type { GanttService } from './hooks/useStrategicGanttData';
 
@@ -104,6 +113,14 @@ const PRODUCTIVITY_SOURCE_LABEL: Record<GanttService['productivity_source'], str
   missing: 'Sem produtividade',
 };
 
+type GanttScale = 'day' | 'week' | 'month';
+
+const SCALE_CONFIG: Record<GanttScale, { label: string; minZoom: number; maxZoom: number; defaultZoom: number }> = {
+  day: { label: 'Dia', minZoom: 32, maxZoom: 96, defaultZoom: 48 },
+  week: { label: 'Semana', minZoom: 80, maxZoom: 180, defaultZoom: 120 },
+  month: { label: 'Mes', minZoom: 120, maxZoom: 260, defaultZoom: 180 },
+};
+
 export function StrategicGanttChart({
   services,
   projectStartDate,
@@ -112,15 +129,31 @@ export function StrategicGanttChart({
   onUpdatePredecessor,
 }: StrategicGanttChartProps) {
   const { canEdit } = useAuth();
+  const scrollAreaRef = useRef<HTMLDivElement | null>(null);
   const [editingService, setEditingService] = useState<GanttService | null>(null);
   const [editProductivity, setEditProductivity] = useState(1);
   const [editTeams, setEditTeams] = useState(1);
+  const [ganttScale, setGanttScale] = useState<GanttScale>('week');
+  const [zoomByScale, setZoomByScale] = useState<Record<GanttScale, number>>({
+    day: SCALE_CONFIG.day.defaultZoom,
+    week: SCALE_CONFIG.week.defaultZoom,
+    month: SCALE_CONFIG.month.defaultZoom,
+  });
+  const [dragPreview, setDragPreview] = useState<{
+    serviceId: string;
+    offsetDays: number;
+    start: Date;
+    end: Date;
+  } | null>(null);
   const [stageFilter, setStageFilter] = useState('all');
   const [serviceFilter, setServiceFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [teamFilter, setTeamFilter] = useState('all');
   const [capacityFilter, setCapacityFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+
+  const zoom = zoomByScale[ganttScale];
+  const dayWidth = ganttScale === 'day' ? zoom : ganttScale === 'week' ? zoom / 7 : zoom / 30;
 
   const stageOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -165,28 +198,29 @@ export function StrategicGanttChart({
     });
   }, [services, stageFilter, serviceFilter, statusFilter, teamFilter, capacityFilter, searchTerm]);
 
-  const { minDate, weeks, dayWidth, totalWidth } = useMemo(() => {
+  const { minDate, maxDate, ticks, totalWidth } = useMemo(() => {
     if (filteredServices.length === 0) {
-      return { minDate: new Date(), weeks: [], dayWidth: 30, totalWidth: 0 };
+      return { minDate: new Date(), maxDate: new Date(), ticks: [], totalWidth: 0 };
     }
     const allDates = filteredServices.flatMap((s) => [s.planned_start, s.planned_end]);
     if (projectedEndDate) allDates.push(projectedEndDate);
+    allDates.push(new Date());
 
     const min = new Date(Math.min(...allDates.map((d) => d.getTime())));
     const max = new Date(Math.max(...allDates.map((d) => d.getTime())));
 
     const paddedMin = addDays(startOfWeek(min, { locale: ptBR }), -7);
     const paddedMax = addDays(max, 14);
-    const totalDays = differenceInDays(paddedMax, paddedMin);
-    const dayW = 30;
+    const totalDays = Math.max(1, differenceInDays(paddedMax, paddedMin) + 1);
+    const interval = { start: paddedMin, end: paddedMax };
+    const tickDates = ganttScale === 'day'
+      ? eachDayOfInterval(interval)
+      : ganttScale === 'week'
+        ? eachWeekOfInterval(interval, { locale: ptBR })
+        : eachMonthOfInterval({ start: startOfMonth(paddedMin), end: paddedMax });
 
-    const weeksList = eachWeekOfInterval(
-      { start: paddedMin, end: paddedMax },
-      { locale: ptBR }
-    );
-
-    return { minDate: paddedMin, weeks: weeksList, dayWidth: dayW, totalWidth: totalDays * dayW };
-  }, [filteredServices, projectedEndDate]);
+    return { minDate: paddedMin, maxDate: paddedMax, ticks: tickDates, totalWidth: totalDays * dayWidth };
+  }, [filteredServices, projectedEndDate, ganttScale, dayWidth]);
 
   const getBarPosition = (svc: GanttService) => {
     const left = differenceInDays(svc.planned_start, minDate) * dayWidth;
@@ -194,8 +228,82 @@ export function StrategicGanttChart({
     return { left, width };
   };
 
+  const getTickPosition = (date: Date) => differenceInDays(date, minDate) * dayWidth;
+
+  const getTickWidth = (date: Date) => {
+    if (ganttScale === 'day') return dayWidth;
+    if (ganttScale === 'week') return dayWidth * 7;
+    const nextMonth = startOfMonth(addDays(startOfMonth(date), 32));
+    const end = nextMonth > maxDate ? maxDate : nextMonth;
+    return Math.max(dayWidth, differenceInDays(end, date) * dayWidth);
+  };
+
   const today = new Date();
   const todayOffset = differenceInDays(today, minDate) * dayWidth;
+
+  const handleScaleChange = (scale: GanttScale) => {
+    setGanttScale(scale);
+  };
+
+  const handleZoom = (direction: 'in' | 'out' | 'fit') => {
+    if (direction === 'fit') {
+      setZoomByScale((prev) => ({ ...prev, [ganttScale]: SCALE_CONFIG[ganttScale].defaultZoom }));
+      return;
+    }
+
+    setZoomByScale((prev) => {
+      const config = SCALE_CONFIG[ganttScale];
+      const delta = ganttScale === 'day' ? 8 : ganttScale === 'week' ? 20 : 30;
+      const next = direction === 'in' ? prev[ganttScale] + delta : prev[ganttScale] - delta;
+      return { ...prev, [ganttScale]: Math.min(config.maxZoom, Math.max(config.minZoom, next)) };
+    });
+  };
+
+  const scrollToToday = () => {
+    const viewport = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]') as HTMLDivElement | null;
+    if (!viewport) return;
+    viewport.scrollTo({
+      left: Math.max(0, todayOffset - viewport.clientWidth / 2),
+      behavior: 'smooth',
+    });
+  };
+
+  const handleBarPointerDown = (event: React.PointerEvent<HTMLDivElement>, svc: GanttService) => {
+    if (!canEdit) {
+      toast.info('Somente usuarios com permissao de edicao podem alterar datas do Gantt.');
+      return;
+    }
+
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const startX = event.clientX;
+
+    const handleMove = (moveEvent: PointerEvent) => {
+      const rawDays = (moveEvent.clientX - startX) / Math.max(dayWidth, 1);
+      const snap = ganttScale === 'month' ? 30 : ganttScale === 'week' ? 7 : 1;
+      const offsetDays = Math.round(rawDays / snap) * snap;
+      setDragPreview({
+        serviceId: svc.id,
+        offsetDays,
+        start: addDays(svc.planned_start, offsetDays),
+        end: addDays(svc.planned_end, offsetDays),
+      });
+    };
+
+    const handleUp = () => {
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', handleUp);
+      setDragPreview((preview) => {
+        if (preview && preview.serviceId === svc.id && preview.offsetDays !== 0) {
+          toast.info('Alteracao de data simulada no Gantt. Nao foi salva porque nao ha campo persistente claro de inicio/fim por servico nesta fase.');
+        }
+        return null;
+      });
+    };
+
+    window.addEventListener('pointermove', handleMove);
+    window.addEventListener('pointerup', handleUp);
+  };
 
   const handleEditOpen = (svc: GanttService) => {
     setEditingService(svc);
@@ -296,6 +404,39 @@ export function StrategicGanttChart({
 
         {/* Filters toolbar */}
         <div className="rounded-2xl border border-slate-200 dark:border-border bg-white dark:bg-card p-3 md:p-4 shadow-sm">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {(['day', 'week', 'month'] as GanttScale[]).map((scale) => (
+                <Button
+                  key={scale}
+                  size="sm"
+                  variant={ganttScale === scale ? 'default' : 'outline'}
+                  className="h-8 rounded-full text-xs"
+                  onClick={() => handleScaleChange(scale)}
+                >
+                  {SCALE_CONFIG[scale].label}
+                </Button>
+              ))}
+              <Button size="sm" variant="outline" className="h-8 rounded-full text-xs gap-1" onClick={scrollToToday}>
+                <CalendarDays className="h-3.5 w-3.5" />
+                Hoje
+              </Button>
+              <Button size="sm" variant="outline" className="h-8 rounded-full text-xs" onClick={() => handleZoom('fit')}>
+                Ajustar
+              </Button>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Button size="icon" variant="outline" className="h-8 w-8 rounded-full" onClick={() => handleZoom('out')}>
+                <ZoomOut className="h-3.5 w-3.5" />
+              </Button>
+              <span className="min-w-16 text-center text-[11px] text-muted-foreground">
+                Zoom {Math.round((zoom / SCALE_CONFIG[ganttScale].defaultZoom) * 100)}%
+              </span>
+              <Button size="icon" variant="outline" className="h-8 w-8 rounded-full" onClick={() => handleZoom('in')}>
+                <ZoomIn className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
           <div className="grid gap-2 md:grid-cols-7">
             <Input
               value={searchTerm}
@@ -369,29 +510,50 @@ export function StrategicGanttChart({
                 Nenhum serviço encontrado com os filtros atuais.
               </div>
             ) : (
-            <ScrollArea className="w-full">
+            <ScrollArea className="w-full" ref={scrollAreaRef}>
               <div className="min-w-max">
                 {/* Header */}
                 <div className="flex border-b border-slate-200 dark:border-border bg-slate-50/80 dark:bg-muted/30 sticky top-0 z-20">
                   <div className="w-96 shrink-0 border-r border-slate-200 dark:border-border px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide text-slate-600 dark:text-muted-foreground">
                     Etapa / serviço
                   </div>
-                  <div className="flex" style={{ width: totalWidth }}>
-                    {weeks.map((week, i) => (
+                  <div className="relative h-[52px]" style={{ width: totalWidth }}>
+                    {ticks.map((tick, i) => (
                       <div
                         key={i}
-                        className="border-r border-slate-200 dark:border-border text-center text-[11px] py-1.5"
-                        style={{ width: dayWidth * 7 }}
+                        className="absolute top-0 bottom-0 border-r border-slate-200 dark:border-border text-center text-[11px] py-1.5"
+                        style={{ left: getTickPosition(tick), width: getTickWidth(tick) }}
                       >
-                        <div className="font-medium text-slate-700 dark:text-foreground">{format(week, "'Sem' w", { locale: ptBR })}</div>
-                        <div className="text-slate-400 dark:text-muted-foreground">{format(week, 'dd/MM')}</div>
+                        <div className="font-medium text-slate-700 dark:text-foreground">
+                          {ganttScale === 'day'
+                            ? format(tick, 'dd')
+                            : ganttScale === 'week'
+                              ? format(tick, "'Sem' w", { locale: ptBR })
+                              : format(tick, 'MMM/yyyy', { locale: ptBR })}
+                        </div>
+                        <div className="text-slate-400 dark:text-muted-foreground">
+                          {ganttScale === 'day'
+                            ? format(tick, 'EEE', { locale: ptBR })
+                            : ganttScale === 'week'
+                              ? format(tick, 'dd/MM')
+                              : format(tick, 'MMMM', { locale: ptBR })}
+                        </div>
                       </div>
                     ))}
+                    {todayOffset >= 0 && todayOffset <= totalWidth && (
+                      <div className="absolute top-0 bottom-0 z-30 w-0.5 bg-red-500" style={{ left: todayOffset }}>
+                        <span className="absolute -top-0.5 left-1 rounded bg-red-500 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white shadow">
+                          Hoje
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
               {filteredServices.map((svc) => {
                 const pos = getBarPosition(svc);
+                const activeDragPreview = dragPreview?.serviceId === svc.id ? dragPreview : null;
+                const dragLeft = activeDragPreview ? pos.left + activeDragPreview.offsetDays * dayWidth : pos.left;
                 const status = getServiceStatus(svc);
                 const statusConfig = STATUS_CONFIG[status];
                 const plannedPercent = getPlannedPercent(svc);
@@ -505,9 +667,22 @@ export function StrategicGanttChart({
 
                     {/* Bar area */}
                     <div className="relative py-2" style={{ width: totalWidth }}>
+                      <div className="pointer-events-none absolute inset-0">
+                        {ticks.map((tick, index) => (
+                          <div
+                            key={`${tick.toISOString()}-${index}`}
+                            className={`absolute top-0 bottom-0 border-r border-slate-100 dark:border-border/60 ${
+                              ganttScale === 'day' && isWeekend(tick)
+                                ? 'bg-slate-100/70 dark:bg-slate-800/30'
+                                : ''
+                            }`}
+                            style={{ left: getTickPosition(tick), width: getTickWidth(tick) }}
+                          />
+                        ))}
+                      </div>
                       {/* Today marker */}
                       <div
-                        className="absolute top-0 bottom-0 w-px bg-primary z-10"
+                        className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-30"
                         style={{ left: todayOffset }}
                       />
 
@@ -533,9 +708,10 @@ export function StrategicGanttChart({
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <div
-                              className={`absolute top-1/2 -translate-y-1/2 h-6 rounded-full cursor-pointer transition-all hover:h-7 hover:shadow-md ring-1 ring-black/5 overflow-hidden ${statusConfig.color}`}
-                              style={{ left: pos.left, width: pos.width }}
+                              className={`absolute top-1/2 -translate-y-1/2 h-6 rounded-full cursor-grab active:cursor-grabbing transition-all hover:h-7 hover:shadow-md ring-1 ring-black/5 overflow-hidden ${statusConfig.color} ${activeDragPreview ? 'ring-2 ring-red-400 shadow-lg' : ''}`}
+                              style={{ left: dragLeft, width: pos.width }}
                               onClick={() => handleEditOpen(svc)}
+                              onPointerDown={(event) => handleBarPointerDown(event, svc)}
                             >
                               {/* Progress */}
                               {svc.completion_percent > 0 && (
@@ -550,6 +726,8 @@ export function StrategicGanttChart({
                                   ? `${svc.completion_percent.toFixed(0)}%`
                                   : `${svc.duration_days}d`}
                               </div>
+                              <div className="absolute inset-y-0 left-0 w-1.5 cursor-ew-resize bg-white/25" />
+                              <div className="absolute inset-y-0 right-0 w-1.5 cursor-ew-resize bg-white/25" />
                             </div>
 
                           </TooltipTrigger>
@@ -564,6 +742,14 @@ export function StrategicGanttChart({
                               <div>Unidade cadastrada: {svc.productivity_unit}</div>
                               <div>Inicio planejado: {format(svc.planned_start, 'dd/MM/yyyy')}</div>
                               <div>Fim planejado: {format(svc.planned_end, 'dd/MM/yyyy')}</div>
+                              {activeDragPreview && (
+                                <>
+                                  <div className="font-medium text-red-600">Preview de arraste</div>
+                                  <div>Novo inicio: {format(activeDragPreview.start, 'dd/MM/yyyy')}</div>
+                                  <div>Novo fim: {format(activeDragPreview.end, 'dd/MM/yyyy')}</div>
+                                  <div>Deslocamento: {activeDragPreview.offsetDays >= 0 ? '+' : ''}{activeDragPreview.offsetDays} dias</div>
+                                </>
+                              )}
                               <div>Duracao planejada: {svc.duration_days} dias</div>
                               <div>Duracao sugerida: {svc.suggested_duration_days ? `${svc.suggested_duration_days} dias` : 'sem produtividade cadastrada'}</div>
                               {svc.duration_delta_days !== null && (
@@ -609,6 +795,16 @@ export function StrategicGanttChart({
                   </div>
                 </div>
               )}
+              <div className="flex border-t bg-slate-50/80 dark:bg-muted/20">
+                <div className="w-96 shrink-0 border-r px-3 py-2 text-xs text-muted-foreground">
+                  Linha de hoje
+                </div>
+                <div className="relative h-8" style={{ width: totalWidth }}>
+                  {todayOffset >= 0 && todayOffset <= totalWidth && (
+                    <div className="absolute top-0 bottom-0 z-30 w-0.5 bg-red-500" style={{ left: todayOffset }} />
+                  )}
+                </div>
+              </div>
             </div>
             <ScrollBar orientation="horizontal" />
           </ScrollArea>
