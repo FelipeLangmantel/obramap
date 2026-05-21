@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { DollarSign, Package, Hammer, Wrench, TrendingUp, PieChart, BarChart3, Calculator, Target, ChevronDown, ChevronRight, Home, Loader2, Minimize2, Maximize2, Printer, Building2, ChevronsDownUp, ChevronsUpDown } from "lucide-react";
+import { DollarSign, Package, Hammer, Wrench, TrendingUp, PieChart, BarChart3, Calculator, Target, ChevronDown, ChevronRight, Home, Loader2, Minimize2, Maximize2, Printer, Building2, ChevronsDownUp, ChevronsUpDown, Copy, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -7,6 +7,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProjectSetupFlow } from "@/hooks/useProjectSetupFlow";
@@ -77,10 +82,11 @@ interface MeasurementCost {
 }
 
 const COSTS_TAB_STORAGE_KEY = "obramap_costs_tab";
+type CopyBudgetMode = "add_missing" | "replace";
 
 export function ProjectCostsView() {
-  const { currentProject } = useConstruction();
-  const { canEdit } = useAuth();
+  const { currentProject, projects } = useConstruction();
+  const { canEdit, requireEdit, profile } = useAuth();
   const { currentStep, advanceToStep } = useProjectSetupFlow();
   const [scopeCosts, setScopeCosts] = useState<ScopeCost[]>([]);
   const [plannedProductions, setPlannedProductions] = useState<PlannedProduction[]>([]);
@@ -100,6 +106,11 @@ export function ProjectCostsView() {
   const [isUnitCostCollapsed, setIsUnitCostCollapsed] = useState(false);
   const [allExpanded, setAllExpanded] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [copyDialogOpen, setCopyDialogOpen] = useState(false);
+  const [copySourceProjectId, setCopySourceProjectId] = useState("");
+  const [copyMode, setCopyMode] = useState<CopyBudgetMode>("add_missing");
+  const [confirmReplaceBudget, setConfirmReplaceBudget] = useState(false);
+  const [isCopyingBudget, setIsCopyingBudget] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const savedScrollPosition = useRef<number>(0);
 
@@ -137,6 +148,14 @@ export function ProjectCostsView() {
 
   const macros = currentProject?.macrosTemplate || [];
   const houses = currentProject?.houses || [];
+  const sourceProjects = useMemo(
+    () => projects.filter(project => project.id !== currentProject?.id),
+    [projects, currentProject?.id]
+  );
+  const selectedCopySourceProject = useMemo(
+    () => sourceProjects.find(project => project.id === copySourceProjectId) || null,
+    [sourceProjects, copySourceProjectId]
+  );
 
   // Load costs from database
   const loadCostsFromDatabase = useCallback(async () => {
@@ -479,6 +498,236 @@ export function ProjectCostsView() {
     }).format(value);
   };
 
+  const normalizeCopyKey = (value?: string | null) =>
+    (value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toLowerCase();
+
+  const handleOpenCopyDialog = () => {
+    if (!requireEdit()) return;
+    setCopySourceProjectId("");
+    setCopyMode("add_missing");
+    setConfirmReplaceBudget(false);
+    setCopyDialogOpen(true);
+  };
+
+  const handleCopyCostsFromProject = async () => {
+    if (!requireEdit()) return;
+    if (!currentProject?.id) return;
+    if (!copySourceProjectId || !selectedCopySourceProject) {
+      toast.error("Selecione uma obra de origem.");
+      return;
+    }
+    if (copySourceProjectId === currentProject.id) {
+      toast.error("A obra de origem deve ser diferente da obra atual.");
+      return;
+    }
+    if (copyMode === "replace" && !confirmReplaceBudget) {
+      toast.error("Confirme a substituicao do orcamento atual antes de continuar.");
+      return;
+    }
+
+    setIsCopyingBudget(true);
+
+    try {
+      const { data: sourceItems, error: sourceItemsError } = await supabase
+        .from("scope_items")
+        .select("*")
+        .eq("project_id", copySourceProjectId);
+      if (sourceItemsError) throw sourceItemsError;
+
+      const { data: sourceIndirectCosts, error: sourceIndirectError } = await supabase
+        .from("indirect_costs")
+        .select("*")
+        .eq("project_id", copySourceProjectId);
+      if (sourceIndirectError) throw sourceIndirectError;
+
+      if ((sourceItems?.length ?? 0) === 0 && (sourceIndirectCosts?.length ?? 0) === 0) {
+        toast.warning("A obra de origem nao possui custos para copiar.");
+        return;
+      }
+
+      const sourceScopeById = new Map<string, { macroName: string; scopeName: string }>();
+      selectedCopySourceProject.macrosTemplate?.forEach(macro => {
+        macro.scopes.forEach(scope => {
+          sourceScopeById.set(scope.id, { macroName: macro.name, scopeName: scope.name });
+        });
+      });
+
+      const destinationScopes = macros.flatMap(macro =>
+        macro.scopes.map(scope => ({ macro, scope }))
+      );
+      const destinationScopeById = new Map(destinationScopes.map(item => [item.scope.id, item]));
+      const destinationScopeByName = new Map(
+        destinationScopes.map(item => [
+          `${normalizeCopyKey(item.macro.name)}|${normalizeCopyKey(item.scope.name)}`,
+          item,
+        ])
+      );
+
+      const findDestinationScope = (item: any) => {
+        const idMatch = destinationScopeById.get(item.scope_id);
+        if (idMatch) return idMatch;
+
+        const sourceScope = sourceScopeById.get(item.scope_id);
+        if (!sourceScope) return null;
+
+        return destinationScopeByName.get(
+          `${normalizeCopyKey(sourceScope.macroName)}|${normalizeCopyKey(sourceScope.scopeName)}`
+        ) || null;
+      };
+
+      const makeScopeItemKey = (item: any) => [
+        item.scope_id,
+        normalizeCopyKey(item.name),
+        item.category || "",
+        normalizeCopyKey(item.material_family),
+        normalizeCopyKey(item.unit),
+        item.input_id || "",
+      ].join("|");
+
+      let copiedItems = 0;
+      let skippedItems = 0;
+      let skippedUnmappedItems = 0;
+      let copiedIndirect = 0;
+      let skippedIndirect = 0;
+
+      if (copyMode === "replace") {
+        const { error: deleteItemsError } = await supabase
+          .from("scope_items")
+          .delete()
+          .eq("project_id", currentProject.id);
+        if (deleteItemsError) throw deleteItemsError;
+
+        if (profile?.company_id) {
+          const { error: deleteIndirectError } = await supabase
+            .from("indirect_costs")
+            .delete()
+            .eq("project_id", currentProject.id)
+            .eq("company_id", profile.company_id);
+          if (deleteIndirectError) throw deleteIndirectError;
+        }
+      }
+
+      const { data: existingDestinationItems, error: existingItemsError } = await supabase
+        .from("scope_items")
+        .select("scope_id,name,category,material_family,unit,input_id")
+        .eq("project_id", currentProject.id);
+      if (existingItemsError) throw existingItemsError;
+
+      const existingItemKeys = new Set((existingDestinationItems || []).map(makeScopeItemKey));
+      const itemsToInsert = (sourceItems || []).flatMap((item: any) => {
+        const destinationScope = findDestinationScope(item);
+        if (!destinationScope) {
+          skippedUnmappedItems += 1;
+          return [];
+        }
+
+        const nextItem = {
+          project_id: currentProject.id,
+          scope_id: destinationScope.scope.id,
+          macro_id: destinationScope.macro.id,
+          name: item.name,
+          category: item.category,
+          material_family: item.material_family,
+          unit_value: Number(item.unit_value) || 0,
+          quantity: Number(item.quantity) || 1,
+          unit: item.unit || "un",
+          notes: item.notes,
+          input_id: item.input_id,
+          input_code: item.input_code,
+          scope_cost_id: null,
+        };
+
+        const nextKey = makeScopeItemKey(nextItem);
+        if (copyMode === "add_missing" && existingItemKeys.has(nextKey)) {
+          skippedItems += 1;
+          return [];
+        }
+
+        existingItemKeys.add(nextKey);
+        return [nextItem];
+      });
+
+      if (itemsToInsert.length > 0) {
+        const { error: insertItemsError } = await supabase
+          .from("scope_items")
+          .insert(itemsToInsert);
+        if (insertItemsError) throw insertItemsError;
+        copiedItems = itemsToInsert.length;
+      }
+
+      if (profile?.company_id && (sourceIndirectCosts?.length ?? 0) > 0) {
+        const { data: existingIndirectCosts, error: existingIndirectError } = await supabase
+          .from("indirect_costs")
+          .select("name,subcategory,value,quantity,unit")
+          .eq("project_id", currentProject.id)
+          .eq("company_id", profile.company_id);
+        if (existingIndirectError) throw existingIndirectError;
+
+        const makeIndirectKey = (item: any) => [
+          normalizeCopyKey(item.subcategory),
+          normalizeCopyKey(item.name),
+          normalizeCopyKey(item.unit),
+          Number(item.value) || 0,
+          Number(item.quantity) || 1,
+        ].join("|");
+
+        const existingIndirectKeys = new Set((existingIndirectCosts || []).map(makeIndirectKey));
+        const indirectToInsert = (sourceIndirectCosts || []).flatMap((item: any) => {
+          const nextItem = {
+            project_id: currentProject.id,
+            company_id: profile.company_id!,
+            name: item.name,
+            subcategory: item.subcategory,
+            value: Number(item.value) || 0,
+            quantity: Number(item.quantity) || 1,
+            unit: item.unit || "un",
+            notes: item.notes,
+          };
+          const nextKey = makeIndirectKey(nextItem);
+          if (copyMode === "add_missing" && existingIndirectKeys.has(nextKey)) {
+            skippedIndirect += 1;
+            return [];
+          }
+
+          existingIndirectKeys.add(nextKey);
+          return [nextItem];
+        });
+
+        if (indirectToInsert.length > 0) {
+          const { error: insertIndirectError } = await supabase
+            .from("indirect_costs")
+            .insert(indirectToInsert);
+          if (insertIndirectError) throw insertIndirectError;
+          copiedIndirect = indirectToInsert.length;
+        }
+      }
+
+      await loadCostsFromDatabase();
+      setCopyDialogOpen(false);
+      setCopySourceProjectId("");
+      setConfirmReplaceBudget(false);
+
+      const skippedParts = [
+        skippedItems > 0 ? `${skippedItems} itens ja existentes ignorados` : null,
+        skippedIndirect > 0 ? `${skippedIndirect} custos indiretos ja existentes ignorados` : null,
+        skippedUnmappedItems > 0 ? `${skippedUnmappedItems} itens sem etapa/servico equivalente ignorados` : null,
+      ].filter(Boolean);
+
+      toast.success(
+        `Custos copiados: ${copiedItems} itens diretos e ${copiedIndirect} indiretos.${skippedParts.length ? ` ${skippedParts.join("; ")}.` : ""}`
+      );
+    } catch (error) {
+      console.error("Error copying project costs:", error);
+      toast.error("Erro ao copiar custos da obra selecionada.");
+    } finally {
+      setIsCopyingBudget(false);
+    }
+  };
+
   // Print budget function - PDF
   const printBudget = async (format: 'analytical' | 'synthetic') => {
     setIsPrinting(true);
@@ -807,9 +1056,20 @@ export function ProjectCostsView() {
             </Card>
           </Collapsible>
 
-          {/* Print Budget Button */}
+          {/* Budget actions */}
           {!editingScope && (
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
+              {canEdit && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={handleOpenCopyDialog}
+                >
+                  <Copy className="w-4 h-4" />
+                  Copiar de Outra Obra
+                </Button>
+              )}
               <Button
                 variant={allExpanded ? "default" : "outline"}
                 size="sm"
@@ -1238,6 +1498,136 @@ export function ProjectCostsView() {
           )}
         </TabsContent>
       </Tabs>
+
+      <Dialog open={copyDialogOpen} onOpenChange={(open) => {
+        if (isCopyingBudget) return;
+        setCopyDialogOpen(open);
+        if (!open) setConfirmReplaceBudget(false);
+      }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Copy className="w-5 h-5" />
+              Copiar custos de outra obra
+            </DialogTitle>
+            <DialogDescription>
+              Copie o orcamento direto e os custos indiretos de uma obra existente para a obra atual.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5">
+            <div className="grid gap-2">
+              <Label>Obra de origem</Label>
+              <Select
+                value={copySourceProjectId}
+                onValueChange={setCopySourceProjectId}
+                disabled={isCopyingBudget}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione uma obra para copiar" />
+                </SelectTrigger>
+                <SelectContent>
+                  {sourceProjects.map(project => (
+                    <SelectItem key={project.id} value={project.id}>
+                      {project.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {sourceProjects.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Nao ha outra obra disponivel na sua lista de obras.
+                </p>
+              )}
+            </div>
+
+            <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+              <p className="font-medium">Destino</p>
+              <p className="text-muted-foreground">{currentProject.name}</p>
+            </div>
+
+            <div className="grid gap-2">
+              <Label>O que sera copiado</Label>
+              <div className="rounded-lg border p-3 text-sm text-muted-foreground">
+                Orçamento completo da obra origem: itens de custos diretos por etapa/servico e custos indiretos cadastrados.
+              </div>
+            </div>
+
+            <div className="grid gap-3">
+              <Label>Modo de copia</Label>
+              <RadioGroup
+                value={copyMode}
+                onValueChange={(value) => {
+                  setCopyMode(value as CopyBudgetMode);
+                  setConfirmReplaceBudget(false);
+                }}
+                className="grid gap-3"
+                disabled={isCopyingBudget}
+              >
+                <Label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3">
+                  <RadioGroupItem value="add_missing" className="mt-0.5" />
+                  <span>
+                    <span className="block font-medium">Adicionar apenas itens que nao existem</span>
+                    <span className="block text-xs text-muted-foreground">
+                      Mantem o orcamento atual e evita duplicar itens ja cadastrados.
+                    </span>
+                  </span>
+                </Label>
+                <Label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3">
+                  <RadioGroupItem value="replace" className="mt-0.5" />
+                  <span>
+                    <span className="block font-medium">Substituir orcamento atual</span>
+                    <span className="block text-xs text-muted-foreground">
+                      Remove os itens de custos atuais desta obra e copia os custos da obra origem.
+                    </span>
+                  </span>
+                </Label>
+              </RadioGroup>
+            </div>
+
+            <Alert>
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                Esta acao copiara os custos da obra selecionada para a obra atual. Os dados existentes so serao substituidos se voce escolher a opcao de substituicao e confirmar abaixo.
+              </AlertDescription>
+            </Alert>
+
+            {copyMode === "replace" && (
+              <Label className="flex cursor-pointer items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={confirmReplaceBudget}
+                  onChange={(event) => setConfirmReplaceBudget(event.target.checked)}
+                  disabled={isCopyingBudget}
+                />
+                Confirmo que quero substituir o orcamento atual desta obra.
+              </Label>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setCopyDialogOpen(false)}
+              disabled={isCopyingBudget}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleCopyCostsFromProject}
+              disabled={
+                isCopyingBudget ||
+                !copySourceProjectId ||
+                (copyMode === "replace" && !confirmReplaceBudget)
+              }
+            >
+              {isCopyingBudget && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Copiar custos
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
