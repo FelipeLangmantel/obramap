@@ -22,8 +22,14 @@ export interface ServiceProductivityConfig {
   scope_id: string;
   productivity_type: string;
   base_productivity: number;
+  productivity_unit?: string;
+  default_team_count?: number;
+  working_days_per_week?: number;
+  source: 'project' | 'default' | 'manual';
   team_composition: { role: string; quantity: number; unit: string }[];
 }
+
+export type CapacityStatus = 'ok' | 'attention' | 'insufficient' | 'missing_productivity';
 
 export interface GanttService {
   id: string; // macro_id + scope_id
@@ -39,8 +45,14 @@ export interface GanttService {
   completion_percent: number;
   productivity: number;
   productivity_type: string;
+  productivity_source: ServiceProductivityConfig['source'] | 'missing';
+  productivity_unit: string;
+  has_productivity: boolean;
   teams: number;
   duration_days: number;
+  suggested_duration_days: number | null;
+  duration_delta_days: number | null;
+  capacity_status: CapacityStatus;
   planned_start: Date;
   planned_end: Date;
   depends_on: string | null; // id of predecessor service
@@ -52,6 +64,32 @@ const getServiceKey = (macroId: string | null | undefined, scopeId: string | nul
   `${macroId || 'sem_macro'}::${scopeId || 'sem_servico'}`;
 
 const getLegacyServiceId = (macroId: string, scopeId: string) => `${macroId}_${scopeId}`;
+
+const normalizeDailyProductivity = (
+  value: number,
+  unit: string | undefined,
+  workingDaysPerWeek: number | undefined
+) => {
+  const safeValue = Number(value) || 0;
+  if (safeValue <= 0) return 0;
+
+  const normalizedUnit = (unit || '').toLowerCase();
+  if (normalizedUnit.includes('semana')) {
+    return safeValue / Math.max(Number(workingDaysPerWeek) || 5, 1);
+  }
+
+  return safeValue;
+};
+
+const getCapacityStatus = (
+  plannedDuration: number,
+  suggestedDuration: number | null
+): CapacityStatus => {
+  if (!suggestedDuration) return 'missing_productivity';
+  if (plannedDuration >= suggestedDuration) return 'ok';
+  if (plannedDuration >= suggestedDuration * 0.8) return 'attention';
+  return 'insufficient';
+};
 
 export function useStrategicGanttData(projectId: string | undefined) {
   const { company, canEdit } = useAuth();
@@ -72,6 +110,7 @@ export function useStrategicGanttData(projectId: string | undefined) {
         execBankRes,
         servicesRes,
         productivityRes,
+        projectProductivityRes,
         stagesRes,
         housesRes,
         projectRes,
@@ -88,6 +127,11 @@ export function useStrategicGanttData(projectId: string | undefined) {
           .from('service_productivities')
           .select('*')
           .eq('company_id', company.id),
+        supabase
+          .from('project_service_productivity' as any)
+          .select('*')
+          .eq('project_id', projectId)
+          .eq('is_active', true),
         supabase
           .from('planning_stages')
           .select('*')
@@ -144,15 +188,46 @@ export function useStrategicGanttData(projectId: string | undefined) {
       });
       setServices(uniqueServices);
 
-      // Productivities
-      const prods: ServiceProductivityConfig[] = (productivityRes.data || []).map((p: any) => ({
+      // Productivities: prioridade para produtividade especifica da obra,
+      // com fallback para a produtividade padrao da empresa.
+      const projectProds: ServiceProductivityConfig[] = ((projectProductivityRes.data as any[]) || []).map((p: any) => {
+        const dailyProductivity = normalizeDailyProductivity(
+          Number(p.productivity_value),
+          p.productivity_unit,
+          Number(p.working_days_per_week)
+        );
+
+        return {
+          id: p.id,
+          macro_id: p.macro_id,
+          scope_id: p.scope_id,
+          productivity_type: 'casa_por_dia',
+          base_productivity: dailyProductivity,
+          productivity_unit: p.productivity_unit || 'un/dia',
+          default_team_count: Number(p.default_team_count) || 1,
+          working_days_per_week: Number(p.working_days_per_week) || 5,
+          source: 'project',
+          team_composition: [],
+        };
+      });
+
+      const defaultProds: ServiceProductivityConfig[] = (productivityRes.data || []).map((p: any) => ({
         id: p.id,
         macro_id: p.macro_id,
         scope_id: p.scope_id,
         productivity_type: p.productivity_type,
         base_productivity: Number(p.base_productivity),
+        productivity_unit: 'un/dia',
+        default_team_count: 1,
+        working_days_per_week: 5,
+        source: 'default',
         team_composition: p.team_composition || [],
       }));
+
+      const prodsByService = new Map<string, ServiceProductivityConfig>();
+      defaultProds.forEach((p) => prodsByService.set(getServiceKey(p.macro_id, p.scope_id), p));
+      projectProds.forEach((p) => prodsByService.set(getServiceKey(p.macro_id, p.scope_id), p));
+      const prods = Array.from(prodsByService.values());
       setProductivities(prods);
 
       // Planning stages
@@ -240,20 +315,29 @@ export function useStrategicGanttData(projectId: string | undefined) {
       const serviceKey = getServiceKey(svc.macro_id, svc.scope_id);
       const id = getLegacyServiceId(svc.macro_id, svc.scope_id);
       const prod = prodMap.get(serviceKey);
-      const productivity = prod?.base_productivity || 1;
+      const stageProductivity = Number(stage?.planned_productivity) || 0;
+      const hasProductivity = (!!prod && prod.base_productivity > 0) || stageProductivity > 0;
+      const productivity = prod?.base_productivity || stageProductivity || 1;
+      const productivitySource = prod?.source || (stageProductivity > 0 ? 'manual' : 'missing');
       const productivityType = prod?.productivity_type || 'casa_por_dia';
-      const teams = stage?.planned_teams || 1;
+      const teams = stage?.planned_teams || prod?.default_team_count || 1;
       const dependsOn = stage?.depends_on || null;
       const sequenceOrder = stage?.sequence_order ?? result.length;
 
-      // Calculate duration
+      // Calculate suggested duration from productivity without persisting dates.
       const remaining = svc.remaining_houses;
-      let durationDays: number;
-      if (productivityType === 'casa_por_dia') {
-        durationDays = Math.max(1, Math.ceil(remaining / (productivity * teams)));
-      } else {
-        durationDays = Math.max(1, Math.ceil(remaining * productivity / teams));
-      }
+      const dailyCapacity = productivity * teams;
+      const suggestedDurationDays = hasProductivity
+        ? Math.max(1, Math.ceil(remaining / Math.max(dailyCapacity, 0.01)))
+        : null;
+      const durationDays = Math.max(
+        1,
+        Number(stage?.duration_days) || suggestedDurationDays || Math.ceil(remaining / Math.max(dailyCapacity, 0.01))
+      );
+      const durationDeltaDays = suggestedDurationDays !== null
+        ? durationDays - suggestedDurationDays
+        : null;
+      const capacityStatus = getCapacityStatus(durationDays, suggestedDurationDays);
 
       // Determine start date based on predecessor
       let plannedStart = nextStart;
@@ -286,8 +370,14 @@ export function useStrategicGanttData(projectId: string | undefined) {
         completion_percent: svc.completion_percent,
         productivity,
         productivity_type: productivityType,
+        productivity_source: productivitySource,
+        productivity_unit: prod?.productivity_unit || (stageProductivity > 0 ? 'casas/dia manual' : 'sem produtividade'),
+        has_productivity: hasProductivity,
         teams,
         duration_days: durationDays,
+        suggested_duration_days: suggestedDurationDays,
+        duration_delta_days: durationDeltaDays,
+        capacity_status: capacityStatus,
         planned_start: plannedStart,
         planned_end: plannedEnd,
         depends_on: dependsOn,
@@ -314,7 +404,16 @@ export function useStrategicGanttData(projectId: string | undefined) {
       (p) => p.macro_id === macroId && p.scope_id === scopeId
     );
 
-    if (existing?.id) {
+    if (existing?.id && existing.source === 'project') {
+      await supabase
+        .from('project_service_productivity' as any)
+        .update({
+          productivity_value: newProductivity,
+          productivity_unit: 'casa/dia',
+          default_team_count: newTeams,
+        })
+        .eq('id', existing.id);
+    } else if (existing?.id) {
       await supabase
         .from('service_productivities')
         .update({ base_productivity: newProductivity })
@@ -336,7 +435,12 @@ export function useStrategicGanttData(projectId: string | undefined) {
     // Recalculate locally
     const updatedProds = productivities.map((p) => {
       if (p.macro_id === macroId && p.scope_id === scopeId) {
-        return { ...p, base_productivity: newProductivity };
+        return {
+          ...p,
+          base_productivity: newProductivity,
+          productivity_unit: p.source === 'project' ? 'casa/dia' : p.productivity_unit,
+          default_team_count: p.source === 'project' ? newTeams : p.default_team_count,
+        };
       }
       return p;
     });

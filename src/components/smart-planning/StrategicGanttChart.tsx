@@ -90,6 +90,20 @@ const STATUS_CONFIG: Record<string, { color: string; label: string; text?: strin
   completed: { color: 'bg-emerald-500', label: 'Concluído' },
 };
 
+const CAPACITY_CONFIG: Record<GanttService['capacity_status'], { label: string; className: string }> = {
+  ok: { label: 'Capacidade suficiente', className: 'border-emerald-300 text-emerald-700 dark:text-emerald-300' },
+  attention: { label: 'Capacidade apertada', className: 'border-amber-300 text-amber-700 dark:text-amber-300' },
+  insufficient: { label: 'Capacidade insuficiente', className: 'border-red-300 text-red-700 dark:text-red-300' },
+  missing_productivity: { label: 'Sem produtividade cadastrada', className: 'border-slate-300 text-muted-foreground' },
+};
+
+const PRODUCTIVITY_SOURCE_LABEL: Record<GanttService['productivity_source'], string> = {
+  project: 'Especifica da obra',
+  default: 'Padrao',
+  manual: 'Manual',
+  missing: 'Sem produtividade',
+};
+
 export function StrategicGanttChart({
   services,
   projectStartDate,
@@ -105,6 +119,7 @@ export function StrategicGanttChart({
   const [serviceFilter, setServiceFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [teamFilter, setTeamFilter] = useState('all');
+  const [capacityFilter, setCapacityFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
 
   const stageOptions = useMemo(() => {
@@ -133,6 +148,7 @@ export function StrategicGanttChart({
       if (serviceFilter !== 'all' && svc.scope_id !== serviceFilter) return false;
       if (statusFilter !== 'all' && status !== statusFilter) return false;
       if (teamFilter !== 'all' && String(svc.teams) !== teamFilter) return false;
+      if (capacityFilter !== 'all' && svc.capacity_status !== capacityFilter) return false;
       if (normalizedSearch) {
         const searchable = [
           svc.name,
@@ -147,7 +163,7 @@ export function StrategicGanttChart({
       }
       return true;
     });
-  }, [services, stageFilter, serviceFilter, statusFilter, teamFilter, searchTerm]);
+  }, [services, stageFilter, serviceFilter, statusFilter, teamFilter, capacityFilter, searchTerm]);
 
   const { minDate, weeks, dayWidth, totalWidth } = useMemo(() => {
     if (filteredServices.length === 0) {
@@ -226,7 +242,7 @@ export function StrategicGanttChart({
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="grid gap-2 rounded-lg border bg-muted/20 p-3 md:grid-cols-6">
+          <div className="grid gap-2 rounded-lg border bg-muted/20 p-3 md:grid-cols-7">
             <Input
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -277,6 +293,17 @@ export function StrategicGanttChart({
                 ))}
               </SelectContent>
             </Select>
+            <Select value={capacityFilter} onValueChange={setCapacityFilter}>
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder="Capacidade" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toda capacidade</SelectItem>
+                {Object.entries(CAPACITY_CONFIG).map(([key, config]) => (
+                  <SelectItem key={key} value={key}>{config.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="grid gap-2 text-xs md:grid-cols-4">
@@ -304,6 +331,12 @@ export function StrategicGanttChart({
               <p className="text-muted-foreground">Atrasados / risco</p>
               <p className="text-lg font-semibold">
                 {filteredServices.filter((svc) => ['delayed', 'at_risk'].includes(getServiceStatus(svc))).length}
+              </p>
+            </div>
+            <div className="rounded-lg border bg-background p-3">
+              <p className="text-muted-foreground">Capacidade insuf.</p>
+              <p className="text-lg font-semibold">
+                {filteredServices.filter((svc) => svc.capacity_status === 'insufficient').length}
               </p>
             </div>
           </div>
@@ -345,6 +378,7 @@ export function StrategicGanttChart({
                 const predecessor = svc.depends_on
                   ? services.find((s) => s.stage_id === svc.depends_on)
                   : null;
+                const capacityConfig = CAPACITY_CONFIG[svc.capacity_status];
 
                 return (
                   <div key={svc.id} className="flex border-b hover:bg-muted/20 group">
@@ -362,6 +396,9 @@ export function StrategicGanttChart({
                           <Badge variant="outline" className="h-5 text-[10px]">
                             {statusConfig.label}
                           </Badge>
+                          <Badge variant="outline" className={`h-5 text-[10px] ${capacityConfig.className}`}>
+                            {capacityConfig.label}
+                          </Badge>
                         </div>
                         <div className="truncate text-[11px] text-muted-foreground">
                           {svc.macro_name}
@@ -371,6 +408,8 @@ export function StrategicGanttChart({
                           <span>{svc.duration_days} dias</span>
                           <span>{svc.productivity} un/dia</span>
                           <span>{svc.teams} equipe(s)</span>
+                          <span>Sug. {svc.suggested_duration_days ? `${svc.suggested_duration_days}d` : '-'}</span>
+                          <span>{PRODUCTIVITY_SOURCE_LABEL[svc.productivity_source]}</span>
                           <span>Plan. {plannedPercent.toFixed(0)}%</span>
                           <span>Real {svc.completion_percent.toFixed(0)}%</span>
                         </div>
@@ -496,10 +535,17 @@ export function StrategicGanttChart({
                               <div className="text-muted-foreground">{svc.macro_name}</div>
                               <div>Casas: {svc.executed_houses}/{svc.total_houses} realizadas, {svc.remaining_houses} restantes</div>
                               <div>Equipe: {svc.teams} equipe(s)</div>
-                              <div>Produtividade planejada: {svc.productivity} un/dia</div>
+                              <div>Produtividade usada: {svc.has_productivity ? `${svc.productivity.toFixed(2)} un/dia` : 'sem cadastro'}</div>
+                              <div>Fonte da produtividade: {PRODUCTIVITY_SOURCE_LABEL[svc.productivity_source]}</div>
+                              <div>Unidade cadastrada: {svc.productivity_unit}</div>
                               <div>Inicio planejado: {format(svc.planned_start, 'dd/MM/yyyy')}</div>
                               <div>Fim planejado: {format(svc.planned_end, 'dd/MM/yyyy')}</div>
-                              <div>Duracao: {svc.duration_days} dias</div>
+                              <div>Duracao planejada: {svc.duration_days} dias</div>
+                              <div>Duracao sugerida: {svc.suggested_duration_days ? `${svc.suggested_duration_days} dias` : 'sem produtividade cadastrada'}</div>
+                              {svc.duration_delta_days !== null && (
+                                <div>Diferenca de prazo: {svc.duration_delta_days >= 0 ? '+' : ''}{svc.duration_delta_days} dias</div>
+                              )}
+                              <div>Capacidade: {capacityConfig.label}</div>
                               <div>Status: {statusConfig.label}</div>
                               <div>Planejado x realizado: {plannedPercent.toFixed(0)}% x {svc.completion_percent.toFixed(0)}%</div>
                               <div>Diferenca: {variance >= 0 ? '+' : ''}{variance.toFixed(0)} p.p.</div>
