@@ -71,6 +71,11 @@ const MAP3D_WALK_HELP_HIDDEN_KEY = "obramap:map3d:walk-help-hidden";
 
 type ZoomSensitivity = "low" | "normal" | "high" | "very_high";
 
+function getRealServiceFilterKey(mesh: ProjectModelMesh | null | undefined) {
+  if (!mesh?.service_macro_id || !mesh.service_scope_id) return null;
+  return `${mesh.service_macro_id}::${mesh.service_scope_id}`;
+}
+
 const ZOOM_SENSITIVITY_OPTIONS: Array<{ value: ZoomSensitivity; label: string; multiplier: number }> = [
   { value: "low", label: "Baixa", multiplier: 0.7 },
   { value: "normal", label: "Normal", multiplier: 1 },
@@ -1279,6 +1284,8 @@ export function Map3DView() {
   // Modo de visualização
   type ViewMode = "complete" | "real" | "simulation";
   const [viewMode, setViewMode] = useState<ViewMode>("complete");
+  const [realServiceFilterOpen, setRealServiceFilterOpen] = useState(false);
+  const [hiddenRealServiceKeys, setHiddenRealServiceKeys] = useState<Set<string>>(new Set());
   type CameraMode = "orbit" | "walk";
   const [cameraMode, setCameraMode] = useState<CameraMode>("orbit");
   const [walkInspection, setWalkInspection] = useState<WalkInspection | null>(null);
@@ -2228,6 +2235,31 @@ export function Map3DView() {
     return Array.from(new Set(arr)).sort((a, b) => a - b);
   }, [currentProject?.houses]);
 
+  const realServiceFilterStorageKey = useMemo(() => (
+    projectId ? `map3d-real-service-filter:${projectId}` : null
+  ), [projectId]);
+
+  useEffect(() => {
+    if (!realServiceFilterStorageKey) {
+      setHiddenRealServiceKeys(new Set());
+      return;
+    }
+    try {
+      const raw = localStorage.getItem(realServiceFilterStorageKey);
+      const parsed = raw ? JSON.parse(raw) : [];
+      setHiddenRealServiceKeys(new Set(Array.isArray(parsed) ? parsed.filter((item) => typeof item === "string") : []));
+    } catch {
+      setHiddenRealServiceKeys(new Set());
+    }
+  }, [realServiceFilterStorageKey]);
+
+  useEffect(() => {
+    if (!realServiceFilterStorageKey) return;
+    const values = Array.from(hiddenRealServiceKeys);
+    if (values.length === 0) localStorage.removeItem(realServiceFilterStorageKey);
+    else localStorage.setItem(realServiceFilterStorageKey, JSON.stringify(values));
+  }, [hiddenRealServiceKeys, realServiceFilterStorageKey]);
+
   // Lista de serviços (macro→scope) do projeto
   const serviceOptions: ServiceOption[] = useMemo(() => {
     const tpl = (currentProject as any)?.macrosTemplate || [];
@@ -2244,6 +2276,12 @@ export function Map3DView() {
     });
     return opts;
   }, [currentProject]);
+
+  const getRealServiceLabel = useCallback((serviceKey: string) => {
+    const [macroId, scopeId] = serviceKey.split("::");
+    return serviceOptions.find((service) => service.macro_id === macroId && service.scope_id === scopeId)?.label
+      ?? `${macroId || "Etapa"} → ${scopeId || "Serviço"}`;
+  }, [serviceOptions]);
 
   // Aplica modo de visualização à cena
   const walkMeshData = useMemo(() => {
@@ -3015,6 +3053,27 @@ export function Map3DView() {
     return keys;
   }, [traverseActiveModelMeshes]);
 
+  const realServiceRows = useMemo(() => {
+    const sourceMap = buildCurrentMeshMap(meshHooks.meshMap);
+    const rows = new Map<string, { key: string; label: string; meshCount: number; houses: Set<number> }>();
+    traverseActiveModelMeshes((mesh) => {
+      const saved = sourceMap.get(getMeshLayerKey(mesh));
+      if (!isCompleteProductionLink(saved) || isContextProjectModelMesh(saved) || !saved?.production_visible || saved.ignored) return;
+      const serviceKey = getRealServiceFilterKey(saved);
+      if (!serviceKey) return;
+      const current = rows.get(serviceKey) ?? {
+        key: serviceKey,
+        label: getRealServiceLabel(serviceKey),
+        meshCount: 0,
+        houses: new Set<number>(),
+      };
+      current.meshCount += 1;
+      if (saved.assigned_house_number != null) current.houses.add(Number(saved.assigned_house_number));
+      rows.set(serviceKey, current);
+    }, { includeHiddenParts: true });
+    return Array.from(rows.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [buildCurrentMeshMap, getRealServiceLabel, isCompleteProductionLink, meshHooks.meshMap, traverseActiveModelMeshes]);
+
   const reviewVisibilityStats = useMemo(() => {
     const stats = { total: 0, linked: 0, pending: 0, context: 0, ignored: 0 };
     const sourceMap = buildCurrentMeshMap(meshHooks.meshMap);
@@ -3041,12 +3100,18 @@ export function Map3DView() {
   const selectedZoomOption = ZOOM_SENSITIVITY_OPTIONS.find((option) => option.value === zoomSensitivity) ?? ZOOM_SENSITIVITY_OPTIONS[1];
   const orbitZoomSpeed = 2.8 * selectedZoomOption.multiplier;
 
-  const applyViewMode = useCallback((mode: ViewMode, overrideMeshMap?: Map<string, ProjectModelMesh>) => {
+  const applyViewMode = useCallback((
+    mode: ViewMode,
+    overrideMeshMap?: Map<string, ProjectModelMesh>,
+    overrideHiddenRealServiceKeys?: Set<string>,
+  ) => {
     setViewMode(mode);
+    const hiddenServices = overrideHiddenRealServiceKeys ?? hiddenRealServiceKeys;
     const realStats = {
       contextVisible: 0,
       linkedVisible: 0,
       linkedHidden: 0,
+      serviceFilteredHidden: 0,
       unlinkedHidden: 0,
       ignored: 0,
       contextExamples: [] as Array<{ layer_key: string; mesh_name: string | null; material_name: string | null }>,
@@ -3088,8 +3153,11 @@ export function Map3DView() {
             break;
           }
           const hasLink = isCompleteProductionLink(saved);
-          mesh.visible = hasLink && !!saved.production_visible;
+          const serviceKey = getRealServiceFilterKey(saved);
+          const hiddenByServiceFilter = !!serviceKey && hiddenServices.has(serviceKey);
+          mesh.visible = hasLink && !!saved.production_visible && !hiddenByServiceFilter;
           if (!hasLink) realStats.unlinkedHidden++;
+          else if (saved.production_visible && hiddenByServiceFilter) realStats.serviceFilteredHidden++;
           else if (saved.production_visible) realStats.linkedVisible++;
           else realStats.linkedHidden++;
           break;
@@ -3107,18 +3175,21 @@ export function Map3DView() {
           visibleInReal: realStats.linkedVisible + realStats.contextVisible,
           hiddenWithoutLink: realStats.unlinkedHidden,
           linkedHidden: realStats.linkedHidden,
+          serviceFilteredHidden: realStats.serviceFilteredHidden,
           ignored: realStats.ignored,
         });
       }
     }
     return realStats;
-  }, [buildCurrentMeshMap, hideLinkedInReview, isCompleteProductionLink, meshHooks.meshMap, reviewMode, traverseActiveModelMeshes]);
+  }, [buildCurrentMeshMap, hiddenRealServiceKeys, hideLinkedInReview, isCompleteProductionLink, meshHooks.meshMap, reviewMode, traverseActiveModelMeshes]);
 
   const reexibirTodasCamadas = useCallback(() => {
     const beforeState = smartLinkPreviewStateRef.current;
     layerManager.setAutoMode(false);
     layerManager.showAllLayers();
     setHideLinkedInReview(false);
+    const clearedRealServiceFilter = new Set<string>();
+    setHiddenRealServiceKeys(clearedRealServiceFilter);
     setSupplementalGlbParts((current) => current.map((part) => ({ ...part, visible: true })));
     clearAll3DSelection("layers show all");
     traverseActiveModelMeshes((mesh) => {
@@ -3135,17 +3206,30 @@ export function Map3DView() {
         }
       });
     }, { includeHiddenParts: true });
-    applyViewMode(viewMode);
+    applyViewMode(viewMode, undefined, clearedRealServiceFilter);
     console.log("[3D Reexibir Tudo Debug]", {
       viewMode,
       clearedPreview: beforeState.previewEnabled,
       clearedIsolation: beforeState.isolatedCount > 0,
       restoredMaterials: smartLinkPreviewMaterialsRef.current.length,
       layersRestored: true,
+      realServiceFilterCleared: hiddenRealServiceKeys.size > 0,
       reappliedViewMode: viewMode,
     });
     toast.success("Visualização 3D reexibida.");
-  }, [applyViewMode, clearAll3DSelection, layerManager, traverseActiveModelMeshes, viewMode]);
+  }, [applyViewMode, clearAll3DSelection, hiddenRealServiceKeys.size, layerManager, traverseActiveModelMeshes, viewMode]);
+
+  const updateHiddenRealServices = useCallback((next: Set<string>) => {
+    setHiddenRealServiceKeys(next);
+    if (viewMode === "real") applyViewMode("real", undefined, next);
+  }, [applyViewMode, viewMode]);
+
+  const toggleRealServiceVisibility = useCallback((serviceKey: string, visible: boolean) => {
+    const next = new Set(hiddenRealServiceKeys);
+    if (visible) next.delete(serviceKey);
+    else next.add(serviceKey);
+    updateHiddenRealServices(next);
+  }, [hiddenRealServiceKeys, updateHiddenRealServices]);
 
   const diagnoseGlbPartRealMode = useCallback(() => {
     const sourceMap = buildCurrentMeshMap(meshHooks.meshMap);
@@ -4556,6 +4640,93 @@ export function Map3DView() {
                   <Sparkles className="h-3.5 w-3.5" />Simulação
                 </ToggleGroupItem>
               </ToggleGroup>
+            )}
+            {modelData && viewMode === "real" && canView3DReal && (
+              <div className="relative">
+                <Button
+                  type="button"
+                  variant={realServiceFilterOpen ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setRealServiceFilterOpen((open) => !open)}
+                  disabled={isLoading}
+                  title="Filtro visual temporário dos serviços visíveis no 3D Real"
+                >
+                  <EyeOff className="h-4 w-4 mr-1.5" />
+                  Serviços visíveis
+                  {hiddenRealServiceKeys.size > 0 && (
+                    <Badge variant="secondary" className="ml-1.5 h-4 text-[10px] px-1">
+                      -{hiddenRealServiceKeys.size}
+                    </Badge>
+                  )}
+                </Button>
+                {realServiceFilterOpen && (
+                  <div className="absolute left-0 top-full z-50 mt-2 w-[min(420px,calc(100vw-2rem))] rounded-lg border bg-background p-3 text-xs shadow-xl">
+                    <div className="mb-2 flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold">Serviços visíveis no 3D Real</p>
+                        <p className="text-muted-foreground">Filtro local: só oculta temporariamente, sem salvar no banco.</p>
+                      </div>
+                      <Button type="button" variant="ghost" size="sm" className="h-7 px-2" onClick={() => setRealServiceFilterOpen(false)}>
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => updateHiddenRealServices(new Set())}>
+                        Mostrar todos
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => updateHiddenRealServices(new Set(realServiceRows.map((row) => row.key)))}
+                        disabled={realServiceRows.length === 0}
+                      >
+                        Ocultar todos
+                      </Button>
+                      <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => updateHiddenRealServices(new Set())}>
+                        Limpar filtro
+                      </Button>
+                    </div>
+                    <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                      {realServiceRows.length === 0 ? (
+                        <p className="rounded-md border bg-muted/40 p-3 text-muted-foreground">
+                          Nenhum serviço com produção visível no 3D Real.
+                        </p>
+                      ) : realServiceRows.map((row) => {
+                        const visible = !hiddenRealServiceKeys.has(row.key);
+                        return (
+                          <div key={row.key} className="rounded-md border p-2">
+                            <label className="flex items-start gap-2">
+                              <input
+                                type="checkbox"
+                                checked={visible}
+                                onChange={(event) => toggleRealServiceVisibility(row.key, event.target.checked)}
+                                className="mt-0.5 h-4 w-4"
+                              />
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate font-medium" title={row.label}>{row.label}</span>
+                                <span className="text-muted-foreground">
+                                  {row.meshCount} mesh(es) / {row.houses.size} casa(s)
+                                </span>
+                              </span>
+                            </label>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="mt-2 h-6 px-2 text-[11px]"
+                              onClick={() => updateHiddenRealServices(new Set(realServiceRows.filter((item) => item.key !== row.key).map((item) => item.key)))}
+                            >
+                              Somente este serviço
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
             {canSync3DReal && modelData && (
               <Button
