@@ -67,6 +67,7 @@ type GlbMeshInventoryInput = {
 
 const MAP3D_STORAGE_BUCKET = "3d-models";
 const MAP3D_ZOOM_SENSITIVITY_KEY = "obramap:map3d:zoom-sensitivity";
+const MAP3D_WALK_HELP_HIDDEN_KEY = "obramap:map3d:walk-help-hidden";
 
 type ZoomSensitivity = "low" | "normal" | "high" | "very_high";
 
@@ -1222,6 +1223,8 @@ export function Map3DView() {
   const [supplementalPartsExpanded, setSupplementalPartsExpanded] = useState(() => localStorage.getItem("obramap:map3d:parts-expanded") === "true");
   const [walkStartPoint, setWalkStartPoint] = useState<[number, number, number] | null>(null);
   const [walkStartPickMode, setWalkStartPickMode] = useState(false);
+  const [walkHelpVisible, setWalkHelpVisible] = useState(() => localStorage.getItem(MAP3D_WALK_HELP_HIDDEN_KEY) !== "true");
+  const [walkHelpExpanded, setWalkHelpExpanded] = useState(false);
   const [sceneReady, setSceneReady] = useState(false);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [ifcSuggestionsOpen, setIfcSuggestionsOpen] = useState(false);
@@ -2172,6 +2175,32 @@ export function Map3DView() {
   const exitWalkMode = useCallback(() => {
     setCameraMode("orbit");
     setWalkInspection(null);
+    setWalkHelpExpanded(false);
+  }, []);
+
+  useEffect(() => {
+    if (cameraMode !== "walk") {
+      setWalkHelpExpanded(false);
+      return;
+    }
+    if (!walkHelpVisible) return;
+    setWalkHelpExpanded(true);
+    const timer = window.setTimeout(() => {
+      setWalkHelpExpanded(false);
+    }, 6500);
+    return () => window.clearTimeout(timer);
+  }, [cameraMode, walkHelpVisible]);
+
+  const hideWalkHelp = useCallback(() => {
+    localStorage.setItem(MAP3D_WALK_HELP_HIDDEN_KEY, "true");
+    setWalkHelpVisible(false);
+    setWalkHelpExpanded(false);
+  }, []);
+
+  const showWalkHelp = useCallback(() => {
+    localStorage.removeItem(MAP3D_WALK_HELP_HIDDEN_KEY);
+    setWalkHelpVisible(true);
+    setWalkHelpExpanded(true);
   }, []);
 
   const toggleWalkMode = useCallback(() => {
@@ -2401,7 +2430,9 @@ export function Map3DView() {
       { validHouseNumbers: houseNumbers, includeOtherPossible: true, additionalHouseAnchors: mainModelTextAnchors },
     )
       .filter((candidate) => candidate.layerKey !== layerKey);
-    const candidates = allSimilarCandidates.filter((candidate) => candidate.matchStrength === "strong");
+    const candidates = allSimilarCandidates.filter((candidate) =>
+      candidate.matchStrength === "strong" || candidate.matchStrength === "group"
+    );
     const selected = new Set(
       candidates
         .filter((candidate) => candidate.selectedByDefault)
@@ -2503,6 +2534,7 @@ export function Map3DView() {
       textAnchorSample: houseAnchorDiagnostics.textAnchors.slice(0, 10),
       mainModelTextAnchorSample: mainModelTextAnchors.slice(0, 10),
       strongCandidates: candidates.filter((candidate) => candidate.matchStrength === "strong").length,
+      groupedCandidates: candidates.filter((candidate) => candidate.matchStrength === "group").length,
       existingHouse: candidates.filter((candidate) => candidate.currentAssignedHouseNumber != null).length,
       suggestedHigh: candidates.filter((candidate) => candidate.suggestionConfidence === "alta" && candidate.currentAssignedHouseNumber == null).length,
       suggestedMedium: candidates.filter((candidate) => candidate.suggestionConfidence === "media").length,
@@ -2580,6 +2612,14 @@ export function Map3DView() {
       if (checked) next.add(layerKey);
       else next.delete(layerKey);
       const candidate = smartLinkCandidates.find((item) => item.layerKey === layerKey) ?? null;
+      if (candidate && checked && candidate.status !== "applicable") {
+        console.log("[SmartLink Selection Override]", {
+          candidate: layerKey,
+          status: candidate.status,
+          selectedManually: true,
+          reason: candidate.houseSuggestionRejectReason || candidate.suggestionReason,
+        });
+      }
       console.log("[GLB Smart Review]", {
         action: "toggle-candidate",
         focusedCandidateKey: smartLinkFocusedCandidateKey,
@@ -2840,10 +2880,45 @@ export function Map3DView() {
     if (!baseSaved.service_macro_id || !baseSaved.service_scope_id) return;
     const validHouseNumbers = new Set(houseNumbers);
 
-    const selectedCandidates = smartLinkCandidates.filter((candidate) =>
+    const selectedRawCandidates = smartLinkCandidates.filter((candidate) =>
       smartLinkSelectedKeys.has(candidate.layerKey)
-      && candidate.status === "applicable"
-      && candidate.suggestedHouseNumber != null
+    );
+    const candidatesWithoutHouse = selectedRawCandidates.filter((candidate) =>
+      candidate.suggestedHouseNumber == null || !validHouseNumbers.has(candidate.suggestedHouseNumber)
+    );
+    if (candidatesWithoutHouse.length > 0) {
+      toast.error(`Defina Casa antes de aplicar ${candidatesWithoutHouse.length} candidata(s) selecionada(s).`);
+      console.log("[SmartLink Selection Override]", {
+        action: "apply-blocked-missing-house",
+        candidates: candidatesWithoutHouse.slice(0, 10).map((candidate) => ({
+          layerKey: candidate.layerKey,
+          status: candidate.status,
+          suggestedHouseNumber: candidate.suggestedHouseNumber,
+          reason: candidate.houseSuggestionRejectReason || candidate.suggestionReason,
+        })),
+      });
+      return;
+    }
+    const blockedByExistingState = selectedRawCandidates.filter((candidate) =>
+      candidate.status === "linked"
+      || candidate.status === "context"
+      || candidate.status === "ignored"
+      || candidate.status === "self"
+    );
+    if (blockedByExistingState.length > 0) {
+      toast.error(`Remova da selecao ${blockedByExistingState.length} candidata(s) ja vinculada(s), contexto, ignorada(s) ou base.`);
+      console.log("[SmartLink Selection Override]", {
+        action: "apply-blocked-existing-state",
+        candidates: blockedByExistingState.slice(0, 10).map((candidate) => ({
+          layerKey: candidate.layerKey,
+          status: candidate.status,
+          suggestedHouseNumber: candidate.suggestedHouseNumber,
+        })),
+      });
+      return;
+    }
+    const selectedCandidates = selectedRawCandidates.filter((candidate) =>
+      candidate.suggestedHouseNumber != null
       && validHouseNumbers.has(candidate.suggestedHouseNumber)
     );
     if (selectedCandidates.length === 0) {
@@ -2918,7 +2993,7 @@ export function Map3DView() {
     }
   }, [clearSmartLinkPreview, houseNumbers, meshHooks, projectId, smartLinkBase, smartLinkCandidates, smartLinkSelectedKeys]);
 
-  const traverseActiveModelMeshes = useCallback((visitor: (mesh: THREE.Mesh) => void) => {
+  const traverseActiveModelMeshes = useCallback((visitor: (mesh: THREE.Mesh) => void, options?: { includeHiddenParts?: boolean }) => {
     const traverseRoot = (root: THREE.Object3D | null | undefined) => {
       if (!root) return;
       root.traverse((child) => {
@@ -2928,7 +3003,7 @@ export function Map3DView() {
     };
     traverseRoot(sceneObj);
     supplementalGlbParts
-      .filter((part) => part.visible)
+      .filter((part) => options?.includeHiddenParts || part.visible)
       .forEach((part) => traverseRoot(supplementalGlbScenesRef.current.get(part.id)));
   }, [sceneObj, supplementalGlbParts]);
 
@@ -2939,29 +3014,6 @@ export function Map3DView() {
     });
     return keys;
   }, [traverseActiveModelMeshes]);
-
-  const reexibirTodasCamadas = useCallback(() => {
-    layerManager.setAutoMode(false);
-    layerManager.showAllLayers();
-    setHideLinkedInReview(false);
-    setSupplementalGlbParts((current) => current.map((part) => ({ ...part, visible: true })));
-    clearAll3DSelection("layers show all");
-    traverseActiveModelMeshes((mesh) => {
-      mesh.visible = true;
-      const material = mesh.material;
-      const materials = Array.isArray(material) ? material : [material];
-      materials.forEach((item) => {
-        const anyMaterial = item as any;
-        if (!anyMaterial) return;
-        if ("opacity" in anyMaterial) {
-          anyMaterial.opacity = 1;
-          anyMaterial.transparent = false;
-          anyMaterial.needsUpdate = true;
-        }
-      });
-    });
-    toast.success("Visualização 3D reexibida.");
-  }, [clearAll3DSelection, layerManager, traverseActiveModelMeshes]);
 
   const reviewVisibilityStats = useMemo(() => {
     const stats = { total: 0, linked: 0, pending: 0, context: 0, ignored: 0 };
@@ -3046,7 +3098,7 @@ export function Map3DView() {
           mesh.visible = saved.visible;
           break;
       }
-    });
+    }, { includeHiddenParts: true });
     if (visitedMeshes === 0) return realStats;
     if (mode === "real") {
       console.log("[GLB Real Context]", realStats);
@@ -3061,6 +3113,39 @@ export function Map3DView() {
     }
     return realStats;
   }, [buildCurrentMeshMap, hideLinkedInReview, isCompleteProductionLink, meshHooks.meshMap, reviewMode, traverseActiveModelMeshes]);
+
+  const reexibirTodasCamadas = useCallback(() => {
+    const beforeState = smartLinkPreviewStateRef.current;
+    layerManager.setAutoMode(false);
+    layerManager.showAllLayers();
+    setHideLinkedInReview(false);
+    setSupplementalGlbParts((current) => current.map((part) => ({ ...part, visible: true })));
+    clearAll3DSelection("layers show all");
+    traverseActiveModelMeshes((mesh) => {
+      mesh.visible = true;
+      const material = mesh.material;
+      const materials = Array.isArray(material) ? material : [material];
+      materials.forEach((item) => {
+        const anyMaterial = item as any;
+        if (!anyMaterial) return;
+        if ("opacity" in anyMaterial) {
+          anyMaterial.opacity = 1;
+          anyMaterial.transparent = false;
+          anyMaterial.needsUpdate = true;
+        }
+      });
+    }, { includeHiddenParts: true });
+    applyViewMode(viewMode);
+    console.log("[3D Reexibir Tudo Debug]", {
+      viewMode,
+      clearedPreview: beforeState.previewEnabled,
+      clearedIsolation: beforeState.isolatedCount > 0,
+      restoredMaterials: smartLinkPreviewMaterialsRef.current.length,
+      layersRestored: true,
+      reappliedViewMode: viewMode,
+    });
+    toast.success("Visualização 3D reexibida.");
+  }, [applyViewMode, clearAll3DSelection, layerManager, traverseActiveModelMeshes, viewMode]);
 
   const diagnoseGlbPartRealMode = useCallback(() => {
     const sourceMap = buildCurrentMeshMap(meshHooks.meshMap);
@@ -4638,11 +4723,57 @@ export function Map3DView() {
         </div>
         <div id="map3d-ifc-panel-slot" className="pointer-events-none absolute bottom-3 left-0 right-3 top-3 z-40 overflow-hidden" />
         {cameraMode === "walk" && (
-          <div className="absolute top-4 left-1/2 z-30 flex -translate-x-1/2 flex-col items-center gap-1 rounded-lg border border-primary/30 bg-background/95 px-3 py-2 text-xs shadow-lg backdrop-blur pointer-events-none">
-            <div className="font-semibold text-primary">Caminhar na Obra</div>
-            <div className="text-muted-foreground">
-              Clique no mapa para capturar o mouse | WASD mover | Mouse olhar | E inspecionar/fechar | Shift acelerar | Esc sair
-            </div>
+          <div className="pointer-events-none absolute left-1/2 top-1/2 z-30 h-4 w-4 -translate-x-1/2 -translate-y-1/2 opacity-80">
+            <span className="absolute left-1/2 top-0 h-4 w-px -translate-x-1/2 rounded bg-white shadow-[0_0_3px_rgba(0,0,0,0.85)]" />
+            <span className="absolute left-0 top-1/2 h-px w-4 -translate-y-1/2 rounded bg-white shadow-[0_0_3px_rgba(0,0,0,0.85)]" />
+            <span className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-slate-900/70 bg-white/80" />
+          </div>
+        )}
+        {cameraMode === "walk" && (
+          <div className="pointer-events-none absolute bottom-4 left-4 z-30 flex max-w-[min(360px,calc(100%-2rem))] items-end gap-2 text-xs">
+            {walkHelpVisible ? (
+              <div className="pointer-events-auto rounded-lg border border-primary/20 bg-background/90 px-3 py-2 shadow-lg backdrop-blur">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-medium text-primary">WASD mover · Mouse olhar · Shift acelerar · Esc sair</span>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-2 text-xs"
+                      onClick={() => setWalkHelpExpanded((value) => !value)}
+                    >
+                      ?
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-2 text-xs"
+                      onClick={hideWalkHelp}
+                    >
+                      Ocultar
+                    </Button>
+                  </div>
+                </div>
+                {walkHelpExpanded && (
+                  <p className="mt-1 text-muted-foreground">
+                    Clique no mapa para capturar o mouse · E inspecionar/fechar · Esc sair
+                  </p>
+                )}
+              </div>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="pointer-events-auto h-8 w-8 rounded-full p-0 shadow-lg"
+                onClick={showWalkHelp}
+                title="Mostrar ajuda do Caminhar"
+              >
+                ?
+              </Button>
+            )}
           </div>
         )}
         {smartLinkPreviewBarOpen && smartLinkPreviewEnabled && (

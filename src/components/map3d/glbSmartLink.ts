@@ -22,7 +22,7 @@ export interface GlbSmartLinkCandidate extends GlbMeshRuntimeInfo {
   confidence: "alta" | "media" | "baixa";
   reasons: string[];
   status: GlbSmartLinkStatus;
-  matchStrength: "strong" | "other";
+  matchStrength: "strong" | "group" | "other";
   currentAssignedHouseNumber: number | null;
   suggestedHouseNumber: number | null;
   suggestionReason: string;
@@ -81,6 +81,70 @@ function sortedDimensions(info: GlbMeshRuntimeInfo) {
 
 function prefixOf(name: string) {
   return name.toLowerCase().replace(/\d+/g, "").replace(/[_\-.]+/g, "_").replace(/^_+|_+$/g, "");
+}
+
+function normalizedTokens(info: Pick<GlbMeshRuntimeInfo, "meshName" | "materialName">) {
+  const normalized = `${info.meshName} ${info.materialName}`
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\d+/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  return new Set(normalized.split(/\s+/).filter((token) => token.length >= 3));
+}
+
+function hasAnyToken(tokens: Set<string>, options: string[]) {
+  return options.some((option) => tokens.has(option));
+}
+
+function horizontalGap(a: GlbMeshRuntimeInfo, b: GlbMeshRuntimeInfo) {
+  const gapX = Math.max(0, Math.abs(a.center.x - b.center.x) - (a.size.x + b.size.x) / 2);
+  const gapZ = Math.max(0, Math.abs(a.center.z - b.center.z) - (a.size.z + b.size.z) / 2);
+  return Math.sqrt(gapX ** 2 + gapZ ** 2);
+}
+
+function horizontalCenterDistance(a: GlbMeshRuntimeInfo, b: GlbMeshRuntimeInfo) {
+  return Math.sqrt((a.center.x - b.center.x) ** 2 + (a.center.z - b.center.z) ** 2);
+}
+
+function getLocalGroupMatch(
+  base: GlbMeshRuntimeInfo,
+  mesh: GlbMeshRuntimeInfo,
+  baseTokens: Set<string>,
+  baseHouseNumber: number | null,
+  candidateHouseNumber: number | null,
+) {
+  if (base.layerKey === mesh.layerKey) return { grouped: false, bonus: 0, reasons: [] as string[] };
+  const candidateTokens = normalizedTokens(mesh);
+  const sharedUsefulToken = Array.from(baseTokens).some((token) => token.length >= 4 && candidateTokens.has(token));
+  const groupGap = horizontalGap(base, mesh);
+  const centerDistance = horizontalCenterDistance(base, mesh);
+  const baseScale = Math.max(diagonal(base), 0.5);
+  const candidateScale = Math.max(diagonal(mesh), 0.5);
+  const closeByBox = groupGap <= Math.max(0.25, Math.min(2.5, Math.max(baseScale, candidateScale) * 0.22));
+  const closeByCenter = centerDistance <= Math.max(0.6, Math.min(3.5, (baseScale + candidateScale) * 0.45));
+  const houseCompatible = baseHouseNumber == null || candidateHouseNumber == null || baseHouseNumber === candidateHouseNumber;
+  const openingTokens = ["esquadria", "janela", "porta", "vidro", "glass", "aluminio", "aluminum", "metal", "marco", "folha"];
+  const utilityTokens = ["prumada", "caixa", "barrilete", "tubo", "tubulacao", "hidraulica", "shaft"];
+  const hasComplementaryUse = (
+    hasAnyToken(baseTokens, openingTokens) && hasAnyToken(candidateTokens, openingTokens)
+  ) || (
+    hasAnyToken(baseTokens, utilityTokens) && hasAnyToken(candidateTokens, utilityTokens)
+  );
+  const grouped = houseCompatible && (closeByBox || (closeByCenter && (sharedUsefulToken || hasComplementaryUse)));
+  const reasons: string[] = [];
+  if (grouped) {
+    reasons.push("grupo proximo");
+    if (hasComplementaryUse) reasons.push("mesh complementar");
+    if (sharedUsefulToken) reasons.push("mesmo conjunto visual");
+    if (baseHouseNumber != null && candidateHouseNumber === baseHouseNumber) reasons.push("mesma casa sugerida");
+  }
+  return {
+    grouped,
+    bonus: grouped ? (hasComplementaryUse || sharedUsefulToken ? 12 : 8) : 0,
+    reasons,
+  };
 }
 
 function confidenceFromScore(score: number): GlbSmartLinkCandidate["confidence"] {
@@ -586,10 +650,20 @@ export function scoreGlbSimilarCandidates(
   const baseDims = sortedDimensions(base);
   const basePrefix = prefixOf(base.meshName);
   const baseMaterial = base.materialName.toLowerCase();
+  const baseTokens = normalizedTokens(base);
   const validHouseNumbers = Array.isArray(options?.validHouseNumbers)
     ? new Set(options.validHouseNumbers.map(Number).filter(Number.isFinite))
     : undefined;
   const houseAnchors = buildHouseAnchors(meshes, validHouseNumbers, options?.additionalHouseAnchors);
+  const baseDirectHouse = validHouseOrNull(base.saved?.assigned_house_number, validHouseNumbers)
+    ?? validHouseOrNull(base.saved?.detected_house_number, validHouseNumbers)
+    ?? validHouseOrNull(parseTextAnchorHouseNumber(base, validHouseNumbers), validHouseNumbers);
+  const baseInferredHouse = suggestHouse(base, houseAnchors);
+  const baseHouseForGrouping = baseDirectHouse ?? (
+    baseInferredHouse.confidence === "alta" || baseInferredHouse.confidence === "media"
+      ? baseInferredHouse.houseNumber
+      : null
+  );
 
   const scored = meshes
     .map<GlbSmartLinkCandidate>((mesh) => {
@@ -604,7 +678,7 @@ export function scoreGlbSimilarCandidates(
       const materialScore = baseMaterial && mesh.materialName.toLowerCase() === baseMaterial ? 1 : 0;
       const materialCompatible = materialScore > 0 || !baseMaterial;
       const nameScore = basePrefix && prefixOf(mesh.meshName) === basePrefix ? 1 : 0;
-      const score = Math.round((
+      const baseScore = Math.round((
         dimensionScore * 0.45
         + heightScore * 0.20
         + volumeScore * 0.18
@@ -655,12 +729,15 @@ export function scoreGlbSimilarCandidates(
       const suggestionDistanceGap = inferredHouse.distanceGap;
       const suggestionDistanceRatio = inferredHouse.distanceRatio;
       const acceptedDominantAnchor = inferredHouse.acceptedDominantAnchor;
+      const groupMatch = getLocalGroupMatch(base, mesh, baseTokens, baseHouseForGrouping, suggestedHouseNumber);
+      const score = Math.min(100, baseScore + groupMatch.bonus);
       const isStrongMatch = score >= 90
         && dimensionScore >= 0.96
         && heightScore >= 0.90
         && volumeScore >= 0.90
         && materialCompatible;
-      const matchStrength: GlbSmartLinkCandidate["matchStrength"] = isStrongMatch ? "strong" : "other";
+      const isGroupedMatch = !isStrongMatch && groupMatch.grouped;
+      const matchStrength: GlbSmartLinkCandidate["matchStrength"] = isStrongMatch ? "strong" : isGroupedMatch ? "group" : "other";
       const houseSuggestionRejectReason = suggestedHouseNumber == null
         ? directHouseWasDiscarded
           ? "casa fora do projeto"
@@ -712,6 +789,9 @@ export function scoreGlbSimilarCandidates(
       ];
       if (materialScore > 0) reasons.push("material igual");
       if (nameScore > 0) reasons.push("nome/prefixo parecido");
+      groupMatch.reasons.forEach((reason) => {
+        if (!reasons.includes(reason)) reasons.push(reason);
+      });
 
       return {
         ...mesh,
@@ -742,7 +822,7 @@ export function scoreGlbSimilarCandidates(
         selectedByDefault: false,
       };
     })
-    .filter((item) => options?.includeOtherPossible || item.matchStrength === "strong")
+    .filter((item) => options?.includeOtherPossible || item.matchStrength === "strong" || item.matchStrength === "group")
     .sort((a, b) => b.score - a.score)
     .slice(0, 120);
 
@@ -809,6 +889,23 @@ export function scoreGlbSimilarCandidates(
       topConfirmedLinkedAnchors: candidate.suggestionTopConfirmedAnchors,
       rejectedNumericNames: houseAnchors.rejectedNumericNames.slice(0, 10),
     })));
+    const groupedSample = result.filter((candidate) => candidate.matchStrength === "group").slice(0, 10);
+    if (groupedSample.length > 0) {
+      console.log("[SmartLink Group Similar Debug]", groupedSample.map((candidate) => ({
+        baseLayerKey: base.layerKey,
+        candidateLayerKey: candidate.layerKey,
+        groupReason: candidate.reasons.filter((reason) =>
+          reason === "grupo proximo"
+          || reason === "mesh complementar"
+          || reason === "mesmo conjunto visual"
+          || reason === "mesma casa sugerida"
+        ),
+        distance: horizontalCenterDistance(base, candidate),
+        material: candidate.materialName,
+        name: candidate.meshName,
+        houseSuggestion: candidate.suggestedHouseNumber,
+      })));
+    }
   }
 
   return result;

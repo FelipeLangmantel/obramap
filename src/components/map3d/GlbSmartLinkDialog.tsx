@@ -128,12 +128,12 @@ export function GlbSmartLinkDialog({
                   {isPartScoped ? "Nenhuma candidata compativel encontrada nesta parte GLB." : "Nenhuma similar encontrada."}
                 </p>
               ) : candidates.map((item) => {
-                const canSelect = item.status === "applicable";
+                const canApplyAutomatically = item.status === "applicable";
                 return (
                   <div key={item.layerKey} className="grid grid-cols-[32px_1fr_92px_112px_96px] gap-3 p-3 text-xs">
                     <Checkbox
                       checked={selectedKeys.has(item.layerKey)}
-                      disabled={!canSelect || applying}
+                      disabled={applying}
                       onCheckedChange={(checked) => onToggle(item.layerKey, checked === true)}
                       aria-label={`Selecionar ${item.layerKey}`}
                     />
@@ -175,9 +175,14 @@ export function GlbSmartLinkDialog({
                     </div>
                     <div>
                       <p className="text-muted-foreground">Status</p>
-                      <Badge variant={canSelect ? "default" : "outline"} className="text-[10px]">
+                      <Badge variant={canApplyAutomatically ? "default" : "outline"} className="text-[10px]">
                         {statusLabel[item.status]}
                       </Badge>
+                      {!canApplyAutomatically && (
+                        <p className="mt-1 text-[10px] text-muted-foreground">
+                          Pode marcar para revisar manualmente.
+                        </p>
+                      )}
                     </div>
                   </div>
                 );
