@@ -533,24 +533,25 @@ export function StrategicGanttChart({
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <div
-                              className={`absolute top-1/2 -translate-y-1/2 h-7 rounded cursor-pointer transition-all hover:h-8 ${statusConfig.color}`}
+                              className={`absolute top-1/2 -translate-y-1/2 h-6 rounded-full cursor-pointer transition-all hover:h-7 hover:shadow-md ring-1 ring-black/5 overflow-hidden ${statusConfig.color}`}
                               style={{ left: pos.left, width: pos.width }}
                               onClick={() => handleEditOpen(svc)}
                             >
                               {/* Progress */}
                               {svc.completion_percent > 0 && (
                                 <div
-                                  className="absolute inset-y-0 left-0 bg-black/20 rounded-l"
+                                  className="absolute inset-y-0 left-0 bg-black/20"
                                   style={{ width: `${svc.completion_percent}%` }}
                                 />
                               )}
-                              <div className={`relative z-10 px-2 flex items-center gap-1 h-full text-xs font-medium whitespace-nowrap ${statusConfig.text || 'text-white'}`}>
-                                <Clock className="h-3 w-3 shrink-0" />
+                              <div className={`relative z-10 px-2.5 flex items-center gap-1 h-full text-[11px] font-medium whitespace-nowrap ${statusConfig.text || 'text-white'}`}>
+                                <Clock className="h-3 w-3 shrink-0 opacity-80" />
                                 {svc.completion_percent > 0
                                   ? `${svc.completion_percent.toFixed(0)}%`
                                   : `${svc.duration_days}d`}
                               </div>
                             </div>
+
                           </TooltipTrigger>
                           <TooltipContent className="max-w-xs">
                             <div className="text-sm space-y-1">
