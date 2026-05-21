@@ -364,9 +364,32 @@ export function StrategicGanttChart({
         {/* Gantt body */}
         <Card className="rounded-2xl border-slate-200 dark:border-border shadow-sm overflow-hidden">
           <CardContent className="p-0">
+            {filteredServices.length === 0 ? (
+              <div className="py-12 text-center text-sm text-muted-foreground">
+                Nenhum serviço encontrado com os filtros atuais.
+              </div>
+            ) : (
+            <ScrollArea className="w-full">
+              <div className="min-w-max">
+                {/* Header */}
+                <div className="flex border-b border-slate-200 dark:border-border bg-slate-50/80 dark:bg-muted/30 sticky top-0 z-20">
+                  <div className="w-96 shrink-0 border-r border-slate-200 dark:border-border px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide text-slate-600 dark:text-muted-foreground">
+                    Etapa / serviço
+                  </div>
+                  <div className="flex" style={{ width: totalWidth }}>
+                    {weeks.map((week, i) => (
+                      <div
+                        key={i}
+                        className="border-r border-slate-200 dark:border-border text-center text-[11px] py-1.5"
+                        style={{ width: dayWidth * 7 }}
+                      >
+                        <div className="font-medium text-slate-700 dark:text-foreground">{format(week, "'Sem' w", { locale: ptBR })}</div>
+                        <div className="text-slate-400 dark:text-muted-foreground">{format(week, 'dd/MM')}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
-
-              {/* Services */}
               {filteredServices.map((svc) => {
                 const pos = getBarPosition(svc);
                 const status = getServiceStatus(svc);
