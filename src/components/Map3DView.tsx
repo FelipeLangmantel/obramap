@@ -4700,7 +4700,7 @@ export function Map3DView() {
                   )}
                 </Button>
                 {realServiceFilterOpen && (
-                  <div className="absolute left-0 top-full z-50 mt-2 w-[min(420px,calc(100vw-2rem))] rounded-lg border bg-background p-3 text-xs shadow-xl">
+                  <div className="fixed right-6 top-28 z-[90] flex max-h-[min(70vh,640px)] w-[min(560px,calc(100vw-2rem))] flex-col overflow-hidden rounded-lg border bg-background p-3 text-xs shadow-2xl max-md:left-4 max-md:right-4 max-md:top-24 max-md:w-auto">
                     <div className="mb-2 flex items-start justify-between gap-3">
                       <div>
                         <p className="font-semibold">Serviços visíveis no 3D Real</p>
@@ -4728,7 +4728,7 @@ export function Map3DView() {
                         Limpar filtro
                       </Button>
                     </div>
-                    <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                    <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
                       {realServiceRows.length === 0 ? (
                         <p className="rounded-md border bg-muted/40 p-3 text-muted-foreground">
                           Nenhum serviço com produção visível no 3D Real.
