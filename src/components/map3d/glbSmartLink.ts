@@ -35,6 +35,7 @@ export interface GlbSmartLinkCandidate extends GlbMeshRuntimeInfo {
   suggestionDistanceRatio?: number;
   acceptedDominantAnchor?: boolean;
   suggestionSource: "linked_neighbor" | "text_anchor" | "house_position" | "none";
+  suggestionIgnoredLinkedNeighbor?: boolean;
   suggestionAnchorLayerKey?: string;
   suggestionAnchorName?: string;
   suggestionAnchorCenter?: GlbMeshRuntimeInfo["center"];
@@ -107,6 +108,10 @@ function diagonal(info: GlbMeshRuntimeInfo) {
   return Math.sqrt(info.size.x ** 2 + info.size.y ** 2 + info.size.z ** 2);
 }
 
+function exactNumberTokens(text: string) {
+  return Array.from(text.matchAll(/(^|[^a-z0-9])0*(\d{1,4})(?=[^a-z0-9]|$)/gi)).map((match) => match[2]);
+}
+
 function parseTextAnchorHouseNumber(mesh: GlbMeshRuntimeInfo, validHouseNumbers?: Set<number>) {
   const rawText = `${mesh.meshName} ${mesh.materialName}`;
   const hasTextMarker = /(3dtext|text|texto|numero|numeracao|number)/i.test(rawText);
@@ -127,18 +132,18 @@ function parseTextAnchorHouseNumber(mesh: GlbMeshRuntimeInfo, validHouseNumbers?
     .replace(/geom3d/gi, " ")
     .replace(/3dtext/gi, " ")
     .replace(/\b3d\b/gi, " ");
-  const explicitTextNumber = rawText.match(/(?:^|[^a-z0-9])(?:3dtext|text|texto|numero|numeracao|number|casa|house)[_\-\s]*(\d{1,4})(?!\d)/i);
+  const explicitTextNumber = rawText.match(/(?:^|[^a-z0-9])(?:3dtext|text|texto|numero|numeracao|number|casa|house)[_\-\s]*0*(\d{1,4})(?=[^a-z0-9]|$)/i);
   const geometryNumberMatches = isSmallFlatGeometry
     ? mesh.meshName
       .toLowerCase()
       .replace(/geom3d/gi, " ")
       .replace(/\b3d\b/gi, " ")
-      .match(/\d{1,4}/g) ?? []
+      .match(/(^|\D)(\d{1,4})(?=\D|$)/g)?.map((match) => match.replace(/\D/g, "")) ?? []
     : [];
   const matches = explicitTextNumber?.[1]
     ? [explicitTextNumber[1]]
     : hasTextMarker
-      ? Array.from(sanitized.matchAll(/(^|\D)(\d{1,4})(?=\D|$)/g)).map((match) => match[2])
+      ? exactNumberTokens(sanitized)
       : geometryNumberMatches;
 
   for (let index = matches.length - 1; index >= 0; index -= 1) {
@@ -312,10 +317,81 @@ function nearestAnchor(
   };
 }
 
+function nearestTextAnchorDecision(mesh: GlbMeshRuntimeInfo, anchors: HouseAnchor[], excludeLayerKey?: string) {
+  const ranked = anchors
+    .filter((anchor) => anchor.layerKey !== excludeLayerKey)
+    .map((anchor) => {
+      const distances = anchorDistanceDetails(mesh, anchor, "text_anchor");
+      return {
+        anchor,
+        distance: distances.weightedDistance,
+        horizontalDistance: distances.horizontalDistance,
+        distance3d: distances.distance3d,
+      };
+    })
+    .sort((a, b) => a.horizontalDistance - b.horizontalDistance);
+  const nearest = ranked[0];
+  if (!nearest) return null;
+
+  const secondDifferentHouse = ranked.find((item) => item.anchor.houseNumber !== nearest.anchor.houseNumber);
+  const distanceGap = secondDifferentHouse ? secondDifferentHouse.horizontalDistance - nearest.horizontalDistance : undefined;
+  const distanceRatio = secondDifferentHouse && secondDifferentHouse.horizontalDistance > 0
+    ? nearest.horizontalDistance / secondDifferentHouse.horizontalDistance
+    : undefined;
+  const highRadius = 10;
+  const maxRadius = 14;
+  const highDominance = !secondDifferentHouse
+    || (distanceGap != null && distanceGap >= 1.6)
+    || (distanceRatio != null && distanceRatio <= 0.78);
+  const mediumDominance = highDominance
+    || (distanceGap != null && distanceGap >= 0.8)
+    || (distanceRatio != null && distanceRatio <= 0.88);
+
+  let confidence: GlbSmartLinkCandidate["suggestionConfidence"] = "nenhuma";
+  let rejectReason: string | undefined;
+  if (nearest.horizontalDistance > maxRadius) {
+    rejectReason = "texto ancora distante";
+  } else if (!mediumDominance) {
+    confidence = "baixa";
+    rejectReason = "texto ancora ambiguo";
+  } else if (nearest.horizontalDistance <= highRadius && highDominance) {
+    confidence = "alta";
+  } else {
+    confidence = "media";
+    rejectReason = "texto ancora dominante media";
+  }
+
+  return {
+    houseNumber: nearest.anchor.houseNumber,
+    confidence,
+    distance: nearest.distance,
+    horizontalDistance: nearest.horizontalDistance,
+    distance3d: nearest.distance3d,
+    source: "text_anchor" as const,
+    ambiguous: !!secondDifferentHouse && !mediumDominance,
+    nearestLayerKey: nearest.anchor.layerKey,
+    nearestAnchorName: nearest.anchor.meshName,
+    nearestAnchorCenter: nearest.anchor.center,
+    secondDistance: secondDifferentHouse?.horizontalDistance,
+    distanceGap,
+    distanceRatio,
+    acceptedDominantAnchor: mediumDominance,
+    topTextAnchors: ranked.slice(0, 5).map((item) => ({
+      houseNumber: item.anchor.houseNumber,
+      layerKey: item.anchor.layerKey,
+      meshName: item.anchor.meshName,
+      center: item.anchor.center,
+      horizontalDistance: item.horizontalDistance,
+      distance3d: item.distance3d,
+      weightedDistance: item.distance,
+    })),
+    rejectReason,
+  };
+}
+
 function suggestHouse(mesh: GlbMeshRuntimeInfo, anchors: ReturnType<typeof buildHouseAnchors>) {
-  const text = nearestAnchor(mesh, anchors.textAnchors, "text_anchor", mesh.layerKey);
-  if (text && (text.confidence === "alta" || text.confidence === "media")) return text;
-  if (text && text.houseNumber != null && text.distance != null && text.distance <= 15) return text;
+  const text = nearestTextAnchorDecision(mesh, anchors.textAnchors, mesh.layerKey);
+  if (text) return text;
 
   const linked = nearestAnchor(mesh, anchors.linkedAnchors, "linked_neighbor", mesh.layerKey);
   if (linked && (linked.confidence === "alta" || linked.confidence === "media")) return linked;
@@ -433,6 +509,8 @@ export function scoreGlbSimilarCandidates(
       );
       const inferredHouse = suggestHouse(mesh, houseAnchors);
       const directSuggestedHouse = currentAssignedHouseNumber ?? detectedHouseNumber ?? parsedHouseNumber;
+      const textAnchorBlockedLinkedNeighbor = inferredHouse.source === "text_anchor"
+        && inferredHouse.houseNumber != null;
       const suggestedHouseNumber = directSuggestedHouse ?? (
         inferredHouse.confidence === "alta" || inferredHouse.confidence === "media"
           ? inferredHouse.houseNumber
@@ -528,6 +606,7 @@ export function scoreGlbSimilarCandidates(
         suggestionDistanceRatio,
         acceptedDominantAnchor,
         suggestionSource,
+        suggestionIgnoredLinkedNeighbor: textAnchorBlockedLinkedNeighbor,
         suggestionAnchorLayerKey: inferredHouse.nearestLayerKey,
         suggestionAnchorName: inferredHouse.nearestAnchorName,
         suggestionAnchorCenter: inferredHouse.nearestAnchorCenter,
@@ -580,12 +659,13 @@ export function scoreGlbSimilarCandidates(
   });
 
   if (import.meta.env.DEV) {
-    console.log("[SmartLink Anchor Debug]", result.slice(0, 10).map((candidate) => ({
+    console.log("[SmartLink Text Anchor Decision]", result.slice(0, 10).map((candidate) => ({
       layer_key: candidate.layerKey,
       meshName: candidate.meshName,
       candidateCenterWorld: candidate.center,
       suggestedHouse: candidate.suggestedHouseNumber,
       serviceSource: candidate.suggestionSource,
+      linkedNeighborIgnored: candidate.suggestionIgnoredLinkedNeighbor,
       anchorLayerKey: candidate.suggestionAnchorLayerKey,
       anchorName: candidate.suggestionAnchorName,
       anchorCenterWorld: candidate.suggestionAnchorCenter,

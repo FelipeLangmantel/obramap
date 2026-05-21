@@ -4457,6 +4457,9 @@ export function Map3DView() {
             {smartLinkHoverTooltip.candidate.suggestionHorizontalDistance != null && (
               <p>Dist. X/Z: {smartLinkHoverTooltip.candidate.suggestionHorizontalDistance.toFixed(1)}m</p>
             )}
+            {smartLinkHoverTooltip.candidate.suggestionIgnoredLinkedNeighbor && (
+              <p className="text-amber-600">Fallback por vizinho não usado: decisão por texto âncora.</p>
+            )}
             <p className="text-muted-foreground">
               {smartLinkHoverTooltip.candidate.houseSuggestionRejectReason || smartLinkHoverTooltip.candidate.suggestionReason}
             </p>
