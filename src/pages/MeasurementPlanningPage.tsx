@@ -14,6 +14,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { PeriodCard } from "@/components/planning/PeriodCard";
 import { PeriodServicesDialog } from "@/components/planning/PeriodServicesDialog";
+import { CurrentProjectHeaderBadge } from "@/components/CurrentProjectHeaderBadge";
 
 export default function MeasurementPlanningPage() {
   const navigate = useNavigate();
@@ -106,7 +107,7 @@ export default function MeasurementPlanningPage() {
           <AppSidebar activeView="planning" onViewChange={() => navigate("/dashboard")} />
 
         <main className="flex-1 overflow-auto">
-          <div className="sticky top-0 z-10 flex items-center justify-between bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b px-4 py-3">
+          <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b px-4 py-3">
             <div className="flex items-center gap-4">
               <SidebarTrigger className="p-2 -ml-1 text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors">
                 <Menu className="h-6 w-6" />
@@ -116,6 +117,7 @@ export default function MeasurementPlanningPage() {
               </Button>
               <h1 className="text-xl font-semibold">Planejamento por Período</h1>
             </div>
+            <CurrentProjectHeaderBadge />
           </div>
 
           <div className="p-6 space-y-6">

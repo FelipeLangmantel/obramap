@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Save, ArrowRight, AlertTriangle, Edit, Menu, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { ModuleAccessGuard } from "@/components/guards/ModuleAccessGuard";
+import { CurrentProjectHeaderBadge } from "@/components/CurrentProjectHeaderBadge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -130,11 +131,14 @@ export default function ProjectContractPage() {
           <div className="flex min-h-screen w-full bg-background">
             <AppSidebar activeView="costs" onViewChange={() => {}} />
             <SidebarInset className="flex-1">
-              <header className="h-10 sm:h-12 flex items-center gap-2 border-b border-border bg-background/80 backdrop-blur px-2 sm:px-3 shrink-0">
+              <header className="min-h-10 sm:min-h-12 flex flex-wrap items-center gap-2 border-b border-border bg-background/80 backdrop-blur px-2 sm:px-3 py-1.5 shrink-0">
                 <SidebarTrigger className="p-2 -ml-1 text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors">
                   <Menu className="h-5 w-5" />
                 </SidebarTrigger>
                 <span className="text-xs sm:text-sm font-medium text-muted-foreground">Contrato da Obra</span>
+                <div className="ml-auto">
+                  <CurrentProjectHeaderBadge />
+                </div>
               </header>
               <div className="flex items-center justify-center h-full">
                 <div className="text-center space-y-4">
@@ -155,11 +159,14 @@ export default function ProjectContractPage() {
         <div className="flex min-h-screen w-full bg-background">
           <AppSidebar activeView="costs" onViewChange={() => {}} />
         <SidebarInset className="flex-1">
-          <header className="h-10 sm:h-12 flex items-center gap-2 border-b border-border bg-background/80 backdrop-blur px-2 sm:px-3 shrink-0">
+          <header className="min-h-10 sm:min-h-12 flex flex-wrap items-center gap-2 border-b border-border bg-background/80 backdrop-blur px-2 sm:px-3 py-1.5 shrink-0">
             <SidebarTrigger className="p-2 -ml-1 text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors">
               <Menu className="h-5 w-5" />
             </SidebarTrigger>
             <span className="text-xs sm:text-sm font-medium text-muted-foreground">Contrato da Obra</span>
+            <div className="ml-auto">
+              <CurrentProjectHeaderBadge />
+            </div>
           </header>
           <div className="container mx-auto py-6 px-4 space-y-6 max-w-7xl">
             <ContractHeader 

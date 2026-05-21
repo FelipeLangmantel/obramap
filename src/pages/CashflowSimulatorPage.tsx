@@ -1,5 +1,6 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
+import { CurrentProjectHeaderBadge } from "@/components/CurrentProjectHeaderBadge";
 import CashflowSimulatorView from "@/components/cashflow-simulator/CashflowSimulatorView";
 import { Menu } from "lucide-react";
 import { useState } from "react";
@@ -20,8 +21,11 @@ export default function CashflowSimulatorPage() {
       <div className="min-h-screen flex w-full bg-background">
         <AppSidebar activeView={activeView} onViewChange={setActiveView} />
         <main className="flex-1 flex flex-col min-w-0">
-          <header className="h-12 flex items-center border-b border-border px-4 bg-background">
+          <header className="min-h-12 flex flex-wrap items-center gap-3 border-b border-border px-4 py-1.5 bg-background">
             <SidebarTriggerButton />
+            <div className="flex min-w-0 flex-1 justify-center">
+              <CurrentProjectHeaderBadge />
+            </div>
           </header>
           <div className="flex-1 p-4 md:p-6 overflow-auto">
             <CashflowSimulatorView />

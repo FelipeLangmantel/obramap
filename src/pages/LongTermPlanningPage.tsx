@@ -14,6 +14,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useProjectSetupFlow } from "@/hooks/useProjectSetupFlow";
 import { supabase } from "@/integrations/supabase/client";
 import { ModuleAccessGuard } from "@/components/guards/ModuleAccessGuard";
+import { CurrentProjectHeaderBadge } from "@/components/CurrentProjectHeaderBadge";
 
 export default function LongTermPlanningPage() {
   const navigate = useNavigate();
@@ -73,7 +74,7 @@ export default function LongTermPlanningPage() {
           <main className="flex-1 overflow-auto">
             {/* Header */}
             <header className="sticky top-0 z-40 border-b bg-card/95 backdrop-blur-sm">
-              <div className="flex items-center justify-between px-6 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3">
                 <div className="flex items-center gap-3">
                   <Button
                     variant="ghost"
@@ -97,6 +98,7 @@ export default function LongTermPlanningPage() {
                     </div>
                   </div>
                 </div>
+                <CurrentProjectHeaderBadge />
               </div>
             </header>
 

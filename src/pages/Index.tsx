@@ -39,6 +39,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Loader2, Menu, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OfflineStatusBadge } from "@/components/offline/OfflineStatusBadge";
+import { CurrentProjectHeaderBadge } from "@/components/CurrentProjectHeaderBadge";
 
 // Sidebar trigger button - visible on all screen sizes
 function SidebarTriggerButton() {
@@ -275,6 +276,27 @@ function Index() {
     "manual": "Manual de Configuração",
   };
 
+  const showCurrentProjectHeader = [
+    "map",
+    "interactive-map",
+    "3d-map",
+    "charts",
+    "board-decisions",
+    "production",
+    "diario-obra",
+    "relatorio-obra",
+    "productivity",
+    "planning",
+    "smart-planning",
+    "costs",
+    "financial-flow",
+    "supplies",
+    "contractors",
+    "delivery",
+    "industrialization",
+    "holding-dashboard",
+  ].includes(activeView);
+
   return (
     <SidebarProvider defaultOpen={true}>
       <div className="h-screen flex w-full overflow-hidden">
@@ -292,7 +314,9 @@ function Index() {
               {viewTitles[activeView]}
             </h2>
             
-            <div className="flex-1 min-w-0" />
+            <div className="flex min-w-0 flex-1 justify-center px-2">
+              {showCurrentProjectHeader && <CurrentProjectHeaderBadge />}
+            </div>
             
             <div className="flex items-center gap-1.5 md:gap-3 shrink-0 flex-wrap">
               <OfflineStatusBadge />
