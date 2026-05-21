@@ -50,22 +50,21 @@ export function LayersPanel({
   };
 
   return (
-    <Card className="absolute top-4 left-4 w-80 z-10 bg-background/95 backdrop-blur-sm flex flex-col" style={{ maxHeight: 'calc(100% - 2rem)' }}>
+    <Card className="absolute top-4 left-4 z-10 flex w-[calc(100vw-2rem)] max-w-[520px] flex-col bg-background/95 backdrop-blur-sm sm:w-[460px] lg:w-[500px]" style={{ maxHeight: 'calc(100% - 2rem)' }}>
       <CardHeader className="pb-2 px-3 pt-3 flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm">Camadas ({layers.length})</CardTitle>
-          <div className="flex items-center gap-1.5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle className="text-sm leading-none">Camadas ({layers.length})</CardTitle>
+          <div className="flex flex-wrap items-center gap-1.5">
             <Button
               variant="outline"
               size="sm"
               onClick={onShowAllLayers}
-              className="h-7 text-xs"
-              disabled={hiddenCount === 0}
-              title={hiddenCount > 0 ? `${hiddenCount} camada(s) ocultas ou translucidas` : "Todas as camadas ja estao visiveis"}
+              className="h-7 whitespace-nowrap text-xs"
+              title={hiddenCount > 0 ? `${hiddenCount} camada(s) ocultas ou translucidas` : "Resetar visualizacao 3D"}
             >
               <RotateCcw className="h-3 w-3 mr-1" />Reexibir tudo
             </Button>
-            <Button variant="outline" size="sm" onClick={onOpenLinkDialog} className="h-7 text-xs">
+            <Button variant="outline" size="sm" onClick={onOpenLinkDialog} className="h-7 whitespace-nowrap text-xs">
               <Link2 className="h-3 w-3 mr-1" />Vincular Serviços
             </Button>
           </div>

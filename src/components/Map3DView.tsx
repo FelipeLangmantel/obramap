@@ -1299,18 +1299,6 @@ export function Map3DView() {
   const meshAssignments = useMeshHouseAssignments(projectId);
   const layerManager = useModelLayers(projectId, meshAssignments.assignmentMap);
 
-  const reexibirTodasCamadas = useCallback(() => {
-    layerManager.setAutoMode(false);
-    layerManager.showAllLayers();
-    setHideLinkedInReview(false);
-    setIsolatedKeys(null);
-    setSmartLinkHoverTooltip(null);
-    setSmartLinkFocusedCandidateKey(null);
-    setSupplementalGlbParts((current) => current.map((part) => ({ ...part, visible: true })));
-    clearMeshSelection("layers show all");
-    toast.success("Todas as camadas foram reexibidas.");
-  }, [clearMeshSelection, layerManager]);
-
   // Inventário de meshes do modelo
   const meshHooks = useProjectModelMeshes(projectId);
 
@@ -2867,6 +2855,29 @@ export function Map3DView() {
     });
     return keys;
   }, [traverseActiveModelMeshes]);
+
+  const reexibirTodasCamadas = useCallback(() => {
+    layerManager.setAutoMode(false);
+    layerManager.showAllLayers();
+    setHideLinkedInReview(false);
+    setSupplementalGlbParts((current) => current.map((part) => ({ ...part, visible: true })));
+    clearAll3DSelection("layers show all");
+    traverseActiveModelMeshes((mesh) => {
+      mesh.visible = true;
+      const material = mesh.material;
+      const materials = Array.isArray(material) ? material : [material];
+      materials.forEach((item) => {
+        const anyMaterial = item as any;
+        if (!anyMaterial) return;
+        if ("opacity" in anyMaterial) {
+          anyMaterial.opacity = 1;
+          anyMaterial.transparent = false;
+          anyMaterial.needsUpdate = true;
+        }
+      });
+    });
+    toast.success("Visualização 3D reexibida.");
+  }, [clearAll3DSelection, layerManager, traverseActiveModelMeshes]);
 
   const reviewVisibilityStats = useMemo(() => {
     const stats = { total: 0, linked: 0, pending: 0, context: 0, ignored: 0 };
