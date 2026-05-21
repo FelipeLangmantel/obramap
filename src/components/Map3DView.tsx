@@ -1136,10 +1136,11 @@ function HouseWalkInspectPanel({
 export function Map3DView() {
   const { currentProject, refreshHousesFromDB } = useConstruction();
   const navigate = useNavigate();
-  const { profile, user } = useAuth();
+  const { profile, user, canEdit } = useAuth();
   const projectId = currentProject?.id;
   const companyId = (currentProject as any)?.company_id || profile?.company_id || null;
   const canManage3D = canManage3DMap(profile);
+  const canSync3DReal = canManage3D || canEdit;
   const canDelete3D = canDelete3DAssets(profile);
   
   const [modelData, setModelData] = useState<ModelData | null>(null);
@@ -3288,7 +3289,7 @@ export function Map3DView() {
 
   // Sincronização 3D Real
   const handleSync3DReal = useCallback(async (options?: { silent?: boolean }) => {
-    if (!canManage3D) { toast.error("Sem permissão para sincronizar o 3D Real."); return; }
+    if (!canSync3DReal) { toast.error("Você precisa ter permissão de edição para sincronizar o 3D Real."); return; }
     if (!projectId) return;
     setIsSyncing(true);
     clearMeshSelection("3D Real sync started");
@@ -3581,7 +3582,7 @@ export function Map3DView() {
       console.error("[Sync3D]", err);
       toast.error("Erro ao sincronizar");
     } finally { setIsSyncing(false); }
-  }, [buildCurrentMeshMap, canManage3D, projectId, meshHooks, currentProject, applyViewMode, viewMode, meshReviewOverrides, sanitizeGlbMeshForCurrentModel, isCompleteProductionLink, collectActiveModelLayerKeys, clearMeshSelection]);
+  }, [buildCurrentMeshMap, canSync3DReal, projectId, meshHooks, currentProject, applyViewMode, viewMode, meshReviewOverrides, sanitizeGlbMeshForCurrentModel, isCompleteProductionLink, collectActiveModelLayerKeys, clearMeshSelection]);
 
   // Auto-sync após realtime, debounced (somente se já sincronizou ao menos 1x)
   const autoSync = useCallback(() => {
@@ -4212,13 +4213,13 @@ export function Map3DView() {
                 </ToggleGroupItem>
               </ToggleGroup>
             )}
-            {canManage3D && modelData && (
+            {canSync3DReal && modelData && (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => handleSync3DReal()}
-                disabled={isLoading || isSyncing || meshHooks.meshMap.size === 0}
-                title="Atualiza a visibilidade das meshes a partir da produção real"
+                disabled={!canSync3DReal || isLoading || isSyncing || meshHooks.meshMap.size === 0}
+                title={canSync3DReal ? "Atualiza a visibilidade das meshes a partir da produção real" : "Você precisa ter permissão de edição para sincronizar o 3D Real."}
               >
                 {isSyncing ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1.5" />}
                 Sincronizar 3D Real
