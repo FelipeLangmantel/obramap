@@ -67,6 +67,22 @@ export const MENU_MODULES: MenuModule[] = [
  * Seções de gerenciamento — aparecem como opções de permissão separadas.
  */
 export const MANAGEMENT_MODULES: ManagementModule[] = [
+  { id: "map3d.import_main_model", label: "Mapa 3D - Importar 3D" },
+  { id: "map3d.add_glb_part", label: "Mapa 3D - Adicionar parte GLB" },
+  { id: "map3d.manage_layers", label: "Mapa 3D - Gerenciar camadas" },
+  { id: "map3d.link_services", label: "Mapa 3D - Vincular servicos" },
+  { id: "map3d.assign_houses", label: "Mapa 3D - Atribuir casas" },
+  { id: "map3d.review_model", label: "Mapa 3D - Revisar modelo" },
+  { id: "map3d.smartlink", label: "Mapa 3D - SmartLink" },
+  { id: "map3d.sync_real", label: "Mapa 3D - Sincronizar 3D Real" },
+  { id: "map3d.view_real", label: "Mapa 3D - Ver 3D Real" },
+  { id: "map3d.view_simulation", label: "Mapa 3D - Ver simulacao" },
+  { id: "map3d.reset_map", label: "Mapa 3D - Resetar mapa" },
+  { id: "map3d.save_map", label: "Mapa 3D - Salvar mapa" },
+  { id: "map3d.manage_glb_parts", label: "Mapa 3D - Gerenciar partes GLB" },
+  { id: "map3d.walk_mode", label: "Mapa 3D - Modo caminhar" },
+  { id: "map3d.change_zoom_sensitivity", label: "Mapa 3D - Sensibilidade do zoom" },
+  { id: "map3d.performance_mode", label: "Mapa 3D - Modo desempenho" },
   { id: "projetos", label: "Cadastro de Obras" },
   { id: "quadras", label: "Cadastro de Quadras" },
   { id: "macros", label: "Etapas e Serviços" },
@@ -110,7 +126,13 @@ export const DEFAULT_MENUS_BY_ROLE: Record<string, string[]> = {
 };
 
 export const DEFAULT_MANAGEMENT_BY_ROLE: Record<string, string[]> = {
-  admin: ['projetos','quadras','macros','insumos','fornecedores','usuarios','configuracoes'],
+  admin: [
+    'projetos','quadras','macros','insumos','fornecedores','usuarios','configuracoes',
+    'map3d.import_main_model','map3d.add_glb_part','map3d.manage_layers','map3d.link_services',
+    'map3d.assign_houses','map3d.review_model','map3d.smartlink','map3d.sync_real',
+    'map3d.view_real','map3d.view_simulation','map3d.reset_map','map3d.save_map',
+    'map3d.manage_glb_parts','map3d.walk_mode','map3d.change_zoom_sensitivity','map3d.performance_mode',
+  ],
   editor: ['projetos','quadras','macros','insumos','fornecedores'],
   viewer: [],
 };

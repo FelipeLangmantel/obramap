@@ -38,7 +38,7 @@ import {
 } from "./map3d/glbSmartLink";
 import { parseHouseNumberFromMesh } from "./map3d/parseHouseFromMeshName";
 import { HouseFotoHistoryDrawer } from "@/components/diario/HouseFotoHistoryDrawer";
-import { canDelete3DAssets, canManage3DMap } from "@/lib/accessControl";
+import { canDelete3DAssets, canManage3DMap, canUseMap3DAction } from "@/lib/accessControl";
 import { calculateHouseProgress } from "@/data/constructionData";
 
 interface ModelData {
@@ -263,8 +263,9 @@ function isContextMesh(saved: ProjectModelMesh | null | undefined, mesh: THREE.M
 }
 
 // Aplica highlight temporario na mesh selecionada (modo Revisar).
-function useSelectionHighlight(scene: THREE.Object3D | null, selectedKey: string | null) {
+function useSelectionHighlight(scene: THREE.Object3D | null, selectedKey: string | null, selectedKeys?: Set<string>) {
   const highlightedRef = useRef<Array<{ mesh: THREE.Mesh; originalMaterial: THREE.Material | THREE.Material[] }>>([]);
+  const selectedKeysSignature = selectedKeys ? Array.from(selectedKeys).sort().join("|") : "";
 
   useEffect(() => {
     const resolveRestoredMaterial = (material: THREE.Material): THREE.Material => {
@@ -302,18 +303,19 @@ function useSelectionHighlight(scene: THREE.Object3D | null, selectedKey: string
     };
 
     restoreHighlighted();
-    if (!scene || !selectedKey) return restoreHighlighted;
+    const targetKeys = new Set<string>();
+    if (selectedKey) targetKeys.add(selectedKey);
+    selectedKeys?.forEach((key) => targetKeys.add(key));
+    if (!scene || targetKeys.size === 0) return restoreHighlighted;
 
-    let selectedMesh: THREE.Mesh | null = null;
+    const selectedMeshes: THREE.Mesh[] = [];
     scene.traverse((child) => {
       if (!(child as THREE.Mesh).isMesh) return;
       const mesh = child as THREE.Mesh;
-      if (getMeshLayerKey(mesh) === selectedKey) selectedMesh = mesh;
+      if (targetKeys.has(getMeshLayerKey(mesh))) selectedMeshes.push(mesh);
     });
 
-    if (!selectedMesh) return restoreHighlighted;
-
-    const originalMaterial = selectedMesh.material as THREE.Material | THREE.Material[];
+    if (selectedMeshes.length === 0) return restoreHighlighted;
     const highlightMaterial = (material: THREE.Material) => {
       const clone = material.clone();
       clone.userData = {
@@ -334,23 +336,26 @@ function useSelectionHighlight(scene: THREE.Object3D | null, selectedKey: string
       return clone;
     };
 
-    selectedMesh.material = Array.isArray(originalMaterial)
-      ? originalMaterial.map(highlightMaterial)
-      : highlightMaterial(originalMaterial);
-    highlightedRef.current = [{ mesh: selectedMesh, originalMaterial }];
+    highlightedRef.current = selectedMeshes.map((selectedMesh) => {
+      const originalMaterial = selectedMesh.material as THREE.Material | THREE.Material[];
+      selectedMesh.material = Array.isArray(originalMaterial)
+        ? originalMaterial.map(highlightMaterial)
+        : highlightMaterial(originalMaterial);
+      return { mesh: selectedMesh, originalMaterial };
+    });
     if (import.meta.env.DEV) {
-      console.log("[GLB Review Highlight] selected", { uuid: selectedMesh.uuid, name: selectedMesh.name || null });
+      console.log("[GLB Review Highlight] selected", { count: selectedMeshes.length, selectedKeys: Array.from(targetKeys) });
     }
 
     return restoreHighlighted;
-  }, [scene, selectedKey]);
+  }, [scene, selectedKey, selectedKeysSignature]);
 }
 
 // GLTF model - calls onLoaded after it's in the scene
-function GLTFModel({ url, onLoaded, onSceneReady, onMeshClick, onMeshDoubleClick, onMeshHover, onMeshHoverEnd, selectedMeshKey }: { url: string; onLoaded: () => void; onSceneReady?: (scene: THREE.Object3D) => void; onMeshClick?: (mesh: THREE.Object3D, point?: THREE.Vector3) => void; onMeshDoubleClick?: (mesh: THREE.Object3D, point?: THREE.Vector3) => void; onMeshHover?: (mesh: THREE.Object3D, event: any) => void; onMeshHoverEnd?: () => void; selectedMeshKey?: string | null }) {
+function GLTFModel({ url, onLoaded, onSceneReady, onMeshClick, onMeshDoubleClick, onMeshHover, onMeshHoverEnd, selectedMeshKey, selectedMeshKeys }: { url: string; onLoaded: () => void; onSceneReady?: (scene: THREE.Object3D) => void; onMeshClick?: (mesh: THREE.Object3D, point?: THREE.Vector3, event?: any) => void; onMeshDoubleClick?: (mesh: THREE.Object3D, point?: THREE.Vector3) => void; onMeshHover?: (mesh: THREE.Object3D, event: any) => void; onMeshHoverEnd?: () => void; selectedMeshKey?: string | null; selectedMeshKeys?: Set<string> }) {
   const { scene } = useGLTF(url);
   const calledRef = useRef(false);
-  useSelectionHighlight(scene, selectedMeshKey ?? null);
+  useSelectionHighlight(scene, selectedMeshKey ?? null, selectedMeshKeys);
 
   useEffect(() => {
     if (scene && !calledRef.current) {
@@ -371,7 +376,7 @@ function GLTFModel({ url, onLoaded, onSceneReady, onMeshClick, onMeshDoubleClick
         if (!onMeshClick) return;
         e.stopPropagation();
         const hit = getSelectableRaycastHit(e);
-        if (hit) onMeshClick(hit.object, hit.point);
+        if (hit) onMeshClick(hit.object, hit.point, e);
       }}
       onDoubleClick={(e: any) => {
         if (!onMeshDoubleClick) return;
@@ -398,15 +403,17 @@ function SupplementalGLTFPart({
   onSceneReady,
   onInventoryReady,
   selectedMeshKey,
+  selectedMeshKeys,
 }: {
   part: SupplementalGlbPart;
-  onMeshClick?: (part: SupplementalGlbPart, mesh: THREE.Object3D, point?: THREE.Vector3) => void;
+  onMeshClick?: (part: SupplementalGlbPart, mesh: THREE.Object3D, point?: THREE.Vector3, event?: any) => void;
   onMeshDoubleClick?: (part: SupplementalGlbPart, mesh: THREE.Object3D, point?: THREE.Vector3) => void;
   onMeshHover?: (part: SupplementalGlbPart, mesh: THREE.Object3D, event: any) => void;
   onMeshHoverEnd?: () => void;
   onSceneReady?: (part: SupplementalGlbPart, scene: THREE.Object3D) => void;
   onInventoryReady?: (part: SupplementalGlbPart, meshes: GlbMeshInventoryInput[]) => void;
   selectedMeshKey?: string | null;
+  selectedMeshKeys?: Set<string>;
 }) {
   const { scene } = useGLTF(part.url);
 
@@ -440,7 +447,7 @@ function SupplementalGLTFPart({
     onSceneReady?.(part, scene);
     if (part.persisted) onInventoryReady?.(part, meshesToUpsert);
   }, [onInventoryReady, onSceneReady, part, scene]);
-  useSelectionHighlight(scene, selectedMeshKey ?? null);
+  useSelectionHighlight(scene, selectedMeshKey ?? null, selectedMeshKeys);
 
   return (
     <primitive
@@ -448,7 +455,7 @@ function SupplementalGLTFPart({
       onClick={(e: any) => {
         e.stopPropagation();
         const hit = getSelectableRaycastHit(e);
-        if (hit) onMeshClick?.(part, hit.object, hit.point);
+        if (hit) onMeshClick?.(part, hit.object, hit.point, e);
       }}
       onDoubleClick={(e: any) => {
         if (!onMeshDoubleClick) return;
@@ -467,13 +474,13 @@ function SupplementalGLTFPart({
 }
 
 // OBJ model - calls onLoaded after it's in the scene
-function OBJModel({ url, mtlUrl, onLoaded, onSceneReady, onMeshClick, onMeshDoubleClick, onMeshHover, onMeshHoverEnd, selectedMeshKey }: { url: string; mtlUrl?: string; onLoaded: () => void; onSceneReady?: (scene: THREE.Object3D) => void; onMeshClick?: (mesh: THREE.Object3D, point?: THREE.Vector3) => void; onMeshDoubleClick?: (mesh: THREE.Object3D, point?: THREE.Vector3) => void; onMeshHover?: (mesh: THREE.Object3D, event: any) => void; onMeshHoverEnd?: () => void; selectedMeshKey?: string | null }) {
+function OBJModel({ url, mtlUrl, onLoaded, onSceneReady, onMeshClick, onMeshDoubleClick, onMeshHover, onMeshHoverEnd, selectedMeshKey, selectedMeshKeys }: { url: string; mtlUrl?: string; onLoaded: () => void; onSceneReady?: (scene: THREE.Object3D) => void; onMeshClick?: (mesh: THREE.Object3D, point?: THREE.Vector3, event?: any) => void; onMeshDoubleClick?: (mesh: THREE.Object3D, point?: THREE.Vector3) => void; onMeshHover?: (mesh: THREE.Object3D, event: any) => void; onMeshHoverEnd?: () => void; selectedMeshKey?: string | null; selectedMeshKeys?: Set<string> }) {
   const materials = mtlUrl ? useLoader(MTLLoader, mtlUrl) : null;
   const obj = useLoader(OBJLoader, url, (loader) => {
     if (materials) { materials.preload(); loader.setMaterials(materials); }
   });
   const calledRef = useRef(false);
-  useSelectionHighlight(obj, selectedMeshKey ?? null);
+  useSelectionHighlight(obj, selectedMeshKey ?? null, selectedMeshKeys);
 
   useEffect(() => {
     if (obj && !calledRef.current) {
@@ -490,7 +497,7 @@ function OBJModel({ url, mtlUrl, onLoaded, onSceneReady, onMeshClick, onMeshDoub
         if (!onMeshClick) return;
         e.stopPropagation();
         const hit = getSelectableRaycastHit(e);
-        if (hit) onMeshClick(hit.object, hit.point);
+        if (hit) onMeshClick(hit.object, hit.point, e);
       }}
       onDoubleClick={(e: any) => {
         if (!onMeshDoubleClick) return;
@@ -865,7 +872,7 @@ function AutoFitCamera({
 // Scene
 function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLegendItems,
   resetTrigger, fitTrigger, savedPosition, savedTarget, onCameraChange, sceneReady, onModelLoaded, onSceneReady,
-  orbitFocusPoint, onMeshClick, onMeshDoubleClick, onMeshHover, onMeshHoverEnd, selectedMeshKey, projectId, companyId, ifcRealModeActive, ifcHouseOptions, ifcServiceOptions,
+  orbitFocusPoint, onMeshClick, onMeshDoubleClick, onMeshHover, onMeshHoverEnd, selectedMeshKey, selectedMeshKeys, projectId, companyId, ifcRealModeActive, ifcHouseOptions, ifcServiceOptions,
   cameraMode, walkInspectOpen, onWalkExit, onWalkInspectClose, onWalkMeshInspect,
   supplementalGlbParts, onSupplementalMeshClick, onSupplementalMeshDoubleClick, onSupplementalMeshHover, onSupplementalMeshHoverEnd, onSupplementalSceneReady, onSupplementalInventoryReady,
   observerHeight, walkStartPoint, performanceMode, zoomSpeed,
@@ -879,11 +886,12 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   onSceneReady?: (scene: THREE.Object3D) => void;
   orbitFocusPoint?: [number, number, number] | null;
   zoomSpeed: number;
-  onMeshClick?: (mesh: THREE.Object3D, point?: THREE.Vector3) => void;
+  onMeshClick?: (mesh: THREE.Object3D, point?: THREE.Vector3, event?: any) => void;
   onMeshDoubleClick?: (mesh: THREE.Object3D, point?: THREE.Vector3) => void;
   onMeshHover?: (mesh: THREE.Object3D, event: any) => void;
   onMeshHoverEnd?: () => void;
   selectedMeshKey?: string | null;
+  selectedMeshKeys?: Set<string>;
   projectId?: string | null;
   companyId?: string | null;
   ifcRealModeActive?: boolean;
@@ -895,7 +903,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   onWalkInspectClose: () => void;
   onWalkMeshInspect?: (mesh: THREE.Mesh) => void;
   supplementalGlbParts: SupplementalGlbPart[];
-  onSupplementalMeshClick?: (part: SupplementalGlbPart, mesh: THREE.Object3D, point?: THREE.Vector3) => void;
+  onSupplementalMeshClick?: (part: SupplementalGlbPart, mesh: THREE.Object3D, point?: THREE.Vector3, event?: any) => void;
   onSupplementalMeshDoubleClick?: (part: SupplementalGlbPart, mesh: THREE.Object3D, point?: THREE.Vector3) => void;
   onSupplementalMeshHover?: (part: SupplementalGlbPart, mesh: THREE.Object3D, event: any) => void;
   onSupplementalMeshHoverEnd?: () => void;
@@ -927,11 +935,11 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
       {modelData && (
         <Suspense fallback={<Html center><div className="bg-background/90 px-4 py-2 rounded-lg border border-border">Carregando modelo...</div></Html>}>
           {modelData.type === "gltf" ? (
-            <GLTFModel url={modelData.url} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} onMeshDoubleClick={onMeshDoubleClick} onMeshHover={onMeshHover} onMeshHoverEnd={onMeshHoverEnd} selectedMeshKey={selectedMeshKey} />
+            <GLTFModel url={modelData.url} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} onMeshDoubleClick={onMeshDoubleClick} onMeshHover={onMeshHover} onMeshHoverEnd={onMeshHoverEnd} selectedMeshKey={selectedMeshKey} selectedMeshKeys={selectedMeshKeys} />
           ) : modelData.type === "ifc" ? (
             <IFCModel url={modelData.url} projectId={projectId} companyId={companyId} ifcRealModeActive={ifcRealModeActive} houseOptions={ifcHouseOptions} serviceOptions={ifcServiceOptions} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} selectedMeshKey={selectedMeshKey} />
           ) : (
-            <OBJModel url={modelData.url} mtlUrl={modelData.mtlUrl} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} onMeshDoubleClick={onMeshDoubleClick} onMeshHover={onMeshHover} onMeshHoverEnd={onMeshHoverEnd} selectedMeshKey={selectedMeshKey} />
+            <OBJModel url={modelData.url} mtlUrl={modelData.mtlUrl} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} onMeshDoubleClick={onMeshDoubleClick} onMeshHover={onMeshHover} onMeshHoverEnd={onMeshHoverEnd} selectedMeshKey={selectedMeshKey} selectedMeshKeys={selectedMeshKeys} />
           )}
         </Suspense>
       )}
@@ -947,6 +955,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
             onSceneReady={onSupplementalSceneReady}
             onInventoryReady={onSupplementalInventoryReady}
             selectedMeshKey={selectedMeshKey}
+            selectedMeshKeys={selectedMeshKeys}
           />
         </Suspense>
       ))}
@@ -1161,12 +1170,30 @@ function HouseWalkInspectPanel({
 export function Map3DView() {
   const { currentProject, refreshHousesFromDB } = useConstruction();
   const navigate = useNavigate();
-  const { profile, user, canEdit } = useAuth();
+  const { profile, user, canEdit, canAccessManagement } = useAuth();
   const projectId = currentProject?.id;
   const companyId = (currentProject as any)?.company_id || profile?.company_id || null;
-  const canManage3D = canManage3DMap(profile);
-  const canSync3DReal = canManage3D || canEdit;
-  const canDelete3D = canDelete3DAssets(profile);
+  const canUseMap3D = useCallback((action: Parameters<typeof canUseMap3DAction>[1]) => (
+    canUseMap3DAction(profile, action, canAccessManagement)
+  ), [canAccessManagement, profile]);
+  const canImportMainModel = canUseMap3D("map3d.import_main_model");
+  const canAddGlbPart = canUseMap3D("map3d.add_glb_part");
+  const canManageLayers = canUseMap3D("map3d.manage_layers");
+  const canLinkServices = canUseMap3D("map3d.link_services");
+  const canAssignHouses = canUseMap3D("map3d.assign_houses");
+  const canReviewModel = canUseMap3D("map3d.review_model");
+  const canUseSmartLink = canUseMap3D("map3d.smartlink");
+  const canSync3DReal = canUseMap3D("map3d.sync_real");
+  const canView3DReal = canUseMap3D("map3d.view_real");
+  const canViewSimulation = canUseMap3D("map3d.view_simulation");
+  const canResetMap = canUseMap3D("map3d.reset_map");
+  const canSaveMap = canUseMap3D("map3d.save_map");
+  const canManageGlbParts = canUseMap3D("map3d.manage_glb_parts");
+  const canUseWalkMode = canUseMap3D("map3d.walk_mode");
+  const canChangeZoomSensitivity = canUseMap3D("map3d.change_zoom_sensitivity");
+  const canUsePerformanceMode = canUseMap3D("map3d.performance_mode");
+  const canManage3D = canReviewModel;
+  const canDelete3D = canDelete3DAssets(profile) || canResetMap || canManageGlbParts;
   
   const [modelData, setModelData] = useState<ModelData | null>(null);
   const [supplementalGlbParts, setSupplementalGlbParts] = useState<SupplementalGlbPart[]>([]);
@@ -1212,6 +1239,7 @@ export function Map3DView() {
   // Modo "Revisar Modelo"
   const [reviewMode, setReviewMode] = useState(false);
   const [selectedMeshKey, setSelectedMeshKey] = useState<string | null>(null);
+  const [multiSelectedMeshKeys, setMultiSelectedMeshKeys] = useState<Set<string>>(new Set());
   const [hideLinkedInReview, setHideLinkedInReview] = useState(false);
   const [isolatedKeys, setIsolatedKeys] = useState<Set<string> | null>(null);
   const [meshReviewOverrides, setMeshReviewOverrides] = useState<Map<string, ProjectModelMesh>>(new Map());
@@ -1265,6 +1293,7 @@ export function Map3DView() {
 
   const clearMeshSelection = useCallback((reason = "manual") => {
     setSelectedMeshKey(null);
+    setMultiSelectedMeshKeys(new Set());
     setIsolatedKeys(null);
     setSmartLinkFocusedCandidateKey(null);
     setSmartLinkHoverTooltip(null);
@@ -1330,6 +1359,17 @@ export function Map3DView() {
     if (sessionSaved) return sessionSaved;
     return sanitizeGlbMeshForCurrentModel(meshHooks.meshMap.get(layerKey) ?? null);
   }, [meshHooks.meshMap, meshReviewOverrides, sanitizeGlbMeshForCurrentModel]);
+
+  const multiReviewSelection = useMemo(() => (
+    Array.from(multiSelectedMeshKeys).map((layerKey) => {
+      const meshData = getCurrentMeshRecord(layerKey);
+      return {
+        layerKey,
+        meshData,
+        meshName: meshData?.mesh_name || layerKey,
+      };
+    })
+  ), [getCurrentMeshRecord, multiSelectedMeshKeys]);
 
   const buildCurrentMeshMap = useCallback((sourceMap: Map<string, ProjectModelMesh>, includeSessionOverrides = true) => {
     const next = new Map<string, ProjectModelMesh>();
@@ -1550,7 +1590,7 @@ export function Map3DView() {
     const file = input.files?.[0];
     input.value = "";
     if (!file) return;
-    if (!canManage3D) {
+    if (!canAddGlbPart) {
       toast.error("Sem permissao para adicionar parte GLB.");
       return;
     }
@@ -1614,18 +1654,26 @@ export function Map3DView() {
     } finally {
       setIsLoading(false);
     }
-  }, [canManage3D, companyId, projectId, toSupplementalGlbPart, user?.id]);
+  }, [canAddGlbPart, companyId, projectId, toSupplementalGlbPart, user?.id]);
 
   const toggleSupplementalGlbPart = useCallback((id: string) => {
+    if (!canManageGlbParts) {
+      toast.error("Sem permissao para gerenciar partes GLB.");
+      return;
+    }
     if (selectedMeshKey?.startsWith(`glbpart:${id}:`)) {
       clearMeshSelection("supplemental part visibility toggled");
     }
     setSupplementalGlbParts((current) =>
       current.map((part) => part.id === id ? { ...part, visible: !part.visible } : part),
     );
-  }, [clearMeshSelection, selectedMeshKey]);
+  }, [canManageGlbParts, clearMeshSelection, selectedMeshKey]);
 
   const removeSupplementalGlbPart = useCallback(async (id: string) => {
+    if (!canManageGlbParts) {
+      toast.error("Sem permissao para gerenciar partes GLB.");
+      return;
+    }
     const part = supplementalGlbPartsRef.current.find((item) => item.id === id);
     if (!part) return;
 
@@ -1650,9 +1698,13 @@ export function Map3DView() {
     supplementalInventoriedPartIdsRef.current.delete(id);
     setSupplementalGlbParts((current) => current.filter((item) => item.id !== id));
     toast.success("Parte GLB complementar removida.");
-  }, [clearMeshSelection, selectedMeshKey]);
+  }, [canManageGlbParts, clearMeshSelection, selectedMeshKey]);
 
   const removeAllSupplementalGlbParts = useCallback(async () => {
+    if (!canManageGlbParts) {
+      toast.error("Sem permissao para gerenciar partes GLB.");
+      return;
+    }
     const parts = supplementalGlbPartsRef.current;
     if (parts.length === 0) return;
 
@@ -1924,7 +1976,7 @@ export function Map3DView() {
     toast.success("Ponto inicial do Caminhar definido.");
   }, [projectId]);
 
-  const handleReviewMeshClick = useCallback((obj: THREE.Object3D, point?: THREE.Vector3) => {
+  const handleReviewMeshClick = useCallback((obj: THREE.Object3D, point?: THREE.Vector3, event?: any) => {
     if (!reviewMode) return;
     if (!(obj as THREE.Mesh).isMesh) return;
     const mesh = obj as THREE.Mesh;
@@ -1970,6 +2022,22 @@ export function Map3DView() {
           })),
       });
     }
+    const sourceEvent = event?.nativeEvent ?? event;
+    const isMultiSelectClick = !!(sourceEvent?.ctrlKey || sourceEvent?.metaKey);
+    let nextSelectedKey: string | null = layerKey;
+    if (isMultiSelectClick) {
+      const next = new Set(multiSelectedMeshKeys);
+      if (next.has(layerKey)) {
+        next.delete(layerKey);
+        nextSelectedKey = Array.from(next).at(-1) ?? null;
+      } else {
+        next.add(layerKey);
+        nextSelectedKey = layerKey;
+      }
+      setMultiSelectedMeshKeys(next);
+    } else {
+      setMultiSelectedMeshKeys(new Set());
+    }
     if (smartLinkPreviewEnabled) {
       const candidate = smartLinkCandidates.find((item) => item.layerKey === layerKey) ?? null;
       if (candidate) {
@@ -1986,10 +2054,10 @@ export function Map3DView() {
         setSmartLinkFocusedCandidateKey(null);
       }
     }
-    setSelectedMeshKey(layerKey);
-  }, [meshHooks.meshMap, reviewMode, sceneObj, smartLinkCandidates, smartLinkIsolationFilter, smartLinkPreviewEnabled, smartLinkSelectedKeys]);
+    setSelectedMeshKey(nextSelectedKey);
+  }, [meshHooks.meshMap, multiSelectedMeshKeys, reviewMode, sceneObj, smartLinkCandidates, smartLinkIsolationFilter, smartLinkPreviewEnabled, smartLinkSelectedKeys]);
 
-  const handleSupplementalMeshClick = useCallback((part: SupplementalGlbPart, obj: THREE.Object3D, point?: THREE.Vector3) => {
+  const handleSupplementalMeshClick = useCallback((part: SupplementalGlbPart, obj: THREE.Object3D, point?: THREE.Vector3, event?: any) => {
     if (!(obj as THREE.Mesh).isMesh) return;
     const mesh = obj as THREE.Mesh;
     const layerKey = getMeshLayerKey(mesh);
@@ -2014,9 +2082,25 @@ export function Map3DView() {
         meshMapRecord: meshHooks.meshMap.get(layerKey) ?? null,
       });
     }
+    const sourceEvent = event?.nativeEvent ?? event;
+    const isMultiSelectClick = !!(sourceEvent?.ctrlKey || sourceEvent?.metaKey);
+    let nextSelectedKey: string | null = layerKey;
+    if (isMultiSelectClick) {
+      const next = new Set(multiSelectedMeshKeys);
+      if (next.has(layerKey)) {
+        next.delete(layerKey);
+        nextSelectedKey = Array.from(next).at(-1) ?? null;
+      } else {
+        next.add(layerKey);
+        nextSelectedKey = layerKey;
+      }
+      setMultiSelectedMeshKeys(next);
+    } else {
+      setMultiSelectedMeshKeys(new Set());
+    }
     setSmartLinkFocusedCandidateKey(null);
-    setSelectedMeshKey(layerKey);
-  }, [assignMode, meshHooks.meshMap, reviewMode]);
+    setSelectedMeshKey(nextSelectedKey);
+  }, [assignMode, meshHooks.meshMap, multiSelectedMeshKeys, reviewMode]);
 
   const handleSmartLinkCandidateHover = useCallback((obj: THREE.Object3D, event: any) => {
     if (!smartLinkPreviewEnabled || !(obj as THREE.Mesh).isMesh) return;
@@ -2082,7 +2166,7 @@ export function Map3DView() {
   const handleClearIsolation = useCallback(() => {
     setIsolatedKeys(null);
     clearMeshSelection("isolation cleared");
-  }, [clearMeshSelection]);
+  }, [canManageGlbParts, clearMeshSelection]);
 
   // Lista de casas para o painel de revisão
   const exitWalkMode = useCallback(() => {
@@ -3748,7 +3832,7 @@ export function Map3DView() {
   }, [assignMode]);
 
   const confirmAssignment = useCallback(async (houseNumber: number, includeChildren: boolean) => {
-    if (!canManage3D) { toast.error("Sem permissão para atribuir casas no Mapa 3D."); return; }
+    if (!canAssignHouses) { toast.error("Sem permissão para atribuir casas no Mapa 3D."); return; }
     if (!pickedMesh) return;
     setAssignSaving(true);
     const targets = includeChildren
@@ -3764,7 +3848,7 @@ export function Map3DView() {
       `${targets.length} mesh(es) atribuído(s) à Casa ${String(houseNumber).padStart(2, "0")}`
     );
     setPickedMesh(null);
-  }, [canManage3D, pickedMesh, meshAssignments]);
+  }, [canAssignHouses, pickedMesh, meshAssignments]);
 
   const clearAssignment = useCallback(async () => {
     if (!canDelete3D) { toast.error("Sem permissão para remover atribuições do Mapa 3D."); return; }
@@ -3944,7 +4028,7 @@ export function Map3DView() {
   useEffect(() => { loadSaved3DMap(); }, [loadSaved3DMap]);
 
   const save3DMap = async () => {
-    if (!canManage3D) { toast.error("Sem permissão para salvar o Mapa 3D."); return; }
+    if (!canSaveMap) { toast.error("Sem permissão para salvar o Mapa 3D."); return; }
     if (!projectId) { toast.error("Selecione um projeto"); return; }
     setIsSaving(true);
     try {
@@ -3965,6 +4049,49 @@ export function Map3DView() {
     } catch (err) { console.error('[3D] Save error:', err); toast.error("Erro ao salvar"); }
     finally { setIsSaving(false); }
   };
+
+  const applyMeshReviewBatchUpdate = useCallback(async (keys: string[], data: Partial<ProjectModelMesh>) => {
+    if (!canReviewModel) {
+      toast.error("Sem permissao para revisar o modelo 3D.");
+      return { applied: 0, failed: keys.length };
+    }
+    let applied = 0;
+    let failed = 0;
+    const savedByKey = new Map<string, ProjectModelMesh>();
+    for (const key of keys) {
+      try {
+        const existing = getCurrentMeshRecord(key);
+        const saved = await meshHooks.upsertMesh({
+          layer_key: key,
+          mesh_name: existing?.mesh_name || data.mesh_name || "",
+          material_name: existing?.material_name || data.material_name || "",
+          detected_house_number: existing?.detected_house_number ?? data.detected_house_number ?? null,
+          ...data,
+        });
+        savedByKey.set(key, saved);
+        applied++;
+      } catch (error) {
+        failed++;
+        console.error("[GLB Mesh Batch Link] apply error", { key, error });
+      }
+    }
+    const refreshed = await meshHooks.refresh();
+    const refreshedMap = new Map((refreshed || []).map((mesh) => [mesh.layer_key, mesh]));
+    setTrustedGlbLinkKeys((prev) => {
+      const next = new Set(prev);
+      keys.forEach((key) => next.add(key));
+      return next;
+    });
+    setMeshReviewOverrides((prev) => {
+      const next = new Map(prev);
+      keys.forEach((key) => {
+        const saved = refreshedMap.get(key) ?? savedByKey.get(key);
+        if (saved) next.set(key, saved);
+      });
+      return next;
+    });
+    return { applied, failed };
+  }, [canReviewModel, getCurrentMeshRecord, meshHooks]);
 
   const uploadFile = async (file: File, folder: string): Promise<string | null> => {
     const uploaded = await uploadFileTo3DStorage(file, folder);
@@ -4024,7 +4151,7 @@ export function Map3DView() {
     const input = e.currentTarget;
     const file = input.files?.[0];
     input.value = "";
-    if (!canManage3D) {
+    if (!canImportMainModel) {
       toast.error("Sem permissão para importar modelo 3D.");
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
@@ -4061,7 +4188,7 @@ export function Map3DView() {
   };
 
   const handleMtlUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!canManage3D) { toast.error("Sem permissão para importar modelo 3D."); return; }
+    if (!canImportMainModel) { toast.error("Sem permissão para importar modelo 3D."); return; }
     const file = e.target.files?.[0]; if (!pendingObjFile) return;
     setIsLoading(true); setSceneReady(false);
     try {
@@ -4075,7 +4202,7 @@ export function Map3DView() {
   };
 
   const loadObjWithoutMtl = async () => {
-    if (!canManage3D) { toast.error("Sem permissão para importar modelo 3D."); return; }
+    if (!canImportMainModel) { toast.error("Sem permissão para importar modelo 3D."); return; }
     if (!pendingObjFile) return;
     setIsLoading(true); setSceneReady(false);
     try {
@@ -4088,7 +4215,7 @@ export function Map3DView() {
   };
 
   const resetView = () => {
-    if (!canDelete3D) { toast.error("Sem permissão para resetar o Mapa 3D."); return; }
+    if (!canResetMap) { toast.error("Sem permissão para resetar o Mapa 3D."); return; }
     if (!projectId) return;
     setModelData(null); setMarkers([]); setSelectedMarker(null); setPendingObjFile(null);
     clearAll3DSelection("map reset");
@@ -4104,7 +4231,7 @@ export function Map3DView() {
       <Card>
         <CardContent className="p-3">
           <div className="flex flex-wrap items-center gap-2">
-            {canManage3D && (
+            {canImportMainModel && (
               <>
                 <Input ref={fileInputRef} type="file" accept=".gltf,.glb,.obj,.ifc" onChange={handleFileUpload} className="hidden" disabled={isLoading} />
                 <Button
@@ -4121,7 +4248,7 @@ export function Map3DView() {
                 </Button>
               </>
             )}
-            {canManage3D && modelData && (
+            {canAddGlbPart && modelData && (
               <>
                 <Input ref={supplementalGlbInputRef} type="file" accept=".glb" onChange={handleSupplementalGlbUpload} className="hidden" disabled={isLoading} />
                 <Button
@@ -4140,14 +4267,14 @@ export function Map3DView() {
                 </Button>
               </>
             )}
-            {canManage3D && pendingObjFile && (<>
+            {canImportMainModel && pendingObjFile && (<>
               <Input ref={mtlInputRef} type="file" accept=".mtl" onChange={handleMtlUpload} className="hidden" />
               <Button variant="outline" size="sm" onClick={() => mtlInputRef.current?.click()} disabled={isLoading}>MTL</Button>
               <Button variant="secondary" size="sm" onClick={loadObjWithoutMtl} disabled={isLoading}>Sem MTL</Button>
             </>)}
             <Button variant="outline" size="sm" onClick={centerCamera} disabled={isLoading}><Target className="h-4 w-4 mr-1.5" />Centralizar</Button>
             <Button variant="outline" size="sm" onClick={resetCameraView} disabled={isLoading}><Home className="h-4 w-4 mr-1.5" />Resetar Visão</Button>
-            {modelData && (
+            {canUseWalkMode && modelData && (
               <Button
                 variant={cameraMode === "walk" ? "default" : "outline"}
                 size="sm"
@@ -4159,7 +4286,7 @@ export function Map3DView() {
                 {cameraMode === "walk" ? "Sair do caminhar" : "Caminhar"}
               </Button>
             )}
-            {modelData && (
+            {canUseWalkMode && modelData && (
               <label className="flex items-center gap-1 rounded-md border bg-background px-2 py-1 text-xs">
                 <span className="text-muted-foreground">Altura do observador</span>
                 <Input
@@ -4177,7 +4304,7 @@ export function Map3DView() {
                 <span className="text-muted-foreground">m</span>
               </label>
             )}
-            {modelData && (
+            {canUsePerformanceMode && modelData && (
               <Button
                 variant={performanceMode ? "default" : "outline"}
                 size="sm"
@@ -4188,7 +4315,7 @@ export function Map3DView() {
                 Modo desempenho
               </Button>
             )}
-            {modelData && (
+            {canChangeZoomSensitivity && modelData && (
               <div className="flex items-center gap-1 rounded-md border border-input bg-background px-1 py-1">
                 <span className="hidden items-center gap-1 px-1 text-xs text-muted-foreground sm:flex">
                   <SlidersHorizontal className="h-3.5 w-3.5" />
@@ -4213,7 +4340,7 @@ export function Map3DView() {
                 </ToggleGroup>
               </div>
             )}
-            {canManage3D && layerManager.layers.length > 0 && (
+            {canManageLayers && layerManager.layers.length > 0 && (
               <Button
                 variant={showLayers ? "default" : "outline"}
                 size="sm"
@@ -4226,7 +4353,7 @@ export function Map3DView() {
                 <Layers className="h-4 w-4 mr-1.5" />Camadas ({layerManager.layers.length})
               </Button>
             )}
-            {canManage3D && layerManager.layers.length > 0 && (currentProject?.houses?.length ?? 0) > 0 && (
+            {canAssignHouses && layerManager.layers.length > 0 && (currentProject?.houses?.length ?? 0) > 0 && (
               <Button
                 variant={assignMode ? "default" : "outline"}
                 size="sm"
@@ -4243,7 +4370,7 @@ export function Map3DView() {
                 )}
               </Button>
             )}
-            {canManage3D && modelData && (
+            {canReviewModel && modelData && (
               <Button
                 variant={reviewMode ? "default" : "outline"}
                 size="sm"
@@ -4269,7 +4396,7 @@ export function Map3DView() {
                 )}
               </Button>
             )}
-            {canManage3D && reviewMode && (
+            {canReviewModel && reviewMode && (
               <div className="flex items-center gap-2 rounded-md border border-input bg-background px-2 py-1 text-xs">
                 <Button
                   type="button"
@@ -4288,7 +4415,7 @@ export function Map3DView() {
                 </span>
               </div>
             )}
-            {canManage3D && reviewMode && sceneObj && (
+            {canReviewModel && reviewMode && sceneObj && (
               <Button
                 type="button"
                 variant={quickContextPanelOpen ? "default" : "outline"}
@@ -4301,7 +4428,7 @@ export function Map3DView() {
                 Contexto rápido
               </Button>
             )}
-            {canManage3D && modelData?.type === "ifc" && projectId && (
+            {canReviewModel && modelData?.type === "ifc" && projectId && (
               <Button
                 variant="outline"
                 size="sm"
@@ -4321,6 +4448,14 @@ export function Map3DView() {
                 value={viewMode}
                 onValueChange={(v) => {
                   if (!v) return;
+                  if (v === "real" && !canView3DReal) {
+                    toast.error("Sem permissao para visualizar o 3D Real.");
+                    return;
+                  }
+                  if (v === "simulation" && !canViewSimulation) {
+                    toast.error("Sem permissao para visualizar a simulacao.");
+                    return;
+                  }
                   clearAll3DSelection("view mode changed");
                   applyViewMode(v as ViewMode);
                 }}
@@ -4354,7 +4489,7 @@ export function Map3DView() {
                 )}
               </Button>
             )}
-            {canDelete3D && (
+            {canResetMap && (
               <AlertDialog>
                 <AlertDialogTrigger asChild><Button variant="outline" size="sm" disabled={isLoading}><RotateCcw className="h-4 w-4 mr-1.5" />Resetar Mapa</Button></AlertDialogTrigger>
                 <AlertDialogContent>
@@ -4369,7 +4504,7 @@ export function Map3DView() {
                 </AlertDialogContent>
               </AlertDialog>
             )}
-            {canManage3D && (
+            {canSaveMap && (
               <Button variant={hasChanges ? "default" : "outline"} size="sm" onClick={save3DMap} disabled={isSaving || isLoading}>
                 {isSaving ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}Salvar
               </Button>
@@ -4379,7 +4514,7 @@ export function Map3DView() {
               <strong>Arrastar</strong> rotacionar | <strong>Scroll</strong> zoom | <strong>Direito</strong> mover | <strong>Duplo clique</strong> fixa ponto de rotacao | <strong>Centralizar</strong> ajusta a obra inteira
             </span>
           </div>
-          {supplementalGlbParts.length > 0 && (
+          {canManageGlbParts && supplementalGlbParts.length > 0 && (
             <Collapsible open={supplementalPartsExpanded} onOpenChange={setSupplementalPartsExpanded}>
               <div className="mt-3 rounded-md border border-dashed border-border bg-muted/30">
                 <CollapsibleTrigger asChild>
@@ -4478,6 +4613,7 @@ export function Map3DView() {
               onMeshHover={smartLinkPreviewEnabled ? handleSmartLinkCandidateHover : undefined}
               onMeshHoverEnd={clearSmartLinkCandidateHover}
               selectedMeshKey={cameraMode === "walk" ? null : reviewMode ? selectedMeshKey : null}
+              selectedMeshKeys={cameraMode === "walk" || !reviewMode ? undefined : multiSelectedMeshKeys}
               projectId={projectId}
               companyId={companyId}
               ifcRealModeActive={modelData?.type === "ifc" && viewMode === "real"}
@@ -4747,6 +4883,7 @@ export function Map3DView() {
           <MeshReviewPanel
             meshKey={selectedMeshKey}
             meshData={getCurrentMeshRecord(selectedMeshKey)}
+            multiSelection={multiReviewSelection}
             sceneRef={selectedMeshSceneRoot}
             houses={houseNumbers}
             services={serviceOptions}
@@ -4757,9 +4894,11 @@ export function Map3DView() {
             onSmartLinkClearFocus={() => setSmartLinkFocusedCandidateKey(null)}
             onSmartLinkReturnToList={returnToSmartLinkList}
             onClose={() => clearAll3DSelection("review panel closed")}
+            onClearMultiSelection={() => setMultiSelectedMeshKeys(new Set())}
             onIsolate={handleIsolate}
             onShowAll={handleClearIsolation}
-            onFindSimilar={openSmartLinkSimilar}
+            onFindSimilar={canUseSmartLink ? openSmartLinkSimilar : undefined}
+            onBatchUpdate={applyMeshReviewBatchUpdate}
             onUpdate={async (key, data) => {
               if (!canManage3D) { toast.error("Sem permissão para revisar o modelo 3D."); return; }
               const payload = { layer_key: key, ...data };
@@ -4875,7 +5014,7 @@ export function Map3DView() {
             }}
           />
         )}
-        {canManage3D && showLayers && layerManager.layers.length > 0 && (
+        {canManageLayers && showLayers && layerManager.layers.length > 0 && (
           <LayersPanel
             layers={layerManager.layers}
             links={layerManager.links}
@@ -4997,7 +5136,7 @@ export function Map3DView() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {canManage3D && projectId && (
+      {canLinkServices && projectId && (
         <LinkLayersDialog
           open={linkDialogOpen}
           onOpenChange={setLinkDialogOpen}
@@ -5008,7 +5147,7 @@ export function Map3DView() {
           onRemoveLink={layerManager.removeLink}
         />
       )}
-      {canManage3D && projectId && (
+      {canReviewModel && projectId && (
         <IfcSuggestionsPanel
           open={ifcSuggestionsOpen}
           onOpenChange={setIfcSuggestionsOpen}

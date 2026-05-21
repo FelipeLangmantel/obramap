@@ -30,6 +30,7 @@ export interface ServiceOption {
 interface Props {
   meshKey: string | null;
   meshData: ProjectModelMesh | null;
+  multiSelection?: Array<{ layerKey: string; meshName: string; meshData: ProjectModelMesh | null }>;
   sceneRef: THREE.Object3D | null;
   houses: number[];
   services: ServiceOption[];
@@ -38,6 +39,8 @@ interface Props {
   onIsolate: (key: string) => void;
   onShowAll: () => void;
   onUpdate: (key: string, data: Partial<ProjectModelMesh>) => Promise<void>;
+  onBatchUpdate?: (keys: string[], data: Partial<ProjectModelMesh>) => Promise<{ applied: number; failed: number }>;
+  onClearMultiSelection?: () => void;
   onIgnore: (key: string) => void;
   onFindSimilar?: (key: string) => void;
   smartLinkCandidate?: GlbSmartLinkCandidate | null;
@@ -60,13 +63,14 @@ const smartLinkStatusLabel: Record<GlbSmartLinkCandidate["status"], string> = {
 
 export function MeshReviewPanel({
   meshKey, meshData, sceneRef, houses, services, isolated,
-  onClose, onIsolate, onShowAll, onUpdate, onIgnore, onFindSimilar,
+  multiSelection = [], onClose, onIsolate, onShowAll, onUpdate, onBatchUpdate, onClearMultiSelection, onIgnore, onFindSimilar,
   smartLinkCandidate, smartLinkSelected = false, onSmartLinkToggleCandidate, onSmartLinkClearFocus, onSmartLinkReturnToList,
 }: Props) {
   const [bbox, setBbox] = useState<{ size: THREE.Vector3; center: THREE.Vector3 } | null>(null);
   const [draftHouse, setDraftHouse] = useState("_none");
   const [draftService, setDraftService] = useState("_none");
   const [savingLink, setSavingLink] = useState(false);
+  const [overwriteExistingLinks, setOverwriteExistingLinks] = useState(false);
   const [identExpanded, setIdentExpanded] = useState(false);
   const [pendingTypeChange, setPendingTypeChange] = useState<PendingTypeChange>(null);
 
@@ -141,7 +145,19 @@ export function MeshReviewPanel({
   const hasExistingLink = hasAssignedHouse || hasServiceMacro || hasServiceScope || isContextProjectModelMesh(meshData);
   const hasOnFindSimilar = !!onFindSimilar;
   const isGlbPartMesh = meshKey.startsWith("glbpart:");
-  const canFindSimilar = isCompleteProductionLink(meshData);
+  const multiSelectionTargets = multiSelection.length > 1 ? multiSelection : [];
+  const isMultiSelection = multiSelectionTargets.length > 1;
+  const multiSelectionWithExistingLinks = multiSelectionTargets.filter((item) => {
+    const data = item.meshData;
+    return !!data && (
+      data.assigned_house_number != null ||
+      (!!data.service_macro_id && !isContextProjectModelMesh(data)) ||
+      (!!data.service_scope_id && !isContextProjectModelMesh(data)) ||
+      isContextProjectModelMesh(data)
+    );
+  });
+  const multiSelectionIgnored = multiSelectionTargets.filter((item) => item.meshData?.ignored);
+  const canFindSimilar = hasOnFindSimilar && isCompleteProductionLink(meshData);
   useEffect(() => {
     setDraftHouse(currentHouse);
     setDraftService(currentService);
@@ -276,8 +292,25 @@ export function MeshReviewPanel({
         meshData?.detected_house_number ?? parseHouseNumberFromMesh(selectedSceneMesh?.name || ""),
     };
     try {
-      await onUpdate(meshKey, payload);
-      toast.success("Vínculo aplicado à mesh. Clique em Sincronizar 3D Real para atualizar a produção.");
+      if (isMultiSelection) {
+        if (!onBatchUpdate) {
+          toast.error("Aplicacao em lote indisponivel neste painel.");
+          return;
+        }
+        if ((multiSelectionWithExistingLinks.length > 0 || multiSelectionIgnored.length > 0) && !overwriteExistingLinks) {
+          toast.warning("Ha meshes ja vinculadas ou ignoradas. Marque a opcao de sobrescrever para aplicar em lote.");
+          return;
+        }
+        const result = await onBatchUpdate(multiSelectionTargets.map((item) => item.layerKey), payload);
+        if (result.failed > 0) {
+          toast.error(`${result.applied} vinculos aplicados, ${result.failed} falhou.`);
+        } else {
+          toast.success(`${result.applied} vinculos aplicados. Clique em Sincronizar 3D Real para atualizar a producao.`);
+        }
+      } else {
+        await onUpdate(meshKey, payload);
+        toast.success("Vínculo aplicado à mesh. Clique em Sincronizar 3D Real para atualizar a produção.");
+      }
     } catch (error) {
       console.error("[MeshReviewPanel] apply link error", error);
       toast.error("Falha ao aplicar vínculo da mesh.");
@@ -505,6 +538,43 @@ export function MeshReviewPanel({
               </section>
             )}
 
+            {isMultiSelection && (
+              <section className="space-y-2 rounded-md border border-primary/20 bg-primary/5 p-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[10px] uppercase font-semibold text-primary">
+                    {multiSelectionTargets.length} meshes selecionadas
+                  </p>
+                  <Button type="button" variant="ghost" size="sm" className="h-7 text-[11px]" onClick={onClearMultiSelection}>
+                    Limpar seleção
+                  </Button>
+                </div>
+                <div className="max-h-24 space-y-1 overflow-y-auto text-[10px] text-muted-foreground">
+                  {multiSelectionTargets.slice(0, 6).map((item) => (
+                    <p key={item.layerKey} className="truncate" title={item.layerKey}>
+                      {item.meshName || item.layerKey}
+                    </p>
+                  ))}
+                  {multiSelectionTargets.length > 6 && (
+                    <p>+ {multiSelectionTargets.length - 6} outras meshes</p>
+                  )}
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  O vínculo será aplicado em todas as meshes selecionadas.
+                </p>
+                {(multiSelectionWithExistingLinks.length > 0 || multiSelectionIgnored.length > 0) && (
+                  <label className="flex items-start gap-2 text-[10px] text-amber-600">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={overwriteExistingLinks}
+                      onChange={(event) => setOverwriteExistingLinks(event.target.checked)}
+                    />
+                    Sobrescrever {multiSelectionWithExistingLinks.length} vinculada(s) e {multiSelectionIgnored.length} ignorada(s)
+                  </label>
+                )}
+              </section>
+            )}
+
             {/* Vínculos */}
             <section className="space-y-2">
               <p className="text-[10px] uppercase font-semibold text-muted-foreground">Vínculos</p>
@@ -577,7 +647,7 @@ export function MeshReviewPanel({
                 onClick={handleApplyLink}
               >
                 <Save className="h-3.5 w-3.5 mr-1" />
-                {savingLink ? "Aplicando..." : "Aplicar vínculo"}
+                {savingLink ? "Aplicando..." : isMultiSelection ? `Aplicar vínculo em ${multiSelectionTargets.length} meshes` : "Aplicar vínculo"}
               </Button>
               <Button
                 type="button"
