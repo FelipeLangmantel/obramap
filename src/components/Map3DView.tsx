@@ -2646,9 +2646,11 @@ export function Map3DView() {
 
   useEffect(() => {
     if (!reviewMode) {
+      clearMeshSelection("review mode exited");
+      clearSmartLinkCandidateHover();
       clearSmartLinkPreview("review mode exited");
     }
-  }, [clearSmartLinkPreview, reviewMode]);
+  }, [clearMeshSelection, clearSmartLinkCandidateHover, clearSmartLinkPreview, reviewMode]);
 
   const smartLinkModelUrlRef = useRef<string | null>(null);
   useEffect(() => {
