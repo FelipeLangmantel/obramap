@@ -1283,6 +1283,7 @@ export function UserPermissionsPanel() {
                       <button
                         key={project.id}
                         type="button"
+                        title={project.name}
                         onClick={() => toggleProject(project.id)}
                         className={cn(
                           "flex items-center gap-2 px-3 py-2 rounded-md border text-sm text-left transition-colors",
@@ -1325,6 +1326,7 @@ export function UserPermissionsPanel() {
                       <button
                         key={menu.id}
                         type="button"
+                        title={menu.label}
                         onClick={() => toggleMenu(menu.id)}
                         className={cn(
                           "flex items-center gap-2 px-3 py-2.5 rounded-md border text-sm text-left transition-colors",
@@ -1339,7 +1341,7 @@ export function UserPermissionsPanel() {
                         )}>
                           {isChecked && <Settings className="h-2.5 w-2.5 text-primary-foreground" />}
                         </div>
-                        <span className="truncate">{menu.label}</span>
+                        <span className="truncate" title={menu.label}>{menu.label}</span>
                       </button>
                     );
                   })}
@@ -1359,6 +1361,7 @@ export function UserPermissionsPanel() {
                       <button
                         key={section.id}
                         type="button"
+                        title={section.label}
                         onClick={() => toggleManagement(section.id)}
                         className={cn(
                           "flex items-center gap-2 px-3 py-2.5 rounded-md border text-sm text-left transition-colors",
@@ -1373,7 +1376,7 @@ export function UserPermissionsPanel() {
                         )}>
                           {isChecked && <Settings className="h-2.5 w-2.5 text-primary-foreground" />}
                         </div>
-                        <span className="truncate">{section.label}</span>
+                        <span className="truncate" title={section.label}>{section.label}</span>
                       </button>
                     );
                   })}
@@ -1396,6 +1399,7 @@ export function UserPermissionsPanel() {
                       <button
                         key={opt.id}
                         type="button"
+                        title={opt.label}
                         onClick={() => {
                           if (!editingPermission) return;
                           setEditingPermission({
@@ -1419,7 +1423,7 @@ export function UserPermissionsPanel() {
                         )}>
                           {isChecked && <Settings className="h-2.5 w-2.5 text-primary-foreground" />}
                         </div>
-                        <span className="truncate">{opt.label}</span>
+                        <span className="truncate" title={opt.label}>{opt.label}</span>
                       </button>
                     );
                   })}
@@ -1496,7 +1500,7 @@ export function UserPermissionsPanel() {
                           });
                         }}
                       />
-                      <label htmlFor={`dept-menu-${mod.id}`} className="text-xs cursor-pointer">{mod.label}</label>
+                      <label htmlFor={`dept-menu-${mod.id}`} className="text-xs cursor-pointer" title={mod.label}>{mod.label}</label>
                     </div>
                   ))}
                 </div>
@@ -1520,7 +1524,7 @@ export function UserPermissionsPanel() {
                           });
                         }}
                       />
-                      <label htmlFor={`dept-mgmt-${mod.id}`} className="text-xs cursor-pointer">{mod.label}</label>
+                      <label htmlFor={`dept-mgmt-${mod.id}`} className="text-xs cursor-pointer" title={mod.label}>{mod.label}</label>
                     </div>
                   ))}
                 </div>
