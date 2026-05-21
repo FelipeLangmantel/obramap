@@ -216,41 +216,95 @@ export function StrategicGanttChart({
 
   if (services.length === 0) {
     return (
-      <Card>
-        <CardContent className="py-12 text-center text-muted-foreground">
-          <Home className="h-12 w-12 mx-auto mb-3 opacity-30" />
-          <p>Configure os serviços no Planejamento Estratégico para visualizar o Gantt</p>
-        </CardContent>
-      </Card>
+      <div className="bg-slate-50 dark:bg-transparent rounded-2xl p-6">
+        <Card className="rounded-2xl border-slate-200 dark:border-border shadow-sm">
+          <CardContent className="py-16 text-center text-muted-foreground">
+            <Home className="h-12 w-12 mx-auto mb-3 opacity-30" />
+            <p>Configure os serviços no Planejamento Estratégico para visualizar o Gantt</p>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   return (
     <>
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <CardTitle className="text-lg">Gráfico de Gantt</CardTitle>
-            <div className="flex gap-2 flex-wrap">
-              {Object.entries(STATUS_CONFIG).map(([key, config]) => (
-                <Badge key={key} variant="outline" className="gap-1 text-xs">
-                  <div className={`w-2 h-2 rounded-full ${config.color}`} />
-                  {config.label}
-                </Badge>
-              ))}
-            </div>
+      <div className="bg-slate-50 dark:bg-transparent rounded-2xl p-4 md:p-6 space-y-5">
+        {/* Header */}
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h2 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-foreground">
+              Gráfico de Gantt
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-muted-foreground mt-0.5">
+              Visão estratégica de etapas, serviços e capacidade
+            </p>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid gap-2 rounded-lg border bg-muted/20 p-3 md:grid-cols-7">
+          <div className="flex gap-1.5 flex-wrap">
+            {Object.entries(STATUS_CONFIG).map(([key, config]) => (
+              <div
+                key={key}
+                className="inline-flex items-center gap-1.5 rounded-full bg-white dark:bg-card border border-slate-200 dark:border-border px-2.5 py-1 text-[11px] font-medium text-slate-600 dark:text-muted-foreground shadow-sm"
+              >
+                <span className={`w-2 h-2 rounded-full ${config.dot}`} />
+                {config.label}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* KPI cards */}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {[
+            { label: 'Serviços exibidos', value: `${filteredServices.length}/${services.length}`, accent: 'text-slate-900 dark:text-foreground' },
+            {
+              label: 'Planejado médio',
+              value: filteredServices.length
+                ? `${(filteredServices.reduce((sum, svc) => sum + getPlannedPercent(svc), 0) / filteredServices.length).toFixed(0)}%`
+                : '—',
+              accent: 'text-blue-600',
+            },
+            {
+              label: 'Realizado médio',
+              value: filteredServices.length
+                ? `${(filteredServices.reduce((sum, svc) => sum + svc.completion_percent, 0) / filteredServices.length).toFixed(0)}%`
+                : '—',
+              accent: 'text-emerald-600',
+            },
+            {
+              label: 'Atrasados / risco',
+              value: filteredServices.filter((svc) => ['delayed', 'at_risk'].includes(getServiceStatus(svc))).length,
+              accent: 'text-red-600',
+            },
+            {
+              label: 'Capacidade insuf.',
+              value: filteredServices.filter((svc) => svc.capacity_status === 'insufficient').length,
+              accent: 'text-amber-600',
+            },
+          ].map((kpi) => (
+            <div
+              key={kpi.label}
+              className="rounded-2xl border border-slate-200 dark:border-border bg-white dark:bg-card p-4 shadow-sm hover:shadow-md transition-shadow"
+            >
+              <p className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-muted-foreground font-medium">
+                {kpi.label}
+              </p>
+              <p className={`text-2xl font-semibold mt-1 ${kpi.accent}`}>{kpi.value}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Filters toolbar */}
+        <div className="rounded-2xl border border-slate-200 dark:border-border bg-white dark:bg-card p-3 md:p-4 shadow-sm">
+          <div className="grid gap-2 md:grid-cols-7">
             <Input
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Buscar etapa, servico ou pacote"
-              className="h-8 text-xs md:col-span-2"
+              placeholder="Buscar etapa, serviço ou pacote"
+              className="h-9 text-xs md:col-span-2 rounded-lg bg-slate-50 dark:bg-background border-slate-200 dark:border-border focus-visible:ring-blue-500/30"
             />
             <Select value={stageFilter} onValueChange={setStageFilter}>
-              <SelectTrigger className="h-8 text-xs">
+              <SelectTrigger className="h-9 text-xs rounded-lg bg-slate-50 dark:bg-background border-slate-200 dark:border-border">
                 <SelectValue placeholder="Etapa" />
               </SelectTrigger>
               <SelectContent>
@@ -261,18 +315,18 @@ export function StrategicGanttChart({
               </SelectContent>
             </Select>
             <Select value={serviceFilter} onValueChange={setServiceFilter}>
-              <SelectTrigger className="h-8 text-xs">
-                <SelectValue placeholder="Servico" />
+              <SelectTrigger className="h-9 text-xs rounded-lg bg-slate-50 dark:bg-background border-slate-200 dark:border-border">
+                <SelectValue placeholder="Serviço" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos os servicos</SelectItem>
+                <SelectItem value="all">Todos os serviços</SelectItem>
                 {serviceOptions.map(([id, name]) => (
                   <SelectItem key={id} value={id}>{name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="h-8 text-xs">
+              <SelectTrigger className="h-9 text-xs rounded-lg bg-slate-50 dark:bg-background border-slate-200 dark:border-border">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
@@ -283,7 +337,7 @@ export function StrategicGanttChart({
               </SelectContent>
             </Select>
             <Select value={teamFilter} onValueChange={setTeamFilter}>
-              <SelectTrigger className="h-8 text-xs">
+              <SelectTrigger className="h-9 text-xs rounded-lg bg-slate-50 dark:bg-background border-slate-200 dark:border-border">
                 <SelectValue placeholder="Equipe" />
               </SelectTrigger>
               <SelectContent>
@@ -294,7 +348,7 @@ export function StrategicGanttChart({
               </SelectContent>
             </Select>
             <Select value={capacityFilter} onValueChange={setCapacityFilter}>
-              <SelectTrigger className="h-8 text-xs">
+              <SelectTrigger className="h-9 text-xs rounded-lg bg-slate-50 dark:bg-background border-slate-200 dark:border-border">
                 <SelectValue placeholder="Capacidade" />
               </SelectTrigger>
               <SelectContent>
@@ -305,67 +359,12 @@ export function StrategicGanttChart({
               </SelectContent>
             </Select>
           </div>
+        </div>
 
-          <div className="grid gap-2 text-xs md:grid-cols-4">
-            <div className="rounded-lg border bg-background p-3">
-              <p className="text-muted-foreground">Servicos exibidos</p>
-              <p className="text-lg font-semibold">{filteredServices.length}/{services.length}</p>
-            </div>
-            <div className="rounded-lg border bg-background p-3">
-              <p className="text-muted-foreground">Planejado medio</p>
-              <p className="text-lg font-semibold">
-                {filteredServices.length
-                  ? `${(filteredServices.reduce((sum, svc) => sum + getPlannedPercent(svc), 0) / filteredServices.length).toFixed(0)}%`
-                  : '-'}
-              </p>
-            </div>
-            <div className="rounded-lg border bg-background p-3">
-              <p className="text-muted-foreground">Realizado medio</p>
-              <p className="text-lg font-semibold">
-                {filteredServices.length
-                  ? `${(filteredServices.reduce((sum, svc) => sum + svc.completion_percent, 0) / filteredServices.length).toFixed(0)}%`
-                  : '-'}
-              </p>
-            </div>
-            <div className="rounded-lg border bg-background p-3">
-              <p className="text-muted-foreground">Atrasados / risco</p>
-              <p className="text-lg font-semibold">
-                {filteredServices.filter((svc) => ['delayed', 'at_risk'].includes(getServiceStatus(svc))).length}
-              </p>
-            </div>
-            <div className="rounded-lg border bg-background p-3">
-              <p className="text-muted-foreground">Capacidade insuf.</p>
-              <p className="text-lg font-semibold">
-                {filteredServices.filter((svc) => svc.capacity_status === 'insufficient').length}
-              </p>
-            </div>
-          </div>
+        {/* Gantt body */}
+        <Card className="rounded-2xl border-slate-200 dark:border-border shadow-sm overflow-hidden">
+          <CardContent className="p-0">
 
-          {filteredServices.length === 0 ? (
-            <div className="rounded-lg border border-dashed py-10 text-center text-sm text-muted-foreground">
-              Nenhum servico encontrado com os filtros atuais.
-            </div>
-          ) : (
-          <ScrollArea className="w-full">
-            <div className="min-w-max">
-              {/* Header */}
-              <div className="flex border-b">
-                <div className="w-96 shrink-0 border-r px-3 py-2 bg-muted/30 font-medium text-sm">
-                  Etapa / servico / leitura
-                </div>
-                <div className="flex" style={{ width: totalWidth }}>
-                  {weeks.map((week, i) => (
-                    <div
-                      key={i}
-                      className="border-r text-center text-xs py-1 bg-muted/30"
-                      style={{ width: dayWidth * 7 }}
-                    >
-                      {format(week, "'Sem' w", { locale: ptBR })}
-                      <div className="text-muted-foreground">{format(week, 'dd/MM')}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
 
               {/* Services */}
               {filteredServices.map((svc) => {
