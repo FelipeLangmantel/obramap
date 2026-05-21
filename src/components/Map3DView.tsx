@@ -30,6 +30,7 @@ import { MeshReviewPanel, type ServiceOption } from "./map3d/MeshReviewPanel";
 import { GlbSmartLinkDialog } from "./map3d/GlbSmartLinkDialog";
 import {
   getGlbHouseSuggestionDiagnostics,
+  getGlbTextHouseAnchors,
   getSceneMeshInfo,
   scoreGlbSimilarCandidates,
   type GlbMeshRuntimeInfo,
@@ -1698,6 +1699,15 @@ export function Map3DView() {
     if (!part.persisted || meshes.length === 0) return;
     if (supplementalInventoriedPartIdsRef.current.has(part.id)) return;
     supplementalInventoriedPartIdsRef.current.add(part.id);
+    if (import.meta.env.DEV) {
+      console.log("[GLB Part Link Persistence Debug]", {
+        action: "inventory-ready",
+        part_id: part.id,
+        file_name: part.fileName ?? part.name,
+        meshCount: meshes.length,
+        sample: meshes.slice(0, 10),
+      });
+    }
     void meshHooks.bulkUpsertMeshes(meshes).catch((error) => {
       supplementalInventoriedPartIdsRef.current.delete(part.id);
       console.error("[GLB Parts] inventory error", error);
@@ -2004,9 +2014,21 @@ export function Map3DView() {
       toast.info("Parte complementar visual: vinculos serao suportados em etapa futura.");
       return;
     }
+    if (import.meta.env.DEV) {
+      console.log("[GLB Part Link Persistence Debug]", {
+        action: "select-part-mesh",
+        part_id: part.id,
+        file_name: part.fileName ?? part.name,
+        meshName: mesh.name || "",
+        localLayerKey: mesh.userData?.obramapPartLocalLayerKey ?? null,
+        layer_key: layerKey,
+        meshMapFound: meshHooks.meshMap.has(layerKey),
+        meshMapRecord: meshHooks.meshMap.get(layerKey) ?? null,
+      });
+    }
     setSmartLinkFocusedCandidateKey(null);
     setSelectedMeshKey(layerKey);
-  }, [assignMode, reviewMode]);
+  }, [assignMode, meshHooks.meshMap, reviewMode]);
 
   const handleSmartLinkCandidateHover = useCallback((obj: THREE.Object3D, event: any) => {
     if (!smartLinkPreviewEnabled || !(obj as THREE.Mesh).isMesh) return;
@@ -2284,6 +2306,13 @@ export function Map3DView() {
       .filter((mesh) => partId
         ? getGlbPartIdFromLayerKey(mesh.layerKey) === partId
         : mesh.layerKey.startsWith("glb:"));
+    const mainModelRuntimeMeshes = partId && sceneObj
+      ? getSceneMeshInfo(sceneObj, sourceMap, getMeshLayerKey)
+        .filter((mesh) => mesh.layerKey.startsWith("glb:"))
+      : [];
+    const mainModelTextAnchors = partId
+      ? getGlbTextHouseAnchors(mainModelRuntimeMeshes, houseNumbers, "main_model_text_anchor")
+      : [];
     const houseAnchorDiagnostics = getGlbHouseSuggestionDiagnostics(runtimeMeshes, houseNumbers);
     const base = runtimeMeshes.find((mesh) => mesh.layerKey === layerKey) ?? null;
     const baseSaved = sourceMap.get(layerKey) ?? null;
@@ -2297,7 +2326,7 @@ export function Map3DView() {
     const allSimilarCandidates = scoreGlbSimilarCandidates(
       { ...base, saved: baseSaved },
       runtimeMeshes,
-      { validHouseNumbers: houseNumbers, includeOtherPossible: true },
+      { validHouseNumbers: houseNumbers, includeOtherPossible: true, additionalHouseAnchors: mainModelTextAnchors },
     )
       .filter((candidate) => candidate.layerKey !== layerKey);
     const candidates = allSimilarCandidates.filter((candidate) => candidate.matchStrength === "strong");
@@ -2317,9 +2346,33 @@ export function Map3DView() {
           textSample: houseAnchorDiagnostics.textAnchors.slice(0, 10),
           linkedSample: houseAnchorDiagnostics.linkedAnchors.slice(0, 10),
         },
+        mainModelTextAnchors: {
+          total: mainModelTextAnchors.length,
+          sample: mainModelTextAnchors.slice(0, 10),
+        },
         candidatesInPart: candidates.length,
         selectedByDefault: selected.size,
       });
+      console.log("[GLB Part Anchor Cross Source Debug]", candidates.slice(0, 10).map((candidate) => ({
+        candidateLayerKey: candidate.layerKey,
+        candidatePartId: getGlbPartIdFromLayerKey(candidate.layerKey),
+        candidateCenterWorld: candidate.center,
+        samePartTextAnchorsFound: houseAnchorDiagnostics.textAnchors.length,
+        mainModelTextAnchorsNearby: candidate.suggestionTopTextAnchors
+          ?.filter((anchor) => anchor.source === "main_model_text_anchor")
+          .slice(0, 5) ?? [],
+        chosenAnchor: candidate.suggestionAnchorLayerKey
+          ? {
+            layerKey: candidate.suggestionAnchorLayerKey,
+            name: candidate.suggestionAnchorName,
+            center: candidate.suggestionAnchorCenter,
+          }
+          : null,
+        source: candidate.suggestionSource,
+        distanceXZ: candidate.suggestionHorizontalDistance ?? null,
+        top5TextAnchors: candidate.suggestionTopTextAnchors?.slice(0, 5) ?? [],
+        decisionReason: candidate.houseSuggestionRejectReason || candidate.suggestionReason,
+      })));
     }
     const officialHouseSet = new Set(houseNumbers);
     const invalidApplicableCandidates = candidates
@@ -2373,8 +2426,10 @@ export function Map3DView() {
       officialHouseSample: houseNumbers.slice(0, 20),
       linkedAnchorTotal: houseAnchorDiagnostics.linkedAnchors.length,
       textAnchorTotal: houseAnchorDiagnostics.textAnchors.length,
+      mainModelTextAnchorTotal: mainModelTextAnchors.length,
       linkedAnchorSample: houseAnchorDiagnostics.linkedAnchors.slice(0, 10),
       textAnchorSample: houseAnchorDiagnostics.textAnchors.slice(0, 10),
+      mainModelTextAnchorSample: mainModelTextAnchors.slice(0, 10),
       strongCandidates: candidates.filter((candidate) => candidate.matchStrength === "strong").length,
       existingHouse: candidates.filter((candidate) => candidate.currentAssignedHouseNumber != null).length,
       suggestedHigh: candidates.filter((candidate) => candidate.suggestionConfidence === "alta" && candidate.currentAssignedHouseNumber == null).length,
@@ -4506,6 +4561,12 @@ export function Map3DView() {
             {smartLinkHoverTooltip.candidate.suggestionAnchorName && (
               <p>Ancora: {smartLinkHoverTooltip.candidate.suggestionAnchorName}</p>
             )}
+            {smartLinkHoverTooltip.candidate.suggestionSource === "main_model_text_anchor" && (
+              <p>Origem da ancora: modelo principal</p>
+            )}
+            {smartLinkHoverTooltip.candidate.suggestionSource === "text_anchor" && (
+              <p>Origem da ancora: mesma origem GLB</p>
+            )}
             {smartLinkHoverTooltip.candidate.suggestionHorizontalDistance != null && (
               <p>Dist. X/Z: {smartLinkHoverTooltip.candidate.suggestionHorizontalDistance.toFixed(1)}m</p>
             )}
@@ -4691,6 +4752,8 @@ export function Map3DView() {
             onUpdate={async (key, data) => {
               if (!canManage3D) { toast.error("Sem permissão para revisar o modelo 3D."); return; }
               const payload = { layer_key: key, ...data };
+              const glbPartId = getGlbPartIdFromLayerKey(key);
+              const glbPart = glbPartId ? supplementalGlbPartsRef.current.find((part) => part.id === glbPartId) ?? null : null;
               if (import.meta.env.DEV) {
                 console.log("[GLB Mesh Link] map onUpdate", {
                   selectedMeshKey,
@@ -4698,6 +4761,18 @@ export function Map3DView() {
                   payload,
                   before: meshHooks.meshMap.get(key) ?? null,
                 });
+                if (glbPartId) {
+                  console.log("[GLB Part Link Persistence Debug]", {
+                    action: "apply-link-start",
+                    part_id: glbPartId,
+                    file_name: glbPart?.fileName ?? glbPart?.name ?? null,
+                    layer_key: key,
+                    selectedMeshKey,
+                    payload,
+                    meshMapFoundBefore: meshHooks.meshMap.has(key),
+                    meshMapBefore: meshHooks.meshMap.get(key) ?? null,
+                  });
+                }
               }
               const meshMapBeforeUpdate = meshHooks.meshMap;
               const saved = await meshHooks.upsertMesh(payload);
@@ -4751,6 +4826,20 @@ export function Map3DView() {
                   saved: effectiveSaved,
                   after: meshHooks.meshMap.get(key) ?? null,
                 });
+                if (glbPartId) {
+                  console.log("[GLB Part Link Persistence Debug]", {
+                    action: "apply-link-saved",
+                    part_id: glbPartId,
+                    file_name: glbPart?.fileName ?? glbPart?.name ?? null,
+                    layer_key: key,
+                    saved,
+                    directRead,
+                    refreshMapHasLayerKey: refreshedAfterUpdateMap.has(key),
+                    refreshedMesh: refreshedAfterUpdateMap.get(key) ?? null,
+                    overrideApplied: true,
+                    layerKeyChanged: selectedMeshKey !== key,
+                  });
+                }
                 console.log("[GLB Mesh Link Check] map onUpdate saved", {
                   key,
                   saved,

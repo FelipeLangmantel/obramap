@@ -34,7 +34,7 @@ export interface GlbSmartLinkCandidate extends GlbMeshRuntimeInfo {
   suggestionDistanceGap?: number;
   suggestionDistanceRatio?: number;
   acceptedDominantAnchor?: boolean;
-  suggestionSource: "confirmed_link_anchor" | "linked_neighbor" | "text_anchor" | "house_position" | "none";
+  suggestionSource: "confirmed_link_anchor" | "linked_neighbor" | "text_anchor" | "main_model_text_anchor" | "house_position" | "none";
   suggestionIgnoredLinkedNeighbor?: boolean;
   suggestionAnchorLayerKey?: string;
   suggestionAnchorName?: string;
@@ -43,6 +43,7 @@ export interface GlbSmartLinkCandidate extends GlbMeshRuntimeInfo {
     houseNumber: number;
     layerKey: string;
     meshName: string;
+    source: HouseAnchor["source"];
     center: GlbMeshRuntimeInfo["center"];
     horizontalDistance: number;
     distance3d: number;
@@ -104,7 +105,7 @@ function anchorDistanceDetails(mesh: GlbMeshRuntimeInfo, anchor: HouseAnchor, so
   // Textos de casa costumam estar na frente/divisa do lote; use X/Z como
   // criterio principal. Vinculos confirmados tambem sao referencia espacial
   // local de lote, entao o Y deve pesar pouco na decisao.
-  return { horizontalDistance, distance3d, weightedDistance: horizontalDistance + dy * (source === "text_anchor" ? 0.15 : 0.10) };
+  return { horizontalDistance, distance3d, weightedDistance: horizontalDistance + dy * (isTextAnchorSource(source) ? 0.15 : 0.10) };
 }
 
 function validHouseOrNull(value: unknown, validHouseNumbers?: Set<number>) {
@@ -159,21 +160,30 @@ function parseTextAnchorHouseNumber(mesh: GlbMeshRuntimeInfo, validHouseNumbers?
   return null;
 }
 
-interface HouseAnchor {
+export interface HouseAnchor {
   houseNumber: number;
   center: GlbMeshRuntimeInfo["center"];
-  source: "confirmed_link_anchor" | "linked_neighbor" | "text_anchor";
+  source: "confirmed_link_anchor" | "linked_neighbor" | "text_anchor" | "main_model_text_anchor";
   layerKey: string;
   meshName: string;
   materialName: string;
   serviceName?: string;
 }
 
-function buildHouseAnchors(meshes: GlbMeshRuntimeInfo[], validHouseNumbers?: Set<number>) {
+function isTextAnchorSource(source: HouseAnchor["source"]) {
+  return source === "text_anchor" || source === "main_model_text_anchor";
+}
+
+function buildHouseAnchors(
+  meshes: GlbMeshRuntimeInfo[],
+  validHouseNumbers?: Set<number>,
+  extraAnchors: HouseAnchor[] = [],
+) {
   const isValidHouse = (houseNumber: number) => !validHouseNumbers || validHouseNumbers.has(houseNumber);
   const confirmedLinkAnchors: HouseAnchor[] = [];
   const linkedAnchors: HouseAnchor[] = [];
   const textAnchors: HouseAnchor[] = [];
+  const mainModelTextAnchors: HouseAnchor[] = [];
   const rejectedNumericNames: Array<{ layerKey: string; meshName: string; materialName: string; reason: string }> = [];
 
   meshes.forEach((mesh) => {
@@ -226,7 +236,47 @@ function buildHouseAnchors(meshes: GlbMeshRuntimeInfo[], validHouseNumbers?: Set
     }
   });
 
-  return { confirmedLinkAnchors, linkedAnchors, textAnchors, rejectedNumericNames };
+  extraAnchors.forEach((anchor) => {
+    if (!isValidHouse(Number(anchor.houseNumber))) return;
+    if (anchor.source === "main_model_text_anchor") mainModelTextAnchors.push(anchor);
+    else if (anchor.source === "text_anchor") textAnchors.push(anchor);
+    else if (anchor.source === "confirmed_link_anchor") confirmedLinkAnchors.push(anchor);
+    else if (anchor.source === "linked_neighbor") linkedAnchors.push(anchor);
+  });
+
+  return { confirmedLinkAnchors, linkedAnchors, textAnchors, mainModelTextAnchors, rejectedNumericNames };
+}
+
+export function getGlbTextHouseAnchors(
+  meshes: GlbMeshRuntimeInfo[],
+  validHouseNumbers?: number[],
+  source: Extract<HouseAnchor["source"], "text_anchor" | "main_model_text_anchor"> = "main_model_text_anchor",
+) {
+  const validSet = Array.isArray(validHouseNumbers)
+    ? new Set(validHouseNumbers.map(Number).filter(Number.isFinite))
+    : undefined;
+  const isValidHouse = (houseNumber: number) => !validSet || validSet.has(houseNumber);
+  const anchors: HouseAnchor[] = [];
+
+  meshes.forEach((mesh) => {
+    const parsedTextHouse = parseTextAnchorHouseNumber(mesh, validSet);
+    const savedTextHouse = hasHouseTextMarker(`${mesh.meshName} ${mesh.materialName}`)
+      ? validHouseOrNull(mesh.saved?.detected_house_number, validSet)
+      : null;
+    const textHouse = parsedTextHouse ?? savedTextHouse;
+    if (textHouse == null || !isValidHouse(Number(textHouse))) return;
+
+    anchors.push({
+      houseNumber: Number(textHouse),
+      center: mesh.center,
+      source,
+      layerKey: mesh.layerKey,
+      meshName: mesh.meshName,
+      materialName: mesh.materialName,
+    });
+  });
+
+  return anchors;
 }
 
 function nearestAnchor(
@@ -235,7 +285,7 @@ function nearestAnchor(
   source: HouseAnchor["source"],
   excludeLayerKey?: string,
 ) {
-  const useHorizontalCompetition = source === "text_anchor" || source === "confirmed_link_anchor";
+  const useHorizontalCompetition = isTextAnchorSource(source) || source === "confirmed_link_anchor";
   const ranked = anchors
     .filter((anchor) => anchor.layerKey !== excludeLayerKey)
     .map((anchor) => {
@@ -286,7 +336,7 @@ function nearestAnchor(
 
   let confidence: GlbSmartLinkCandidate["suggestionConfidence"] = "nenhuma";
   let rejectReason: string | undefined;
-  if (source === "text_anchor") {
+  if (isTextAnchorSource(source)) {
     if (nearestComparisonDistance > textDiscardDistanceLimit) {
       confidence = "nenhuma";
       rejectReason = "distancia excessiva";
@@ -346,11 +396,12 @@ function nearestAnchor(
     distanceGap,
     distanceRatio,
     acceptedDominantAnchor: !ambiguous && mediumDominance,
-    topTextAnchors: source === "text_anchor"
+    topTextAnchors: isTextAnchorSource(source)
       ? ranked.slice(0, 5).map((item) => ({
         houseNumber: item.anchor.houseNumber,
         layerKey: item.anchor.layerKey,
         meshName: item.anchor.meshName,
+        source: item.anchor.source,
         center: item.anchor.center,
         horizontalDistance: item.horizontalDistance,
         distance3d: item.distance3d,
@@ -441,6 +492,7 @@ function nearestTextAnchorDecision(mesh: GlbMeshRuntimeInfo, anchors: HouseAncho
       houseNumber: item.anchor.houseNumber,
       layerKey: item.anchor.layerKey,
       meshName: item.anchor.meshName,
+      source: item.anchor.source,
       center: item.anchor.center,
       horizontalDistance: item.horizontalDistance,
       distance3d: item.distance3d,
@@ -453,6 +505,9 @@ function nearestTextAnchorDecision(mesh: GlbMeshRuntimeInfo, anchors: HouseAncho
 function suggestHouse(mesh: GlbMeshRuntimeInfo, anchors: ReturnType<typeof buildHouseAnchors>) {
   const text = nearestTextAnchorDecision(mesh, anchors.textAnchors, mesh.layerKey);
   if (text && (text.confidence === "alta" || text.confidence === "media")) return text;
+
+  const mainModelText = nearestAnchor(mesh, anchors.mainModelTextAnchors, "main_model_text_anchor", mesh.layerKey);
+  if (mainModelText && (mainModelText.confidence === "alta" || mainModelText.confidence === "media")) return mainModelText;
 
   const confirmed = nearestAnchor(mesh, anchors.confirmedLinkAnchors, "confirmed_link_anchor", mesh.layerKey);
   if (confirmed && (confirmed.confidence === "alta" || confirmed.confidence === "media")) return confirmed;
@@ -526,7 +581,7 @@ export function getSceneMeshInfo(
 export function scoreGlbSimilarCandidates(
   base: GlbMeshRuntimeInfo,
   meshes: GlbMeshRuntimeInfo[],
-  options?: { validHouseNumbers?: number[]; includeOtherPossible?: boolean },
+  options?: { validHouseNumbers?: number[]; includeOtherPossible?: boolean; additionalHouseAnchors?: HouseAnchor[] },
 ) {
   const baseDims = sortedDimensions(base);
   const basePrefix = prefixOf(base.meshName);
@@ -534,7 +589,7 @@ export function scoreGlbSimilarCandidates(
   const validHouseNumbers = Array.isArray(options?.validHouseNumbers)
     ? new Set(options.validHouseNumbers.map(Number).filter(Number.isFinite))
     : undefined;
-  const houseAnchors = buildHouseAnchors(meshes, validHouseNumbers);
+  const houseAnchors = buildHouseAnchors(meshes, validHouseNumbers, options?.additionalHouseAnchors);
 
   const scored = meshes
     .map<GlbSmartLinkCandidate>((mesh) => {
