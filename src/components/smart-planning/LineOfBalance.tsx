@@ -91,13 +91,16 @@ export function LineOfBalance({ ganttServices, projectStartDate, onUpdatePredece
 
   if (ganttServices.length === 0 || !projectStartDate) {
     return (
-      <Card>
-        <CardContent className="py-12 text-center text-muted-foreground">
-          Configure o planejamento estratégico para visualizar a Linha de Balanço
-        </CardContent>
-      </Card>
+      <div className="bg-slate-50 dark:bg-transparent rounded-2xl p-6">
+        <Card className="rounded-2xl border-slate-200 dark:border-border shadow-sm">
+          <CardContent className="py-16 text-center text-muted-foreground">
+            Configure o planejamento estratégico para visualizar a Linha de Balanço
+          </CardContent>
+        </Card>
+      </div>
     );
   }
+
 
   const startDate = startOfDay(new Date(projectStartDate));
   const ROW_HEIGHT = 32;
