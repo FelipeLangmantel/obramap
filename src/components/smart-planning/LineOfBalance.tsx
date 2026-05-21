@@ -443,9 +443,11 @@ export function LineOfBalance({ ganttServices, projectStartDate, onUpdatePredece
         allServices={ganttServices}
         onUpdatePredecessor={onUpdatePredecessor}
       />
-    </Card>
+      </Card>
+    </div>
   );
 }
+
 
 // ── Sequence Editor Dialog ──────────────────────────────────────────
 interface SequenceDialogProps {
