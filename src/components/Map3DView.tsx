@@ -1263,33 +1263,12 @@ export function Map3DView() {
   const [sceneObj, setSceneObj] = useState<THREE.Object3D | null>(null);
 
   const clearMeshSelection = useCallback((reason = "manual") => {
-    let restoredPreviewMaterials = 0;
-    smartLinkPreviewMaterialsRef.current.forEach(({ mesh, originalMaterial }) => {
-      if (!mesh || !originalMaterial) return;
-      const currentMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      mesh.material = originalMaterial;
-      const materials = Array.isArray(originalMaterial) ? originalMaterial : [originalMaterial];
-      materials.forEach((material) => {
-        material.needsUpdate = true;
-      });
-      currentMaterials.forEach((material) => {
-        if ((material as any)?.userData?.__obramapSmartPreviewMaterial) {
-          material.dispose();
-        }
-      });
-      restoredPreviewMaterials += 1;
-    });
-    smartLinkPreviewMaterialsRef.current = [];
-    setSmartLinkPreviewEnabled(false);
-    setSmartLinkPreviewBarOpen(false);
-    setSmartLinkPreviewMode(null);
-    setSmartLinkIsolationFilter("all");
     setSelectedMeshKey(null);
     setIsolatedKeys(null);
     setSmartLinkFocusedCandidateKey(null);
     setSmartLinkHoverTooltip(null);
     if (import.meta.env.DEV) {
-      console.log("[Map3D Selection] cleared", { reason, restoredPreviewMaterials });
+      console.log("[Map3D Selection] cleared", { reason });
     }
   }, []);
 
