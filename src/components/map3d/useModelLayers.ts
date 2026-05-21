@@ -168,6 +168,10 @@ export function useModelLayers(
     ));
   }, []);
 
+  const showAllLayers = useCallback(() => {
+    setLayers(prev => prev.map(l => ({ ...l, visible: true, opacity: 1 })));
+  }, []);
+
   // Aplica visibilidade/opacity ao Three.js
   useEffect(() => {
     if (!sceneRef) return;
@@ -241,6 +245,7 @@ export function useModelLayers(
     extractLayers,
     toggleLayer,
     setLayerOpacity,
+    showAllLayers,
     saveLink,
     removeLink,
     renameLayer,

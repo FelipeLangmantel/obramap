@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Eye, EyeOff, Link2, Unlink, Pencil, Check, X, Home } from "lucide-react";
+import { Eye, EyeOff, Link2, Unlink, Pencil, Check, X, Home, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
@@ -17,18 +17,20 @@ interface LayersPanelProps {
   onAutoModeChange: (v: boolean) => void;
   onToggleLayer: (name: string) => void;
   onOpacityChange: (name: string, opacity: number) => void;
+  onShowAllLayers: () => void;
   onOpenLinkDialog: () => void;
   onRenameLayer?: (name: string, newDisplayName: string) => void;
 }
 
 export function LayersPanel({
   layers, links, autoMode, onAutoModeChange,
-  onToggleLayer, onOpacityChange, onOpenLinkDialog, onRenameLayer,
+  onToggleLayer, onOpacityChange, onShowAllLayers, onOpenLinkDialog, onRenameLayer,
 }: LayersPanelProps) {
   const [editingLayer, setEditingLayer] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
 
   if (layers.length === 0) return null;
+  const hiddenCount = layers.filter((layer) => !layer.visible || layer.opacity < 1).length;
 
   const startRename = (layer: ModelLayer) => {
     setEditingLayer(layer.name);
@@ -52,10 +54,27 @@ export function LayersPanel({
       <CardHeader className="pb-2 px-3 pt-3 flex-shrink-0">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm">Camadas ({layers.length})</CardTitle>
-          <Button variant="outline" size="sm" onClick={onOpenLinkDialog} className="h-7 text-xs">
-            <Link2 className="h-3 w-3 mr-1" />Vincular Serviços
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onShowAllLayers}
+              className="h-7 text-xs"
+              disabled={hiddenCount === 0}
+              title={hiddenCount > 0 ? `${hiddenCount} camada(s) ocultas ou translucidas` : "Todas as camadas ja estao visiveis"}
+            >
+              <RotateCcw className="h-3 w-3 mr-1" />Reexibir tudo
+            </Button>
+            <Button variant="outline" size="sm" onClick={onOpenLinkDialog} className="h-7 text-xs">
+              <Link2 className="h-3 w-3 mr-1" />Vincular Serviços
+            </Button>
+          </div>
         </div>
+        {hiddenCount > 0 && (
+          <p className="text-[10px] text-muted-foreground mt-1">
+            {hiddenCount} camada(s) ocultas ou com opacidade reduzida.
+          </p>
+        )}
         <div className="flex items-center gap-2 mt-2">
           <Switch
             id="auto-mode"

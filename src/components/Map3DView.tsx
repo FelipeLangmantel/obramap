@@ -1242,6 +1242,7 @@ export function Map3DView() {
     setSelectedMeshKey(null);
     setIsolatedKeys(null);
     setSmartLinkFocusedCandidateKey(null);
+    setSmartLinkHoverTooltip(null);
     if (import.meta.env.DEV) {
       console.log("[Map3D Selection] cleared", { reason });
     }
@@ -1272,6 +1273,18 @@ export function Map3DView() {
   // Atribuição manual mesh→casa (persistida no banco) — fonte da verdade.
   const meshAssignments = useMeshHouseAssignments(projectId);
   const layerManager = useModelLayers(projectId, meshAssignments.assignmentMap);
+
+  const reexibirTodasCamadas = useCallback(() => {
+    layerManager.setAutoMode(false);
+    layerManager.showAllLayers();
+    setHideLinkedInReview(false);
+    setIsolatedKeys(null);
+    setSmartLinkHoverTooltip(null);
+    setSmartLinkFocusedCandidateKey(null);
+    setSupplementalGlbParts((current) => current.map((part) => ({ ...part, visible: true })));
+    clearMeshSelection("layers show all");
+    toast.success("Todas as camadas foram reexibidas.");
+  }, [clearMeshSelection, layerManager]);
 
   // Inventário de meshes do modelo
   const meshHooks = useProjectModelMeshes(projectId);
@@ -4104,7 +4117,15 @@ export function Map3DView() {
               </div>
             )}
             {canManage3D && layerManager.layers.length > 0 && (
-              <Button variant={showLayers ? "default" : "outline"} size="sm" onClick={() => setShowLayers(p => !p)} disabled={isLoading}>
+              <Button
+                variant={showLayers ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  clearMeshSelection("layers panel toggled");
+                  setShowLayers(p => !p);
+                }}
+                disabled={isLoading}
+              >
                 <Layers className="h-4 w-4 mr-1.5" />Camadas ({layerManager.layers.length})
               </Button>
             )}
@@ -4673,6 +4694,9 @@ export function Map3DView() {
                 next.set(key, effectiveSaved);
                 return next;
               });
+              if (data.visible === false) {
+                clearMeshSelection("mesh hidden from review panel");
+              }
               console.log("[GLB MeshMap Consistency] apply link", {
                 layer_key: key,
                 returnedByUpsert: saved,
@@ -4728,8 +4752,12 @@ export function Map3DView() {
             links={layerManager.links}
             autoMode={layerManager.autoMode}
             onAutoModeChange={layerManager.setAutoMode}
-            onToggleLayer={layerManager.toggleLayer}
+            onToggleLayer={(name) => {
+              layerManager.toggleLayer(name);
+              clearMeshSelection("layer toggled");
+            }}
             onOpacityChange={layerManager.setLayerOpacity}
+            onShowAllLayers={reexibirTodasCamadas}
             onOpenLinkDialog={() => setLinkDialogOpen(true)}
             onRenameLayer={layerManager.renameLayer}
           />
