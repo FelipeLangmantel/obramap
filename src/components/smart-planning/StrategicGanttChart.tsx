@@ -403,9 +403,10 @@ export function StrategicGanttChart({
                 const capacityConfig = CAPACITY_CONFIG[svc.capacity_status];
 
                 return (
-                  <div key={svc.id} className="flex border-b hover:bg-muted/20 group">
+                  <div key={svc.id} className="flex border-b border-slate-100 dark:border-border hover:bg-blue-50/40 dark:hover:bg-muted/20 transition-colors group">
                     {/* Service label */}
-                    <div className="w-96 shrink-0 border-r px-3 py-2 flex items-start gap-2">
+                    <div className="w-96 shrink-0 border-r border-slate-100 dark:border-border px-4 py-3 flex items-start gap-2.5">
+
                       <div
                         className="mt-1 w-3 h-3 rounded-full shrink-0"
                         style={{ backgroundColor: svc.color }}
