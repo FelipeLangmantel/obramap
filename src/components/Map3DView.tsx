@@ -2462,13 +2462,15 @@ export function Map3DView() {
       dialogOpenBefore: beforeState.dialogOpen,
     });
     setSmartLinkPreviewEnabled(true);
+    clearSmartLinkCandidateHover();
+    clearMeshSelection(`smartlink isolate filter: ${filter}`);
     setIsolatedKeys(keys);
     setSmartLinkIsolationFilter(filter);
     setSmartLinkPreviewMode("isolate");
     setSmartLinkPreviewBarOpen(true);
     setSmartLinkOpen(false);
     toast.info(`Isolando ${keys.size} mesh(es) do filtro SmartLink.`);
-  }, [getSmartLinkIsolationKeys, smartLinkFocusedCandidateKey]);
+  }, [clearMeshSelection, clearSmartLinkCandidateHover, getSmartLinkIsolationKeys, smartLinkFocusedCandidateKey]);
 
   useEffect(() => {
     if (!smartLinkPreviewEnabled || smartLinkPreviewMode !== "isolate") return;
@@ -2487,13 +2489,15 @@ export function Map3DView() {
       caller: "showSmartLinkCandidatesOnMap",
     });
     setSmartLinkPreviewEnabled(true);
+    clearSmartLinkCandidateHover();
+    clearMeshSelection("smartlink show candidates");
     setIsolatedKeys(null);
     setSmartLinkIsolationFilter("all");
     setSmartLinkPreviewMode("show");
     setSmartLinkPreviewBarOpen(true);
     setSmartLinkOpen(false);
     toast.info("Candidatas destacadas no mapa.");
-  }, []);
+  }, [clearMeshSelection, clearSmartLinkCandidateHover]);
 
   const isolateSmartLinkCandidates = useCallback(() => {
     const beforeState = smartLinkPreviewStateRef.current;
@@ -2616,9 +2620,11 @@ export function Map3DView() {
       cleanupCalled: false,
       caller: "returnToSmartLinkList",
     });
+    clearSmartLinkCandidateHover();
+    clearMeshSelection("smartlink return to list");
     setSmartLinkOpen(true);
     setSmartLinkPreviewBarOpen(false);
-  }, [smartLinkBase, smartLinkCandidates.length]);
+  }, [clearMeshSelection, clearSmartLinkCandidateHover, smartLinkBase, smartLinkCandidates.length]);
 
   const handleSmartLinkOpenChange = useCallback((open: boolean) => {
     const beforeState = smartLinkPreviewStateRef.current;
@@ -4444,6 +4450,13 @@ export function Map3DView() {
                 ? ` | ${smartLinkHoverTooltip.candidate.suggestionDistance.toFixed(1)}m`
                 : ""}
             </p>
+            <p>Fonte: {smartLinkHoverTooltip.candidate.suggestionSource}</p>
+            {smartLinkHoverTooltip.candidate.suggestionAnchorName && (
+              <p>Ancora: {smartLinkHoverTooltip.candidate.suggestionAnchorName}</p>
+            )}
+            {smartLinkHoverTooltip.candidate.suggestionHorizontalDistance != null && (
+              <p>Dist. X/Z: {smartLinkHoverTooltip.candidate.suggestionHorizontalDistance.toFixed(1)}m</p>
+            )}
             <p className="text-muted-foreground">
               {smartLinkHoverTooltip.candidate.houseSuggestionRejectReason || smartLinkHoverTooltip.candidate.suggestionReason}
             </p>
