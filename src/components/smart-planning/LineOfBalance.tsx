@@ -91,13 +91,16 @@ export function LineOfBalance({ ganttServices, projectStartDate, onUpdatePredece
 
   if (ganttServices.length === 0 || !projectStartDate) {
     return (
-      <Card>
-        <CardContent className="py-12 text-center text-muted-foreground">
-          Configure o planejamento estratégico para visualizar a Linha de Balanço
-        </CardContent>
-      </Card>
+      <div className="bg-slate-50 dark:bg-transparent rounded-2xl p-6">
+        <Card className="rounded-2xl border-slate-200 dark:border-border shadow-sm">
+          <CardContent className="py-16 text-center text-muted-foreground">
+            Configure o planejamento estratégico para visualizar a Linha de Balanço
+          </CardContent>
+        </Card>
+      </div>
     );
   }
+
 
   const startDate = startOfDay(new Date(projectStartDate));
   const ROW_HEIGHT = 32;
@@ -133,33 +136,92 @@ export function LineOfBalance({ ganttServices, projectStartDate, onUpdatePredece
     }
   };
 
+  // KPIs (puramente visual, calculados a partir dos serviços já carregados)
+  const totalActivities = sortedServices.reduce((s, svc) => s + svc.total_houses, 0);
+  const totalExecuted   = sortedServices.reduce((s, svc) => s + svc.executed_houses, 0);
+  const inProgress      = sortedServices.filter((s) => s.completion_percent > 0 && s.completion_percent < 100).length;
+  const delayed         = sortedServices.filter((s) => new Date() > s.planned_end && s.completion_percent < 100).length;
+  const plannedAvg      = sortedServices.length
+    ? sortedServices.reduce((sum, svc) => {
+        const total = differenceInDays(svc.planned_end, svc.planned_start) || 1;
+        const elapsed = differenceInDays(new Date(), svc.planned_start);
+        const pct = Math.max(0, Math.min(100, (elapsed / total) * 100));
+        return sum + pct;
+      }, 0) / sortedServices.length
+    : 0;
+  const realAvg = sortedServices.length
+    ? sortedServices.reduce((sum, svc) => sum + svc.completion_percent, 0) / sortedServices.length
+    : 0;
+  const deviation = realAvg - plannedAvg;
+
+  const kpis = [
+    { label: 'Atividades',   value: totalActivities, sub: `${sortedServices.length} serviços`, accent: 'text-slate-900 dark:text-foreground' },
+    { label: 'Concluídas',   value: totalExecuted,   sub: '',                                  accent: 'text-emerald-600' },
+    { label: 'Em Andamento', value: inProgress,      sub: '',                                  accent: 'text-blue-600' },
+    { label: 'Atrasadas',    value: delayed,         sub: '',                                  accent: 'text-red-600' },
+    { label: '% Planejado',  value: `${plannedAvg.toFixed(0)}%`, sub: '',                      accent: 'text-slate-700 dark:text-foreground' },
+    { label: '% Realizado',  value: `${realAvg.toFixed(0)}%`,    sub: '',                      accent: 'text-emerald-600' },
+    { label: 'Desvio',       value: `${deviation >= 0 ? '+' : ''}${deviation.toFixed(0)}%`, sub: '', accent: deviation >= 0 ? 'text-emerald-600' : 'text-red-600' },
+  ];
+
   return (
-    <Card className="overflow-hidden">
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">Linha de Balanço</CardTitle>
-          <div className="flex items-center gap-2">
-            {/* Legend badges */}
-            <div className="hidden lg:flex gap-1.5 flex-wrap mr-2">
-              {sortedServices.map((svc, idx) => (
-                <Badge key={svc.id} variant="outline" className="text-[10px] gap-1 py-0">
-                  <div className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
-                  {svc.name.length > 20 ? svc.name.substring(0, 20) + '…' : svc.name}
-                </Badge>
-              ))}
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              onClick={() => setShowSequenceDialog(true)}
-            >
-              <Settings2 className="h-4 w-4" />
-              Organizar Fluxograma
-            </Button>
-          </div>
+    <div className="bg-slate-50 dark:bg-transparent rounded-2xl p-4 md:p-6 space-y-5">
+      {/* Header */}
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-foreground">
+            Linha de Balanço
+          </h2>
+          <p className="text-xs text-slate-500 dark:text-muted-foreground mt-0.5">
+            Planejamento físico-financeiro por unidade
+          </p>
         </div>
-      </CardHeader>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2 h-9 rounded-lg bg-white dark:bg-card border-slate-200 dark:border-border shadow-sm hover:bg-slate-50"
+          onClick={() => setShowSequenceDialog(true)}
+        >
+          <Settings2 className="h-4 w-4" />
+          Organizar Fluxograma
+        </Button>
+      </div>
+
+      {/* KPI cards */}
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-4 lg:grid-cols-7">
+        {kpis.map((kpi) => (
+          <div
+            key={kpi.label}
+            className="rounded-2xl border border-slate-200 dark:border-border bg-white dark:bg-card p-4 shadow-sm hover:shadow-md transition-shadow"
+          >
+            <p className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-muted-foreground font-medium">
+              {kpi.label}
+            </p>
+            <p className={`text-2xl font-semibold mt-1 ${kpi.accent}`}>{kpi.value}</p>
+            {kpi.sub && (
+              <p className="text-[11px] text-slate-400 dark:text-muted-foreground mt-0.5">{kpi.sub}</p>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Legend chips */}
+      {sortedServices.length > 0 && (
+        <div className="flex gap-1.5 flex-wrap">
+          {sortedServices.map((svc, idx) => (
+            <div
+              key={svc.id}
+              className="inline-flex items-center gap-1.5 rounded-full bg-white dark:bg-card border border-slate-200 dark:border-border px-2.5 py-1 text-[11px] font-medium text-slate-600 dark:text-muted-foreground shadow-sm"
+            >
+              <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
+              {svc.name.length > 24 ? svc.name.substring(0, 24) + '…' : svc.name}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Card className="rounded-2xl border-slate-200 dark:border-border shadow-sm overflow-hidden">
+
 
       <CardContent className="p-0">
         <div className="flex border-t" style={{ height: Math.min(chartHeight + HEADER_HEIGHT + 2, 600) }}>
@@ -381,9 +443,11 @@ export function LineOfBalance({ ganttServices, projectStartDate, onUpdatePredece
         allServices={ganttServices}
         onUpdatePredecessor={onUpdatePredecessor}
       />
-    </Card>
+      </Card>
+    </div>
   );
 }
+
 
 // ── Sequence Editor Dialog ──────────────────────────────────────────
 interface SequenceDialogProps {
