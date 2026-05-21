@@ -173,6 +173,21 @@ type SmartLinkHoverTooltip = {
   y: number;
 } | null;
 
+type ReviewLinksFilter = "all" | "linked" | "pending";
+
+type ReviewLinkHoverTooltip = {
+  x: number;
+  y: number;
+  layerKey: string;
+  meshName: string;
+  materialName: string;
+  houseLabel: string;
+  serviceLabel: string;
+  statusLabel: string;
+  meshTypeLabel: string;
+  originLabel: string;
+} | null;
+
 const SMART_LINK_STATUS_LABEL: Record<GlbSmartLinkCandidate["status"], string> = {
   applicable: "aplicavel",
   missing_house: "sem casa",
@@ -1264,6 +1279,9 @@ export function Map3DView() {
   const [reviewMode, setReviewMode] = useState(false);
   const [selectedMeshKey, setSelectedMeshKey] = useState<string | null>(null);
   const [multiSelectedMeshKeys, setMultiSelectedMeshKeys] = useState<Set<string>>(new Set());
+  const [reviewLinksMode, setReviewLinksMode] = useState(false);
+  const [reviewLinksFilter, setReviewLinksFilter] = useState<ReviewLinksFilter>("all");
+  const [reviewLinkHoverTooltip, setReviewLinkHoverTooltip] = useState<ReviewLinkHoverTooltip>(null);
   const [hideLinkedInReview, setHideLinkedInReview] = useState(false);
   const [isolatedKeys, setIsolatedKeys] = useState<Set<string> | null>(null);
   const [meshReviewOverrides, setMeshReviewOverrides] = useState<Map<string, ProjectModelMesh>>(new Map());
@@ -1285,6 +1303,7 @@ export function Map3DView() {
   const [smartLinkFocusedCandidateKey, setSmartLinkFocusedCandidateKey] = useState<string | null>(null);
   const [smartLinkHoverTooltip, setSmartLinkHoverTooltip] = useState<SmartLinkHoverTooltip>(null);
   const [smartLinkApplying, setSmartLinkApplying] = useState(false);
+  const reviewLinksHighlightRef = useRef<Array<{ mesh: THREE.Mesh; originalMaterial: THREE.Material | THREE.Material[] }>>([]);
   const smartLinkPreviewMaterialsRef = useRef<Array<{ mesh: THREE.Mesh; originalMaterial: THREE.Material | THREE.Material[] }>>([]);
   const smartLinkPreviewStateRef = useRef({
     isLoading: false,
@@ -1323,6 +1342,7 @@ export function Map3DView() {
     setIsolatedKeys(null);
     setSmartLinkFocusedCandidateKey(null);
     setSmartLinkHoverTooltip(null);
+    setReviewLinkHoverTooltip(null);
     if (import.meta.env.DEV) {
       console.log("[Map3D Selection] cleared", { reason });
     }
@@ -2313,6 +2333,70 @@ export function Map3DView() {
   }, [serviceOptions]);
 
   // Aplica modo de visualização à cena
+  const getReviewLinkTooltipData = useCallback((layerKey: string, mesh?: THREE.Mesh): Omit<NonNullable<ReviewLinkHoverTooltip>, "x" | "y"> => {
+    const saved = getCurrentMeshRecord(layerKey);
+    const meshName = saved?.mesh_name || mesh?.name || layerKey;
+    const materialName = saved?.material_name || (mesh ? getMeshMaterialName(mesh) : "");
+    const serviceKey = getRealServiceFilterKey(saved);
+    const serviceLabel = serviceKey ? getRealServiceLabel(serviceKey) : "Sem servico";
+    const houseLabel = saved?.assigned_house_number != null ? `Casa ${saved.assigned_house_number}` : "Sem casa";
+
+    let statusLabel = "Sem vinculo";
+    let meshTypeLabel = "Sem vinculo";
+    if (saved?.ignored) {
+      statusLabel = "Ignorada";
+      meshTypeLabel = "Ignorar";
+    } else if (isContextProjectModelMesh(saved)) {
+      statusLabel = "Contexto";
+      meshTypeLabel = "Contexto";
+    } else if (isCompleteProductionLink(saved)) {
+      statusLabel = "Vinculada";
+      meshTypeLabel = "Producao";
+    }
+
+    return {
+      layerKey,
+      meshName,
+      materialName,
+      houseLabel,
+      serviceLabel,
+      statusLabel,
+      meshTypeLabel,
+      originLabel: "desconhecida",
+    };
+  }, [getCurrentMeshRecord, getRealServiceLabel, isCompleteProductionLink]);
+
+  const handleReviewLinkHover = useCallback((obj: THREE.Object3D, event: any) => {
+    if (!reviewMode || !reviewLinksMode || !(obj as THREE.Mesh).isMesh) return;
+    const mesh = obj as THREE.Mesh;
+    const layerKey = getMeshLayerKey(mesh);
+    const saved = getCurrentMeshRecord(layerKey);
+    const isLinked = isCompleteProductionLink(saved);
+    const isPending = !saved?.ignored && !isContextProjectModelMesh(saved) && !isLinked;
+    if (reviewLinksFilter === "linked" && !isLinked) {
+      setReviewLinkHoverTooltip(null);
+      return;
+    }
+    if (reviewLinksFilter === "pending" && !isPending) {
+      setReviewLinkHoverTooltip(null);
+      return;
+    }
+    const sourceEvent = event?.nativeEvent ?? event;
+    setReviewLinkHoverTooltip({
+      ...getReviewLinkTooltipData(layerKey, mesh),
+      x: Number(sourceEvent?.clientX ?? 0),
+      y: Number(sourceEvent?.clientY ?? 0),
+    });
+  }, [getCurrentMeshRecord, getReviewLinkTooltipData, isCompleteProductionLink, reviewLinksFilter, reviewLinksMode, reviewMode]);
+
+  const handleSupplementalReviewLinkHover = useCallback((_part: SupplementalGlbPart, obj: THREE.Object3D, event: any) => {
+    handleReviewLinkHover(obj, event);
+  }, [handleReviewLinkHover]);
+
+  const clearReviewLinkHover = useCallback(() => {
+    setReviewLinkHoverTooltip(null);
+  }, []);
+
   const walkMeshData = useMemo(() => {
     if (!walkInspection) return null;
     return getCurrentMeshRecord(walkInspection.layerKey);
@@ -2671,6 +2755,8 @@ export function Map3DView() {
     setSmartLinkPreviewMode(null);
     setSmartLinkIsolationFilter("all");
     setSmartLinkOpen(true);
+    setReviewLinksMode(false);
+    setReviewLinkHoverTooltip(null);
   }, [buildCurrentMeshMap, currentProject?.name, houseNumbers, isCompleteProductionLink, meshHooks.meshMap, projectId, sceneObj]);
 
   const toggleSmartLinkCandidate = useCallback((layerKey: string, checked: boolean) => {
@@ -2884,6 +2970,9 @@ export function Map3DView() {
   const clearAll3DSelection = useCallback((reason = "manual") => {
     clearSmartLinkPreview(reason);
     clearMeshSelection(reason);
+    setReviewLinksMode(false);
+    setReviewLinksFilter("all");
+    setReviewLinkHoverTooltip(null);
     setPickedMesh(null);
     setWalkInspection(null);
   }, [clearMeshSelection, clearSmartLinkPreview]);
@@ -3125,6 +3214,68 @@ export function Map3DView() {
     });
     return stats;
   }, [buildCurrentMeshMap, isCompleteProductionLink, meshHooks.meshMap, supplementalGlbParts, traverseActiveModelMeshes]);
+
+  useEffect(() => {
+    const restoreReviewLinksHighlight = () => {
+      reviewLinksHighlightRef.current.forEach(({ mesh, originalMaterial }) => {
+        const currentMaterial = mesh.material as THREE.Material | THREE.Material[];
+        mesh.material = originalMaterial;
+        const currentMaterials = Array.isArray(currentMaterial) ? currentMaterial : [currentMaterial];
+        currentMaterials.forEach((material) => {
+          if ((material.userData as any)?.__obramapReviewLinksMaterial) {
+            material.dispose();
+          }
+        });
+        const restoredMaterials = Array.isArray(originalMaterial) ? originalMaterial : [originalMaterial];
+        restoredMaterials.forEach((material) => {
+          material.needsUpdate = true;
+        });
+      });
+      reviewLinksHighlightRef.current = [];
+    };
+
+    restoreReviewLinksHighlight();
+    if (!reviewMode || !reviewLinksMode) return restoreReviewLinksHighlight;
+
+    const linkedMeshes: THREE.Mesh[] = [];
+    traverseActiveModelMeshes((mesh) => {
+      const saved = getCurrentMeshRecord(getMeshLayerKey(mesh));
+      if (isCompleteProductionLink(saved)) linkedMeshes.push(mesh);
+    });
+
+    const makeReviewMaterial = (material: THREE.Material) => {
+      const clone = material.clone();
+      clone.userData = {
+        ...clone.userData,
+        __obramapReviewLinksMaterial: true,
+      };
+      const anyClone = clone as any;
+      if (anyClone.emissive?.set) {
+        anyClone.emissive.set(0x38bdf8);
+        anyClone.emissiveIntensity = Math.max(Number(anyClone.emissiveIntensity || 0), 0.22);
+      } else if (anyClone.color?.lerp) {
+        anyClone.color.lerp(new THREE.Color(0x38bdf8), 0.22);
+      }
+      clone.transparent = true;
+      clone.opacity = Math.max(Number((clone as any).opacity ?? 1), 0.82);
+      clone.needsUpdate = true;
+      return clone;
+    };
+
+    reviewLinksHighlightRef.current = linkedMeshes.map((mesh) => {
+      const originalMaterial = mesh.material as THREE.Material | THREE.Material[];
+      mesh.material = Array.isArray(originalMaterial)
+        ? originalMaterial.map(makeReviewMaterial)
+        : makeReviewMaterial(originalMaterial);
+      return { mesh, originalMaterial };
+    });
+
+    if (import.meta.env.DEV) {
+      console.log("[Review Links] highlight applied", { count: linkedMeshes.length });
+    }
+
+    return restoreReviewLinksHighlight;
+  }, [getCurrentMeshRecord, isCompleteProductionLink, reviewLinksMode, reviewMode, traverseActiveModelMeshes]);
 
   const selectedZoomOption = ZOOM_SENSITIVITY_OPTIONS.find((option) => option.value === zoomSensitivity) ?? ZOOM_SENSITIVITY_OPTIONS[1];
   const orbitZoomSpeed = 2.8 * selectedZoomOption.multiplier;
@@ -4619,6 +4770,45 @@ export function Map3DView() {
                   {hideLinkedInReview ? <Eye className="h-3.5 w-3.5 mr-1.5" /> : <EyeOff className="h-3.5 w-3.5 mr-1.5" />}
                   {hideLinkedInReview ? "Mostrar vinculadas" : "Ocultar vinculadas"}
                 </Button>
+                <Button
+                  type="button"
+                  variant={reviewLinksMode ? "default" : "outline"}
+                  size="sm"
+                  className="h-7"
+                  onClick={() => {
+                    if (!reviewLinksMode && smartLinkPreviewEnabled) {
+                      clearSmartLinkPreview("review links mode enabled");
+                    }
+                    setReviewLinksMode((value) => !value);
+                    setReviewLinksFilter("all");
+                    setReviewLinkHoverTooltip(null);
+                  }}
+                  disabled={isLoading}
+                  title="Auditar visualmente Casa e Servico das meshes vinculadas"
+                >
+                  <ScanSearch className="h-3.5 w-3.5 mr-1.5" />
+                  {reviewLinksMode ? "Ocultar vinculos" : "Revisar vinculos"}
+                </Button>
+                {reviewLinksMode && ([
+                  ["all", "Todas"],
+                  ["linked", "Vinculadas"],
+                  ["pending", "Sem vinculo"],
+                ] as Array<[ReviewLinksFilter, string]>).map(([filter, label]) => (
+                  <Button
+                    key={filter}
+                    type="button"
+                    variant={reviewLinksFilter === filter ? "default" : "ghost"}
+                    size="sm"
+                    className="h-7 px-2"
+                    onClick={() => {
+                      setReviewLinksFilter(filter);
+                      setReviewLinkHoverTooltip(null);
+                    }}
+                    disabled={isLoading}
+                  >
+                    {label}
+                  </Button>
+                ))}
                 <span className="whitespace-nowrap text-muted-foreground">
                   {reviewVisibilityStats.total} total · {reviewVisibilityStats.linked} vinc. · {reviewVisibilityStats.pending} pend. · {reviewVisibilityStats.context} ctx · {reviewVisibilityStats.ignored} ign.
                 </span>
@@ -4906,8 +5096,8 @@ export function Map3DView() {
               orbitFocusPoint={orbitFocusPoint}
               onMeshClick={cameraMode === "walk" ? undefined : reviewMode ? handleReviewMeshClick : assignMode ? handleMeshClick : undefined}
               onMeshDoubleClick={cameraMode === "orbit" ? handleMeshDoubleClickFocus : undefined}
-              onMeshHover={smartLinkPreviewEnabled ? handleSmartLinkCandidateHover : undefined}
-              onMeshHoverEnd={clearSmartLinkCandidateHover}
+              onMeshHover={smartLinkPreviewEnabled ? handleSmartLinkCandidateHover : reviewLinksMode ? handleReviewLinkHover : undefined}
+              onMeshHoverEnd={smartLinkPreviewEnabled ? clearSmartLinkCandidateHover : reviewLinksMode ? clearReviewLinkHover : undefined}
               selectedMeshKey={cameraMode === "walk" ? null : reviewMode ? selectedMeshKey : null}
               selectedMeshKeys={cameraMode === "walk" || !reviewMode ? undefined : multiSelectedMeshKeys}
               projectId={projectId}
@@ -4923,8 +5113,8 @@ export function Map3DView() {
               supplementalGlbParts={supplementalGlbParts}
               onSupplementalMeshClick={handleSupplementalMeshClick}
               onSupplementalMeshDoubleClick={cameraMode === "orbit" ? handleSupplementalMeshDoubleClickFocus : undefined}
-              onSupplementalMeshHover={smartLinkPreviewEnabled ? handleSupplementalSmartLinkCandidateHover : undefined}
-              onSupplementalMeshHoverEnd={clearSmartLinkCandidateHover}
+              onSupplementalMeshHover={smartLinkPreviewEnabled ? handleSupplementalSmartLinkCandidateHover : reviewLinksMode ? handleSupplementalReviewLinkHover : undefined}
+              onSupplementalMeshHoverEnd={smartLinkPreviewEnabled ? clearSmartLinkCandidateHover : reviewLinksMode ? clearReviewLinkHover : undefined}
               onSupplementalSceneReady={handleSupplementalSceneReady}
               onSupplementalInventoryReady={handleSupplementalInventoryReady}
               observerHeight={observerHeight}
@@ -5066,6 +5256,25 @@ export function Map3DView() {
             <p className="text-muted-foreground">
               {smartLinkHoverTooltip.candidate.houseSuggestionRejectReason || smartLinkHoverTooltip.candidate.suggestionReason}
             </p>
+          </div>
+        )}
+        {reviewLinkHoverTooltip && (
+          <div
+            className="pointer-events-none fixed z-[80] max-w-xs rounded-md border border-sky-400/40 bg-background/95 px-3 py-2 text-xs shadow-xl backdrop-blur"
+            style={{
+              left: Math.min(reviewLinkHoverTooltip.x + 14, window.innerWidth - 300),
+              top: Math.min(reviewLinkHoverTooltip.y + 14, window.innerHeight - 190),
+            }}
+          >
+            <p className="font-semibold text-sky-500">{reviewLinkHoverTooltip.houseLabel}</p>
+            <p>{reviewLinkHoverTooltip.serviceLabel}</p>
+            <p className="mt-1 text-muted-foreground">Mesh: {reviewLinkHoverTooltip.meshName || reviewLinkHoverTooltip.layerKey}</p>
+            {reviewLinkHoverTooltip.materialName && (
+              <p className="text-muted-foreground">Material: {reviewLinkHoverTooltip.materialName}</p>
+            )}
+            <p>Status: {reviewLinkHoverTooltip.statusLabel}</p>
+            <p>Tipo: {reviewLinkHoverTooltip.meshTypeLabel}</p>
+            <p>Origem: {reviewLinkHoverTooltip.originLabel}</p>
           </div>
         )}
         {assignMode && (
