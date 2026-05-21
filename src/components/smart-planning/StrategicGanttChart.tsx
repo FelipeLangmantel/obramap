@@ -82,19 +82,19 @@ const getPlannedPercent = (svc: GanttService) => {
   return Math.min(100, Math.max(0, (elapsed / Math.max(svc.duration_days, 1)) * 100));
 };
 
-const STATUS_CONFIG: Record<string, { color: string; label: string; text?: string }> = {
-  planned: { color: 'bg-muted', label: 'Planejado', text: 'text-foreground' },
-  in_progress: { color: 'bg-primary', label: 'Em Andamento', text: 'text-primary-foreground' },
-  at_risk: { color: 'bg-amber-500', label: 'Em Risco', text: 'text-white' },
-  delayed: { color: 'bg-destructive', label: 'Atrasado', text: 'text-destructive-foreground' },
-  completed: { color: 'bg-emerald-500', label: 'Concluído' },
+const STATUS_CONFIG: Record<string, { color: string; dot: string; label: string; text?: string }> = {
+  planned:     { color: 'bg-slate-300 dark:bg-slate-600', dot: 'bg-slate-400',   label: 'Planejado',    text: 'text-slate-800 dark:text-slate-100' },
+  in_progress: { color: 'bg-blue-500',                    dot: 'bg-blue-500',    label: 'Em Andamento', text: 'text-white' },
+  at_risk:     { color: 'bg-amber-400',                   dot: 'bg-amber-400',   label: 'Em Risco',     text: 'text-amber-950' },
+  delayed:     { color: 'bg-red-500',                     dot: 'bg-red-500',     label: 'Atrasado',     text: 'text-white' },
+  completed:   { color: 'bg-emerald-500',                 dot: 'bg-emerald-500', label: 'Concluído',    text: 'text-white' },
 };
 
 const CAPACITY_CONFIG: Record<GanttService['capacity_status'], { label: string; className: string }> = {
-  ok: { label: 'Capacidade suficiente', className: 'border-emerald-300 text-emerald-700 dark:text-emerald-300' },
-  attention: { label: 'Capacidade apertada', className: 'border-amber-300 text-amber-700 dark:text-amber-300' },
-  insufficient: { label: 'Capacidade insuficiente', className: 'border-red-300 text-red-700 dark:text-red-300' },
-  missing_productivity: { label: 'Sem produtividade cadastrada', className: 'border-slate-300 text-muted-foreground' },
+  ok:                    { label: 'Capacidade suficiente',        className: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-900' },
+  attention:             { label: 'Capacidade apertada',          className: 'border-amber-200 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-900' },
+  insufficient:          { label: 'Capacidade insuficiente',      className: 'border-red-200 bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300 dark:border-red-900' },
+  missing_productivity:  { label: 'Sem produtividade cadastrada', className: 'border-slate-200 bg-slate-50 text-slate-600 dark:bg-slate-900/40 dark:text-slate-400 dark:border-slate-800' },
 };
 
 const PRODUCTIVITY_SOURCE_LABEL: Record<GanttService['productivity_source'], string> = {
@@ -216,41 +216,95 @@ export function StrategicGanttChart({
 
   if (services.length === 0) {
     return (
-      <Card>
-        <CardContent className="py-12 text-center text-muted-foreground">
-          <Home className="h-12 w-12 mx-auto mb-3 opacity-30" />
-          <p>Configure os serviços no Planejamento Estratégico para visualizar o Gantt</p>
-        </CardContent>
-      </Card>
+      <div className="bg-slate-50 dark:bg-transparent rounded-2xl p-6">
+        <Card className="rounded-2xl border-slate-200 dark:border-border shadow-sm">
+          <CardContent className="py-16 text-center text-muted-foreground">
+            <Home className="h-12 w-12 mx-auto mb-3 opacity-30" />
+            <p>Configure os serviços no Planejamento Estratégico para visualizar o Gantt</p>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   return (
     <>
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <CardTitle className="text-lg">Gráfico de Gantt</CardTitle>
-            <div className="flex gap-2 flex-wrap">
-              {Object.entries(STATUS_CONFIG).map(([key, config]) => (
-                <Badge key={key} variant="outline" className="gap-1 text-xs">
-                  <div className={`w-2 h-2 rounded-full ${config.color}`} />
-                  {config.label}
-                </Badge>
-              ))}
-            </div>
+      <div className="bg-slate-50 dark:bg-transparent rounded-2xl p-4 md:p-6 space-y-5">
+        {/* Header */}
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h2 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-foreground">
+              Gráfico de Gantt
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-muted-foreground mt-0.5">
+              Visão estratégica de etapas, serviços e capacidade
+            </p>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid gap-2 rounded-lg border bg-muted/20 p-3 md:grid-cols-7">
+          <div className="flex gap-1.5 flex-wrap">
+            {Object.entries(STATUS_CONFIG).map(([key, config]) => (
+              <div
+                key={key}
+                className="inline-flex items-center gap-1.5 rounded-full bg-white dark:bg-card border border-slate-200 dark:border-border px-2.5 py-1 text-[11px] font-medium text-slate-600 dark:text-muted-foreground shadow-sm"
+              >
+                <span className={`w-2 h-2 rounded-full ${config.dot}`} />
+                {config.label}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* KPI cards */}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {[
+            { label: 'Serviços exibidos', value: `${filteredServices.length}/${services.length}`, accent: 'text-slate-900 dark:text-foreground' },
+            {
+              label: 'Planejado médio',
+              value: filteredServices.length
+                ? `${(filteredServices.reduce((sum, svc) => sum + getPlannedPercent(svc), 0) / filteredServices.length).toFixed(0)}%`
+                : '—',
+              accent: 'text-blue-600',
+            },
+            {
+              label: 'Realizado médio',
+              value: filteredServices.length
+                ? `${(filteredServices.reduce((sum, svc) => sum + svc.completion_percent, 0) / filteredServices.length).toFixed(0)}%`
+                : '—',
+              accent: 'text-emerald-600',
+            },
+            {
+              label: 'Atrasados / risco',
+              value: filteredServices.filter((svc) => ['delayed', 'at_risk'].includes(getServiceStatus(svc))).length,
+              accent: 'text-red-600',
+            },
+            {
+              label: 'Capacidade insuf.',
+              value: filteredServices.filter((svc) => svc.capacity_status === 'insufficient').length,
+              accent: 'text-amber-600',
+            },
+          ].map((kpi) => (
+            <div
+              key={kpi.label}
+              className="rounded-2xl border border-slate-200 dark:border-border bg-white dark:bg-card p-4 shadow-sm hover:shadow-md transition-shadow"
+            >
+              <p className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-muted-foreground font-medium">
+                {kpi.label}
+              </p>
+              <p className={`text-2xl font-semibold mt-1 ${kpi.accent}`}>{kpi.value}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Filters toolbar */}
+        <div className="rounded-2xl border border-slate-200 dark:border-border bg-white dark:bg-card p-3 md:p-4 shadow-sm">
+          <div className="grid gap-2 md:grid-cols-7">
             <Input
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Buscar etapa, servico ou pacote"
-              className="h-8 text-xs md:col-span-2"
+              placeholder="Buscar etapa, serviço ou pacote"
+              className="h-9 text-xs md:col-span-2 rounded-lg bg-slate-50 dark:bg-background border-slate-200 dark:border-border focus-visible:ring-blue-500/30"
             />
             <Select value={stageFilter} onValueChange={setStageFilter}>
-              <SelectTrigger className="h-8 text-xs">
+              <SelectTrigger className="h-9 text-xs rounded-lg bg-slate-50 dark:bg-background border-slate-200 dark:border-border">
                 <SelectValue placeholder="Etapa" />
               </SelectTrigger>
               <SelectContent>
@@ -261,18 +315,18 @@ export function StrategicGanttChart({
               </SelectContent>
             </Select>
             <Select value={serviceFilter} onValueChange={setServiceFilter}>
-              <SelectTrigger className="h-8 text-xs">
-                <SelectValue placeholder="Servico" />
+              <SelectTrigger className="h-9 text-xs rounded-lg bg-slate-50 dark:bg-background border-slate-200 dark:border-border">
+                <SelectValue placeholder="Serviço" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos os servicos</SelectItem>
+                <SelectItem value="all">Todos os serviços</SelectItem>
                 {serviceOptions.map(([id, name]) => (
                   <SelectItem key={id} value={id}>{name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="h-8 text-xs">
+              <SelectTrigger className="h-9 text-xs rounded-lg bg-slate-50 dark:bg-background border-slate-200 dark:border-border">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
@@ -283,7 +337,7 @@ export function StrategicGanttChart({
               </SelectContent>
             </Select>
             <Select value={teamFilter} onValueChange={setTeamFilter}>
-              <SelectTrigger className="h-8 text-xs">
+              <SelectTrigger className="h-9 text-xs rounded-lg bg-slate-50 dark:bg-background border-slate-200 dark:border-border">
                 <SelectValue placeholder="Equipe" />
               </SelectTrigger>
               <SelectContent>
@@ -294,7 +348,7 @@ export function StrategicGanttChart({
               </SelectContent>
             </Select>
             <Select value={capacityFilter} onValueChange={setCapacityFilter}>
-              <SelectTrigger className="h-8 text-xs">
+              <SelectTrigger className="h-9 text-xs rounded-lg bg-slate-50 dark:bg-background border-slate-200 dark:border-border">
                 <SelectValue placeholder="Capacidade" />
               </SelectTrigger>
               <SelectContent>
@@ -305,69 +359,37 @@ export function StrategicGanttChart({
               </SelectContent>
             </Select>
           </div>
+        </div>
 
-          <div className="grid gap-2 text-xs md:grid-cols-4">
-            <div className="rounded-lg border bg-background p-3">
-              <p className="text-muted-foreground">Servicos exibidos</p>
-              <p className="text-lg font-semibold">{filteredServices.length}/{services.length}</p>
-            </div>
-            <div className="rounded-lg border bg-background p-3">
-              <p className="text-muted-foreground">Planejado medio</p>
-              <p className="text-lg font-semibold">
-                {filteredServices.length
-                  ? `${(filteredServices.reduce((sum, svc) => sum + getPlannedPercent(svc), 0) / filteredServices.length).toFixed(0)}%`
-                  : '-'}
-              </p>
-            </div>
-            <div className="rounded-lg border bg-background p-3">
-              <p className="text-muted-foreground">Realizado medio</p>
-              <p className="text-lg font-semibold">
-                {filteredServices.length
-                  ? `${(filteredServices.reduce((sum, svc) => sum + svc.completion_percent, 0) / filteredServices.length).toFixed(0)}%`
-                  : '-'}
-              </p>
-            </div>
-            <div className="rounded-lg border bg-background p-3">
-              <p className="text-muted-foreground">Atrasados / risco</p>
-              <p className="text-lg font-semibold">
-                {filteredServices.filter((svc) => ['delayed', 'at_risk'].includes(getServiceStatus(svc))).length}
-              </p>
-            </div>
-            <div className="rounded-lg border bg-background p-3">
-              <p className="text-muted-foreground">Capacidade insuf.</p>
-              <p className="text-lg font-semibold">
-                {filteredServices.filter((svc) => svc.capacity_status === 'insufficient').length}
-              </p>
-            </div>
-          </div>
-
-          {filteredServices.length === 0 ? (
-            <div className="rounded-lg border border-dashed py-10 text-center text-sm text-muted-foreground">
-              Nenhum servico encontrado com os filtros atuais.
-            </div>
-          ) : (
-          <ScrollArea className="w-full">
-            <div className="min-w-max">
-              {/* Header */}
-              <div className="flex border-b">
-                <div className="w-96 shrink-0 border-r px-3 py-2 bg-muted/30 font-medium text-sm">
-                  Etapa / servico / leitura
-                </div>
-                <div className="flex" style={{ width: totalWidth }}>
-                  {weeks.map((week, i) => (
-                    <div
-                      key={i}
-                      className="border-r text-center text-xs py-1 bg-muted/30"
-                      style={{ width: dayWidth * 7 }}
-                    >
-                      {format(week, "'Sem' w", { locale: ptBR })}
-                      <div className="text-muted-foreground">{format(week, 'dd/MM')}</div>
-                    </div>
-                  ))}
-                </div>
+        {/* Gantt body */}
+        <Card className="rounded-2xl border-slate-200 dark:border-border shadow-sm overflow-hidden">
+          <CardContent className="p-0">
+            {filteredServices.length === 0 ? (
+              <div className="py-12 text-center text-sm text-muted-foreground">
+                Nenhum serviço encontrado com os filtros atuais.
               </div>
+            ) : (
+            <ScrollArea className="w-full">
+              <div className="min-w-max">
+                {/* Header */}
+                <div className="flex border-b border-slate-200 dark:border-border bg-slate-50/80 dark:bg-muted/30 sticky top-0 z-20">
+                  <div className="w-96 shrink-0 border-r border-slate-200 dark:border-border px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide text-slate-600 dark:text-muted-foreground">
+                    Etapa / serviço
+                  </div>
+                  <div className="flex" style={{ width: totalWidth }}>
+                    {weeks.map((week, i) => (
+                      <div
+                        key={i}
+                        className="border-r border-slate-200 dark:border-border text-center text-[11px] py-1.5"
+                        style={{ width: dayWidth * 7 }}
+                      >
+                        <div className="font-medium text-slate-700 dark:text-foreground">{format(week, "'Sem' w", { locale: ptBR })}</div>
+                        <div className="text-slate-400 dark:text-muted-foreground">{format(week, 'dd/MM')}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
-              {/* Services */}
               {filteredServices.map((svc) => {
                 const pos = getBarPosition(svc);
                 const status = getServiceStatus(svc);
@@ -381,9 +403,10 @@ export function StrategicGanttChart({
                 const capacityConfig = CAPACITY_CONFIG[svc.capacity_status];
 
                 return (
-                  <div key={svc.id} className="flex border-b hover:bg-muted/20 group">
+                  <div key={svc.id} className="flex border-b border-slate-100 dark:border-border hover:bg-blue-50/40 dark:hover:bg-muted/20 transition-colors group">
                     {/* Service label */}
-                    <div className="w-96 shrink-0 border-r px-3 py-2 flex items-start gap-2">
+                    <div className="w-96 shrink-0 border-r border-slate-100 dark:border-border px-4 py-3 flex items-start gap-2.5">
+
                       <div
                         className="mt-1 w-3 h-3 rounded-full shrink-0"
                         style={{ backgroundColor: svc.color }}
@@ -510,24 +533,25 @@ export function StrategicGanttChart({
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <div
-                              className={`absolute top-1/2 -translate-y-1/2 h-7 rounded cursor-pointer transition-all hover:h-8 ${statusConfig.color}`}
+                              className={`absolute top-1/2 -translate-y-1/2 h-6 rounded-full cursor-pointer transition-all hover:h-7 hover:shadow-md ring-1 ring-black/5 overflow-hidden ${statusConfig.color}`}
                               style={{ left: pos.left, width: pos.width }}
                               onClick={() => handleEditOpen(svc)}
                             >
                               {/* Progress */}
                               {svc.completion_percent > 0 && (
                                 <div
-                                  className="absolute inset-y-0 left-0 bg-black/20 rounded-l"
+                                  className="absolute inset-y-0 left-0 bg-black/20"
                                   style={{ width: `${svc.completion_percent}%` }}
                                 />
                               )}
-                              <div className={`relative z-10 px-2 flex items-center gap-1 h-full text-xs font-medium whitespace-nowrap ${statusConfig.text || 'text-white'}`}>
-                                <Clock className="h-3 w-3 shrink-0" />
+                              <div className={`relative z-10 px-2.5 flex items-center gap-1 h-full text-[11px] font-medium whitespace-nowrap ${statusConfig.text || 'text-white'}`}>
+                                <Clock className="h-3 w-3 shrink-0 opacity-80" />
                                 {svc.completion_percent > 0
                                   ? `${svc.completion_percent.toFixed(0)}%`
                                   : `${svc.duration_days}d`}
                               </div>
                             </div>
+
                           </TooltipTrigger>
                           <TooltipContent className="max-w-xs">
                             <div className="text-sm space-y-1">
@@ -589,8 +613,11 @@ export function StrategicGanttChart({
             <ScrollBar orientation="horizontal" />
           </ScrollArea>
           )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
+
+
 
       {/* Edit Dialog */}
       <Dialog open={!!editingService} onOpenChange={(o) => !o && setEditingService(null)}>
