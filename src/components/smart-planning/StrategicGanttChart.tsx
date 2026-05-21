@@ -611,8 +611,11 @@ export function StrategicGanttChart({
             <ScrollBar orientation="horizontal" />
           </ScrollArea>
           )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
+
+
 
       {/* Edit Dialog */}
       <Dialog open={!!editingService} onOpenChange={(o) => !o && setEditingService(null)}>
