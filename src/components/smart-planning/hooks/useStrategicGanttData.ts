@@ -29,6 +29,8 @@ export interface GanttService {
   id: string; // macro_id + scope_id
   macro_id: string;
   scope_id: string;
+  macro_name: string;
+  scope_name: string;
   name: string;
   color: string;
   remaining_houses: number;
@@ -45,6 +47,11 @@ export interface GanttService {
   sequence_order: number;
   stage_id: string | null; // planning_stages id if exists
 }
+
+const getServiceKey = (macroId: string | null | undefined, scopeId: string | null | undefined) =>
+  `${macroId || 'sem_macro'}::${scopeId || 'sem_servico'}`;
+
+const getLegacyServiceId = (macroId: string, scopeId: string) => `${macroId}_${scopeId}`;
 
 export function useStrategicGanttData(projectId: string | undefined) {
   const { company, canEdit } = useAuth();
@@ -107,7 +114,7 @@ export function useStrategicGanttData(projectId: string | undefined) {
       const execMap = new Map<string, { executed: number; available: number; percent: number }>();
       if (!execBankRes.error && execBankRes.data) {
         (execBankRes.data as any[]).forEach((row: any) => {
-          execMap.set(`${row.macro_id}_${row.scope_id}`, {
+          execMap.set(getServiceKey(row.macro_id, row.scope_id), {
             executed: Number(row.executed_houses) || 0,
             available: Number(row.available_houses) || 0,
             percent: Number(row.completion_percent) || 0,
@@ -119,7 +126,7 @@ export function useStrategicGanttData(projectId: string | undefined) {
       const uniqueServices: StrategicService[] = [];
       const seen = new Set<string>();
       servicesRes.data?.forEach((s) => {
-        const key = `${s.macro_id}_${s.scope_id}`;
+        const key = getServiceKey(s.macro_id, s.scope_id);
         if (seen.has(key)) return;
         seen.add(key);
         const exec = execMap.get(key);
@@ -186,27 +193,53 @@ export function useStrategicGanttData(projectId: string | undefined) {
     startDateStr: string
   ): GanttService[] => {
     const prodMap = new Map<string, ServiceProductivityConfig>();
-    prods.forEach((p) => prodMap.set(`${p.macro_id}_${p.scope_id}`, p));
+    prods.forEach((p) => prodMap.set(getServiceKey(p.macro_id, p.scope_id), p));
 
-    const stageMap = new Map<string, any>();
+    const exactStageMap = new Map<string, any>();
+    const macroStageMap = new Map<string, any>();
     stgs.forEach((s) => {
-      if (s.macro_id) stageMap.set(s.macro_id, s);
+      if (!s.macro_id) return;
+      if (s.scope_id) {
+        exactStageMap.set(getServiceKey(s.macro_id, s.scope_id), s);
+      } else {
+        macroStageMap.set(s.macro_id, s);
+      }
     });
+
+    const serviceCountByMacro = svcs.reduce((acc, svc) => {
+      acc.set(svc.macro_id, (acc.get(svc.macro_id) || 0) + 1);
+      return acc;
+    }, new Map<string, number>());
+
+    const getStageForService = (macroId: string, scopeId: string) => {
+      const exact = exactStageMap.get(getServiceKey(macroId, scopeId));
+      if (exact) return exact;
+
+      // Fallback para dados antigos em planning_stages sem scope_id.
+      // Se a etapa tem vários serviços, não reaproveitamos o mesmo stage para todos
+      // para evitar misturar produtividade, equipes e predecessoras entre serviços.
+      if ((serviceCountByMacro.get(macroId) || 0) <= 1) {
+        return macroStageMap.get(macroId);
+      }
+
+      return null;
+    };
 
     const result: GanttService[] = [];
     const scheduleMap = new Map<string, { start: Date; end: Date }>();
 
     // Sort by stage sequence if available, otherwise by service order
     const sorted = [...svcs].map((svc, idx) => {
-      const stage = stageMap.get(svc.macro_id);
+      const stage = getStageForService(svc.macro_id, svc.scope_id);
       return { svc, stage, order: stage?.sequence_order ?? idx };
     }).sort((a, b) => a.order - b.order);
 
     let nextStart = startOfDay(parseISO(startDateStr));
 
     for (const { svc, stage } of sorted) {
-      const id = `${svc.macro_id}_${svc.scope_id}`;
-      const prod = prodMap.get(id);
+      const serviceKey = getServiceKey(svc.macro_id, svc.scope_id);
+      const id = getLegacyServiceId(svc.macro_id, svc.scope_id);
+      const prod = prodMap.get(serviceKey);
       const productivity = prod?.base_productivity || 1;
       const productivityType = prod?.productivity_type || 'casa_por_dia';
       const teams = stage?.planned_teams || 1;
@@ -243,6 +276,8 @@ export function useStrategicGanttData(projectId: string | undefined) {
         id,
         macro_id: svc.macro_id,
         scope_id: svc.scope_id,
+        macro_name: svc.macro_name,
+        scope_name: svc.scope_name,
         name: `${svc.macro_name} - ${svc.scope_name}`,
         color: svc.macro_color,
         remaining_houses: remaining,
@@ -287,7 +322,10 @@ export function useStrategicGanttData(projectId: string | undefined) {
     }
 
     // Update planning_stages if exists
-    const stage = stages.find((s: any) => s.macro_id === macroId);
+    const stage = stages.find((s: any) => s.macro_id === macroId && s.scope_id === scopeId)
+      || (services.filter((s) => s.macro_id === macroId).length <= 1
+        ? stages.find((s: any) => s.macro_id === macroId && !s.scope_id)
+        : null);
     if (stage) {
       await supabase
         .from('planning_stages')

@@ -73,11 +73,20 @@ const getServiceStatus = (svc: GanttService) => {
   return 'planned';
 };
 
-const STATUS_CONFIG: Record<string, { color: string; label: string }> = {
-  planned: { color: 'bg-muted', label: 'Planejado' },
-  in_progress: { color: 'bg-primary', label: 'Em Andamento' },
-  at_risk: { color: 'bg-amber-500', label: 'Em Risco' },
-  delayed: { color: 'bg-destructive', label: 'Atrasado' },
+const getPlannedPercent = (svc: GanttService) => {
+  const today = new Date();
+  if (today < svc.planned_start) return 0;
+  if (today > svc.planned_end) return 100;
+
+  const elapsed = differenceInDays(today, svc.planned_start) + 1;
+  return Math.min(100, Math.max(0, (elapsed / Math.max(svc.duration_days, 1)) * 100));
+};
+
+const STATUS_CONFIG: Record<string, { color: string; label: string; text?: string }> = {
+  planned: { color: 'bg-muted', label: 'Planejado', text: 'text-foreground' },
+  in_progress: { color: 'bg-primary', label: 'Em Andamento', text: 'text-primary-foreground' },
+  at_risk: { color: 'bg-amber-500', label: 'Em Risco', text: 'text-white' },
+  delayed: { color: 'bg-destructive', label: 'Atrasado', text: 'text-destructive-foreground' },
   completed: { color: 'bg-emerald-500', label: 'Concluído' },
 };
 
@@ -92,12 +101,59 @@ export function StrategicGanttChart({
   const [editingService, setEditingService] = useState<GanttService | null>(null);
   const [editProductivity, setEditProductivity] = useState(1);
   const [editTeams, setEditTeams] = useState(1);
+  const [stageFilter, setStageFilter] = useState('all');
+  const [serviceFilter, setServiceFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [teamFilter, setTeamFilter] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const stageOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    services.forEach((svc) => map.set(svc.macro_id, svc.macro_name));
+    return Array.from(map.entries());
+  }, [services]);
+
+  const serviceOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    services.forEach((svc) => map.set(svc.scope_id, svc.scope_name));
+    return Array.from(map.entries());
+  }, [services]);
+
+  const teamOptions = useMemo(
+    () => Array.from(new Set(services.map((svc) => String(svc.teams)))).sort((a, b) => Number(a) - Number(b)),
+    [services]
+  );
+
+  const filteredServices = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+
+    return services.filter((svc) => {
+      const status = getServiceStatus(svc);
+      if (stageFilter !== 'all' && svc.macro_id !== stageFilter) return false;
+      if (serviceFilter !== 'all' && svc.scope_id !== serviceFilter) return false;
+      if (statusFilter !== 'all' && status !== statusFilter) return false;
+      if (teamFilter !== 'all' && String(svc.teams) !== teamFilter) return false;
+      if (normalizedSearch) {
+        const searchable = [
+          svc.name,
+          svc.macro_name,
+          svc.scope_name,
+          String(svc.total_houses),
+          String(svc.executed_houses),
+          String(svc.remaining_houses),
+        ].join(' ').toLowerCase();
+
+        if (!searchable.includes(normalizedSearch)) return false;
+      }
+      return true;
+    });
+  }, [services, stageFilter, serviceFilter, statusFilter, teamFilter, searchTerm]);
 
   const { minDate, weeks, dayWidth, totalWidth } = useMemo(() => {
-    if (services.length === 0) {
+    if (filteredServices.length === 0) {
       return { minDate: new Date(), weeks: [], dayWidth: 30, totalWidth: 0 };
     }
-    const allDates = services.flatMap((s) => [s.planned_start, s.planned_end]);
+    const allDates = filteredServices.flatMap((s) => [s.planned_start, s.planned_end]);
     if (projectedEndDate) allDates.push(projectedEndDate);
 
     const min = new Date(Math.min(...allDates.map((d) => d.getTime())));
@@ -114,7 +170,7 @@ export function StrategicGanttChart({
     );
 
     return { minDate: paddedMin, weeks: weeksList, dayWidth: dayW, totalWidth: totalDays * dayW };
-  }, [services, projectedEndDate]);
+  }, [filteredServices, projectedEndDate]);
 
   const getBarPosition = (svc: GanttService) => {
     const left = differenceInDays(svc.planned_start, minDate) * dayWidth;
@@ -169,13 +225,100 @@ export function StrategicGanttChart({
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
+          <div className="grid gap-2 rounded-lg border bg-muted/20 p-3 md:grid-cols-6">
+            <Input
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar etapa, servico ou pacote"
+              className="h-8 text-xs md:col-span-2"
+            />
+            <Select value={stageFilter} onValueChange={setStageFilter}>
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder="Etapa" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as etapas</SelectItem>
+                {stageOptions.map(([id, name]) => (
+                  <SelectItem key={id} value={id}>{name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={serviceFilter} onValueChange={setServiceFilter}>
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder="Servico" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os servicos</SelectItem>
+                {serviceOptions.map(([id, name]) => (
+                  <SelectItem key={id} value={id}>{name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os status</SelectItem>
+                {Object.entries(STATUS_CONFIG).map(([key, config]) => (
+                  <SelectItem key={key} value={key}>{config.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={teamFilter} onValueChange={setTeamFilter}>
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder="Equipe" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as equipes</SelectItem>
+                {teamOptions.map((team) => (
+                  <SelectItem key={team} value={team}>{team} equipe(s)</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid gap-2 text-xs md:grid-cols-4">
+            <div className="rounded-lg border bg-background p-3">
+              <p className="text-muted-foreground">Servicos exibidos</p>
+              <p className="text-lg font-semibold">{filteredServices.length}/{services.length}</p>
+            </div>
+            <div className="rounded-lg border bg-background p-3">
+              <p className="text-muted-foreground">Planejado medio</p>
+              <p className="text-lg font-semibold">
+                {filteredServices.length
+                  ? `${(filteredServices.reduce((sum, svc) => sum + getPlannedPercent(svc), 0) / filteredServices.length).toFixed(0)}%`
+                  : '-'}
+              </p>
+            </div>
+            <div className="rounded-lg border bg-background p-3">
+              <p className="text-muted-foreground">Realizado medio</p>
+              <p className="text-lg font-semibold">
+                {filteredServices.length
+                  ? `${(filteredServices.reduce((sum, svc) => sum + svc.completion_percent, 0) / filteredServices.length).toFixed(0)}%`
+                  : '-'}
+              </p>
+            </div>
+            <div className="rounded-lg border bg-background p-3">
+              <p className="text-muted-foreground">Atrasados / risco</p>
+              <p className="text-lg font-semibold">
+                {filteredServices.filter((svc) => ['delayed', 'at_risk'].includes(getServiceStatus(svc))).length}
+              </p>
+            </div>
+          </div>
+
+          {filteredServices.length === 0 ? (
+            <div className="rounded-lg border border-dashed py-10 text-center text-sm text-muted-foreground">
+              Nenhum servico encontrado com os filtros atuais.
+            </div>
+          ) : (
           <ScrollArea className="w-full">
             <div className="min-w-max">
               {/* Header */}
               <div className="flex border-b">
-                <div className="w-64 shrink-0 border-r px-2 py-1 bg-muted/30 font-medium text-sm">
-                  Etapa
+                <div className="w-96 shrink-0 border-r px-3 py-2 bg-muted/30 font-medium text-sm">
+                  Etapa / servico / leitura
                 </div>
                 <div className="flex" style={{ width: totalWidth }}>
                   {weeks.map((week, i) => (
@@ -192,24 +335,46 @@ export function StrategicGanttChart({
               </div>
 
               {/* Services */}
-              {services.map((svc) => {
+              {filteredServices.map((svc) => {
                 const pos = getBarPosition(svc);
                 const status = getServiceStatus(svc);
                 const statusConfig = STATUS_CONFIG[status];
+                const plannedPercent = getPlannedPercent(svc);
+                const variance = svc.completion_percent - plannedPercent;
+                const delayDays = status === 'delayed' ? differenceInDays(new Date(), svc.planned_end) : 0;
+                const predecessor = svc.depends_on
+                  ? services.find((s) => s.stage_id === svc.depends_on)
+                  : null;
 
                 return (
                   <div key={svc.id} className="flex border-b hover:bg-muted/20 group">
                     {/* Service label */}
-                    <div className="w-64 shrink-0 border-r px-2 py-2 flex items-center gap-2">
+                    <div className="w-96 shrink-0 border-r px-3 py-2 flex items-start gap-2">
                       <div
-                        className="w-3 h-3 rounded-full shrink-0"
+                        className="mt-1 w-3 h-3 rounded-full shrink-0"
                         style={{ backgroundColor: svc.color }}
                       />
                       <div className="min-w-0 flex-1">
-                        <span className="text-xs font-medium truncate block">
-                          {svc.name}
-                        </span>
-                        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold truncate block">
+                            {svc.scope_name}
+                          </span>
+                          <Badge variant="outline" className="h-5 text-[10px]">
+                            {statusConfig.label}
+                          </Badge>
+                        </div>
+                        <div className="truncate text-[11px] text-muted-foreground">
+                          {svc.macro_name}
+                        </div>
+                        <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground">
+                          <span>{svc.executed_houses}/{svc.total_houses} casas</span>
+                          <span>{svc.duration_days} dias</span>
+                          <span>{svc.productivity} un/dia</span>
+                          <span>{svc.teams} equipe(s)</span>
+                          <span>Plan. {plannedPercent.toFixed(0)}%</span>
+                          <span>Real {svc.completion_percent.toFixed(0)}%</span>
+                        </div>
+                        <div className="hidden">
                           <span>{svc.remaining_houses} restantes</span>
                           <span>•</span>
                           <span>{svc.productivity} un/dia</span>
@@ -317,7 +482,7 @@ export function StrategicGanttChart({
                                   style={{ width: `${svc.completion_percent}%` }}
                                 />
                               )}
-                              <div className="relative z-10 px-2 flex items-center gap-1 h-full text-white text-xs font-medium whitespace-nowrap">
+                              <div className={`relative z-10 px-2 flex items-center gap-1 h-full text-xs font-medium whitespace-nowrap ${statusConfig.text || 'text-white'}`}>
                                 <Clock className="h-3 w-3 shrink-0" />
                                 {svc.completion_percent > 0
                                   ? `${svc.completion_percent.toFixed(0)}%`
@@ -325,8 +490,23 @@ export function StrategicGanttChart({
                               </div>
                             </div>
                           </TooltipTrigger>
-                          <TooltipContent>
+                          <TooltipContent className="max-w-xs">
                             <div className="text-sm space-y-1">
+                              <div className="font-medium">{svc.scope_name}</div>
+                              <div className="text-muted-foreground">{svc.macro_name}</div>
+                              <div>Casas: {svc.executed_houses}/{svc.total_houses} realizadas, {svc.remaining_houses} restantes</div>
+                              <div>Equipe: {svc.teams} equipe(s)</div>
+                              <div>Produtividade planejada: {svc.productivity} un/dia</div>
+                              <div>Inicio planejado: {format(svc.planned_start, 'dd/MM/yyyy')}</div>
+                              <div>Fim planejado: {format(svc.planned_end, 'dd/MM/yyyy')}</div>
+                              <div>Duracao: {svc.duration_days} dias</div>
+                              <div>Status: {statusConfig.label}</div>
+                              <div>Planejado x realizado: {plannedPercent.toFixed(0)}% x {svc.completion_percent.toFixed(0)}%</div>
+                              <div>Diferenca: {variance >= 0 ? '+' : ''}{variance.toFixed(0)} p.p.</div>
+                              {delayDays > 0 && <div>Atraso: {delayDays} dias</div>}
+                              <div>Predecessora: {predecessor?.name || 'Nenhuma'}</div>
+                            </div>
+                            <div className="hidden">
                               <div className="font-medium">{svc.name}</div>
                               <div>Início: {format(svc.planned_start, 'dd/MM/yyyy')}</div>
                               <div>Término: {format(svc.planned_end, 'dd/MM/yyyy')}</div>
@@ -346,7 +526,7 @@ export function StrategicGanttChart({
               {/* Projected end */}
               {projectedEndDate && (
                 <div className="flex border-b bg-amber-50 dark:bg-amber-950/20">
-                  <div className="w-64 shrink-0 border-r px-2 py-2 text-sm text-amber-600 dark:text-amber-400">
+                  <div className="w-96 shrink-0 border-r px-3 py-2 text-sm text-amber-600 dark:text-amber-400">
                     📅 Término Projetado
                   </div>
                   <div className="relative py-2" style={{ width: totalWidth }}>
@@ -362,6 +542,7 @@ export function StrategicGanttChart({
             </div>
             <ScrollBar orientation="horizontal" />
           </ScrollArea>
+          )}
         </CardContent>
       </Card>
 
