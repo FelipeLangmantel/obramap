@@ -82,19 +82,19 @@ const getPlannedPercent = (svc: GanttService) => {
   return Math.min(100, Math.max(0, (elapsed / Math.max(svc.duration_days, 1)) * 100));
 };
 
-const STATUS_CONFIG: Record<string, { color: string; label: string; text?: string }> = {
-  planned: { color: 'bg-muted', label: 'Planejado', text: 'text-foreground' },
-  in_progress: { color: 'bg-primary', label: 'Em Andamento', text: 'text-primary-foreground' },
-  at_risk: { color: 'bg-amber-500', label: 'Em Risco', text: 'text-white' },
-  delayed: { color: 'bg-destructive', label: 'Atrasado', text: 'text-destructive-foreground' },
-  completed: { color: 'bg-emerald-500', label: 'Concluído' },
+const STATUS_CONFIG: Record<string, { color: string; dot: string; label: string; text?: string }> = {
+  planned:     { color: 'bg-slate-300 dark:bg-slate-600', dot: 'bg-slate-400',   label: 'Planejado',    text: 'text-slate-800 dark:text-slate-100' },
+  in_progress: { color: 'bg-blue-500',                    dot: 'bg-blue-500',    label: 'Em Andamento', text: 'text-white' },
+  at_risk:     { color: 'bg-amber-400',                   dot: 'bg-amber-400',   label: 'Em Risco',     text: 'text-amber-950' },
+  delayed:     { color: 'bg-red-500',                     dot: 'bg-red-500',     label: 'Atrasado',     text: 'text-white' },
+  completed:   { color: 'bg-emerald-500',                 dot: 'bg-emerald-500', label: 'Concluído',    text: 'text-white' },
 };
 
 const CAPACITY_CONFIG: Record<GanttService['capacity_status'], { label: string; className: string }> = {
-  ok: { label: 'Capacidade suficiente', className: 'border-emerald-300 text-emerald-700 dark:text-emerald-300' },
-  attention: { label: 'Capacidade apertada', className: 'border-amber-300 text-amber-700 dark:text-amber-300' },
-  insufficient: { label: 'Capacidade insuficiente', className: 'border-red-300 text-red-700 dark:text-red-300' },
-  missing_productivity: { label: 'Sem produtividade cadastrada', className: 'border-slate-300 text-muted-foreground' },
+  ok:                    { label: 'Capacidade suficiente',        className: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-900' },
+  attention:             { label: 'Capacidade apertada',          className: 'border-amber-200 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-900' },
+  insufficient:          { label: 'Capacidade insuficiente',      className: 'border-red-200 bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300 dark:border-red-900' },
+  missing_productivity:  { label: 'Sem produtividade cadastrada', className: 'border-slate-200 bg-slate-50 text-slate-600 dark:bg-slate-900/40 dark:text-slate-400 dark:border-slate-800' },
 };
 
 const PRODUCTIVITY_SOURCE_LABEL: Record<GanttService['productivity_source'], string> = {
