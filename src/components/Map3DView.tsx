@@ -1321,6 +1321,7 @@ export function Map3DView() {
   const [viewMode, setViewMode] = useState<ViewMode>("complete");
   const [realServiceFilterOpen, setRealServiceFilterOpen] = useState(false);
   const [hiddenRealServiceKeys, setHiddenRealServiceKeys] = useState<Set<string>>(new Set());
+  const [completeVisualResetNonce, setCompleteVisualResetNonce] = useState(0);
   type CameraMode = "orbit" | "walk";
   const [cameraMode, setCameraMode] = useState<CameraMode>("orbit");
   const [walkInspection, setWalkInspection] = useState<WalkInspection | null>(null);
@@ -3163,6 +3164,102 @@ export function Map3DView() {
       .forEach((part) => traverseRoot(supplementalGlbScenesRef.current.get(part.id)));
   }, [sceneObj, supplementalGlbParts]);
 
+  const restoreCompleteSceneVisibility = useCallback((reason: string) => {
+    const roots: THREE.Object3D[] = [];
+    if (sceneObj) roots.push(sceneObj);
+    supplementalGlbParts.forEach((part) => {
+      const root = supplementalGlbScenesRef.current.get(part.id);
+      if (root) roots.push(root);
+    });
+
+    const audit = {
+      reason,
+      viewMode,
+      totalMeshes: 0,
+      invisibleBefore: 0,
+      invisibleAfter: 0,
+      translucentMaterialsBefore: 0,
+      translucentMaterialsAfter: 0,
+      invisibleParentsFound: 0,
+      stillInvisible: [] as Array<{ layer_key: string; name: string | null; parent: string | null; material: string | null }>,
+    };
+
+    const isEffectivelyVisible = (object: THREE.Object3D) => {
+      let current: THREE.Object3D | null = object;
+      while (current) {
+        if (!current.visible) return false;
+        current = current.parent;
+      }
+      return true;
+    };
+
+    const inspectMaterials = (mesh: THREE.Mesh, phase: "before" | "after") => {
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      materials.forEach((material) => {
+        const anyMaterial = material as any;
+        if (!anyMaterial) return;
+        const isTranslucent = Number(anyMaterial.opacity ?? 1) < 1 || anyMaterial.transparent === true;
+        if (isTranslucent) {
+          if (phase === "before") audit.translucentMaterialsBefore += 1;
+          else audit.translucentMaterialsAfter += 1;
+        }
+      });
+    };
+
+    roots.forEach((root) => {
+      root.traverse((child) => {
+        if (child !== root && !child.visible && child.children.length > 0) {
+          audit.invisibleParentsFound += 1;
+        }
+        if ((child as THREE.Mesh).isMesh) {
+          const mesh = child as THREE.Mesh;
+          audit.totalMeshes += 1;
+          if (!isEffectivelyVisible(mesh)) audit.invisibleBefore += 1;
+          inspectMaterials(mesh, "before");
+        }
+      });
+    });
+
+    roots.forEach((root) => {
+      root.traverse((child) => {
+        child.visible = true;
+        if (!(child as THREE.Mesh).isMesh) return;
+        const mesh = child as THREE.Mesh;
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        materials.forEach((material) => {
+          const anyMaterial = material as any;
+          if (!anyMaterial) return;
+          if ("opacity" in anyMaterial) anyMaterial.opacity = 1;
+          if ("transparent" in anyMaterial) anyMaterial.transparent = false;
+          if ("depthWrite" in anyMaterial) anyMaterial.depthWrite = true;
+          anyMaterial.needsUpdate = true;
+        });
+      });
+    });
+
+    roots.forEach((root) => {
+      root.traverse((child) => {
+        if (!(child as THREE.Mesh).isMesh) return;
+        const mesh = child as THREE.Mesh;
+        if (!isEffectivelyVisible(mesh)) {
+          audit.invisibleAfter += 1;
+          if (audit.stillInvisible.length < 20) {
+            audit.stillInvisible.push({
+              layer_key: getMeshLayerKey(mesh),
+              name: mesh.name || null,
+              parent: mesh.parent?.name || null,
+              material: getMeshMaterialName(mesh) || null,
+            });
+          }
+        }
+        inspectMaterials(mesh, "after");
+      });
+    });
+
+    console.log("[3D Reexibir Tudo Audit]", audit);
+    return audit;
+  }, [sceneObj, supplementalGlbParts, viewMode]);
+
   const collectActiveModelLayerKeys = useCallback(() => {
     const keys = new Set<string>();
     traverseActiveModelMeshes((mesh) => {
@@ -3372,21 +3469,12 @@ export function Map3DView() {
     setHiddenRealServiceKeys(clearedRealServiceFilter);
     setSupplementalGlbParts((current) => current.map((part) => ({ ...part, visible: true })));
     clearAll3DSelection("layers show all");
-    traverseActiveModelMeshes((mesh) => {
-      mesh.visible = true;
-      const material = mesh.material;
-      const materials = Array.isArray(material) ? material : [material];
-      materials.forEach((item) => {
-        const anyMaterial = item as any;
-        if (!anyMaterial) return;
-        if ("opacity" in anyMaterial) {
-          anyMaterial.opacity = 1;
-          anyMaterial.transparent = false;
-          anyMaterial.needsUpdate = true;
-        }
-      });
-    }, { includeHiddenParts: true });
-    applyViewMode(viewMode, undefined, clearedRealServiceFilter);
+    const resetAudit = restoreCompleteSceneVisibility("layers show all");
+    if (viewMode === "complete") {
+      setCompleteVisualResetNonce((value) => value + 1);
+    } else {
+      applyViewMode(viewMode, undefined, clearedRealServiceFilter);
+    }
     console.log("[3D Reexibir Tudo Debug]", {
       viewMode,
       clearedPreview: beforeState.previewEnabled,
@@ -3394,10 +3482,13 @@ export function Map3DView() {
       restoredMaterials: smartLinkPreviewMaterialsRef.current.length,
       layersRestored: true,
       realServiceFilterCleared: hiddenRealServiceKeys.size > 0,
+      invisibleBefore: resetAudit.invisibleBefore,
+      invisibleAfter: resetAudit.invisibleAfter,
+      invisibleParentsFound: resetAudit.invisibleParentsFound,
       reappliedViewMode: viewMode,
     });
     toast.success("Visualização 3D reexibida.");
-  }, [applyViewMode, clearAll3DSelection, hiddenRealServiceKeys.size, layerManager, traverseActiveModelMeshes, viewMode]);
+  }, [applyViewMode, clearAll3DSelection, hiddenRealServiceKeys.size, layerManager, restoreCompleteSceneVisibility, viewMode]);
 
   const updateHiddenRealServices = useCallback((next: Set<string>) => {
     setHiddenRealServiceKeys(next);
@@ -3509,6 +3600,11 @@ export function Map3DView() {
       mesh.visible = isolatedKeys.has(getMeshLayerKey(mesh));
     });
   }, [isolatedKeys, applyViewMode, viewMode, traverseActiveModelMeshes]);
+
+  useEffect(() => {
+    if (completeVisualResetNonce === 0 || viewMode !== "complete") return;
+    restoreCompleteSceneVisibility("layers show all post-state");
+  }, [completeVisualResetNonce, restoreCompleteSceneVisibility, viewMode]);
 
   useEffect(() => {
     if (!hideLinkedInReview || !selectedMeshKey) return;
