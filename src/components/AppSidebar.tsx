@@ -655,7 +655,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       <ProfessionsManagementDialog open={professionsDialogOpen} onOpenChange={setProfessionsDialogOpen} />
 
       <Dialog open={usersDialogOpen} onOpenChange={setUsersDialogOpen}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="flex max-h-[92vh] w-[95vw] max-w-[1500px] flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle>Painel de Gerenciamento de Usuários</DialogTitle>
           </DialogHeader>

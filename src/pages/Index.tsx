@@ -528,7 +528,7 @@ function Index() {
         <NewProjectDialog open={newObraOpen} onOpenChange={setNewObraOpen} />
         <ManageMacrosDialog open={macrosOpen} onOpenChange={setMacrosOpen} />
         <Dialog open={usersOpen} onOpenChange={setUsersOpen}>
-          <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="flex max-h-[92vh] w-[95vw] max-w-[1500px] flex-col overflow-hidden">
             <DialogHeader>
               <DialogTitle>Painel de Gerenciamento de Usuários</DialogTitle>
             </DialogHeader>

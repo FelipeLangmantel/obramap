@@ -656,10 +656,10 @@ export function UserPermissionsPanel() {
   }
 
   return (
-    <div className="space-y-6">
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <div className="flex items-center justify-between">
-          <TabsList>
+    <div className="flex min-h-0 flex-1 flex-col space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <TabsList className="flex h-auto flex-wrap">
             <TabsTrigger value="users" className="gap-2">
               <Users className="h-4 w-4" />
               Usuários
@@ -690,32 +690,31 @@ export function UserPermissionsPanel() {
           )}
         </div>
 
-        <TabsContent value="users" className="space-y-4">
-          <Card>
+        <TabsContent value="users" className="min-h-0 space-y-4 overflow-y-auto pr-1">
+          <Card className="min-w-0">
             <CardHeader>
               <CardTitle>Usuários do Sistema</CardTitle>
               <CardDescription>
                 Gerencie acessos, funções e permissões detalhadas de cada usuário
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <Table>
+            <CardContent className="overflow-x-auto">
+              <Table className="min-w-[1120px]">
                 <TableHeader>
                   <TableRow>
-                     <TableHead>Nome</TableHead>
-                     <TableHead>Email</TableHead>
-                     <TableHead>Função</TableHead>
-                     <TableHead>Senha</TableHead>
-                     <TableHead>Departamento</TableHead>
-                     <TableHead className="text-right">Ações</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
+                     <TableHead className="w-[220px]">Nome</TableHead>
+                     <TableHead className="w-[260px]">Email</TableHead>
+                     <TableHead className="w-[150px]">Função</TableHead>
+                     <TableHead className="w-[140px]">Senha</TableHead>
+                     <TableHead className="w-[160px]">Departamento</TableHead>
+                     <TableHead className="w-[280px] text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {users.map((u) => (
                     <TableRow key={u.id}>
-                      <TableCell className="font-medium">{u.display_name}</TableCell>
-                      <TableCell>{u.email}</TableCell>
+                      <TableCell className="max-w-[220px] truncate font-medium" title={u.display_name}>{u.display_name}</TableCell>
+                      <TableCell className="max-w-[260px] truncate" title={u.email}>{u.email}</TableCell>
                        <TableCell>{getRoleBadge(u.role)}</TableCell>
                        <TableCell>
                          {u.must_change_password ? (
@@ -729,7 +728,7 @@ export function UserPermissionsPanel() {
                            {permissions[u.user_id]?.department || "Geral"}
                          </Badge>
                        </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="whitespace-nowrap text-right">
                         <div className="flex items-center justify-end gap-2">
                           <Select
                             value={u.role}
@@ -826,7 +825,7 @@ export function UserPermissionsPanel() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="departments" className="space-y-4">
+        <TabsContent value="departments" className="min-h-0 space-y-4 overflow-y-auto pr-1">
           <Card>
             <CardHeader>
               <CardTitle>Departamentos / Categorias</CardTitle>
@@ -895,7 +894,7 @@ export function UserPermissionsPanel() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="sessions" className="space-y-4">
+        <TabsContent value="sessions" className="min-h-0 space-y-4 overflow-y-auto pr-1">
           {/* ── Cards de resumo ── */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
@@ -1156,12 +1155,12 @@ export function UserPermissionsPanel() {
           </div>
         </TabsContent>
 
-        <TabsContent value="edit_requests" className="space-y-4">
+        <TabsContent value="edit_requests" className="min-h-0 space-y-4 overflow-y-auto pr-1">
           <ProductionApprovalPanel />
           <EditRequestsPanel />
         </TabsContent>
 
-        <TabsContent value="audit" className="space-y-4">
+        <TabsContent value="audit" className="min-h-0 space-y-4 overflow-y-auto pr-1">
           <AuditLogPanel />
         </TabsContent>
       </Tabs>
