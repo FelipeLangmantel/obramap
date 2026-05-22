@@ -5,8 +5,19 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Settings, Users, TrendingUp, AlertCircle, ClipboardList } from 'lucide-react';
+import {
+  Settings,
+  Users,
+  TrendingUp,
+  AlertCircle,
+  ClipboardList,
+  GitBranch,
+  Layers,
+  ShieldAlert,
+  Info,
+} from 'lucide-react';
 import { ServiceProductivityDialog } from './ServiceProductivityDialog';
+import type { ServiceProductivity } from '@/hooks/useServiceProductivity';
 
 interface ServiceInfo {
   macroId: string;
@@ -15,6 +26,272 @@ interface ServiceInfo {
   scopeName: string;
   macroColor: string;
 }
+
+type SuggestedServiceType =
+  | 'physical_repetitive'
+  | 'physical_one_time'
+  | 'administrative_cost'
+  | 'support_service'
+  | 'milestone'
+  | 'undefined';
+
+interface ServiceCapacityInsight {
+  service: ServiceInfo;
+  productivity?: ServiceProductivity;
+  type: SuggestedServiceType;
+  isConfigured: boolean;
+  planningSuggestion: {
+    gantt: string;
+    lineOfBalance: string;
+    weeklyPlanning: string;
+  };
+}
+
+interface SuggestedTeamGroup {
+  id: string;
+  title: string;
+  services: ServiceCapacityInsight[];
+  reasons: string[];
+  hasDuplicatedCapacityRisk: boolean;
+}
+
+const TYPE_LABELS: Record<SuggestedServiceType, string> = {
+  physical_repetitive: 'Fisico repetitivo',
+  physical_one_time: 'Fisico pontual',
+  administrative_cost: 'Administrativo/custo',
+  support_service: 'Apoio/controle',
+  milestone: 'Marco',
+  undefined: 'Indefinido',
+};
+
+const normalizeText = (value: string | null | undefined) =>
+  (value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+const hasAny = (text: string, terms: string[]) => terms.some((term) => text.includes(term));
+
+const classifyService = (service: ServiceInfo): SuggestedServiceType => {
+  const text = normalizeText(`${service.macroName} ${service.scopeName}`);
+
+  if (
+    hasAny(text, [
+      'adm de obra',
+      'administracao',
+      'administrativo',
+      'engenheiro',
+      'mestre',
+      'canteiro',
+      'instalacoes provisoria',
+      'mobilizacao',
+      'desmobilizacao',
+    ])
+  ) {
+    return 'administrative_cost';
+  }
+
+  if (
+    hasAny(text, [
+      'ensaio',
+      'resistencia',
+      'compressao',
+      'controle tecnologico',
+      'laudo',
+      'teste',
+      'topografia',
+      'projeto',
+      'documentacao',
+    ])
+  ) {
+    return 'support_service';
+  }
+
+  if (hasAny(text, ['marco', 'vistoria', 'entrega', 'habite se', 'medicao final'])) {
+    return 'milestone';
+  }
+
+  if (
+    hasAny(text, [
+      'radier',
+      'parede',
+      'piso',
+      'laje',
+      'oitao',
+      'telhado',
+      'telhamento',
+      'cobertura',
+      'pintura',
+      'esquadria',
+      'porta',
+      'janela',
+      'prumada',
+      'barrilete',
+      'caixa d agua',
+      'agua',
+      'esgoto',
+      'revestimento',
+      'fundacao',
+      'concretagem',
+      'graute',
+      'pre mold',
+      'premold',
+      'moldad',
+    ])
+  ) {
+    return 'physical_repetitive';
+  }
+
+  if (hasAny(text, ['terraplenagem', 'limpeza', 'locacao', 'infraestrutura', 'rede'])) {
+    return 'physical_one_time';
+  }
+
+  return 'undefined';
+};
+
+const getPlanningSuggestion = (type: SuggestedServiceType) => {
+  switch (type) {
+    case 'physical_repetitive':
+      return { gantt: 'Sim', lineOfBalance: 'Sim', weeklyPlanning: 'Sim' };
+    case 'physical_one_time':
+      return { gantt: 'Sim', lineOfBalance: 'Opcional', weeklyPlanning: 'Opcional' };
+    case 'administrative_cost':
+      return { gantt: 'Opcional', lineOfBalance: 'Nao', weeklyPlanning: 'Nao' };
+    case 'support_service':
+      return { gantt: 'Opcional/marco', lineOfBalance: 'Nao', weeklyPlanning: 'Opcional' };
+    case 'milestone':
+      return { gantt: 'Marco', lineOfBalance: 'Nao', weeklyPlanning: 'Nao' };
+    default:
+      return { gantt: 'Revisar', lineOfBalance: 'Revisar', weeklyPlanning: 'Revisar' };
+  }
+};
+
+const getGroupToken = (service: ServiceInfo) => {
+  const text = normalizeText(`${service.macroName} ${service.scopeName}`);
+  const groups = [
+    {
+      id: 'pre_moldado',
+      title: 'Montagem Pre-Moldado',
+      terms: ['pre mold', 'premold', 'moldad', 'oitao', 'laje pre', 'parede pre'],
+    },
+    {
+      id: 'cobertura',
+      title: 'Cobertura',
+      terms: ['telhado', 'telhamento', 'cobertura'],
+    },
+    {
+      id: 'esquadrias',
+      title: 'Esquadrias',
+      terms: ['esquadria', 'janela', 'porta', 'vidro', 'aluminio'],
+    },
+    {
+      id: 'hidraulica',
+      title: 'Hidraulica e prumadas',
+      terms: ['prumada', 'barrilete', 'caixa d agua', 'agua fria', 'agua quente', 'esgoto'],
+    },
+    {
+      id: 'fundacao',
+      title: 'Fundacao',
+      terms: ['radier', 'fundacao', 'concretagem'],
+    },
+    {
+      id: 'pintura',
+      title: 'Pintura',
+      terms: ['pintura', 'emassamento', 'massa corrida', 'textura'],
+    },
+  ];
+
+  return groups.find((group) => hasAny(text, group.terms)) || null;
+};
+
+const normalizeUnit = (productivity?: ServiceProductivity) =>
+  normalizeText(productivity?.productivity_unit)
+    .replace(/\bpor\b/g, '')
+    .replace(/\bdia\b/g, '')
+    .replace(/\bsemana\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const dailyProductivity = (productivity?: ServiceProductivity) => {
+  if (!productivity?.productivity_value) return null;
+  const unit = normalizeText(productivity.productivity_unit);
+  const value = Number(productivity.productivity_value) || 0;
+  if (!value) return null;
+  if (unit.includes('semana')) {
+    return value / Math.max(Number(productivity.working_days_per_week) || 5, 1);
+  }
+  return value;
+};
+
+const hasSimilarProductivity = (items: ServiceCapacityInsight[]) => {
+  const values = items
+    .map((item) => dailyProductivity(item.productivity))
+    .filter((value): value is number => typeof value === 'number' && value > 0);
+  if (values.length < 2) return false;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  return min > 0 && max / min <= 1.35;
+};
+
+const hasCompatibleComposition = (items: ServiceCapacityInsight[]) => {
+  const signatures = items
+    .filter((item) => item.productivity)
+    .map((item) => {
+      const productivity = item.productivity!;
+      const roles = (productivity.team_composition || [])
+        .map((role) => `${normalizeText(role.role_name)}:${role.role_type}:${role.quantity}`)
+        .sort()
+        .join('|');
+      return [
+        productivity.professionals_per_team,
+        productivity.helpers_per_team,
+        productivity.default_team_count,
+        roles,
+      ].join(':');
+    });
+  return signatures.length >= 2 && new Set(signatures).size === 1;
+};
+
+const buildSuggestedTeamGroups = (insights: ServiceCapacityInsight[]): SuggestedTeamGroup[] => {
+  const grouped = new Map<string, { tokenTitle: string; items: ServiceCapacityInsight[] }>();
+
+  insights
+    .filter((insight) => insight.type === 'physical_repetitive')
+    .forEach((insight) => {
+      const token = getGroupToken(insight.service);
+      if (!token) return;
+      const key = `${insight.service.macroId}:${token.id}`;
+      const current = grouped.get(key) || { tokenTitle: token.title, items: [] };
+      current.items.push(insight);
+      grouped.set(key, current);
+    });
+
+  return Array.from(grouped.entries())
+    .filter(([, group]) => group.items.length >= 2)
+    .map(([id, group]) => {
+      const unitCount = new Set(group.items.map((item) => normalizeUnit(item.productivity))).size;
+      const reasons = [
+        `mesma etapa ${group.items[0].service.macroName}`,
+        'nomes relacionados',
+      ];
+
+      if (unitCount <= 1) reasons.push('mesma unidade');
+      if (hasSimilarProductivity(group.items)) reasons.push('produtividade semelhante');
+      if (hasCompatibleComposition(group.items)) reasons.push('composicao de equipe compativel');
+
+      const configuredCount = group.items.filter((item) => item.productivity).length;
+
+      return {
+        id,
+        title: group.tokenTitle,
+        services: group.items,
+        reasons,
+        hasDuplicatedCapacityRisk: configuredCount >= 2,
+      };
+    });
+};
 
 export function ServiceProductivityView() {
   const { currentProject } = useConstruction();
@@ -52,6 +329,30 @@ export function ServiceProductivityView() {
       (sum, p) => sum + p.default_team_count * p.helpers_per_team, 0
     );
     return { total, configured, missing, totalProfessionals, totalHelpers };
+  }, [allServices, productivities]);
+
+  const capacityDiagnostics = useMemo(() => {
+    const productivityByScope = new Map(productivities.map((item) => [item.scope_id, item]));
+    const serviceInsights: ServiceCapacityInsight[] = allServices.map((service) => {
+      const type = classifyService(service);
+      return {
+        service,
+        productivity: productivityByScope.get(service.scopeId),
+        type,
+        isConfigured: productivityByScope.has(service.scopeId),
+        planningSuggestion: getPlanningSuggestion(type),
+      };
+    });
+
+    const suggestedGroups = buildSuggestedTeamGroups(serviceInsights);
+
+    return {
+      serviceInsights,
+      suggestedGroups,
+      likelyAdministrative: serviceInsights.filter((item) => item.type === 'administrative_cost').length,
+      physicalRepetitive: serviceInsights.filter((item) => item.type === 'physical_repetitive').length,
+      duplicatedCapacityRisk: suggestedGroups.filter((group) => group.hasDuplicatedCapacityRisk).length,
+    };
   }, [allServices, productivities]);
 
   if (!currentProject) {
@@ -133,6 +434,139 @@ export function ServiceProductivityView() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Capacity Diagnostic */}
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Layers className="h-5 w-5 text-primary" />
+                Diagnostico de capacidade
+              </CardTitle>
+              <CardDescription>
+                Leitura local para identificar frentes compartilhadas e servicos que podem entrar no planejamento fisico.
+              </CardDescription>
+            </div>
+            <Badge variant="outline" className="w-fit gap-1">
+              <Info className="h-3 w-3" />
+              Somente leitura
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+            <div className="rounded-lg border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Servicos configurados</p>
+              <p className="text-xl font-semibold">{stats.configured}</p>
+            </div>
+            <div className="rounded-lg border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Servicos pendentes</p>
+              <p className="text-xl font-semibold">{stats.missing}</p>
+            </div>
+            <div className="rounded-lg border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Sem produtividade</p>
+              <p className="text-xl font-semibold">{stats.missing}</p>
+            </div>
+            <div className="rounded-lg border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Administrativos provaveis</p>
+              <p className="text-xl font-semibold">{capacityDiagnostics.likelyAdministrative}</p>
+            </div>
+            <div className="rounded-lg border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Fisicos repetitivos</p>
+              <p className="text-xl font-semibold">{capacityDiagnostics.physicalRepetitive}</p>
+            </div>
+            <div className="rounded-lg border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Possiveis grupos</p>
+              <p className="text-xl font-semibold">{capacityDiagnostics.suggestedGroups.length}</p>
+            </div>
+          </div>
+
+          {capacityDiagnostics.duplicatedCapacityRisk > 0 && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+              <div className="flex items-start gap-2">
+                <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                <div>
+                  <p className="font-medium">Possivel capacidade duplicada</p>
+                  <p className="text-xs">
+                    Alguns servicos parecem usar a mesma frente de trabalho. Hoje eles continuam salvos separadamente,
+                    mas o planejamento futuro deve considerar estes grupos para nao somar capacidade como equipes independentes.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="flex items-center gap-2 text-sm font-semibold">
+                <GitBranch className="h-4 w-4 text-primary" />
+                Possiveis grupos de equipe
+              </h3>
+              <Badge variant="secondary">Acao futura</Badge>
+            </div>
+
+            {capacityDiagnostics.suggestedGroups.length > 0 ? (
+              <div className="grid gap-3 lg:grid-cols-2">
+                {capacityDiagnostics.suggestedGroups.map((group) => (
+                  <div key={group.id} className="rounded-lg border p-3">
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <p className="font-medium">{group.title}</p>
+                      <Badge variant="outline">Sugestao de grupo</Badge>
+                      {group.hasDuplicatedCapacityRisk && (
+                        <Badge variant="secondary" className="text-amber-700 dark:text-amber-300">
+                          revisar capacidade
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="mb-3 flex flex-wrap gap-1.5">
+                      {group.services.map((item) => (
+                        <Badge key={item.service.scopeId} variant="secondary" className="font-normal">
+                          {item.service.scopeName}
+                        </Badge>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Motivos: {group.reasons.join(', ')}.
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                Nenhuma sugestao de grupo encontrada com os dados atuais.
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold">Classificacao sugerida dos servicos</h3>
+            <ScrollArea className="h-72 rounded-lg border">
+              <div className="divide-y">
+                {capacityDiagnostics.serviceInsights.map((item) => (
+                  <div key={item.service.scopeId} className="grid gap-3 p-3 md:grid-cols-[minmax(0,1.4fr)_auto_minmax(240px,1fr)] md:items-center">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{item.service.scopeName}</p>
+                      <p className="truncate text-xs text-muted-foreground">{item.service.macroName}</p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant={item.isConfigured ? 'default' : 'outline'}>
+                        {item.isConfigured ? 'Configurado' : 'Sem produtividade'}
+                      </Badge>
+                      <Badge variant="secondary">{TYPE_LABELS[item.type]}</Badge>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <span className="rounded border px-2 py-1">Gantt: {item.planningSuggestion.gantt}</span>
+                      <span className="rounded border px-2 py-1">Linha: {item.planningSuggestion.lineOfBalance}</span>
+                      <span className="rounded border px-2 py-1">Semanal: {item.planningSuggestion.weeklyPlanning}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Services List */}
       <Card>
