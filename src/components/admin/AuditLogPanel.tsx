@@ -12,6 +12,28 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { AlertTriangle, Copy, Download, Eye, History, Loader2, Search, ShieldAlert } from "lucide-react";
 
+interface AuditUserOption {
+  user_id: string;
+  display_name: string | null;
+  email: string | null;
+  role: string;
+}
+
+interface AuditSession {
+  id: string;
+  user_id: string;
+  login_at: string;
+  logout_at: string | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  is_active: boolean;
+  last_active_at: string | null;
+  city?: string | null;
+  region?: string | null;
+  browser?: string | null;
+  device_type?: string | null;
+}
+
 const ACAO_LABELS: Record<string, { label: string; cls: string }> = {
   INSERT: { label: "Criação", cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300" },
   UPDATE: { label: "Edição", cls: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300" },
@@ -195,6 +217,46 @@ function escapeCsv(value: any) {
   return `"${text.replace(/"/g, '""')}"`;
 }
 
+function getRoleLabel(role: string | null | undefined) {
+  if (role === "admin") return "Administrador";
+  if (role === "editor") return "Editor";
+  if (role === "viewer") return "Visualizador";
+  return "Sem perfil";
+}
+
+function getUserDisplayName(user?: AuditUserOption) {
+  if (!user) return "Usuario";
+  return user.display_name || user.email || "Usuario";
+}
+
+function getSessionReferenceDate(session: AuditSession) {
+  return session.last_active_at || session.logout_at || session.login_at;
+}
+
+function getRelativeTime(value: string | null | undefined) {
+  if (!value) return "sem registro";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "data invalida";
+  const diffMinutes = Math.max(0, Math.round((Date.now() - date.getTime()) / 60000));
+  if (diffMinutes < 1) return "agora";
+  if (diffMinutes < 60) return `ha ${diffMinutes} min`;
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours < 24) return `ha ${diffHours} h`;
+  return `ha ${Math.round(diffHours / 24)} d`;
+}
+
+function getSessionStatus(session: AuditSession) {
+  const date = new Date(getSessionReferenceDate(session) || "");
+  const minutes = Number.isNaN(date.getTime()) ? Infinity : (Date.now() - date.getTime()) / 60000;
+  if (session.is_active && minutes <= 5) {
+    return { label: "Online", cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300" };
+  }
+  if (session.is_active && minutes <= 30) {
+    return { label: "Ativo recente", cls: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300" };
+  }
+  return { label: "Offline", cls: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" };
+}
+
 export function AuditLogPanel() {
   const { company, isSystemAdmin } = useAuth();
   const queryClient = useQueryClient();
@@ -210,22 +272,98 @@ export function AuditLogPanel() {
   const [searchUser, setSearchUser] = useState("");
   const [selectedLog, setSelectedLog] = useState<any>(null);
 
-  // Fetch company user names for resolving user_id -> name
-  const { data: userMap = new Map() } = useQuery({
-    queryKey: ["company-users-map", company?.id],
+  // Fetch all company users for the audit filter, not only users that already have audit_log rows.
+  const { data: companyUsers = [] } = useQuery({
+    queryKey: ["audit-company-users", company?.id],
     queryFn: async () => {
-      const { data } = await supabase
+      const profilesResult = await supabase
         .from("profiles")
-        .select("user_id, display_name, email")
-        .eq("company_id", company!.id);
-      const map = new Map<string, string>();
-      (data || []).forEach((p: any) => {
-        map.set(p.user_id, p.display_name || p.email || "Usuário");
+        .select("user_id, display_name, email, company_id")
+        .eq("company_id", company!.id)
+        .order("display_name", { ascending: true });
+
+      const profileRows = (profilesResult.data || []) as any[];
+      const userIds = profileRows.map((profile) => profile.user_id).filter(Boolean);
+      const rolesResult = userIds.length
+        ? await supabase
+          .from("user_roles")
+          .select("user_id, role")
+          .in("user_id", userIds)
+        : { data: [] };
+
+      const rolesByUser = new Map<string, string>();
+      (rolesResult.data || []).forEach((role: any) => {
+        rolesByUser.set(role.user_id, role.role);
       });
-      return map;
+
+      return profileRows.map((profile) => ({
+        user_id: profile.user_id,
+        display_name: profile.display_name,
+        email: profile.email,
+        role: rolesByUser.get(profile.user_id) || "viewer",
+      })) as AuditUserOption[];
     },
     enabled: !!company?.id,
   });
+
+  const userMap = useMemo(() => {
+    const map = new Map<string, string>();
+    companyUsers.forEach((user) => {
+      map.set(user.user_id, getUserDisplayName(user));
+    });
+    return map;
+  }, [companyUsers]);
+
+  const userById = useMemo(() => {
+    return new Map(companyUsers.map((user) => [user.user_id, user]));
+  }, [companyUsers]);
+
+  const { data: sessions = [] } = useQuery({
+    queryKey: ["audit-user-sessions", company?.id, companyUsers.map((user) => user.user_id).join("|")],
+    queryFn: async () => {
+      const userIds = companyUsers.map((user) => user.user_id);
+      if (!userIds.length) return [] as AuditSession[];
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const { data } = await supabase
+        .from("user_sessions")
+        .select("id, user_id, login_at, logout_at, ip_address, user_agent, is_active, last_active_at, city, region, browser, device_type")
+        .in("user_id", userIds)
+        .gte("login_at", thirtyDaysAgo)
+        .order("login_at", { ascending: false })
+        .limit(200);
+      return (data || []) as AuditSession[];
+    },
+    enabled: !!company?.id && companyUsers.length > 0,
+  });
+
+  const latestSessions = useMemo(() => {
+    const byUser = new Map<string, AuditSession>();
+    sessions.forEach((session) => {
+      const current = byUser.get(session.user_id);
+      const sessionTime = new Date(getSessionReferenceDate(session)).getTime();
+      const currentTime = current ? new Date(getSessionReferenceDate(current)).getTime() : -Infinity;
+      if (!current || sessionTime > currentTime) {
+        byUser.set(session.user_id, session);
+      }
+    });
+    return Array.from(byUser.values()).sort((a, b) => {
+      return new Date(getSessionReferenceDate(b)).getTime() - new Date(getSessionReferenceDate(a)).getTime();
+    });
+  }, [sessions]);
+
+  const activeSummary = useMemo(() => {
+    const activeRecent = latestSessions.filter((session) => {
+      const status = getSessionStatus(session).label;
+      return status === "Online" || status === "Ativo recente";
+    });
+    return {
+      recentViewers: activeRecent.filter((session) => userById.get(session.user_id)?.role === "viewer").length,
+      recentEditorsAdmins: activeRecent.filter((session) => {
+        const role = userById.get(session.user_id)?.role;
+        return role === "admin" || role === "editor";
+      }).length,
+    };
+  }, [latestSessions, userById]);
 
   // Fetch obra names for enrichment
   const { data: obraMap = new Map() } = useQuery({
@@ -334,14 +472,17 @@ export function AuditLogPanel() {
     const tables = Array.from(new Set(logs.map((log: any) => log.tabela).filter(Boolean))).sort();
     const modules = Array.from(new Set(logs.map((log: any) => getAuditModuleLabel(log.tabela)).filter(Boolean))).sort();
     const actions = Array.from(new Set(logs.map((log: any) => log.acao).filter(Boolean))).sort();
-    const users = Array.from(
-      new Map(logs.filter((log: any) => log.user_id).map((log: any) => [log.user_id, resolveUserName(log)])).entries()
-    ).sort((a, b) => String(a[1]).localeCompare(String(b[1])));
+    const users = companyUsers
+      .map((user) => [
+        user.user_id,
+        `${getUserDisplayName(user)} - ${getRoleLabel(user.role)}${user.email && user.display_name ? ` (${user.email})` : ""}`,
+      ] as [string, string])
+      .sort((a, b) => String(a[1]).localeCompare(String(b[1])));
     const obras = Array.from(
       new Map(logs.map((log: any) => [extractObraId(log), resolveObraName(log)]).filter(([id, name]) => id && name) as [string, string][]).entries()
     ).sort((a, b) => String(a[1]).localeCompare(String(b[1])));
     return { tables, modules, actions, users, obras };
-  }, [logs, userMap, obraMap]);
+  }, [logs, companyUsers, obraMap]);
 
   const severityCounts = useMemo(() => {
     return filteredLogs.reduce(
@@ -351,6 +492,10 @@ export function AuditLogPanel() {
       },
       { critical: 0, medium: 0, low: 0 }
     );
+  }, [filteredLogs]);
+
+  const loggedUsersInPeriod = useMemo(() => {
+    return new Set(filteredLogs.map((log: any) => log.user_id).filter(Boolean)).size;
   }, [filteredLogs]);
 
   const renderKeyValue = (label: string, data: any) => {
@@ -440,7 +585,7 @@ export function AuditLogPanel() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <div className="rounded-lg border p-3">
           <p className="text-xs text-muted-foreground">Registros filtrados</p>
           <p className="text-xl font-semibold">{filteredLogs.length}</p>
@@ -456,6 +601,33 @@ export function AuditLogPanel() {
         <div className="rounded-lg border p-3">
           <p className="text-xs text-muted-foreground">Escopo</p>
           <p className="text-sm font-medium">{isSystemAdmin ? "System admin" : "Empresa atual por RLS"}</p>
+        </div>
+        <div className="rounded-lg border p-3">
+          <p className="text-xs text-muted-foreground">Usuarios da empresa</p>
+          <p className="text-xl font-semibold">{companyUsers.length}</p>
+        </div>
+        <div className="rounded-lg border p-3">
+          <p className="text-xs text-muted-foreground">Sem logs no filtro</p>
+          <p className="text-xl font-semibold">{Math.max(companyUsers.length - loggedUsersInPeriod, 0)}</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="rounded-lg border p-3">
+          <p className="text-xs text-muted-foreground">Usuarios com logs</p>
+          <p className="text-xl font-semibold">{loggedUsersInPeriod}</p>
+        </div>
+        <div className="rounded-lg border p-3">
+          <p className="text-xs text-muted-foreground">Sessoes recentes</p>
+          <p className="text-xl font-semibold">{latestSessions.length}</p>
+        </div>
+        <div className="rounded-lg border p-3">
+          <p className="text-xs text-muted-foreground">Visualizadores ativos</p>
+          <p className="text-xl font-semibold">{activeSummary.recentViewers}</p>
+        </div>
+        <div className="rounded-lg border p-3">
+          <p className="text-xs text-muted-foreground">Admins/Editores ativos</p>
+          <p className="text-xl font-semibold">{activeSummary.recentEditorsAdmins}</p>
         </div>
       </div>
 
@@ -564,7 +736,9 @@ export function AuditLogPanel() {
               <TableRow>
                 <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-8">
                   <History className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
-                  Nenhum registro de auditoria encontrado.
+                  {filterUsuario !== "all"
+                    ? "Nenhuma atividade auditada encontrada para este usuario no periodo selecionado."
+                    : "Nenhum log encontrado para este filtro."}
                 </TableCell>
               </TableRow>
             ) : (
@@ -603,7 +777,7 @@ export function AuditLogPanel() {
                     <TableCell className="max-w-[260px]">
                       <div className="truncate text-muted-foreground">{description}</div>
                       <div className="font-mono text-[10px] text-muted-foreground">
-                        ID {extractRecordId(log)?.slice(0, 8) || "â€”"}
+                        ID {extractRecordId(log)?.slice(0, 8) || "—"}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -615,6 +789,75 @@ export function AuditLogPanel() {
             )}
           </TableBody>
         </Table>
+      </div>
+
+      <div className="rounded-lg border p-4 space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold">Atividade Atual / Sessoes</h3>
+            <p className="text-xs text-muted-foreground">
+              Visualizadores podem nao aparecer em registros de auditoria quando apenas navegam.
+              Esta area usa sessoes para mostrar presenca recente quando esses dados existem.
+            </p>
+          </div>
+          <Badge variant="outline">{latestSessions.length} usuario(s)</Badge>
+        </div>
+
+        {latestSessions.length === 0 ? (
+          <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+            Atividade atual indisponivel: nao ha sessoes recentes ou dados de last_seen suficientes para os usuarios da empresa.
+          </div>
+        ) : (
+          <div className="border rounded-lg overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs">Usuario</TableHead>
+                  <TableHead className="text-xs">Perfil</TableHead>
+                  <TableHead className="text-xs">Status</TableHead>
+                  <TableHead className="text-xs">Ultima atividade</TableHead>
+                  <TableHead className="text-xs">IP / dispositivo</TableHead>
+                  <TableHead className="text-xs">Login</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {latestSessions.slice(0, 20).map((session) => {
+                  const user = userById.get(session.user_id);
+                  const status = getSessionStatus(session);
+                  const device = [session.browser, session.device_type].filter(Boolean).join(" / ");
+                  return (
+                    <TableRow key={session.id} className="text-xs">
+                      <TableCell>
+                        <div className="font-medium">{getUserDisplayName(user)}</div>
+                        <div className="text-[10px] text-muted-foreground">{user?.email || "Email nao informado"}</div>
+                      </TableCell>
+                      <TableCell>{getRoleLabel(user?.role)}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className={`text-[10px] ${status.cls}`}>{status.label}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div>{getRelativeTime(getSessionReferenceDate(session))}</div>
+                        <div className="text-[10px] text-muted-foreground">
+                          {safeDateLabel(getSessionReferenceDate(session), "dd/MM/yyyy HH:mm")}
+                        </div>
+                      </TableCell>
+                      <TableCell className="max-w-[180px]">
+                        <div className="truncate">{session.ip_address || "IP nao informado"}</div>
+                        <div className="truncate text-[10px] text-muted-foreground">{device || session.user_agent || "Dispositivo nao informado"}</div>
+                      </TableCell>
+                      <TableCell>{safeDateLabel(session.login_at, "dd/MM/yyyy HH:mm")}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+
+        <p className="text-xs text-muted-foreground">
+          Limite atual: sessoes mostram presenca, IP e dispositivo quando disponiveis, mas nao registram rota atual,
+          modulo aberto ou obra acessada. Para auditoria de navegacao sera necessaria uma estrutura futura de eventos de atividade.
+        </p>
       </div>
 
       {/* Detail Dialog */}
