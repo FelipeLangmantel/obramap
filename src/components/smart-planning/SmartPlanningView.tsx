@@ -25,23 +25,31 @@ import {
   Users,
   ClipboardList
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { PlanningStage, TeamComposition } from './types';
 
-const formatHouses = (houses: number[]) => {
-  if (!houses.length) return '-';
-  if (houses.length <= 6) return houses.join(', ');
-  return `${houses.slice(0, 6).join(', ')} +${houses.length - 6}`;
+const formatHouses = (houses: number[] | null | undefined) => {
+  const safeHouses = Array.isArray(houses) ? houses.filter((house) => Number.isFinite(Number(house))) : [];
+  if (!safeHouses.length) return 'Não informado';
+  if (safeHouses.length <= 6) return safeHouses.join(', ');
+  return `${safeHouses.slice(0, 6).join(', ')} +${safeHouses.length - 6}`;
 };
 
 const formatDateRange = (start: string | null, end: string | null) => {
-  if (!start && !end) return '-';
-  if (start && end) return `${format(new Date(start), 'dd/MM/yyyy')} - ${format(new Date(end), 'dd/MM/yyyy')}`;
-  return format(new Date(start || end || ''), 'dd/MM/yyyy');
+  const startLabel = formatSafeDate(start);
+  const endLabel = formatSafeDate(end);
+  if (startLabel && endLabel) return `${startLabel} - ${endLabel}`;
+  return startLabel || endLabel || 'Sem data';
 };
 
-const formatStatusLabel = (status: string) => {
+const formatSafeDate = (value: string | null | undefined, pattern = 'dd/MM/yyyy') => {
+  if (!value) return null;
+  const date = new Date(value);
+  return isValid(date) ? format(date, pattern, { locale: ptBR }) : null;
+};
+
+const formatStatusLabel = (status: string | null | undefined) => {
   const labels: Record<string, string> = {
     cumprida: 'Cumprida',
     parcial: 'Parcial',
@@ -54,10 +62,11 @@ const formatStatusLabel = (status: string) => {
     delayed: 'Atrasado',
     estimated: 'Estimado',
   };
-  return labels[status] || status;
+  return status ? labels[status] || status : 'Não informado';
 };
 
-const getStatusBadgeVariant = (status: string): 'default' | 'secondary' | 'destructive' | 'outline' => {
+const getStatusBadgeVariant = (status: string | null | undefined): 'default' | 'secondary' | 'destructive' | 'outline' => {
+  if (!status) return 'outline';
   if (['nao_cumprida', 'delayed'].includes(status)) return 'destructive';
   if (['parcial', 'excedida', 'in_progress'].includes(status)) return 'secondary';
   if (['cumprida', 'completed'].includes(status)) return 'default';
@@ -71,7 +80,49 @@ const getSeverityBadgeVariant = (severity: string): 'default' | 'secondary' | 'd
 };
 
 const countDiagnostics = (diagnostics: ReturnType<typeof usePlanningOfficialView>['diagnostics'], type: string) =>
-  diagnostics.filter((diagnostic) => diagnostic.type === type).length;
+  (Array.isArray(diagnostics) ? diagnostics : []).filter((diagnostic) => diagnostic?.type === type).length;
+
+class PlanningDiagnosticRenderBoundary extends React.Component<
+  {
+    summary: {
+      officialPackages: number;
+      weeklyTargets: number;
+      actualProductions: number;
+      deviations: number;
+      diagnostics: number;
+    };
+    children: React.ReactNode;
+  },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+
+  componentDidCatch(error: Error) {
+    if (import.meta.env.DEV) {
+      console.error('[Planning Diagnostic Render Error]', error, this.props.summary);
+    }
+    this.setState({ hasError: true });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <Card>
+          <CardHeader>
+            <CardTitle>Diagnóstico do Planejamento</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              Não foi possível montar o diagnóstico com os dados atuais. O Gantt e a Linha de Balanço permanecem disponíveis.
+            </p>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 
 export function SmartPlanningView() {
@@ -144,6 +195,93 @@ export function SmartPlanningView() {
     await loadData();
   };
 
+  const unresolvedAlerts = Array.isArray(alerts) ? alerts.filter(a => !a.is_resolved) : [];
+  const latestBaseline = Array.isArray(baselines) ? baselines[0] : null;
+  const {
+    officialPackages = [],
+    weeklyTargets = [],
+    actualProductions = [],
+    deviations = [],
+    diagnostics = [],
+  } = planningOfficialView || {};
+
+  const diagnosticOptions = useMemo(() => {
+    const macros = new Set<string>();
+    const services = new Set<string>();
+    const statuses = new Set<string>();
+    const severities = new Set<string>();
+    const weeks = new Set<string>();
+    const contractors = new Set<string>();
+
+    (Array.isArray(weeklyTargets) ? weeklyTargets : []).forEach((target) => {
+      if (target?.macroName) macros.add(target.macroName);
+      if (target?.scopeName) services.add(target.scopeName);
+      if (target?.status) statuses.add(target.status);
+      if (target?.weekStartDate || target?.weekEndDate) weeks.add(formatDateRange(target.weekStartDate, target.weekEndDate));
+      if (target?.contractorName) contractors.add(target.contractorName);
+    });
+    (Array.isArray(officialPackages) ? officialPackages : []).forEach((pkg) => {
+      if (pkg?.macroName) macros.add(pkg.macroName);
+      if (pkg?.scopeName) services.add(pkg.scopeName);
+      if (pkg?.status) statuses.add(pkg.status);
+    });
+    (Array.isArray(diagnostics) ? diagnostics : []).forEach((diagnostic) => {
+      if (diagnostic?.severity) severities.add(diagnostic.severity);
+    });
+
+    return {
+      macros: Array.from(macros).sort(),
+      services: Array.from(services).sort(),
+      statuses: Array.from(statuses).sort(),
+      severities: Array.from(severities).sort(),
+      weeks: Array.from(weeks).sort(),
+      contractors: Array.from(contractors).sort(),
+    };
+  }, [diagnostics, officialPackages, weeklyTargets]);
+
+  const filteredWeeklyTargets = useMemo(() => (Array.isArray(weeklyTargets) ? weeklyTargets : []).filter((target) => {
+    if (!target) return false;
+    if (diagnosticFilters.macro !== 'all' && target.macroName !== diagnosticFilters.macro) return false;
+    if (diagnosticFilters.service !== 'all' && target.scopeName !== diagnosticFilters.service) return false;
+    if (diagnosticFilters.status !== 'all' && target.status !== diagnosticFilters.status) return false;
+    if (diagnosticFilters.week !== 'all' && formatDateRange(target.weekStartDate, target.weekEndDate) !== diagnosticFilters.week) return false;
+    if (diagnosticFilters.contractor !== 'all' && target.contractorName !== diagnosticFilters.contractor) return false;
+    return true;
+  }), [diagnosticFilters, weeklyTargets]);
+
+  const filteredPackages = useMemo(() => (Array.isArray(officialPackages) ? officialPackages : []).filter((pkg) => {
+    if (!pkg) return false;
+    if (diagnosticFilters.macro !== 'all' && pkg.macroName !== diagnosticFilters.macro) return false;
+    if (diagnosticFilters.service !== 'all' && pkg.scopeName !== diagnosticFilters.service) return false;
+    if (diagnosticFilters.status !== 'all' && pkg.status !== diagnosticFilters.status) return false;
+    return true;
+  }), [diagnosticFilters, officialPackages]);
+
+  const filteredDiagnostics = useMemo(() => (Array.isArray(diagnostics) ? diagnostics : []).filter((diagnostic) => {
+    if (!diagnostic) return false;
+    if (diagnosticFilters.severity !== 'all' && diagnostic.severity !== diagnosticFilters.severity) return false;
+    return true;
+  }), [diagnosticFilters.severity, diagnostics]);
+
+  const filteredDeviations = useMemo(() => (Array.isArray(deviations) ? deviations : []).filter((deviation) => {
+    if (!deviation) return false;
+    if (diagnosticFilters.macro !== 'all') {
+      const target = weeklyTargets.find((item) => item.id === deviation.weeklyPlanServiceId);
+      if (target?.macroName !== diagnosticFilters.macro) return false;
+    }
+    if (diagnosticFilters.service !== 'all') {
+      const target = weeklyTargets.find((item) => item.id === deviation.weeklyPlanServiceId);
+      if (target?.scopeName !== diagnosticFilters.service) return false;
+    }
+    return true;
+  }), [deviations, diagnosticFilters.macro, diagnosticFilters.service, weeklyTargets]);
+
+  const criticalDiagnostics = (Array.isArray(diagnostics) ? diagnostics : []).filter((diagnostic) => diagnostic?.severity === 'critical').length;
+  const warningDiagnostics = (Array.isArray(diagnostics) ? diagnostics : []).filter((diagnostic) => diagnostic?.severity === 'warning').length;
+  const initialBankCount = (Array.isArray(actualProductions) ? actualProductions : []).filter((actual) => actual?.source === 'initial_bank').length;
+  const validInitialBankCount = (Array.isArray(actualProductions) ? actualProductions : []).filter(
+    (actual) => actual?.source === 'initial_bank' && actual.countsForProgress && !actual.countsForWeeklyPerformance
+  ).length;
 
   if (!currentProject) {
     return (
@@ -182,90 +320,6 @@ export function SmartPlanningView() {
     );
   }
 
-  const unresolvedAlerts = alerts.filter(a => !a.is_resolved);
-  const latestBaseline = baselines[0];
-  const {
-    officialPackages,
-    weeklyTargets,
-    actualProductions,
-    deviations,
-    diagnostics,
-  } = planningOfficialView;
-
-  const diagnosticOptions = useMemo(() => {
-    const macros = new Set<string>();
-    const services = new Set<string>();
-    const statuses = new Set<string>();
-    const severities = new Set<string>();
-    const weeks = new Set<string>();
-    const contractors = new Set<string>();
-
-    weeklyTargets.forEach((target) => {
-      if (target.macroName) macros.add(target.macroName);
-      if (target.scopeName) services.add(target.scopeName);
-      if (target.status) statuses.add(target.status);
-      if (target.weekStartDate || target.weekEndDate) weeks.add(formatDateRange(target.weekStartDate, target.weekEndDate));
-      if (target.contractorName) contractors.add(target.contractorName);
-    });
-    officialPackages.forEach((pkg) => {
-      if (pkg.macroName) macros.add(pkg.macroName);
-      if (pkg.scopeName) services.add(pkg.scopeName);
-      if (pkg.status) statuses.add(pkg.status);
-    });
-    diagnostics.forEach((diagnostic) => {
-      severities.add(diagnostic.severity);
-    });
-
-    return {
-      macros: Array.from(macros).sort(),
-      services: Array.from(services).sort(),
-      statuses: Array.from(statuses).sort(),
-      severities: Array.from(severities).sort(),
-      weeks: Array.from(weeks).sort(),
-      contractors: Array.from(contractors).sort(),
-    };
-  }, [diagnostics, officialPackages, weeklyTargets]);
-
-  const filteredWeeklyTargets = useMemo(() => weeklyTargets.filter((target) => {
-    if (diagnosticFilters.macro !== 'all' && target.macroName !== diagnosticFilters.macro) return false;
-    if (diagnosticFilters.service !== 'all' && target.scopeName !== diagnosticFilters.service) return false;
-    if (diagnosticFilters.status !== 'all' && target.status !== diagnosticFilters.status) return false;
-    if (diagnosticFilters.week !== 'all' && formatDateRange(target.weekStartDate, target.weekEndDate) !== diagnosticFilters.week) return false;
-    if (diagnosticFilters.contractor !== 'all' && target.contractorName !== diagnosticFilters.contractor) return false;
-    return true;
-  }), [diagnosticFilters, weeklyTargets]);
-
-  const filteredPackages = useMemo(() => officialPackages.filter((pkg) => {
-    if (diagnosticFilters.macro !== 'all' && pkg.macroName !== diagnosticFilters.macro) return false;
-    if (diagnosticFilters.service !== 'all' && pkg.scopeName !== diagnosticFilters.service) return false;
-    if (diagnosticFilters.status !== 'all' && pkg.status !== diagnosticFilters.status) return false;
-    return true;
-  }), [diagnosticFilters, officialPackages]);
-
-  const filteredDiagnostics = useMemo(() => diagnostics.filter((diagnostic) => {
-    if (diagnosticFilters.severity !== 'all' && diagnostic.severity !== diagnosticFilters.severity) return false;
-    return true;
-  }), [diagnosticFilters.severity, diagnostics]);
-
-  const filteredDeviations = useMemo(() => deviations.filter((deviation) => {
-    if (diagnosticFilters.macro !== 'all') {
-      const target = weeklyTargets.find((item) => item.id === deviation.weeklyPlanServiceId);
-      if (target?.macroName !== diagnosticFilters.macro) return false;
-    }
-    if (diagnosticFilters.service !== 'all') {
-      const target = weeklyTargets.find((item) => item.id === deviation.weeklyPlanServiceId);
-      if (target?.scopeName !== diagnosticFilters.service) return false;
-    }
-    return true;
-  }), [deviations, diagnosticFilters.macro, diagnosticFilters.service, weeklyTargets]);
-
-  const criticalDiagnostics = diagnostics.filter((diagnostic) => diagnostic.severity === 'critical').length;
-  const warningDiagnostics = diagnostics.filter((diagnostic) => diagnostic.severity === 'warning').length;
-  const initialBankCount = actualProductions.filter((actual) => actual.source === 'initial_bank').length;
-  const validInitialBankCount = actualProductions.filter(
-    (actual) => actual.source === 'initial_bank' && actual.countsForProgress && !actual.countsForWeeklyPerformance
-  ).length;
-
   return (
     <div className="space-y-4 h-full flex flex-col">
       {/* Planning info banner */}
@@ -279,7 +333,7 @@ export function SmartPlanningView() {
               <div className="flex-1">
                 <span className="text-sm text-green-700 dark:text-green-300">
                   <strong>Planejamento Ativo</strong> - {latestBaseline.name} 
-                  (iniciado em {format(new Date(latestBaseline.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })})
+                  (iniciado em {formatSafeDate(latestBaseline.created_at, "dd/MM/yyyy 'às' HH:mm") || 'Sem data'})
                 </span>
               </div>
             </div>
@@ -403,6 +457,15 @@ export function SmartPlanningView() {
         </TabsContent>
 
         <TabsContent value="diagnostics" className="flex-1 mt-4">
+          <PlanningDiagnosticRenderBoundary
+            summary={{
+              officialPackages: officialPackages.length,
+              weeklyTargets: weeklyTargets.length,
+              actualProductions: actualProductions.length,
+              deviations: deviations.length,
+              diagnostics: diagnostics.length,
+            }}
+          >
           <div className="space-y-4">
             <Card>
               <CardHeader>
@@ -650,6 +713,7 @@ export function SmartPlanningView() {
               </CardContent>
             </Card>
           </div>
+          </PlanningDiagnosticRenderBoundary>
         </TabsContent>
       </Tabs>
 

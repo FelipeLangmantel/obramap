@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { differenceInDays, isWithinInterval, parseISO, startOfDay } from 'date-fns';
+import { differenceInDays, isValid, isWithinInterval, parseISO, startOfDay } from 'date-fns';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useConstruction } from '@/contexts/ConstructionContext';
@@ -204,6 +204,14 @@ const normalizeId = (value: string | null | undefined) => value || null;
 
 const normalizeDate = (value: string | null | undefined) => value || null;
 
+const getSafeDate = (value: string | null | undefined) => {
+  if (!value) return null;
+  const parsed = parseISO(value);
+  if (isValid(parsed)) return startOfDay(parsed);
+  const fallback = new Date(value);
+  return isValid(fallback) ? startOfDay(fallback) : null;
+};
+
 const getNumericArray = (value: unknown) =>
   Array.isArray(value)
     ? value.map(Number).filter(Number.isFinite)
@@ -216,8 +224,10 @@ const getHouseNumbers = (rows: any[]) =>
     .sort((a, b) => a - b);
 
 const getDurationDays = (start: string | null, end: string | null) => {
-  if (!start || !end) return null;
-  return Math.max(1, differenceInDays(startOfDay(parseISO(end)), startOfDay(parseISO(start))) + 1);
+  const startDate = getSafeDate(start);
+  const endDate = getSafeDate(end);
+  if (!startDate || !endDate) return null;
+  return Math.max(1, differenceInDays(endDate, startDate) + 1);
 };
 
 const getProgress = (done: number, total: number) => {
@@ -234,10 +244,13 @@ const intersects = (source: number[], target: number[]) => {
 const uniqueNumbers = (values: number[]) => Array.from(new Set(values)).sort((a, b) => a - b);
 
 const isDateWithinRange = (dateValue: string | null, start: string | null, end: string | null) => {
-  if (!dateValue || !start || !end) return false;
-  return isWithinInterval(startOfDay(parseISO(dateValue)), {
-    start: startOfDay(parseISO(start)),
-    end: startOfDay(parseISO(end)),
+  const date = getSafeDate(dateValue);
+  const startDate = getSafeDate(start);
+  const endDate = getSafeDate(end);
+  if (!date || !startDate || !endDate) return false;
+  return isWithinInterval(date, {
+    start: startDate,
+    end: endDate,
   });
 };
 
@@ -255,8 +268,11 @@ const getStatus = (
   if (realProgress >= 100) return 'completed';
   if (realProgress > 0) return 'in_progress';
   if (estimated) return 'estimated';
-  if (plannedEndDate && startOfDay(new Date()) > startOfDay(parseISO(plannedEndDate))) return 'delayed';
-  if (plannedStartDate && startOfDay(new Date()) >= startOfDay(parseISO(plannedStartDate))) return 'in_progress';
+  const today = startOfDay(new Date());
+  const endDate = getSafeDate(plannedEndDate);
+  const startDate = getSafeDate(plannedStartDate);
+  if (endDate && today > endDate) return 'delayed';
+  if (startDate && today >= startDate) return 'in_progress';
   return 'planned';
 };
 
@@ -454,9 +470,10 @@ const buildOfficialView = (
       ? matchingHouses.length
       : Math.min(plannedQuantity, productionCountByService.get(serviceKey) || 0);
     const realProgress = getProgress(realizedQuantity, plannedQuantity);
-    const plannedProgress = plannedStartDate && plannedEndDate
+    const plannedStart = getSafeDate(plannedStartDate);
+    const plannedProgress = plannedStartDate && plannedEndDate && plannedStart
       ? getProgress(
-          Math.max(0, differenceInDays(startOfDay(new Date()), startOfDay(parseISO(plannedStartDate))) + 1),
+          Math.max(0, differenceInDays(startOfDay(new Date()), plannedStart) + 1),
           getDurationDays(plannedStartDate, plannedEndDate) || plannedQuantity
         )
       : 0;
@@ -645,7 +662,8 @@ const buildOfficialView = (
       : [];
     const missingHouseIds = target.plannedHouseIds.filter((houseId) => !executedHouseIds.includes(houseId));
     const completionPercent = getProgress(executedHouseIds.length, target.plannedHouses || target.plannedHouseIds.length);
-    const ended = target.weekEndDate ? startOfDay(new Date()) > startOfDay(parseISO(target.weekEndDate)) : false;
+    const targetWeekEnd = getSafeDate(target.weekEndDate);
+    const ended = targetWeekEnd ? startOfDay(new Date()) > targetWeekEnd : false;
     const status: WeeklyTargetStatus =
       outOfPlanHouseIds.length > 0 ? 'excedida'
         : executedHouseIds.length === 0 ? (ended ? 'nao_cumprida' : 'sem_lancamento')
