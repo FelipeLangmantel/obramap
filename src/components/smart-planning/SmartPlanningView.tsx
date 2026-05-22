@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useConstruction } from '@/contexts/ConstructionContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -22,11 +22,56 @@ import {
   TrendingUp, 
   Target,
   Loader2,
-  Users
+  Users,
+  ClipboardList
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { PlanningStage, TeamComposition } from './types';
+
+const formatHouses = (houses: number[]) => {
+  if (!houses.length) return '-';
+  if (houses.length <= 6) return houses.join(', ');
+  return `${houses.slice(0, 6).join(', ')} +${houses.length - 6}`;
+};
+
+const formatDateRange = (start: string | null, end: string | null) => {
+  if (!start && !end) return '-';
+  if (start && end) return `${format(new Date(start), 'dd/MM/yyyy')} - ${format(new Date(end), 'dd/MM/yyyy')}`;
+  return format(new Date(start || end || ''), 'dd/MM/yyyy');
+};
+
+const formatStatusLabel = (status: string) => {
+  const labels: Record<string, string> = {
+    cumprida: 'Cumprida',
+    parcial: 'Parcial',
+    nao_cumprida: 'Não cumprida',
+    excedida: 'Excedida',
+    sem_lancamento: 'Sem lançamento',
+    planned: 'Planejado',
+    in_progress: 'Em andamento',
+    completed: 'Concluído',
+    delayed: 'Atrasado',
+    estimated: 'Estimado',
+  };
+  return labels[status] || status;
+};
+
+const getStatusBadgeVariant = (status: string): 'default' | 'secondary' | 'destructive' | 'outline' => {
+  if (['nao_cumprida', 'delayed'].includes(status)) return 'destructive';
+  if (['parcial', 'excedida', 'in_progress'].includes(status)) return 'secondary';
+  if (['cumprida', 'completed'].includes(status)) return 'default';
+  return 'outline';
+};
+
+const getSeverityBadgeVariant = (severity: string): 'default' | 'secondary' | 'destructive' | 'outline' => {
+  if (severity === 'critical') return 'destructive';
+  if (severity === 'warning') return 'secondary';
+  return 'outline';
+};
+
+const countDiagnostics = (diagnostics: ReturnType<typeof usePlanningOfficialView>['diagnostics'], type: string) =>
+  diagnostics.filter((diagnostic) => diagnostic.type === type).length;
 
 
 export function SmartPlanningView() {
@@ -65,7 +110,15 @@ export function SmartPlanningView() {
 
   // Adapter virtual da arquitetura definitiva. Nesta fase fica em modo diagnostico
   // e nao substitui as fontes visuais do Gantt/Linha de Balanco.
-  usePlanningOfficialView(currentProject?.id);
+  const planningOfficialView = usePlanningOfficialView(currentProject?.id);
+  const [diagnosticFilters, setDiagnosticFilters] = useState({
+    macro: 'all',
+    service: 'all',
+    status: 'all',
+    severity: 'all',
+    week: 'all',
+    contractor: 'all',
+  });
 
   const {
     projectedEndDate,
@@ -131,6 +184,87 @@ export function SmartPlanningView() {
 
   const unresolvedAlerts = alerts.filter(a => !a.is_resolved);
   const latestBaseline = baselines[0];
+  const {
+    officialPackages,
+    weeklyTargets,
+    actualProductions,
+    deviations,
+    diagnostics,
+  } = planningOfficialView;
+
+  const diagnosticOptions = useMemo(() => {
+    const macros = new Set<string>();
+    const services = new Set<string>();
+    const statuses = new Set<string>();
+    const severities = new Set<string>();
+    const weeks = new Set<string>();
+    const contractors = new Set<string>();
+
+    weeklyTargets.forEach((target) => {
+      if (target.macroName) macros.add(target.macroName);
+      if (target.scopeName) services.add(target.scopeName);
+      if (target.status) statuses.add(target.status);
+      if (target.weekStartDate || target.weekEndDate) weeks.add(formatDateRange(target.weekStartDate, target.weekEndDate));
+      if (target.contractorName) contractors.add(target.contractorName);
+    });
+    officialPackages.forEach((pkg) => {
+      if (pkg.macroName) macros.add(pkg.macroName);
+      if (pkg.scopeName) services.add(pkg.scopeName);
+      if (pkg.status) statuses.add(pkg.status);
+    });
+    diagnostics.forEach((diagnostic) => {
+      severities.add(diagnostic.severity);
+    });
+
+    return {
+      macros: Array.from(macros).sort(),
+      services: Array.from(services).sort(),
+      statuses: Array.from(statuses).sort(),
+      severities: Array.from(severities).sort(),
+      weeks: Array.from(weeks).sort(),
+      contractors: Array.from(contractors).sort(),
+    };
+  }, [diagnostics, officialPackages, weeklyTargets]);
+
+  const filteredWeeklyTargets = useMemo(() => weeklyTargets.filter((target) => {
+    if (diagnosticFilters.macro !== 'all' && target.macroName !== diagnosticFilters.macro) return false;
+    if (diagnosticFilters.service !== 'all' && target.scopeName !== diagnosticFilters.service) return false;
+    if (diagnosticFilters.status !== 'all' && target.status !== diagnosticFilters.status) return false;
+    if (diagnosticFilters.week !== 'all' && formatDateRange(target.weekStartDate, target.weekEndDate) !== diagnosticFilters.week) return false;
+    if (diagnosticFilters.contractor !== 'all' && target.contractorName !== diagnosticFilters.contractor) return false;
+    return true;
+  }), [diagnosticFilters, weeklyTargets]);
+
+  const filteredPackages = useMemo(() => officialPackages.filter((pkg) => {
+    if (diagnosticFilters.macro !== 'all' && pkg.macroName !== diagnosticFilters.macro) return false;
+    if (diagnosticFilters.service !== 'all' && pkg.scopeName !== diagnosticFilters.service) return false;
+    if (diagnosticFilters.status !== 'all' && pkg.status !== diagnosticFilters.status) return false;
+    return true;
+  }), [diagnosticFilters, officialPackages]);
+
+  const filteredDiagnostics = useMemo(() => diagnostics.filter((diagnostic) => {
+    if (diagnosticFilters.severity !== 'all' && diagnostic.severity !== diagnosticFilters.severity) return false;
+    return true;
+  }), [diagnosticFilters.severity, diagnostics]);
+
+  const filteredDeviations = useMemo(() => deviations.filter((deviation) => {
+    if (diagnosticFilters.macro !== 'all') {
+      const target = weeklyTargets.find((item) => item.id === deviation.weeklyPlanServiceId);
+      if (target?.macroName !== diagnosticFilters.macro) return false;
+    }
+    if (diagnosticFilters.service !== 'all') {
+      const target = weeklyTargets.find((item) => item.id === deviation.weeklyPlanServiceId);
+      if (target?.scopeName !== diagnosticFilters.service) return false;
+    }
+    return true;
+  }), [deviations, diagnosticFilters.macro, diagnosticFilters.service, weeklyTargets]);
+
+  const criticalDiagnostics = diagnostics.filter((diagnostic) => diagnostic.severity === 'critical').length;
+  const warningDiagnostics = diagnostics.filter((diagnostic) => diagnostic.severity === 'warning').length;
+  const initialBankCount = actualProductions.filter((actual) => actual.source === 'initial_bank').length;
+  const validInitialBankCount = actualProductions.filter(
+    (actual) => actual.source === 'initial_bank' && actual.countsForProgress && !actual.countsForWeeklyPerformance
+  ).length;
 
   return (
     <div className="space-y-4 h-full flex flex-col">
@@ -154,7 +288,7 @@ export function SmartPlanningView() {
       )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-        <TabsList className="grid grid-cols-5 w-full max-w-3xl">
+        <TabsList className="grid grid-cols-6 w-full max-w-5xl">
           <TabsTrigger value="dashboard" className="gap-2">
             <BarChart3 className="h-4 w-4" />
             Dashboard
@@ -179,6 +313,10 @@ export function SmartPlanningView() {
                 {unresolvedAlerts.length}
               </Badge>
             )}
+          </TabsTrigger>
+          <TabsTrigger value="diagnostics" className="gap-2">
+            <ClipboardList className="h-4 w-4" />
+            Diagnóstico
           </TabsTrigger>
         </TabsList>
 
@@ -262,6 +400,256 @@ export function SmartPlanningView() {
           {currentProject?.id && (
             <LaborHistogramView projectId={currentProject.id} />
           )}
+        </TabsContent>
+
+        <TabsContent value="diagnostics" className="flex-1 mt-4">
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Diagnóstico do Planejamento</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Visão somente leitura do fluxo Estratégico → Período → Semanal → Produção Real → Desvios → Saldo.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+                  {[
+                    ['Pacotes oficiais', officialPackages.length],
+                    ['Metas semanais', weeklyTargets.length],
+                    ['Produções realizadas', actualProductions.length],
+                    ['Desvios', deviations.length],
+                    ['Críticos', criticalDiagnostics],
+                    ['Atenção', warningDiagnostics],
+                  ].map(([label, value]) => (
+                    <div key={label} className="rounded-lg border bg-card p-3">
+                      <p className="text-xs text-muted-foreground">{label}</p>
+                      <p className="text-2xl font-semibold">{value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  {[
+                    ['Metas sem pacote oficial', countDiagnostics(diagnostics, 'weekly_target_without_official_package'), 'warning'],
+                    ['Metas sem empreiteiro/equipe', countDiagnostics(diagnostics, 'weekly_target_without_contractor'), 'info'],
+                    ['Metas não cumpridas', countDiagnostics(diagnostics, 'weekly_target_not_completed'), 'critical'],
+                    ['Metas parcialmente cumpridas', countDiagnostics(diagnostics, 'weekly_target_partially_completed'), 'warning'],
+                    ['Produção sem meta semanal', countDiagnostics(diagnostics, 'production_without_weekly_target'), 'warning'],
+                    ['Desvios sem motivo', countDiagnostics(diagnostics, 'deviation_without_reason'), 'warning'],
+                    ['Casas fora do contrato', countDiagnostics(diagnostics, 'weekly_target_with_out_of_contract_houses'), 'warning'],
+                    ['Pacotes sem meta semanal', countDiagnostics(diagnostics, 'official_package_without_weekly_target'), 'info'],
+                    ['Serviços com saldo restante', countDiagnostics(diagnostics, 'service_with_remaining_balance'), 'info'],
+                    ['Risco de duplicidade', countDiagnostics(diagnostics, 'duplicated_actual_production_risk'), 'warning'],
+                    ['Banco inicial correto', `${validInitialBankCount}/${initialBankCount}`, 'info'],
+                  ].map(([label, value, severity]) => (
+                    <div key={label} className="rounded-lg border bg-card p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-medium">{label}</p>
+                        <Badge variant={getSeverityBadgeVariant(String(severity))}>{severity}</Badge>
+                      </div>
+                      <p className="mt-2 text-xl font-semibold">{value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+                  {[
+                    ['macro', 'Etapa', diagnosticOptions.macros],
+                    ['service', 'Serviço', diagnosticOptions.services],
+                    ['status', 'Status', diagnosticOptions.statuses],
+                    ['severity', 'Severidade', diagnosticOptions.severities],
+                    ['week', 'Semana', diagnosticOptions.weeks],
+                    ['contractor', 'Empreiteiro/equipe', diagnosticOptions.contractors],
+                  ].map(([key, label, options]) => (
+                    <label key={String(key)} className="space-y-1 text-xs font-medium text-muted-foreground">
+                      {label}
+                      <select
+                        className="w-full rounded-md border border-input bg-background px-2 py-2 text-sm text-foreground"
+                        value={diagnosticFilters[key as keyof typeof diagnosticFilters]}
+                        onChange={(event) => setDiagnosticFilters((current) => ({
+                          ...current,
+                          [key as string]: event.target.value,
+                        }))}
+                      >
+                        <option value="all">Todos</option>
+                        {(options as string[]).map((option) => (
+                          <option key={option} value={option}>
+                            {key === 'status' ? formatStatusLabel(option) : option}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Metas semanais</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[1100px] text-sm">
+                    <thead className="border-b text-left text-xs text-muted-foreground">
+                      <tr>
+                        <th className="p-2">Semana</th>
+                        <th className="p-2">Etapa</th>
+                        <th className="p-2">Serviço</th>
+                        <th className="p-2">Planejadas</th>
+                        <th className="p-2">Executadas</th>
+                        <th className="p-2">Faltantes</th>
+                        <th className="p-2">Fora plano</th>
+                        <th className="p-2">Empreiteiro/equipe</th>
+                        <th className="p-2">% cumprido</th>
+                        <th className="p-2">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredWeeklyTargets.map((target) => (
+                        <tr key={target.id} className="border-b last:border-0">
+                          <td className="p-2">{formatDateRange(target.weekStartDate, target.weekEndDate)}</td>
+                          <td className="p-2">{target.macroName || '-'}</td>
+                          <td className="p-2">{target.scopeName || '-'}</td>
+                          <td className="p-2">{formatHouses(target.plannedHouseIds)}</td>
+                          <td className="p-2">{formatHouses(target.executedHouseIds)}</td>
+                          <td className="p-2">{formatHouses(target.missingHouseIds)}</td>
+                          <td className="p-2">{formatHouses(target.outOfPlanHouseIds)}</td>
+                          <td className="p-2">{target.contractorName || '-'}</td>
+                          <td className="p-2">{target.completionPercent.toFixed(0)}%</td>
+                          <td className="p-2">
+                            <Badge variant={getStatusBadgeVariant(target.status)}>
+                              {formatStatusLabel(target.status)}
+                            </Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Pacotes oficiais virtuais</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[980px] text-sm">
+                    <thead className="border-b text-left text-xs text-muted-foreground">
+                      <tr>
+                        <th className="p-2">Etapa</th>
+                        <th className="p-2">Serviço</th>
+                        <th className="p-2">Casas</th>
+                        <th className="p-2">Período</th>
+                        <th className="p-2">Planejado</th>
+                        <th className="p-2">Realizado</th>
+                        <th className="p-2">Saldo</th>
+                        <th className="p-2">Status</th>
+                        <th className="p-2">Estimado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredPackages.map((pkg) => (
+                        <tr key={pkg.id} className="border-b last:border-0">
+                          <td className="p-2">{pkg.macroName || '-'}</td>
+                          <td className="p-2">{pkg.scopeName || '-'}</td>
+                          <td className="p-2">{pkg.unitLabel || formatHouses(pkg.houseIds)}</td>
+                          <td className="p-2">{formatDateRange(pkg.plannedStartDate, pkg.plannedEndDate)}</td>
+                          <td className="p-2">{pkg.plannedQuantity}</td>
+                          <td className="p-2">{pkg.realizedQuantity}</td>
+                          <td className="p-2">{pkg.remainingQuantity}</td>
+                          <td className="p-2">
+                            <Badge variant={getStatusBadgeVariant(pkg.status)}>
+                              {formatStatusLabel(pkg.status)}
+                            </Badge>
+                          </td>
+                          <td className="p-2">{pkg.estimated ? 'Sim' : 'Não'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Desvios</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[980px] text-sm">
+                    <thead className="border-b text-left text-xs text-muted-foreground">
+                      <tr>
+                        <th className="p-2">Semana/meta</th>
+                        <th className="p-2">Etapa</th>
+                        <th className="p-2">Serviço</th>
+                        <th className="p-2">Faltantes</th>
+                        <th className="p-2">Executadas</th>
+                        <th className="p-2">Fora plano</th>
+                        <th className="p-2">Motivo</th>
+                        <th className="p-2">Observações</th>
+                        <th className="p-2">Sem motivo</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredDeviations.map((deviation) => {
+                        const target = weeklyTargets.find((item) => item.id === deviation.weeklyPlanServiceId);
+                        return (
+                          <tr key={deviation.id} className="border-b last:border-0">
+                            <td className="p-2">{target ? formatDateRange(target.weekStartDate, target.weekEndDate) : deviation.weeklyPlanServiceId || '-'}</td>
+                            <td className="p-2">{target?.macroName || deviation.macroId || '-'}</td>
+                            <td className="p-2">{target?.scopeName || deviation.scopeId || '-'}</td>
+                            <td className="p-2">{formatHouses(deviation.missingHouseIds)}</td>
+                            <td className="p-2">{formatHouses(deviation.executedHouseIds)}</td>
+                            <td className="p-2">{formatHouses(deviation.outOfPlanHouseIds)}</td>
+                            <td className="p-2">{deviation.reason || '-'}</td>
+                            <td className="p-2">{deviation.notes || '-'}</td>
+                            <td className="p-2">
+                              <Badge variant={!deviation.reason && !deviation.notes ? 'destructive' : 'outline'}>
+                                {!deviation.reason && !deviation.notes ? 'Sim' : 'Não'}
+                              </Badge>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Alertas do adapter</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {filteredDiagnostics.map((diagnostic) => (
+                    <div key={diagnostic.id} className="rounded-lg border p-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant={getSeverityBadgeVariant(diagnostic.severity)}>
+                          {diagnostic.severity}
+                        </Badge>
+                        <Badge variant="outline">{diagnostic.type}</Badge>
+                        {diagnostic.houseIds?.length ? (
+                          <span className="text-xs text-muted-foreground">Casas: {formatHouses(diagnostic.houseIds)}</span>
+                        ) : null}
+                      </div>
+                      <p className="mt-2 text-sm">{diagnostic.message}</p>
+                    </div>
+                  ))}
+                  {filteredDiagnostics.length === 0 && (
+                    <p className="py-6 text-center text-sm text-muted-foreground">
+                      Nenhum alerta encontrado para os filtros atuais.
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
       </Tabs>
 
