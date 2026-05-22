@@ -35,6 +35,7 @@ export interface PlanningWorkPackageView {
   id: string;
   projectId: string;
   planningVersionId: string | null;
+  periodId?: string | null;
   macroId: string | null;
   macroName: string | null;
   scopeId: string | null;
@@ -58,6 +59,8 @@ export interface PlanningWorkPackageView {
   predecessorId: string | null;
   lagDays: number | null;
   estimated: boolean;
+  occurrenceCount?: number;
+  duplicateIds?: string[];
 }
 
 export interface WeeklyTargetView {
@@ -154,13 +157,16 @@ export interface PlanningDiagnostic {
     | 'diary_production_without_weekly_target'
     | 'direct_production_without_weekly_target'
     | 'initial_bank_without_reference_date'
-    | 'duplicated_actual_production_risk';
+    | 'duplicated_actual_production_risk'
+    | 'weekly_target_unmatched_but_possible_production_found';
   message: string;
   projectId?: string | null;
   macroId?: string | null;
   scopeId?: string | null;
   houseIds?: number[];
   relatedIds?: string[];
+  occurrenceCount?: number;
+  exampleIds?: string[];
   source?: string;
   refId?: string;
 }
@@ -242,6 +248,89 @@ const intersects = (source: number[], target: number[]) => {
 };
 
 const uniqueNumbers = (values: number[]) => Array.from(new Set(values)).sort((a, b) => a - b);
+
+const getPackagePriority = (source: PlanningPackageSource) => {
+  const priorities: Record<PlanningPackageSource, number> = {
+    service_planning_by_period: 1,
+    planning_stages: 2,
+    planned_productions: 3,
+    weekly_plan_services: 4,
+  };
+  return priorities[source] || 99;
+};
+
+const getPackageDedupKey = (pkg: PlanningWorkPackageView) => [
+  pkg.projectId,
+  pkg.planningVersionId || 'sem_versao',
+  pkg.periodId || 'sem_periodo',
+  pkg.macroId || 'sem_macro',
+  pkg.scopeId || 'sem_servico',
+  pkg.houseIds.join(',') || 'sem_casas',
+  pkg.plannedStartDate || 'sem_inicio',
+  pkg.plannedEndDate || 'sem_fim',
+  pkg.plannedQuantity,
+].join('|');
+
+const dedupeOfficialPackages = (packages: PlanningWorkPackageView[]) => {
+  const grouped = new Map<string, PlanningWorkPackageView[]>();
+  packages.forEach((pkg) => {
+    const key = getPackageDedupKey(pkg);
+    grouped.set(key, [...(grouped.get(key) || []), pkg]);
+  });
+
+  return Array.from(grouped.values()).map((items) => {
+    const sorted = [...items].sort((a, b) => getPackagePriority(a.source) - getPackagePriority(b.source));
+    const selected = sorted[0];
+    if (items.length === 1) return selected;
+    return {
+      ...selected,
+      occurrenceCount: items.length,
+      duplicateIds: items.map((item) => item.id),
+    };
+  });
+};
+
+const groupDiagnostics = (diagnostics: PlanningDiagnostic[]) => {
+  const severityPriority: Record<PlanningDiagnosticSeverity, number> = {
+    critical: 1,
+    warning: 2,
+    info: 3,
+  };
+  const grouped = new Map<string, PlanningDiagnostic[]>();
+  diagnostics.forEach((diagnostic) => {
+    const key = [
+      diagnostic.severity,
+      diagnostic.type,
+      diagnostic.projectId || 'sem_projeto',
+      diagnostic.macroId || 'sem_macro',
+      diagnostic.scopeId || 'sem_servico',
+      diagnostic.source || 'sem_fonte',
+    ].join('|');
+    grouped.set(key, [...(grouped.get(key) || []), diagnostic]);
+  });
+
+  return Array.from(grouped.values())
+    .map((items) => {
+      const first = items[0];
+      const allHouseIds = uniqueNumbers(items.flatMap((item) => item.houseIds || []));
+      const allRelatedIds = Array.from(new Set(items.flatMap((item) => item.relatedIds || []).filter(Boolean)));
+      const exampleIds = items.map((item) => item.refId || item.id).filter(Boolean).slice(0, 5);
+      return {
+        ...first,
+        id: items.length > 1 ? `grouped:${first.severity}:${first.type}:${first.macroId || 'sem_macro'}:${first.scopeId || 'sem_servico'}:${first.source || 'sem_fonte'}` : first.id,
+        message: items.length > 1 ? `${first.message} (${items.length} ocorrencias agrupadas)` : first.message,
+        houseIds: allHouseIds.length ? allHouseIds.slice(0, 30) : first.houseIds,
+        relatedIds: allRelatedIds,
+        occurrenceCount: items.length,
+        exampleIds,
+      };
+    })
+    .sort((a, b) => {
+      const severityDelta = severityPriority[a.severity] - severityPriority[b.severity];
+      if (severityDelta !== 0) return severityDelta;
+      return (b.occurrenceCount || 1) - (a.occurrenceCount || 1);
+    });
+};
 
 const isDateWithinRange = (dateValue: string | null, start: string | null, end: string | null) => {
   const date = getSafeDate(dateValue);
@@ -408,6 +497,7 @@ const buildOfficialView = (
 ) => {
   const diagnostics: PlanningDiagnostic[] = [];
   const activeVersion = rows.versions.find((version) => version.is_active) || rows.versions[0] || null;
+  const periodById = new Map(rows.periods.map((period) => [period.id, period]));
   const allHouseNumbers = rows.houses.length
     ? getHouseNumbers(rows.houses)
     : Array.from({ length: currentProject?.totalHouses || 0 }, (_, index) => index + 1);
@@ -445,6 +535,7 @@ const buildOfficialView = (
   const makePackage = ({
     id,
     planningVersionId,
+    periodId,
     macroId,
     macroName,
     scopeId,
@@ -482,6 +573,7 @@ const buildOfficialView = (
       id,
       projectId,
       planningVersionId,
+      periodId,
       macroId,
       macroName,
       scopeId,
@@ -508,7 +600,7 @@ const buildOfficialView = (
     };
   };
 
-  const officialPackages: PlanningWorkPackageView[] = [];
+  const rawOfficialPackages: PlanningWorkPackageView[] = [];
 
   if (rows.servicePlans.length > 0) {
     rows.servicePlans.forEach((plan) => {
@@ -517,9 +609,15 @@ const buildOfficialView = (
       const houseIds = targetHouses > 0 && targetHouses === allHouseNumbers.length ? allHouseNumbers : [];
       const plannedQuantity = targetHouses || houseIds.length || allHouseNumbers.length || 1;
 
-      officialPackages.push(makePackage({
+      const periodId = normalizeId(plan.planning_period_id || plan.period_id);
+      const period = periodId ? periodById.get(periodId) : null;
+      const plannedStartDate = normalizeDate(plan.planned_start_date || period?.start_date);
+      const plannedEndDate = normalizeDate(plan.planned_end_date || period?.end_date);
+
+      rawOfficialPackages.push(makePackage({
         id: `service-period:${plan.id}`,
         planningVersionId: activeVersion?.id || null,
+        periodId,
         macroId: normalizeId(plan.macro_id),
         macroName: plan.macro_name || null,
         scopeId: normalizeId(plan.scope_id),
@@ -527,8 +625,8 @@ const buildOfficialView = (
         unitType: houseIds.length ? 'project' : 'group',
         houseIds,
         unitLabel: houseIds.length ? 'Todas as casas da obra' : `${plannedQuantity} unidade(s) planejada(s)`,
-        plannedStartDate: normalizeDate(plan.planned_start_date),
-        plannedEndDate: normalizeDate(plan.planned_end_date),
+        plannedStartDate,
+        plannedEndDate,
         teamCount: Number(plan.team_count || plan.teams_planned) || productivity?.teamCount || null,
         productivityValue: Number(plan.productivity_per_team || plan.productivity_planned) || productivity?.value || null,
         productivityUnit: plan.unit_label || productivity?.unit || null,
@@ -536,16 +634,17 @@ const buildOfficialView = (
         source: 'service_planning_by_period',
         predecessorId: null,
         lagDays: null,
-        estimated: !houseIds.length,
+        estimated: !houseIds.length || !plannedStartDate || !plannedEndDate,
       }));
     });
   } else {
     rows.stages.forEach((stage) => {
       const productivity = productivityByService.get(getServiceKey(stage.macro_id, stage.scope_id));
       const plannedQuantity = allHouseNumbers.length || 1;
-      officialPackages.push(makePackage({
+      rawOfficialPackages.push(makePackage({
         id: `stage:${stage.id}`,
         planningVersionId: stage.version_id || activeVersion?.id || null,
+        periodId: null,
         macroId: normalizeId(stage.macro_id),
         macroName: stage.name || null,
         scopeId: normalizeId(stage.scope_id),
@@ -567,13 +666,14 @@ const buildOfficialView = (
     });
   }
 
-  if (officialPackages.length === 0 && rows.plannedProductions.length > 0) {
+  if (rawOfficialPackages.length === 0 && rows.plannedProductions.length > 0) {
     rows.plannedProductions.forEach((planned) => {
       const houseIds = uniqueNumbers(getNumericArray(planned.planned_house_ids));
       const productivity = productivityByService.get(getServiceKey(planned.macro_id, planned.scope_id));
-      officialPackages.push(makePackage({
+      rawOfficialPackages.push(makePackage({
         id: `planned-production:${planned.id}`,
         planningVersionId: activeVersion?.id || null,
+        periodId: null,
         macroId: normalizeId(planned.macro_id),
         macroName: planned.macro_name || null,
         scopeId: normalizeId(planned.scope_id),
@@ -596,6 +696,8 @@ const buildOfficialView = (
       }));
     });
   }
+
+  const officialPackages = dedupeOfficialPackages(rawOfficialPackages);
 
   const packagesByService = new Map<string, PlanningWorkPackageView[]>();
   officialPackages.forEach((pkg) => {
@@ -649,6 +751,30 @@ const buildOfficialView = (
 
   const weeklyTargets: WeeklyTargetView[] = weeklyTargetsBase.map((target) => {
     const matchingActuals = actualProductions.filter((actual) => weeklyTargetMatchesActual(target, actual));
+    const possibleActuals = matchingActuals.length
+      ? []
+      : actualProductions.filter((actual) => (
+          !actual.isInitialBank
+          && getServiceKey(actual.macroId, actual.scopeId) === getServiceKey(target.macroId, target.scopeId)
+          && hasHouseMatch(actual.houseIds, target.plannedHouseIds)
+        ));
+
+    if (possibleActuals.length > 0) {
+      diagnostics.push(makeDiagnostic({
+        id: `weekly-possible-production:${target.id}`,
+        severity: 'warning',
+        type: 'weekly_target_unmatched_but_possible_production_found',
+        message: 'Meta semanal sem match efetivo, mas ha producao parecida por servico/casas fora do criterio de data/vinculo.',
+        projectId,
+        macroId: target.macroId,
+        scopeId: target.scopeId,
+        houseIds: target.plannedHouseIds,
+        relatedIds: [target.id, ...possibleActuals.map((actual) => actual.id)],
+        source: 'weekly_plan_services',
+        refId: target.id,
+      }));
+    }
+
     matchingActuals.forEach((actual) => {
       actual.countsForWeeklyPerformance = true;
       actual.estimatedWeeklyMatch = !actual.weeklyPlanServiceId;
@@ -1002,7 +1128,7 @@ const buildOfficialView = (
     weeklyTargets,
     actualProductions,
     deviations,
-    diagnostics,
+    diagnostics: groupDiagnostics(diagnostics),
   };
 };
 

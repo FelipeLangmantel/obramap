@@ -282,6 +282,10 @@ export function SmartPlanningView() {
   const validInitialBankCount = (Array.isArray(actualProductions) ? actualProductions : []).filter(
     (actual) => actual?.source === 'initial_bank' && actual.countsForProgress && !actual.countsForWeeklyPerformance
   ).length;
+  const visiblePackages = filteredPackages.slice(0, 100);
+  const hiddenPackagesCount = Math.max(0, filteredPackages.length - visiblePackages.length);
+  const visibleDiagnostics = filteredDiagnostics.slice(0, 100);
+  const hiddenDiagnosticsCount = Math.max(0, filteredDiagnostics.length - visibleDiagnostics.length);
 
   if (!currentProject) {
     return (
@@ -611,10 +615,11 @@ export function SmartPlanningView() {
                         <th className="p-2">Saldo</th>
                         <th className="p-2">Status</th>
                         <th className="p-2">Estimado</th>
+                        <th className="p-2">Ocorrências</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredPackages.map((pkg) => (
+                      {visiblePackages.map((pkg) => (
                         <tr key={pkg.id} className="border-b last:border-0">
                           <td className="p-2">{pkg.macroName || '-'}</td>
                           <td className="p-2">{pkg.scopeName || '-'}</td>
@@ -629,11 +634,17 @@ export function SmartPlanningView() {
                             </Badge>
                           </td>
                           <td className="p-2">{pkg.estimated ? 'Sim' : 'Não'}</td>
+                          <td className="p-2">{pkg.occurrenceCount || 1}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
+                {hiddenPackagesCount > 0 && (
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Exibindo 100 de {filteredPackages.length} pacotes filtrados. Refine os filtros para ver os demais.
+                  </p>
+                )}
               </CardContent>
             </Card>
 
@@ -690,20 +701,31 @@ export function SmartPlanningView() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {filteredDiagnostics.map((diagnostic) => (
+                  {visibleDiagnostics.map((diagnostic) => (
                     <div key={diagnostic.id} className="rounded-lg border p-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge variant={getSeverityBadgeVariant(diagnostic.severity)}>
                           {diagnostic.severity}
                         </Badge>
                         <Badge variant="outline">{diagnostic.type}</Badge>
+                        {(diagnostic.occurrenceCount || 1) > 1 ? (
+                          <Badge variant="secondary">{diagnostic.occurrenceCount} ocorrências</Badge>
+                        ) : null}
                         {diagnostic.houseIds?.length ? (
                           <span className="text-xs text-muted-foreground">Casas: {formatHouses(diagnostic.houseIds)}</span>
+                        ) : null}
+                        {diagnostic.exampleIds?.length ? (
+                          <span className="text-xs text-muted-foreground">Exemplos: {diagnostic.exampleIds.join(', ')}</span>
                         ) : null}
                       </div>
                       <p className="mt-2 text-sm">{diagnostic.message}</p>
                     </div>
                   ))}
+                  {hiddenDiagnosticsCount > 0 && (
+                    <p className="py-2 text-center text-xs text-muted-foreground">
+                      Exibindo 100 de {filteredDiagnostics.length} alertas agrupados. Refine os filtros para ver os demais.
+                    </p>
+                  )}
                   {filteredDiagnostics.length === 0 && (
                     <p className="py-6 text-center text-sm text-muted-foreground">
                       Nenhum alerta encontrado para os filtros atuais.
