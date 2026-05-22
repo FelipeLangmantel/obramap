@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { usePlanningData } from './hooks/usePlanningData';
 import { usePlanningCalculations } from './hooks/usePlanningCalculations';
 import { useStrategicGanttData } from './hooks/useStrategicGanttData';
+import { usePlanningOfficialView } from './hooks/usePlanningOfficialView';
 import { PlanningOnboarding } from './PlanningOnboarding';
 import { PlanningDashboard } from './PlanningDashboard';
 import { StrategicGanttChart } from './StrategicGanttChart';
@@ -61,6 +62,10 @@ export function SmartPlanningView() {
     updateServiceProductivity,
     updatePredecessor,
   } = useStrategicGanttData(currentProject?.id);
+
+  // Adapter virtual da arquitetura definitiva. Nesta fase fica em modo diagnostico
+  // e nao substitui as fontes visuais do Gantt/Linha de Balanco.
+  usePlanningOfficialView(currentProject?.id);
 
   const {
     projectedEndDate,
