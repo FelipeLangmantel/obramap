@@ -154,15 +154,15 @@ const classifyService = (service: ServiceInfo): SuggestedServiceType => {
 const getPlanningSuggestion = (type: SuggestedServiceType) => {
   switch (type) {
     case 'physical_repetitive':
-      return { gantt: 'Sim', lineOfBalance: 'Sim', weeklyPlanning: 'Sim' };
+      return { gantt: 'Sim', lineOfBalance: 'Sim', weeklyPlanning: 'Valida capacidade' };
     case 'physical_one_time':
-      return { gantt: 'Sim', lineOfBalance: 'Opcional', weeklyPlanning: 'Opcional' };
+      return { gantt: 'Sim', lineOfBalance: 'Opcional', weeklyPlanning: 'Meta por servico' };
     case 'administrative_cost':
-      return { gantt: 'Opcional', lineOfBalance: 'Nao', weeklyPlanning: 'Nao' };
+      return { gantt: 'Opcional', lineOfBalance: 'Nao', weeklyPlanning: 'Nao lancar como grupo' };
     case 'support_service':
-      return { gantt: 'Opcional/marco', lineOfBalance: 'Nao', weeklyPlanning: 'Opcional' };
+      return { gantt: 'Opcional/marco', lineOfBalance: 'Nao', weeklyPlanning: 'Opcional por servico' };
     case 'milestone':
-      return { gantt: 'Marco', lineOfBalance: 'Nao', weeklyPlanning: 'Nao' };
+      return { gantt: 'Marco', lineOfBalance: 'Nao', weeklyPlanning: 'Nao lancar como grupo' };
     default:
       return { gantt: 'Revisar', lineOfBalance: 'Revisar', weeklyPlanning: 'Revisar' };
   }
@@ -291,6 +291,14 @@ const buildSuggestedTeamGroups = (insights: ServiceCapacityInsight[]): Suggested
         hasDuplicatedCapacityRisk: configuredCount >= 2,
       };
     });
+};
+
+const formatSharedCapacity = (services: ServiceCapacityInsight[]) => {
+  const configured = services.filter((item) => item.productivity);
+  if (!configured.length) return 'Sem produtividade configurada para estimar capacidade.';
+
+  const reference = configured[0].productivity!;
+  return `Referencia: ${reference.productivity_value} ${reference.productivity_unit} com ${reference.default_team_count} equipe(s).`;
 };
 
 export function ServiceProductivityView() {
@@ -445,7 +453,7 @@ export function ServiceProductivityView() {
                 Diagnostico de capacidade
               </CardTitle>
               <CardDescription>
-                Leitura local para identificar frentes compartilhadas e servicos que podem entrar no planejamento fisico.
+                Leitura local para identificar frentes de trabalho compartilhadas, sem unir os lancamentos por servico.
               </CardDescription>
             </div>
             <Badge variant="outline" className="w-fit gap-1">
@@ -477,9 +485,17 @@ export function ServiceProductivityView() {
               <p className="text-xl font-semibold">{capacityDiagnostics.physicalRepetitive}</p>
             </div>
             <div className="rounded-lg border bg-muted/30 p-3">
-              <p className="text-xs text-muted-foreground">Possiveis grupos</p>
+              <p className="text-xs text-muted-foreground">Frentes compartilhadas</p>
               <p className="text-xl font-semibold">{capacityDiagnostics.suggestedGroups.length}</p>
             </div>
+          </div>
+
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-100">
+            <p className="font-medium">Grupo sugerido aqui significa capacidade compartilhada.</p>
+            <p className="mt-1 text-xs">
+              Os servicos continuam separados na Producao, Diario, desvios, saldo, Mapa 3D e medicao. A frente compartilhada
+              serve apenas para Gantt, Linha de Balanco, capacidade semanal/mensal, alerta de sobrecarga, simulacao e replanejamento.
+            </p>
           </div>
 
           {capacityDiagnostics.duplicatedCapacityRisk > 0 && (
@@ -487,10 +503,10 @@ export function ServiceProductivityView() {
               <div className="flex items-start gap-2">
                 <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
                 <div>
-                  <p className="font-medium">Possivel capacidade duplicada</p>
+                  <p className="font-medium">Possivel capacidade duplicada no planejamento</p>
                   <p className="text-xs">
-                    Alguns servicos parecem usar a mesma frente de trabalho. Hoje eles continuam salvos separadamente,
-                    mas o planejamento futuro deve considerar estes grupos para nao somar capacidade como equipes independentes.
+                    Alguns servicos parecem disputar a mesma equipe. Eles continuam sendo lancados separadamente,
+                    mas o planejamento deve somar as metas desses servicos para validar sobrecarga da frente.
                   </p>
                 </div>
               </div>
@@ -501,7 +517,7 @@ export function ServiceProductivityView() {
             <div className="flex items-center justify-between gap-3">
               <h3 className="flex items-center gap-2 text-sm font-semibold">
                 <GitBranch className="h-4 w-4 text-primary" />
-                Possiveis grupos de equipe
+                Frentes de trabalho compartilhadas
               </h3>
               <Badge variant="secondary">Acao futura</Badge>
             </div>
@@ -512,7 +528,7 @@ export function ServiceProductivityView() {
                   <div key={group.id} className="rounded-lg border p-3">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <p className="font-medium">{group.title}</p>
-                      <Badge variant="outline">Sugestao de grupo</Badge>
+                      <Badge variant="outline">Capacidade compartilhada</Badge>
                       {group.hasDuplicatedCapacityRisk && (
                         <Badge variant="secondary" className="text-amber-700 dark:text-amber-300">
                           revisar capacidade
@@ -526,15 +542,24 @@ export function ServiceProductivityView() {
                         </Badge>
                       ))}
                     </div>
+                    <div className="mb-3 grid gap-2 rounded-md bg-muted/40 p-2 text-xs md:grid-cols-2">
+                      <span>Gantt: capacidade compartilhada</span>
+                      <span>Linha: fluxo da frente</span>
+                      <span>Semanal: valida sobrecarga por servico</span>
+                      <span>Producao/Diario: lancamento separado</span>
+                    </div>
                     <p className="text-xs text-muted-foreground">
                       Motivos: {group.reasons.join(', ')}.
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {formatSharedCapacity(group.services)} Nao une lancamentos de producao.
                     </p>
                   </div>
                 ))}
               </div>
             ) : (
               <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                Nenhuma sugestao de grupo encontrada com os dados atuais.
+                Nenhuma frente compartilhada sugerida com os dados atuais.
               </div>
             )}
           </div>
@@ -564,6 +589,10 @@ export function ServiceProductivityView() {
                 ))}
               </div>
             </ScrollArea>
+            <p className="text-xs text-muted-foreground">
+              O Planejamento Semanal continua por servico. Para uma frente compartilhada, a validacao futura deve somar as metas
+              dos servicos da mesma frente para detectar sobrecarga, sem transformar tudo em um lancamento unico.
+            </p>
           </div>
         </CardContent>
       </Card>
