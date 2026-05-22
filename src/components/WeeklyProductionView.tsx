@@ -625,6 +625,11 @@ export function WeeklyProductionView() {
 
   // Save production record - now also saves to new productions table
   const handleSave = async () => {
+    if (!canEdit) {
+      toast.error("Voce nao tem permissao para salvar producao.");
+      return;
+    }
+
     if (!currentProject || !selectedScope || selectedHouses.length === 0) {
       toast.error("Selecione um serviço e pelo menos uma casa");
       return;
@@ -861,6 +866,10 @@ export function WeeklyProductionView() {
 
   const deleteProductionWithSafeRevert = async () => {
     if (!productionToDelete || !currentProject) return;
+    if (!podeExcluir) {
+      toast.error("Voce nao tem permissao para excluir producao.");
+      return;
+    }
 
     const affectedHouseIds = productionToDelete.house_ids || [];
     const now = new Date().toISOString();
@@ -1040,7 +1049,11 @@ export function WeeklyProductionView() {
 
   // Handle delete production with safe revert before soft delete.
   const handleDeleteProduction = async () => {
-    if (!productionToDelete || !currentProject || !podeExcluir) return;
+    if (!productionToDelete || !currentProject) return;
+    if (!podeExcluir) {
+      toast.error("Voce nao tem permissao para excluir producao.");
+      return;
+    }
     if (justificativaExclusao.trim().length < 20) return;
 
     setIsDeleting(true);
@@ -2642,6 +2655,10 @@ export function WeeklyProductionView() {
                               variant="outline"
                               className="h-7 text-xs text-green-600 border-green-300 hover:bg-green-50"
                               onClick={async () => {
+                                if (!canEdit) {
+                                  toast.error("Voce nao tem permissao para alterar desvios.");
+                                  return;
+                                }
                                 await supabase.from('production_deviations')
                                   .update({ status: 'resolved', resolved_at: new Date().toISOString(), resolved_by: profile?.user_id })
                                   .eq('id', alert.id);
@@ -2701,6 +2718,10 @@ export function WeeklyProductionView() {
                   className="w-full"
                   disabled={!deviationReason}
                   onClick={async () => {
+                    if (!canEdit) {
+                      toast.error("Voce nao tem permissao para alterar desvios.");
+                      return;
+                    }
                     if (!selectedAlert) return;
                     await supabase.from('production_deviations')
                       .update({

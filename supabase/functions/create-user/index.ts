@@ -5,6 +5,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const allowedRoles = new Set(["viewer", "editor", "admin"]);
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -48,8 +50,15 @@ Deno.serve(async (req) => {
       );
     }
 
+    const { data: callerRole } = await supabaseClient
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", currentUser.id)
+      .maybeSingle();
+
     const isSystemAdmin = callerProfile.system_role === "system_admin";
-    const isCompanyAdmin = callerProfile.system_role === "admin" || callerProfile.company_id;
+    const isCompanyAdmin =
+      callerProfile.system_role === "admin" || callerRole?.role === "admin";
 
     if (!isSystemAdmin && !isCompanyAdmin) {
       return new Response(
@@ -59,11 +68,40 @@ Deno.serve(async (req) => {
     }
 
     const { email, password, display_name, role, company_id } = await req.json();
+    const requestedRole = role || "viewer";
 
     if (!email || !password || !display_name) {
       return new Response(
         JSON.stringify({ error: "email, password and display_name are required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!allowedRoles.has(requestedRole)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid role" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!isSystemAdmin && requestedRole === "admin") {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized - only system admins can create admins" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!isSystemAdmin && !callerProfile.company_id) {
+      return new Response(
+        JSON.stringify({ error: "Caller company is required" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!isSystemAdmin && company_id && company_id !== callerProfile.company_id) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized - cannot create users in another company" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -120,10 +158,10 @@ Deno.serve(async (req) => {
     }
 
     // Update role if not default
-    if (role && role !== "viewer") {
+    if (requestedRole !== "viewer") {
       const { error: roleError } = await supabaseAdmin
         .from("user_roles")
-        .update({ role })
+        .update({ role: requestedRole })
         .eq("user_id", newUserId);
 
       if (roleError) {

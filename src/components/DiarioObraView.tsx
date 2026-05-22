@@ -124,7 +124,7 @@ interface DiarioObraViewProps {
 
 export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAlert }: DiarioObraViewProps = {}) {
   const { currentProject, updateBatchScopeProgress, refreshHousesFromDB } = useConstruction();
-  const { user, profile, company } = useAuth();
+  const { user, profile, company, canEdit, requireEdit } = useAuth();
   const houses = currentProject?.houses || [];
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -252,7 +252,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   const isAdmin = canApproveObra;
   const isLocked = entryStatus === "finalizado" || statusAprovacao === "aprovado";
   const canEditLockedDiary = isAdmin;
-  const editingDisabled = isLocked && !canEditLockedDiary;
+  const editingDisabled = !canEdit || (isLocked && !canEditLockedDiary);
 
   // Verifica se há solicitação de edição pendente para este RDO
   useEffect(() => {
@@ -290,6 +290,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
 
   const handleSendForApproval = async () => {
     if (!entryId) return;
+    if (!requireEdit()) return;
     // Verifica serviços sem foto e pede confirmação ao usuário
     try {
       const itemIds = diaryItems.map(i => i.id);
@@ -323,6 +324,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
 
   const handleConfirmRainAndSend = async (mmFinal: number) => {
     if (!entryId) return;
+    if (!requireEdit()) return;
     setSendingForApproval(true);
     try {
       const { error } = await supabase
@@ -607,6 +609,10 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
 
   // Upload de fotos
   const handleUploadFotos = async (e: React.ChangeEvent<HTMLInputElement>, source: "camera" | "gallery" = "gallery") => {
+    if (!requireEdit()) {
+      e.target.value = "";
+      return;
+    }
     const resolvedEntryId = entryId || await ensureEntryExists();
     if (!resolvedEntryId || !e.target.files?.length || !company?.id) return;
     setUploadingFoto(true);
@@ -645,6 +651,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   };
 
   const handleRemoverFoto = async (fotoId: string, storagePath: string) => {
+    if (!requireEdit()) return;
     try {
       await supabase.storage.from("diary-photos").remove([storagePath]);
       await supabase.from("diary_photos").delete().eq("id", fotoId);
@@ -790,6 +797,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
 
   const ensureEntryExists = useCallback(async () => {
     if (entryId) return entryId;
+    if (!requireEdit()) return null;
     if (!currentProject?.id || !user?.id || !company?.id) return null;
 
     try {
@@ -835,7 +843,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       toast.error("Erro ao iniciar relatório: " + (error.message || ""));
       return null;
     }
-  }, [entryId, currentProject?.id, user?.id, company?.id, profile?.display_name, user?.email, entryDate, equipePres, obsGeral, buildClimaPayload]);
+  }, [entryId, requireEdit, currentProject?.id, user?.id, company?.id, profile?.display_name, user?.email, entryDate, equipePres, obsGeral, buildClimaPayload]);
 
   const openDialogWithEntry = useCallback(async (openDialog: () => void) => {
     const ensuredEntryId = await ensureEntryExists();
@@ -865,6 +873,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   // Save header (cabeçalho + clima novo)
   const handleSaveHeader = async () => {
     if (!currentProject?.id || !user?.id || !company?.id) return;
+    if (!requireEdit()) return;
     setSavingHeader(true);
     try {
       const climaPayload = buildClimaPayload();
@@ -1007,6 +1016,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   };
 
   const handleRegister = async () => {
+    if (!requireEdit()) return;
     if (!entryId || !selectedMacro || !selectedScope || selectedHouses.length === 0 || !currentProject?.id) {
       toast.error("Salve o cabeçalho e selecione etapa, serviço e casas.");
       return;
@@ -1123,6 +1133,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   const [deleteRequestItem, setDeleteRequestItem] = useState<DiaryItem | null>(null);
 
   const handleDeleteItem = async (item: DiaryItem) => {
+    if (!requireEdit()) return;
     // Engenheiro/usuário comum: precisa abrir pedido de exclusão (governança)
     if (!isAdmin) {
       setDeleteRequestItem(item);
@@ -1164,6 +1175,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
     newObs: string;
     housePercents?: Record<number, number>;
   }) => {
+    if (!requireEdit()) return;
     const { item, newHouseIds, newPercent, newObs, housePercents } = params;
 
     // Resolve o percentual a aplicar em cada casa: usa per-casa quando vier,
@@ -1227,7 +1239,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
     queryClient.invalidateQueries({ queryKey: ["weekly_productions"] });
     queryClient.invalidateQueries({ queryKey: ["houses"] });
     if (entryId) await loadItems(entryId);
-  }, [houses, updateBatchScopeProgress, queryClient, entryId]);
+  }, [requireEdit, houses, updateBatchScopeProgress, queryClient, entryId]);
 
   const summaryStats = useMemo(() => {
     const totalServicos = diaryItems.length;

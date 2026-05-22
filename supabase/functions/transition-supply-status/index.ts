@@ -87,6 +87,56 @@ Deno.serve(async (req) => {
       );
     }
 
+    const [{ data: callerProfile, error: profileError }, { data: callerRole }] = await Promise.all([
+      supabaseAdmin
+        .from('profiles')
+        .select('system_role, company_id')
+        .eq('user_id', userId)
+        .maybeSingle(),
+      supabaseAdmin
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId)
+        .maybeSingle(),
+    ]);
+
+    if (profileError || !callerProfile) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Perfil do usuario nao encontrado' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const isSystemAdmin = callerProfile.system_role === 'system_admin';
+    const canWriteSupply =
+      isSystemAdmin ||
+      callerProfile.system_role === 'admin' ||
+      callerProfile.system_role === 'editor' ||
+      callerRole?.role === 'admin' ||
+      callerRole?.role === 'editor';
+
+    if (!canWriteSupply) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Sem permissao para alterar requisicoes de suprimentos' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!isSystemAdmin) {
+      const { data: project, error: projectError } = await supabaseAdmin
+        .from('projects')
+        .select('company_id')
+        .eq('id', currentRequest.project_id)
+        .maybeSingle();
+
+      if (projectError || !project || project.company_id !== callerProfile.company_id) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Requisicao fora da empresa do usuario' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
     const currentStatus = currentRequest.status;
     const allowedTransitions = VALID_TRANSITIONS[currentStatus] || [];
     if (!allowedTransitions.includes(new_status)) {

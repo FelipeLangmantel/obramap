@@ -167,6 +167,10 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
 
   const handleSave = async () => {
     if (!production || !currentProject) return;
+    if (!canEdit) {
+      toast.error("Voce nao tem permissao para editar producao.");
+      return;
+    }
     
     // Only validate dates if NOT initial database
     if (!isInitialDatabase) {
@@ -297,6 +301,10 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
 
   const handleDelete = async () => {
     if (!production || !currentProject) return;
+    if (!canEdit) {
+      toast.error("Voce nao tem permissao para excluir producao.");
+      return;
+    }
 
     try {
       // Revert progress: check if other records still cover each house

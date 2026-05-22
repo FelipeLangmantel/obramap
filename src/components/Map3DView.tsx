@@ -1376,7 +1376,16 @@ export function Map3DView() {
   const layerManager = useModelLayers(projectId, meshAssignments.assignmentMap);
 
   // Inventário de meshes do modelo
-  const meshHooks = useProjectModelMeshes(projectId);
+  const meshHooks = useProjectModelMeshes(projectId, {
+    canWrite: canEdit && (
+      canImportMainModel ||
+      canManage3D ||
+      canManageLayers ||
+      canLinkServices ||
+      canAssignHouses ||
+      canSync3DReal
+    ),
+  });
 
   const sanitizeGlbMeshForCurrentModel = useCallback((mesh: ProjectModelMesh | null | undefined): ProjectModelMesh | null => {
     if (!mesh) return null;

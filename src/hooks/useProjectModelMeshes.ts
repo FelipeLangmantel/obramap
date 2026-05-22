@@ -54,7 +54,21 @@ function isWatchedGlbMeshKey(layerKey: string | null | undefined) {
   return !!layerKey && WATCHED_GLB_MESH_KEYS.some((key) => layerKey.includes(key));
 }
 
-export function useProjectModelMeshes(projectId: string | undefined) {
+interface UseProjectModelMeshesOptions {
+  canWrite?: boolean;
+}
+
+function assertCanWriteProjectModelMeshes(canWrite: boolean) {
+  if (!canWrite) {
+    throw new Error("Sem permissao para alterar vinculos ou inventario do modelo 3D.");
+  }
+}
+
+export function useProjectModelMeshes(
+  projectId: string | undefined,
+  options: UseProjectModelMeshesOptions = {},
+) {
+  const canWrite = options.canWrite === true;
   const [meshes, setMeshes] = useState<ProjectModelMesh[]>([]);
   const [loading, setLoading] = useState(false);
   const loadedFor = useRef<string | null>(null);
@@ -161,6 +175,7 @@ export function useProjectModelMeshes(projectId: string | undefined) {
   /** Upsert único — preserva campos editáveis caso o registro já exista. */
   const upsertMesh = useCallback(
     async (data: Partial<ProjectModelMesh> & { layer_key: string }) => {
+      assertCanWriteProjectModelMeshes(canWrite);
       if (!projectId) {
         throw new Error("projectId ausente ao salvar vinculo da mesh.");
       }
@@ -257,7 +272,7 @@ export function useProjectModelMeshes(projectId: string | undefined) {
       }
       return verifiedMesh;
     },
-    [projectId, refresh],
+    [canWrite, projectId, refresh],
   );
 
   /**
@@ -268,6 +283,12 @@ export function useProjectModelMeshes(projectId: string | undefined) {
   const bulkUpsertMeshes = useCallback(
     async (incoming: BulkMeshInput[]) => {
       if (!projectId || incoming.length === 0) return;
+      if (!canWrite) {
+        if (import.meta.env.DEV) {
+          console.warn("[useProjectModelMeshes] bulk inventory skipped without write permission", { projectId });
+        }
+        return;
+      }
 
       const existing = new Map<string, ProjectModelMesh>();
       // usa o estado mais recente sincronicamente refazendo o fetch
@@ -359,7 +380,7 @@ export function useProjectModelMeshes(projectId: string | undefined) {
       }
       await refresh();
     },
-    [projectId, refresh],
+    [canWrite, projectId, refresh],
   );
 
   const countGlbMeshes = useCallback(async () => {
@@ -378,6 +399,7 @@ export function useProjectModelMeshes(projectId: string | undefined) {
 
   const clearGlbMeshes = useCallback(async () => {
     if (!projectId) return 0;
+    assertCanWriteProjectModelMeshes(canWrite);
     const beforeCount = await countGlbMeshes();
     const { count, error } = await supabase
       .from("project_model_meshes" as any)
@@ -396,27 +418,29 @@ export function useProjectModelMeshes(projectId: string | undefined) {
     });
     await refresh();
     return deletedCount;
-  }, [countGlbMeshes, projectId, refresh]);
+  }, [canWrite, countGlbMeshes, projectId, refresh]);
 
   const setIgnored = useCallback(async (layerKey: string, ignored: boolean) => {
     if (!projectId) return;
+    assertCanWriteProjectModelMeshes(canWrite);
     await supabase
       .from("project_model_meshes" as any)
       .update(ignored ? { ignored: true, visible: false } : { ignored: false })
       .eq("project_id", projectId)
       .eq("layer_key", layerKey);
     await refresh();
-  }, [projectId, refresh]);
+  }, [canWrite, projectId, refresh]);
 
   const setVisible = useCallback(async (layerKey: string, visible: boolean) => {
     if (!projectId) return;
+    assertCanWriteProjectModelMeshes(canWrite);
     await supabase
       .from("project_model_meshes" as any)
       .update({ visible })
       .eq("project_id", projectId)
       .eq("layer_key", layerKey);
     await refresh();
-  }, [projectId, refresh]);
+  }, [canWrite, projectId, refresh]);
 
   return { meshes, meshMap, loading, refresh, upsertMesh, bulkUpsertMeshes, countGlbMeshes, clearGlbMeshes, setIgnored, setVisible };
 }
