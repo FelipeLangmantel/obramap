@@ -36,6 +36,11 @@ const formatHouses = (houses: number[] | null | undefined) => {
   return `${safeHouses.slice(0, 6).join(', ')} +${safeHouses.length - 6}`;
 };
 
+const formatHousesOrNone = (houses: number[] | null | undefined) => {
+  const safeHouses = Array.isArray(houses) ? houses.filter((house) => Number.isFinite(Number(house))) : [];
+  return safeHouses.length ? formatHouses(safeHouses) : 'Nenhuma';
+};
+
 const formatDateRange = (start: string | null, end: string | null) => {
   const startLabel = formatSafeDate(start);
   const endLabel = formatSafeDate(end);
@@ -81,6 +86,11 @@ const getSeverityBadgeVariant = (severity: string): 'default' | 'secondary' | 'd
 
 const countDiagnostics = (diagnostics: ReturnType<typeof usePlanningOfficialView>['diagnostics'], type: string) =>
   (Array.isArray(diagnostics) ? diagnostics : []).filter((diagnostic) => diagnostic?.type === type).length;
+
+const countDiagnosticOccurrences = (diagnostics: ReturnType<typeof usePlanningOfficialView>['diagnostics'], type: string) =>
+  (Array.isArray(diagnostics) ? diagnostics : [])
+    .filter((diagnostic) => diagnostic?.type === type)
+    .reduce((total, diagnostic) => total + (diagnostic.occurrenceCount || 1), 0);
 
 class PlanningDiagnosticRenderBoundary extends React.Component<
   {
@@ -170,6 +180,7 @@ export function SmartPlanningView() {
     week: 'all',
     contractor: 'all',
   });
+  const [packageViewMode, setPackageViewMode] = useState<'consolidated' | 'period'>('consolidated');
 
   const {
     projectedEndDate,
@@ -257,6 +268,67 @@ export function SmartPlanningView() {
     return true;
   }), [diagnosticFilters, officialPackages]);
 
+  const consolidatedPackages = useMemo(() => {
+    const grouped = new Map<string, {
+      id: string;
+      macroName: string | null;
+      scopeName: string | null;
+      periods: number;
+      firstDate: string | null;
+      lastDate: string | null;
+      plannedQuantity: number;
+      realizedQuantity: number;
+      remainingQuantity: number;
+      hasProductivity: boolean;
+      hasDates: boolean;
+      hasSpecificHouses: boolean;
+      estimated: boolean;
+    }>();
+
+    filteredPackages.forEach((pkg) => {
+      const key = `${pkg.macroId || 'sem_macro'}::${pkg.scopeId || 'sem_servico'}`;
+      const current = grouped.get(key);
+      const start = pkg.plannedStartDate;
+      const end = pkg.plannedEndDate;
+      if (!current) {
+        grouped.set(key, {
+          id: key,
+          macroName: pkg.macroName,
+          scopeName: pkg.scopeName,
+          periods: 1,
+          firstDate: start,
+          lastDate: end,
+          plannedQuantity: pkg.plannedQuantity || 0,
+          realizedQuantity: pkg.realizedQuantity || 0,
+          remainingQuantity: pkg.remainingQuantity || 0,
+          hasProductivity: Boolean(pkg.productivityValue),
+          hasDates: Boolean(pkg.plannedStartDate && pkg.plannedEndDate),
+          hasSpecificHouses: Boolean(pkg.houseIds?.length),
+          estimated: Boolean(pkg.estimated),
+        });
+        return;
+      }
+
+      grouped.set(key, {
+        ...current,
+        periods: current.periods + 1,
+        firstDate: [current.firstDate, start].filter(Boolean).sort()[0] || null,
+        lastDate: [current.lastDate, end].filter(Boolean).sort().at(-1) || null,
+        plannedQuantity: current.plannedQuantity + (pkg.plannedQuantity || 0),
+        realizedQuantity: current.realizedQuantity + (pkg.realizedQuantity || 0),
+        remainingQuantity: current.remainingQuantity + (pkg.remainingQuantity || 0),
+        hasProductivity: current.hasProductivity || Boolean(pkg.productivityValue),
+        hasDates: current.hasDates || Boolean(pkg.plannedStartDate && pkg.plannedEndDate),
+        hasSpecificHouses: current.hasSpecificHouses || Boolean(pkg.houseIds?.length),
+        estimated: current.estimated || Boolean(pkg.estimated),
+      });
+    });
+
+    return Array.from(grouped.values()).sort((a, b) =>
+      `${a.macroName || ''} ${a.scopeName || ''}`.localeCompare(`${b.macroName || ''} ${b.scopeName || ''}`)
+    );
+  }, [filteredPackages]);
+
   const filteredDiagnostics = useMemo(() => (Array.isArray(diagnostics) ? diagnostics : []).filter((diagnostic) => {
     if (!diagnostic) return false;
     if (diagnosticFilters.severity !== 'all' && diagnostic.severity !== diagnosticFilters.severity) return false;
@@ -284,8 +356,55 @@ export function SmartPlanningView() {
   ).length;
   const visiblePackages = filteredPackages.slice(0, 100);
   const hiddenPackagesCount = Math.max(0, filteredPackages.length - visiblePackages.length);
+  const visibleConsolidatedPackages = consolidatedPackages.slice(0, 100);
+  const hiddenConsolidatedPackagesCount = Math.max(0, consolidatedPackages.length - visibleConsolidatedPackages.length);
   const visibleDiagnostics = filteredDiagnostics.slice(0, 100);
   const hiddenDiagnosticsCount = Math.max(0, filteredDiagnostics.length - visibleDiagnostics.length);
+
+  const actionItems = [
+    {
+      title: 'Metas semanais não cumpridas',
+      count: countDiagnosticOccurrences(diagnostics, 'weekly_target_not_completed'),
+      tone: 'critical',
+      description: 'Revisar o fechamento semanal e registrar motivo/desvio quando necessário.',
+    },
+    {
+      title: 'Metas sem empreiteiro/equipe',
+      count: countDiagnosticOccurrences(diagnostics, 'weekly_target_without_contractor'),
+      tone: 'warning',
+      description: 'Vincular um responsável para melhorar cobrança e rastreabilidade.',
+    },
+    {
+      title: 'Produções sem meta semanal',
+      count: countDiagnosticOccurrences(diagnostics, 'production_without_weekly_target'),
+      tone: 'warning',
+      description: 'Verificar se foi execução fora do plano ou se faltou vínculo com a meta.',
+    },
+    {
+      title: 'Serviços sem produtividade',
+      count: countDiagnosticOccurrences(diagnostics, 'missing_productivity'),
+      tone: 'warning',
+      description: 'Cadastrar produtividade para permitir cálculo de prazo e capacidade.',
+    },
+    {
+      title: 'Pacotes sem data',
+      count: countDiagnosticOccurrences(diagnostics, 'missing_dates'),
+      tone: 'warning',
+      description: 'Revisar o Planejamento de Período para preencher datas quando aplicável.',
+    },
+    {
+      title: 'Serviços em vários períodos',
+      count: countDiagnosticOccurrences(diagnostics, 'service_distributed_across_periods'),
+      tone: 'info',
+      description: 'Pode estar correto. Para mais precisão, informar casas específicas por período.',
+    },
+    {
+      title: 'Banco inicial',
+      count: `${validInitialBankCount}/${initialBankCount}`,
+      tone: validInitialBankCount === initialBankCount ? 'success' : 'warning',
+      description: 'Tratado como progresso acumulado, sem contar como desempenho semanal.',
+    },
+  ];
 
   if (!currentProject) {
     return (
@@ -495,6 +614,37 @@ export function SmartPlanningView() {
                   ))}
                 </div>
 
+                <div className="rounded-lg border bg-muted/30 p-4">
+                  <div className="mb-3">
+                    <h3 className="text-base font-semibold">O que fazer agora?</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Ações práticas sugeridas a partir do diagnóstico, sem alterar dados automaticamente.
+                    </p>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {actionItems.map((item) => (
+                      <div key={item.title} className="rounded-lg border bg-card p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-medium">{item.title}</p>
+                            <p className="mt-1 text-xs text-muted-foreground">{item.description}</p>
+                          </div>
+                          <Badge
+                            variant={
+                              item.tone === 'critical' ? 'destructive'
+                                : item.tone === 'warning' ? 'secondary'
+                                  : item.tone === 'success' ? 'default'
+                                    : 'outline'
+                            }
+                          >
+                            {item.count}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                   {[
                     ['Metas sem pacote oficial', countDiagnostics(diagnostics, 'weekly_target_without_official_package'), 'warning'],
@@ -506,6 +656,7 @@ export function SmartPlanningView() {
                     ['Casas fora do contrato', countDiagnostics(diagnostics, 'weekly_target_with_out_of_contract_houses'), 'warning'],
                     ['Pacotes sem meta semanal', countDiagnostics(diagnostics, 'official_package_without_weekly_target'), 'info'],
                     ['Serviços com saldo restante', countDiagnostics(diagnostics, 'service_with_remaining_balance'), 'info'],
+                    ['Serviços em vários períodos', countDiagnostics(diagnostics, 'service_distributed_across_periods'), 'info'],
                     ['Risco de duplicidade', countDiagnostics(diagnostics, 'duplicated_actual_production_risk'), 'warning'],
                     ['Banco inicial correto', `${validInitialBankCount}/${initialBankCount}`, 'info'],
                   ].map(([label, value, severity]) => (
@@ -579,10 +730,14 @@ export function SmartPlanningView() {
                           <td className="p-2">{target.macroName || '-'}</td>
                           <td className="p-2">{target.scopeName || '-'}</td>
                           <td className="p-2">{formatHouses(target.plannedHouseIds)}</td>
-                          <td className="p-2">{formatHouses(target.executedHouseIds)}</td>
-                          <td className="p-2">{formatHouses(target.missingHouseIds)}</td>
-                          <td className="p-2">{formatHouses(target.outOfPlanHouseIds)}</td>
-                          <td className="p-2">{target.contractorName || '-'}</td>
+                          <td className="p-2">{formatHousesOrNone(target.executedHouseIds)}</td>
+                          <td className="p-2">{formatHousesOrNone(target.missingHouseIds)}</td>
+                          <td className="p-2">{formatHousesOrNone(target.outOfPlanHouseIds)}</td>
+                          <td className="p-2">
+                            {target.contractorName || (
+                              <Badge variant="secondary">Sem responsável</Badge>
+                            )}
+                          </td>
                           <td className="p-2">{target.completionPercent.toFixed(0)}%</td>
                           <td className="p-2">
                             <Badge variant={getStatusBadgeVariant(target.status)}>
@@ -599,48 +754,120 @@ export function SmartPlanningView() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Pacotes oficiais virtuais</CardTitle>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <CardTitle>Pacotes oficiais virtuais</CardTitle>
+                  <div className="flex rounded-md border p-1 text-xs">
+                    <button
+                      type="button"
+                      className={`rounded px-3 py-1 ${packageViewMode === 'consolidated' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
+                      onClick={() => setPackageViewMode('consolidated')}
+                    >
+                      Por serviço consolidado
+                    </button>
+                    <button
+                      type="button"
+                      className={`rounded px-3 py-1 ${packageViewMode === 'period' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
+                      onClick={() => setPackageViewMode('period')}
+                    >
+                      Por período
+                    </button>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[980px] text-sm">
-                    <thead className="border-b text-left text-xs text-muted-foreground">
-                      <tr>
-                        <th className="p-2">Etapa</th>
-                        <th className="p-2">Serviço</th>
-                        <th className="p-2">Casas</th>
-                        <th className="p-2">Período</th>
-                        <th className="p-2">Planejado</th>
-                        <th className="p-2">Realizado</th>
-                        <th className="p-2">Saldo</th>
-                        <th className="p-2">Status</th>
-                        <th className="p-2">Estimado</th>
-                        <th className="p-2">Ocorrências</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {visiblePackages.map((pkg) => (
-                        <tr key={pkg.id} className="border-b last:border-0">
-                          <td className="p-2">{pkg.macroName || '-'}</td>
-                          <td className="p-2">{pkg.scopeName || '-'}</td>
-                          <td className="p-2">{pkg.unitLabel || formatHouses(pkg.houseIds)}</td>
-                          <td className="p-2">{formatDateRange(pkg.plannedStartDate, pkg.plannedEndDate)}</td>
-                          <td className="p-2">{pkg.plannedQuantity}</td>
-                          <td className="p-2">{pkg.realizedQuantity}</td>
-                          <td className="p-2">{pkg.remainingQuantity}</td>
-                          <td className="p-2">
-                            <Badge variant={getStatusBadgeVariant(pkg.status)}>
-                              {formatStatusLabel(pkg.status)}
-                            </Badge>
-                          </td>
-                          <td className="p-2">{pkg.estimated ? 'Sim' : 'Não'}</td>
-                          <td className="p-2">{pkg.occurrenceCount || 1}</td>
+                  {packageViewMode === 'consolidated' ? (
+                    <table className="w-full min-w-[1040px] text-sm">
+                      <thead className="border-b text-left text-xs text-muted-foreground">
+                        <tr>
+                          <th className="p-2">Etapa</th>
+                          <th className="p-2">Serviço</th>
+                          <th className="p-2">Períodos</th>
+                          <th className="p-2">Primeiro período</th>
+                          <th className="p-2">Último período</th>
+                          <th className="p-2">Planejado estimado</th>
+                          <th className="p-2">Realizado</th>
+                          <th className="p-2">Saldo</th>
+                          <th className="p-2">Produtividade</th>
+                          <th className="p-2">Datas</th>
+                          <th className="p-2">Casas específicas</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {visibleConsolidatedPackages.map((pkg) => (
+                          <tr key={pkg.id} className="border-b last:border-0">
+                            <td className="p-2">{pkg.macroName || '-'}</td>
+                            <td className="p-2">{pkg.scopeName || '-'}</td>
+                            <td className="p-2">{pkg.periods}</td>
+                            <td className="p-2">{formatDateRange(pkg.firstDate, null)}</td>
+                            <td className="p-2">{formatDateRange(pkg.lastDate, null)}</td>
+                            <td className="p-2">{pkg.plannedQuantity}</td>
+                            <td className="p-2">{pkg.realizedQuantity}</td>
+                            <td className="p-2">{pkg.remainingQuantity}</td>
+                            <td className="p-2">
+                              <Badge variant={pkg.hasProductivity ? 'default' : 'secondary'}>
+                                {pkg.hasProductivity ? 'Sim' : 'Não'}
+                              </Badge>
+                            </td>
+                            <td className="p-2">
+                              <Badge variant={pkg.hasDates ? 'default' : 'secondary'}>
+                                {pkg.hasDates ? 'Sim' : 'Não'}
+                              </Badge>
+                            </td>
+                            <td className="p-2">
+                              <Badge variant={pkg.hasSpecificHouses ? 'default' : 'outline'}>
+                                {pkg.hasSpecificHouses ? 'Sim' : 'Não'}
+                              </Badge>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <table className="w-full min-w-[980px] text-sm">
+                      <thead className="border-b text-left text-xs text-muted-foreground">
+                        <tr>
+                          <th className="p-2">Etapa</th>
+                          <th className="p-2">Serviço</th>
+                          <th className="p-2">Casas</th>
+                          <th className="p-2">Período</th>
+                          <th className="p-2">Planejado</th>
+                          <th className="p-2">Realizado</th>
+                          <th className="p-2">Saldo</th>
+                          <th className="p-2">Status</th>
+                          <th className="p-2">Estimado</th>
+                          <th className="p-2">Ocorrências</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {visiblePackages.map((pkg) => (
+                          <tr key={pkg.id} className="border-b last:border-0">
+                            <td className="p-2">{pkg.macroName || '-'}</td>
+                            <td className="p-2">{pkg.scopeName || '-'}</td>
+                            <td className="p-2">{pkg.unitLabel || formatHouses(pkg.houseIds)}</td>
+                            <td className="p-2">{formatDateRange(pkg.plannedStartDate, pkg.plannedEndDate)}</td>
+                            <td className="p-2">{pkg.plannedQuantity}</td>
+                            <td className="p-2">{pkg.realizedQuantity}</td>
+                            <td className="p-2">{pkg.remainingQuantity}</td>
+                            <td className="p-2">
+                              <Badge variant={getStatusBadgeVariant(pkg.status)}>
+                                {formatStatusLabel(pkg.status)}
+                              </Badge>
+                            </td>
+                            <td className="p-2">{pkg.estimated ? 'Sim' : 'Não'}</td>
+                            <td className="p-2">{pkg.occurrenceCount || 1}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
-                {hiddenPackagesCount > 0 && (
+                {packageViewMode === 'consolidated' && hiddenConsolidatedPackagesCount > 0 && (
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Exibindo 100 de {consolidatedPackages.length} serviços consolidados. Refine os filtros para ver os demais.
+                  </p>
+                )}
+                {packageViewMode === 'period' && hiddenPackagesCount > 0 && (
                   <p className="mt-3 text-xs text-muted-foreground">
                     Exibindo 100 de {filteredPackages.length} pacotes filtrados. Refine os filtros para ver os demais.
                   </p>

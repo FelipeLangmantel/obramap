@@ -139,6 +139,7 @@ export interface PlanningDiagnostic {
     | 'real_production_without_package'
     | 'package_without_house'
     | 'duplicated_service'
+    | 'service_distributed_across_periods'
     | 'weekly_plan_without_package'
     | 'strategic_without_operational_detail'
     | 'missing_dates'
@@ -987,10 +988,10 @@ const buildOfficialView = (
     if (count > 1) {
       const [macroId, scopeId] = key.split('::');
       diagnostics.push(makeDiagnostic({
-        id: `duplicate:${key}`,
-        severity: 'warning',
-        type: 'duplicated_service',
-        message: `Servico aparece em ${count} pacote(s) virtuais. Verificar se e detalhamento real ou duplicidade.`,
+        id: `distributed-service:${key}`,
+        severity: 'info',
+        type: 'service_distributed_across_periods',
+        message: `Servico aparece em ${count} periodos/pacotes. Isso pode estar correto, mas exige casas especificas por periodo para maior precisao.`,
         projectId,
         macroId,
         scopeId,
