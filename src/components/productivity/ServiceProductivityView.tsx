@@ -53,6 +53,7 @@ interface SuggestedTeamGroup {
   services: ServiceCapacityInsight[];
   reasons: string[];
   hasDuplicatedCapacityRisk: boolean;
+  confidence: 'Alta' | 'Media' | 'Baixa';
 }
 
 const TYPE_LABELS: Record<SuggestedServiceType, string> = {
@@ -74,8 +75,33 @@ const normalizeText = (value: string | null | undefined) =>
 
 const hasAny = (text: string, terms: string[]) => terms.some((term) => text.includes(term));
 
+const sameId = (a: unknown, b: unknown) => String(a ?? '') === String(b ?? '');
+
+const findProductivityForService = (
+  service: ServiceInfo,
+  productivities: ServiceProductivity[]
+) =>
+  productivities.find((productivity) =>
+    sameId(productivity.scope_id, service.scopeId) &&
+    (!productivity.macro_id || sameId(productivity.macro_id, service.macroId))
+  ) ||
+  productivities.find((productivity) => sameId(productivity.scope_id, service.scopeId));
+
+const formatProductivitySummary = (productivity?: ServiceProductivity) => {
+  if (!productivity) return 'Sem produtividade';
+  return [
+    `${productivity.productivity_value} ${productivity.productivity_unit}`,
+    `${productivity.professionals_per_team} prof. + ${productivity.helpers_per_team} aux.`,
+    `${productivity.default_team_count} equipe(s)`,
+  ].join(' · ');
+};
+
 const classifyService = (service: ServiceInfo): SuggestedServiceType => {
   const text = normalizeText(`${service.macroName} ${service.scopeName}`);
+
+  if (hasAny(text, ['locacao de obra', 'locacao da obra', 'locacao'])) {
+    return 'physical_one_time';
+  }
 
   if (
     hasAny(text, [
@@ -104,6 +130,8 @@ const classifyService = (service: ServiceInfo): SuggestedServiceType => {
       'topografia',
       'projeto',
       'documentacao',
+      'canteiro de obras',
+      'instalacoes e canteiro',
     ])
   ) {
     return 'support_service';
@@ -139,6 +167,25 @@ const classifyService = (service: ServiceInfo): SuggestedServiceType => {
       'pre mold',
       'premold',
       'moldad',
+      'vaso sanitario',
+      'lavatorio',
+      'bancada',
+      'cozinha',
+      'tanque',
+      'louca',
+      'loucas',
+      'metais',
+      'acessorio',
+      'acessorios',
+      'efiacao',
+      'fiacao',
+      'tomada',
+      'tomadas',
+      'caixa de inspecao',
+      'caixas de inspecao',
+      'caixa de gordura',
+      'calcada',
+      'calcamento',
     ])
   ) {
     return 'physical_repetitive';
@@ -156,11 +203,11 @@ const getPlanningSuggestion = (type: SuggestedServiceType) => {
     case 'physical_repetitive':
       return { gantt: 'Sim', lineOfBalance: 'Sim', weeklyPlanning: 'Valida capacidade' };
     case 'physical_one_time':
-      return { gantt: 'Sim', lineOfBalance: 'Opcional', weeklyPlanning: 'Meta por servico' };
+      return { gantt: 'Sim', lineOfBalance: 'Opcional/Nao', weeklyPlanning: 'Meta pontual por servico' };
     case 'administrative_cost':
       return { gantt: 'Opcional', lineOfBalance: 'Nao', weeklyPlanning: 'Nao lancar como grupo' };
     case 'support_service':
-      return { gantt: 'Opcional/marco', lineOfBalance: 'Nao', weeklyPlanning: 'Opcional por servico' };
+      return { gantt: 'Sim/Opcional', lineOfBalance: 'Nao', weeklyPlanning: 'Opcional por servico' };
     case 'milestone':
       return { gantt: 'Marco', lineOfBalance: 'Nao', weeklyPlanning: 'Nao lancar como grupo' };
     default:
@@ -282,6 +329,17 @@ const buildSuggestedTeamGroups = (insights: ServiceCapacityInsight[]): Suggested
       if (hasCompatibleComposition(group.items)) reasons.push('composicao de equipe compativel');
 
       const configuredCount = group.items.filter((item) => item.productivity).length;
+      const hasPrecastSet =
+        id.includes('pre_moldado') &&
+        group.items.some((item) => normalizeText(item.service.scopeName).includes('parede')) &&
+        group.items.some((item) => normalizeText(item.service.scopeName).includes('laje')) &&
+        group.items.some((item) => normalizeText(item.service.scopeName).includes('oitao'));
+      const confidence: SuggestedTeamGroup['confidence'] =
+        hasPrecastSet || id.includes('pintura')
+          ? 'Alta'
+          : configuredCount >= 2 && (hasSimilarProductivity(group.items) || hasCompatibleComposition(group.items))
+            ? 'Media'
+            : 'Baixa';
 
       return {
         id,
@@ -289,16 +347,18 @@ const buildSuggestedTeamGroups = (insights: ServiceCapacityInsight[]): Suggested
         services: group.items,
         reasons,
         hasDuplicatedCapacityRisk: configuredCount >= 2,
+        confidence,
       };
     });
 };
 
 const formatSharedCapacity = (services: ServiceCapacityInsight[]) => {
   const configured = services.filter((item) => item.productivity);
-  if (!configured.length) return 'Sem produtividade configurada para estimar capacidade.';
+  const missing = services.length - configured.length;
+  if (!configured.length) return `${services.length} servico(s) sem produtividade para estimar capacidade.`;
 
   const reference = configured[0].productivity!;
-  return `Referencia: ${reference.productivity_value} ${reference.productivity_unit} com ${reference.default_team_count} equipe(s).`;
+  return `${configured.length} com produtividade, ${missing} sem produtividade. Referencia: ${reference.productivity_value} ${reference.productivity_unit} com ${reference.default_team_count} equipe(s).`;
 };
 
 export function ServiceProductivityView() {
@@ -326,8 +386,8 @@ export function ServiceProductivityView() {
 
   const stats = useMemo(() => {
     const total = allServices.length;
-    const configured = allServices.filter(s =>
-      productivities.some(p => p.scope_id === s.scopeId)
+    const configured = allServices.filter((service) =>
+      !!findProductivityForService(service, productivities)
     ).length;
     const missing = total - configured;
     const totalProfessionals = productivities.reduce(
@@ -340,14 +400,14 @@ export function ServiceProductivityView() {
   }, [allServices, productivities]);
 
   const capacityDiagnostics = useMemo(() => {
-    const productivityByScope = new Map(productivities.map((item) => [item.scope_id, item]));
     const serviceInsights: ServiceCapacityInsight[] = allServices.map((service) => {
       const type = classifyService(service);
+      const productivity = findProductivityForService(service, productivities);
       return {
         service,
-        productivity: productivityByScope.get(service.scopeId),
+        productivity,
         type,
-        isConfigured: productivityByScope.has(service.scopeId),
+        isConfigured: !!productivity,
         planningSuggestion: getPlanningSuggestion(type),
       };
     });
@@ -357,6 +417,8 @@ export function ServiceProductivityView() {
     return {
       serviceInsights,
       suggestedGroups,
+      configured: serviceInsights.filter((item) => item.isConfigured).length,
+      missing: serviceInsights.filter((item) => !item.isConfigured).length,
       likelyAdministrative: serviceInsights.filter((item) => item.type === 'administrative_cost').length,
       physicalRepetitive: serviceInsights.filter((item) => item.type === 'physical_repetitive').length,
       duplicatedCapacityRisk: suggestedGroups.filter((group) => group.hasDuplicatedCapacityRisk).length,
@@ -466,15 +528,15 @@ export function ServiceProductivityView() {
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
             <div className="rounded-lg border bg-muted/30 p-3">
               <p className="text-xs text-muted-foreground">Servicos configurados</p>
-              <p className="text-xl font-semibold">{stats.configured}</p>
+              <p className="text-xl font-semibold">{capacityDiagnostics.configured}</p>
             </div>
             <div className="rounded-lg border bg-muted/30 p-3">
               <p className="text-xs text-muted-foreground">Servicos pendentes</p>
-              <p className="text-xl font-semibold">{stats.missing}</p>
+              <p className="text-xl font-semibold">{capacityDiagnostics.missing}</p>
             </div>
             <div className="rounded-lg border bg-muted/30 p-3">
               <p className="text-xs text-muted-foreground">Sem produtividade</p>
-              <p className="text-xl font-semibold">{stats.missing}</p>
+              <p className="text-xl font-semibold">{capacityDiagnostics.missing}</p>
             </div>
             <div className="rounded-lg border bg-muted/30 p-3">
               <p className="text-xs text-muted-foreground">Administrativos provaveis</p>
@@ -529,6 +591,7 @@ export function ServiceProductivityView() {
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <p className="font-medium">{group.title}</p>
                       <Badge variant="outline">Capacidade compartilhada</Badge>
+                      <Badge variant="secondary">Confianca {group.confidence}</Badge>
                       {group.hasDuplicatedCapacityRisk && (
                         <Badge variant="secondary" className="text-amber-700 dark:text-amber-300">
                           revisar capacidade
@@ -553,6 +616,9 @@ export function ServiceProductivityView() {
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {formatSharedCapacity(group.services)} Nao une lancamentos de producao.
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Sugestao automatica. Confirme manualmente antes de transformar em frente oficial.
                     </p>
                   </div>
                 ))}
@@ -579,6 +645,11 @@ export function ServiceProductivityView() {
                         {item.isConfigured ? 'Configurado' : 'Sem produtividade'}
                       </Badge>
                       <Badge variant="secondary">{TYPE_LABELS[item.type]}</Badge>
+                      {item.productivity && (
+                        <span className="text-xs text-muted-foreground">
+                          {formatProductivitySummary(item.productivity)}
+                        </span>
+                      )}
                     </div>
                     <div className="grid grid-cols-3 gap-2 text-xs">
                       <span className="rounded border px-2 py-1">Gantt: {item.planningSuggestion.gantt}</span>
@@ -607,7 +678,7 @@ export function ServiceProductivityView() {
           <ScrollArea className="h-[calc(100vh-420px)]">
             <div className="space-y-2">
               {allServices.map((service) => {
-                const productivity = productivities.find(p => p.scope_id === service.scopeId);
+                const productivity = findProductivityForService(service, productivities);
                 const isConfigured = !!productivity;
 
                 return (
@@ -676,7 +747,7 @@ export function ServiceProductivityView() {
       {selectedService && (
         <ServiceProductivityDialog
           service={selectedService}
-          existingProductivity={productivities.find(p => p.scope_id === selectedService.scopeId)}
+          existingProductivity={findProductivityForService(selectedService, productivities)}
           onClose={() => setSelectedService(null)}
           onSave={saveProductivity}
         />
