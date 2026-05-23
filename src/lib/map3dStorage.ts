@@ -3,6 +3,13 @@ import { supabase } from "@/integrations/supabase/client";
 export const MAP3D_STORAGE_BUCKET = "3d-models";
 export const MAP3D_SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
+export function normalizeMap3DStoragePath(path: string | null | undefined): string | null {
+  if (!path) return null;
+  const cleaned = path.split("?")[0].replace(/^\/+/, "");
+  const bucketPrefix = `${MAP3D_STORAGE_BUCKET}/`;
+  return cleaned.startsWith(bucketPrefix) ? cleaned.slice(bucketPrefix.length) : cleaned;
+}
+
 /**
  * Extract the storage object path within the 3d-models bucket from any
  * previously-saved Supabase Storage URL (public or signed).
@@ -20,10 +27,25 @@ export function extractMap3DStoragePath(url: string | null | undefined): string 
     rest = rest.replace(/^(public|sign|authenticated)\//, "");
     const prefix = `${MAP3D_STORAGE_BUCKET}/`;
     if (!rest.startsWith(prefix)) return null;
-    return decodeURIComponent(rest.slice(prefix.length));
+    return normalizeMap3DStoragePath(decodeURIComponent(rest.slice(prefix.length)));
   } catch {
     return null;
   }
+}
+
+export async function createMap3DSignedUrlFromPath(
+  path: string | null | undefined,
+): Promise<string | null> {
+  const normalizedPath = normalizeMap3DStoragePath(path);
+  if (!normalizedPath) return null;
+  const { data, error } = await supabase.storage
+    .from(MAP3D_STORAGE_BUCKET)
+    .createSignedUrl(normalizedPath, MAP3D_SIGNED_URL_TTL_SECONDS);
+  if (error || !data?.signedUrl) {
+    console.error("[3D] Failed to sign URL for", normalizedPath, error);
+    return null;
+  }
+  return data.signedUrl;
 }
 
 /**
@@ -36,12 +58,5 @@ export async function resolveMap3DSignedUrl(
   if (!url) return null;
   const path = extractMap3DStoragePath(url);
   if (!path) return url;
-  const { data, error } = await supabase.storage
-    .from(MAP3D_STORAGE_BUCKET)
-    .createSignedUrl(path, MAP3D_SIGNED_URL_TTL_SECONDS);
-  if (error || !data?.signedUrl) {
-    console.error("[3D] Failed to sign URL for", path, error);
-    return null;
-  }
-  return data.signedUrl;
+  return createMap3DSignedUrlFromPath(path);
 }
