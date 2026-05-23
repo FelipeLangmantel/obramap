@@ -529,6 +529,7 @@ export function SmartPlanningView() {
 
         <TabsContent value="lob" className="flex-1 mt-4">
           <LineOfBalance 
+            projectId={currentProject.id}
             ganttServices={strategicGanttServices}
             projectStartDate={strategicStartDate}
             onUpdatePredecessor={updatePredecessor}

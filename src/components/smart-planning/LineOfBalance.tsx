@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { addDays, addMonths, addWeeks, differenceInDays, endOfMonth, format, isWeekend, startOfDay, startOfMonth, startOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -29,10 +29,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 
 import { GanttService } from './hooks/useStrategicGanttData';
+import { usePlanningCapacityModel } from './hooks/usePlanningCapacityModel';
 
 interface LineOfBalanceProps {
+  projectId?: string;
   ganttServices: GanttService[];
   projectStartDate: string;
   onUpdatePredecessor?: (serviceId: string, predecessorStageId: string | null) => Promise<void>;
@@ -79,6 +82,7 @@ type WorkPackage = {
   color: string;
   isExecuted: boolean;
   isSimulated: boolean;
+  isHiddenFromLine: boolean;
 };
 
 type PackageOverride = {
@@ -126,6 +130,13 @@ const normalize = (value: string) =>
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
+
+const getLineSettingKey = (macroId?: string | null, scopeId?: string | null, serviceName?: string | null) => {
+  const macro = String(macroId ?? '').trim();
+  const scope = String(scopeId ?? '').trim();
+  if (macro || scope) return `${macro || 'sem_macro'}::${scope || 'sem_servico'}`;
+  return `name::${normalize(String(serviceName ?? '')) || 'sem_nome'}`;
+};
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
@@ -258,14 +269,16 @@ const getDaysFromPixels = (pixels: number, columns: TimelineColumn[], scale: Flo
   return Math.round(pixels / width);
 };
 
-export function LineOfBalance({ ganttServices, projectStartDate, onUpdatePredecessor }: LineOfBalanceProps) {
+export function LineOfBalance({ projectId, ganttServices, projectStartDate, onUpdatePredecessor }: LineOfBalanceProps) {
   const { canEdit } = useAuth();
   const { currentProject } = useConstruction();
+  const capacityModel = usePlanningCapacityModel(projectId);
   const [showSequenceDialog, setShowSequenceDialog] = useState(false);
   const [selectedMacroflowId, setSelectedMacroflowId] = useState('housing');
   const [scale, setScale] = useState<FlowScale>('week');
   const [zoom, setZoom] = useState(1);
   const [simulationMode, setSimulationMode] = useState(false);
+  const [showHiddenServices, setShowHiddenServices] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [overrides, setOverrides] = useState<Record<string, PackageOverride>>({});
   const [selectedPackage, setSelectedPackage] = useState<WorkPackage | null>(null);
@@ -278,9 +291,47 @@ export function LineOfBalance({ ganttServices, projectStartDate, onUpdatePredece
     return [...ganttServices].sort((a, b) => a.sequence_order - b.sequence_order);
   }, [ganttServices]);
 
-  const macroflows = useMemo(() => getMacroflowPresets(sortedServices), [sortedServices]);
+  const lineSettingsByKey = useMemo(() => {
+    const exact = new Map<string, boolean>();
+    const byName = new Map<string, boolean>();
+    capacityModel.planningServiceSettings.forEach((setting) => {
+      const key = getLineSettingKey(setting.macroId, setting.scopeId, setting.serviceName);
+      exact.set(key, setting.includeInLineOfBalance);
+      if (setting.serviceName) {
+        byName.set(getLineSettingKey(null, null, setting.serviceName), setting.includeInLineOfBalance);
+      }
+    });
+    return { exact, byName };
+  }, [capacityModel.planningServiceSettings]);
+
+  const getIncludeInLine = useCallback((svc: GanttService) => {
+    if (capacityModel.loading) return true;
+    const exact = lineSettingsByKey.exact.get(getLineSettingKey(svc.macro_id, svc.scope_id, svc.scope_name));
+    if (exact !== undefined) return exact;
+    const byName = lineSettingsByKey.byName.get(getLineSettingKey(null, null, svc.scope_name));
+    if (byName !== undefined) return byName;
+    return true;
+  }, [capacityModel.loading, lineSettingsByKey]);
+
+  const hiddenLineServiceIds = useMemo(() => {
+    const hidden = new Set<string>();
+    sortedServices.forEach((svc) => {
+      if (!getIncludeInLine(svc)) hidden.add(svc.id);
+    });
+    return hidden;
+  }, [getIncludeInLine, sortedServices]);
+
+  const servicesForLine = useMemo(
+    () => (showHiddenServices ? sortedServices : sortedServices.filter((svc) => !hiddenLineServiceIds.has(svc.id))),
+    [hiddenLineServiceIds, showHiddenServices, sortedServices]
+  );
+
+  const visibleLineCount = sortedServices.length - hiddenLineServiceIds.size;
+  const hiddenLineCount = hiddenLineServiceIds.size;
+
+  const macroflows = useMemo(() => getMacroflowPresets(servicesForLine), [servicesForLine]);
   const selectedMacroflow = macroflows.find((flow) => flow.id === selectedMacroflowId) || macroflows[0];
-  const flowServices = selectedMacroflow?.services || sortedServices;
+  const flowServices = selectedMacroflow?.services || servicesForLine;
 
   const maxUnits = useMemo(() => {
     const fromServices = ganttServices.length ? Math.max(...ganttServices.map((s) => s.total_houses)) : 0;
@@ -430,10 +481,11 @@ export function LineOfBalance({ ganttServices, projectStartDate, onUpdatePredece
           color,
           isExecuted: unitIndex < svc.executed_houses,
           isSimulated: Boolean(override),
+          isHiddenFromLine: hiddenLineServiceIds.has(svc.id),
         };
       }).filter(Boolean) as WorkPackage[];
     });
-  }, [columns, flowServices, overrides, rowTopByUnit, scale, unitGroups]);
+  }, [columns, flowServices, hiddenLineServiceIds, overrides, rowTopByUnit, scale, unitGroups]);
 
   const totalActivities = flowServices.reduce((sum, svc) => sum + svc.total_houses, 0);
   const totalExecuted = flowServices.reduce((sum, svc) => sum + svc.executed_houses, 0);
@@ -669,6 +721,34 @@ export function LineOfBalance({ ganttServices, projectStartDate, onUpdatePredece
         ))}
       </div>
 
+      <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-border dark:bg-card md:p-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="font-medium text-slate-900 dark:text-foreground">{visibleLineCount} visiveis</span>
+              <span className="text-muted-foreground">|</span>
+              <span className="font-medium text-slate-600 dark:text-muted-foreground">{hiddenLineCount} ocultos</span>
+              <span className="text-muted-foreground">|</span>
+              <span className="font-medium text-slate-600 dark:text-muted-foreground">{sortedServices.length} total</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Servicos marcados como fora da Linha de Balanco sao ocultados apenas desta visualizacao.
+              Producao, diario, medicao, Gantt e Mapa 3D continuam separados por servico.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 rounded-full border bg-slate-50 px-3 py-2 dark:bg-background">
+            <Switch
+              id="show-hidden-line-services"
+              checked={showHiddenServices}
+              onCheckedChange={setShowHiddenServices}
+            />
+            <Label htmlFor="show-hidden-line-services" className="cursor-pointer text-xs font-medium">
+              Mostrar ocultos
+            </Label>
+          </div>
+        </div>
+      </div>
+
       <Card className="overflow-hidden rounded-2xl border-slate-200 shadow-sm dark:border-border">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-white p-3 dark:bg-card">
           <div className="flex flex-wrap items-center gap-2">
@@ -821,14 +901,14 @@ export function LineOfBalance({ ganttServices, projectStartDate, onUpdatePredece
                     return (
                       <div
                         key={pkg.key}
-                        className={`absolute z-20 flex cursor-grab items-center overflow-hidden rounded-md border border-white/50 px-2 text-[10px] font-semibold text-white shadow-sm transition-shadow hover:shadow-lg ${isDragging ? 'cursor-grabbing ring-2 ring-primary' : ''} ${pkg.isSimulated ? 'ring-2 ring-amber-300' : ''}`}
+                        className={`absolute z-20 flex cursor-grab items-center overflow-hidden rounded-md border border-white/50 px-2 text-[10px] font-semibold text-white shadow-sm transition-shadow hover:shadow-lg ${isDragging ? 'cursor-grabbing ring-2 ring-primary' : ''} ${pkg.isSimulated ? 'ring-2 ring-amber-300' : ''} ${pkg.isHiddenFromLine ? 'grayscale opacity-60' : ''}`}
                         style={{
                           left,
                           top: pkg.y,
                           width,
                           height: ROW_HEIGHT - 10,
                           backgroundColor: pkg.color,
-                          opacity: pkg.isExecuted ? 1 : 0.78,
+                          opacity: pkg.isHiddenFromLine ? 0.55 : pkg.isExecuted ? 1 : 0.78,
                         }}
                         title={`${pkg.service.name}\n${pkg.unit.label}\n${formatShortDate(pkg.start)} - ${formatShortDate(pkg.end)}\n${pkg.durationDays} dias • ${pkg.teams} equipe(s)`}
                         onPointerDown={(event) => {
@@ -851,7 +931,7 @@ export function LineOfBalance({ ganttServices, projectStartDate, onUpdatePredece
                         }}
                       >
                         <span className="truncate" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.45)' }}>
-                          {pkg.service.scope_name || pkg.service.name}
+                          {pkg.isHiddenFromLine ? 'Oculto: ' : ''}{pkg.service.scope_name || pkg.service.name}
                         </span>
                         <span
                           data-resize-handle="true"
@@ -963,7 +1043,14 @@ function PackageDialog({ open, workPackage, simulationMode, onOpenChange, onAppl
         </DialogHeader>
         <div className="space-y-4">
           <div className="rounded-lg border bg-muted/30 p-3 text-sm">
-            <p className="font-semibold">{workPackage.service.name}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-semibold">{workPackage.service.name}</p>
+              {workPackage.isHiddenFromLine && (
+                <Badge variant="secondary" className="text-[10px]">
+                  Oculto na Linha
+                </Badge>
+              )}
+            </div>
             <p className="text-muted-foreground">{workPackage.unit.label}</p>
             <p className="mt-2 text-xs text-muted-foreground">
               {formatShortDate(workPackage.start)} ate {formatShortDate(workPackage.end)} • {workPackage.durationDays} dias
