@@ -2,8 +2,7 @@ import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
-import { Pencil, Plus, Power, Trash2, GitBranch, Users } from 'lucide-react';
+import { AlertTriangle, Pencil, Plus, Power, Trash2, GitBranch, Users } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,8 +14,56 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useTeamWorkGroups, type TeamWorkGroup } from '@/hooks/useTeamWorkGroups';
+import { usePlanningCapacityModel } from '@/components/smart-planning/hooks/usePlanningCapacityModel';
 import { TeamWorkGroupDialog, type ServiceRef, type TeamWorkGroupDialogValues } from './TeamWorkGroupDialog';
 import { AddServiceToGroupDialog } from './AddServiceToGroupDialog';
+
+type SizingStatus = 'ok' | 'attention' | 'overloaded' | 'missing_productivity' | 'no_demand';
+
+const normalizeUnitText = (value: string | null | undefined) =>
+  String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+
+const formatNumber = (value: number | null | undefined, digits = 0) =>
+  Number.isFinite(Number(value)) ? Number(value).toLocaleString('pt-BR', { maximumFractionDigits: digits }) : '-';
+
+const calculateWeeklyCapacity = (
+  productivityValue: number | null | undefined,
+  productivityUnit: string | null | undefined,
+  workingDaysPerWeek: number | null | undefined,
+  teamCount: number | null | undefined,
+) => {
+  const value = Number(productivityValue);
+  const days = Math.max(Number(workingDaysPerWeek) || 0, 0);
+  const teams = Math.max(Number(teamCount) || 0, 0);
+  if (!Number.isFinite(value) || value <= 0 || days <= 0 || teams <= 0) return null;
+
+  const unit = normalizeUnitText(productivityUnit);
+  if (unit.includes('semana')) return value * teams;
+  if (unit.includes('mes')) return (value / 22) * days * teams;
+  return value * days * teams;
+};
+
+const sizingStatusLabel = (status: SizingStatus) => {
+  const labels: Record<SizingStatus, string> = {
+    ok: 'OK',
+    attention: 'Atencao',
+    overloaded: 'Sobrecarregado',
+    missing_productivity: 'Sem produtividade',
+    no_demand: 'Sem demanda',
+  };
+  return labels[status];
+};
+
+const sizingStatusVariant = (status: SizingStatus): 'default' | 'secondary' | 'destructive' | 'outline' => {
+  if (status === 'overloaded') return 'destructive';
+  if (status === 'attention') return 'secondary';
+  if (status === 'ok') return 'default';
+  return 'outline';
+};
 
 interface Props {
   projectId: string | undefined;
@@ -25,6 +72,7 @@ interface Props {
 }
 
 export function TeamWorkGroupsPanel({ projectId, allServices, suggestions = [] }: Props) {
+  const capacityModel = usePlanningCapacityModel(projectId);
   const {
     groups,
     groupServices,
@@ -61,6 +109,84 @@ export function TeamWorkGroupsPanel({ projectId, allServices, suggestions = [] }
     });
     return map;
   }, [groupServices, allServices]);
+
+  const recommendedSizingRows = useMemo(() => {
+    return groups.map((group) => {
+      const linkedServices = servicesByGroup.get(group.id) ?? [];
+      const modelGroup = capacityModel.workGroups.find((item) => item.id === group.id);
+      const groupCapacity = capacityModel.serviceCapacityMap.find((entry) => entry.groupId === group.id);
+      const peakDemand = capacityModel.overloadDiagnostics
+        .filter((item) => item.groupId === group.id)
+        .reduce((max, item) => Math.max(max, item.plannedQuantity), 0);
+      const currentTeams = Math.max(Number(group.simultaneous_team_count ?? modelGroup?.simultaneousTeamCount ?? 1) || 0, 0);
+      const professionalsPerTeam = Math.max(Number(group.professional_count ?? modelGroup?.professionalCount ?? 0) || 0, 0);
+      const auxiliariesPerTeam = Math.max(Number(group.auxiliary_count ?? modelGroup?.auxiliaryCount ?? 0) || 0, 0);
+      const peoplePerTeam = professionalsPerTeam + auxiliariesPerTeam;
+      const currentPeople = peoplePerTeam * currentTeams;
+      const weeklyCapacity = groupCapacity?.weeklyCapacity ?? calculateWeeklyCapacity(
+        group.productivity_value,
+        group.productivity_unit,
+        group.working_days_per_week,
+        currentTeams,
+      );
+      const capacityPerTeam = weeklyCapacity !== null && currentTeams > 0 ? weeklyCapacity / currentTeams : null;
+      const hasProductivity = weeklyCapacity !== null && weeklyCapacity > 0 && capacityPerTeam !== null && capacityPerTeam > 0;
+      const recommendedTeams = hasProductivity && peakDemand > 0
+        ? Math.max(Math.ceil(peakDemand / capacityPerTeam), currentTeams)
+        : currentTeams;
+      const recommendedPeople = peoplePerTeam * recommendedTeams;
+      const additionalTeams = Math.max(recommendedTeams - currentTeams, 0);
+      const additionalPeople = Math.max(recommendedPeople - currentPeople, 0);
+      const overload = weeklyCapacity === null ? 0 : Math.max(peakDemand - weeklyCapacity, 0);
+      const surplus = weeklyCapacity === null ? 0 : Math.max(weeklyCapacity - peakDemand, 0);
+      const overloadPercent = weeklyCapacity && weeklyCapacity > 0 ? (overload / weeklyCapacity) * 100 : 0;
+      const status: SizingStatus =
+        !hasProductivity
+          ? 'missing_productivity'
+          : peakDemand <= 0
+            ? 'no_demand'
+            : peakDemand <= weeklyCapacity
+              ? 'ok'
+              : overloadPercent <= 20
+                ? 'attention'
+                : 'overloaded';
+      const recommendation =
+        status === 'missing_productivity'
+          ? 'Cadastrar produtividade da frente.'
+          : status === 'no_demand'
+            ? 'Sem demanda planejada suficiente para recomendar equipe.'
+            : status === 'ok'
+              ? 'Manter equipe atual.'
+              : additionalTeams > 0
+                ? `Adicionar ${additionalTeams} equipe(s) ou redistribuir metas.`
+                : 'Revisar produtividade cadastrada.';
+
+      return {
+        group,
+        linkedServices,
+        weeklyCapacity,
+        peakDemand,
+        currentTeams,
+        currentPeople,
+        recommendedTeams,
+        recommendedPeople,
+        additionalTeams,
+        additionalPeople,
+        surplus,
+        overload,
+        status,
+        recommendation,
+      };
+    });
+  }, [capacityModel.overloadDiagnostics, capacityModel.serviceCapacityMap, capacityModel.workGroups, groups, servicesByGroup]);
+
+  const recommendedSizingSummary = useMemo(() => ({
+    activeGroups: groups.filter((group) => group.active).length,
+    missingProductivity: recommendedSizingRows.filter((row) => row.status === 'missing_productivity').length,
+    overloaded: recommendedSizingRows.filter((row) => row.status === 'overloaded').length,
+    additionalTeams: recommendedSizingRows.reduce((sum, row) => sum + row.additionalTeams, 0),
+    additionalPeople: recommendedSizingRows.reduce((sum, row) => sum + row.additionalPeople, 0),
+  }), [groups, recommendedSizingRows]);
 
   const openCreate = () => {
     setEditingGroupId(null);
@@ -163,6 +289,140 @@ export function TeamWorkGroupsPanel({ projectId, allServices, suggestions = [] }
           </div>
         </div>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Users className="h-4 w-4 text-primary" />
+            Dimensionamento recomendado
+          </CardTitle>
+          <CardDescription>
+            Recomendacao de capacidade por frente. Nao altera producao, diario, medicao, Gantt, Linha,
+            Semanal ou Previsao oficial.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {groups.length === 0 ? (
+            <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+              Nenhuma frente compartilhada cadastrada. Cadastre frentes para obter dimensionamento recomendado.
+            </div>
+          ) : (
+            <>
+              <div className="grid gap-3 md:grid-cols-5">
+                {[
+                  ['Frentes ativas', recommendedSizingSummary.activeGroups],
+                  ['Sem produtividade', recommendedSizingSummary.missingProductivity],
+                  ['Sobrecarregadas', recommendedSizingSummary.overloaded],
+                  ['Equipes adicionais', recommendedSizingSummary.additionalTeams],
+                  ['Pessoas adicionais', recommendedSizingSummary.additionalPeople],
+                ].map(([label, value]) => (
+                  <div key={String(label)} className="rounded-lg border bg-muted/30 p-3">
+                    <p className="text-xs text-muted-foreground">{label}</p>
+                    <p className="mt-1 text-xl font-semibold">{formatNumber(Number(value))}</p>
+                  </div>
+                ))}
+              </div>
+
+              {capacityModel.diagnostics.length > 0 && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  <AlertTriangle className="mr-2 inline h-4 w-4" />
+                  Algumas fontes de planejamento/capacidade nao puderam ser lidas agora. A recomendacao segue com fallback seguro.
+                </div>
+              )}
+
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[1080px] text-sm">
+                  <thead className="border-b text-left text-xs text-muted-foreground">
+                    <tr>
+                      <th className="p-2">Frente</th>
+                      <th className="p-2">Servicos</th>
+                      <th className="p-2">Produtividade</th>
+                      <th className="p-2">Dias/sem</th>
+                      <th className="p-2">Capacidade</th>
+                      <th className="p-2">Demanda pico</th>
+                      <th className="p-2">Equipes</th>
+                      <th className="p-2">Pessoas</th>
+                      <th className="p-2">Sobra/sobrecarga</th>
+                      <th className="p-2">Status</th>
+                      <th className="p-2">Recomendacao</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recommendedSizingRows.map((row) => (
+                      <tr key={row.group.id} className="border-b last:border-0">
+                        <td className="p-2">
+                          <div className="font-medium">{row.group.name}</div>
+                          {!row.group.active && (
+                            <Badge variant="outline" className="mt-1 text-xs">Inativa</Badge>
+                          )}
+                        </td>
+                        <td className="p-2">
+                          {row.linkedServices.length === 0 ? (
+                            <span className="text-muted-foreground">Frente sem servicos vinculados.</span>
+                          ) : (
+                            <>
+                              {row.linkedServices.slice(0, 3).map((service) => service.scopeName).join(', ')}
+                              {row.linkedServices.length > 3 ? ` +${row.linkedServices.length - 3}` : ''}
+                            </>
+                          )}
+                        </td>
+                        <td className="p-2">
+                          {row.group.productivity_value
+                            ? `${formatNumber(row.group.productivity_value, 2)} ${row.group.productivity_unit ?? ''}`
+                            : 'Sem produtividade'}
+                        </td>
+                        <td className="p-2">{row.group.working_days_per_week ?? 5}</td>
+                        <td className="p-2">
+                          {row.weeklyCapacity === null
+                            ? 'Sem capacidade'
+                            : `${formatNumber(row.weeklyCapacity, 1)}/semana`}
+                        </td>
+                        <td className="p-2">{row.peakDemand > 0 ? formatNumber(row.peakDemand, 1) : 'Sem demanda'}</td>
+                        <td className="p-2">
+                          <div>{row.currentTeams} atual</div>
+                          <div className="text-xs text-muted-foreground">{row.recommendedTeams} recomendado</div>
+                          {row.additionalTeams > 0 && (
+                            <div className="text-xs text-destructive">+{row.additionalTeams}</div>
+                          )}
+                        </td>
+                        <td className="p-2">
+                          <div>{formatNumber(row.currentPeople)} atual</div>
+                          <div className="text-xs text-muted-foreground">{formatNumber(row.recommendedPeople)} recomendado</div>
+                          {row.additionalPeople > 0 && (
+                            <div className="text-xs text-destructive">+{formatNumber(row.additionalPeople)}</div>
+                          )}
+                        </td>
+                        <td className="p-2">
+                          {row.status === 'missing_productivity' ? (
+                            'Cadastre produtividade'
+                          ) : row.status === 'no_demand' ? (
+                            'Sem demanda planejada'
+                          ) : row.overload > 0 ? (
+                            <span className="text-destructive">{formatNumber(row.overload, 1)} sobrecarga</span>
+                          ) : (
+                            <span className="text-emerald-600">{formatNumber(row.surplus, 1)} sobra</span>
+                          )}
+                        </td>
+                        <td className="p-2">
+                          <Badge variant={sizingStatusVariant(row.status)}>
+                            {sizingStatusLabel(row.status)}
+                          </Badge>
+                        </td>
+                        <td className="p-2">{row.recommendation}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+                Este dimensionamento e apenas uma recomendacao de capacidade. A frente compartilhada nao junta
+                lancamentos de producao, diario, medicao, saldo, Mapa 3D ou planejamento oficial.
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       {isLoading ? (
         <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
