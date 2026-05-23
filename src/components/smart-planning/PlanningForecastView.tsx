@@ -8,6 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Project } from '@/contexts/ConstructionContext';
 import type { PlanningOfficialViewResult } from './hooks/usePlanningOfficialView';
 import {
+  usePlanningCapacityModel,
+  type CapacityDiagnosticStatus,
+} from './hooks/usePlanningCapacityModel';
+import {
   usePlanningForecast,
   type ForecastStatus,
   type RecommendedActionSeverity,
@@ -62,6 +66,23 @@ const teamStatusLabel = (status: TeamRequirementStatus) => {
     missing_productivity: 'Sem produtividade',
   };
   return labels[status];
+};
+
+const capacityStatusLabel = (status: CapacityDiagnosticStatus) => {
+  const labels: Record<CapacityDiagnosticStatus, string> = {
+    ok: 'OK',
+    attention: 'Atencao',
+    overloaded: 'Sobrecarga',
+    missing_productivity: 'Sem produtividade',
+  };
+  return labels[status];
+};
+
+const capacityStatusVariant = (status: CapacityDiagnosticStatus): 'default' | 'secondary' | 'destructive' | 'outline' => {
+  if (status === 'overloaded') return 'destructive';
+  if (status === 'attention') return 'secondary';
+  if (status === 'ok') return 'default';
+  return 'outline';
 };
 
 const stageStatusLabel = (status: StageForecastStatus) => {
@@ -146,6 +167,7 @@ const getRecommendedAction = (reason: string, fallback: string) => {
 
 export function PlanningForecastView({ project, companyName, officialView }: PlanningForecastViewProps) {
   const forecast = usePlanningForecast(project.id, officialView, project);
+  const capacityModel = usePlanningCapacityModel(project.id);
   const {
     forecastSummary,
     serviceForecasts,
@@ -161,6 +183,9 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
 
   const missingProductivity = serviceForecasts.filter((item) => item.remainingQuantity > 0 && !item.productivityValue);
   const overloadedTeams = teamRequirements.filter((item) => item.status === 'overloaded');
+  const sharedCapacityOverloads = capacityModel.overloadDiagnostics.filter((item) => item.status === 'overloaded');
+  const activeCapacityGroups = capacityModel.workGroups.filter((group) => group.active);
+  const capacityGroupsWithServices = activeCapacityGroups.filter((group) => group.services.length > 0);
   const missingDateCount = serviceForecasts.filter((item) => item.remainingQuantity > 0 && !item.estimatedFinishDate).length;
   const confidence = getConfidence(forecastSummary.missingProductivityCount, forecastSummary.totalServices, missingDateCount);
   const generatedAt = new Date();
@@ -315,6 +340,136 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
             Previsao estimada com base nas produtividades cadastradas. Servicos sem produtividade reduzem a confiabilidade.
             Frentes compartilhadas ainda estao em diagnostico e nao unem lancamentos de producao, diario, desvios ou Mapa 3D.
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="print:hidden">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Users className="h-4 w-4" />
+            Diagnostico de capacidade por frente
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Este diagnostico ainda nao altera Gantt, Linha de Balanco, Planejamento Semanal, Producao ou Diario. Ele apenas calcula capacidade.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-7">
+            {[
+              ['Frentes', capacityModel.summary.totalWorkGroups],
+              ['Frentes ativas', capacityModel.summary.activeWorkGroups],
+              ['Servicos com frente', capacityModel.summary.servicesWithWorkGroup],
+              ['Servicos sem frente', capacityModel.summary.servicesWithoutWorkGroup],
+              ['Sem capacidade', capacityModel.summary.servicesWithoutCapacity],
+              ['Sobrecargas', capacityModel.summary.overloadedPeriods],
+              ['Pessoas planejadas', capacityModel.summary.totalPeoplePlanned],
+            ].map(([label, value]) => (
+              <div key={String(label)} className="rounded-lg border bg-card p-3">
+                <p className="text-xs text-muted-foreground">{label}</p>
+                <p className="mt-1 text-lg font-semibold">{formatNumber(Number(value))}</p>
+              </div>
+            ))}
+          </div>
+
+          {capacityModel.diagnostics.length > 0 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              Algumas fontes de capacidade nao puderam ser lidas agora. O diagnostico segue com fallback seguro.
+            </div>
+          )}
+
+          <div className="grid gap-4 xl:grid-cols-2">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] text-sm">
+                <thead className="border-b text-left text-xs text-muted-foreground">
+                  <tr>
+                    <th className="p-2">Frente</th>
+                    <th className="p-2">Capacidade semanal</th>
+                    <th className="p-2">Equipes</th>
+                    <th className="p-2">Pessoas</th>
+                    <th className="p-2">Servicos vinculados</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {capacityGroupsWithServices.slice(0, 8).map((group) => {
+                    const groupCapacity = capacityModel.serviceCapacityMap.find((entry) => entry.groupId === group.id);
+                    return (
+                      <tr key={group.id} className="border-b last:border-0">
+                        <td className="p-2 font-medium">{group.name}</td>
+                        <td className="p-2">
+                          {groupCapacity?.weeklyCapacity === null || groupCapacity?.weeklyCapacity === undefined
+                            ? 'Sem produtividade'
+                            : `${formatNumber(groupCapacity.weeklyCapacity, 1)} ${group.productivityUnit || group.baseUnit || ''}/semana`}
+                        </td>
+                        <td className="p-2">{group.simultaneousTeamCount}</td>
+                        <td className="p-2">{group.totalPeople}</td>
+                        <td className="p-2">
+                          {group.services.slice(0, 4).map((service) => service.serviceName || service.scopeId || 'Servico').join(', ')}
+                          {group.services.length > 4 ? ` +${group.services.length - 4}` : ''}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {capacityGroupsWithServices.length === 0 && (
+                    <tr>
+                      <td className="p-6 text-center text-muted-foreground" colSpan={5}>
+                        Nenhuma frente ativa com servicos vinculados para diagnosticar capacidade compartilhada.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[780px] text-sm">
+                <thead className="border-b text-left text-xs text-muted-foreground">
+                  <tr>
+                    <th className="p-2">Periodo</th>
+                    <th className="p-2">Frente</th>
+                    <th className="p-2">Demanda</th>
+                    <th className="p-2">Capacidade</th>
+                    <th className="p-2">Sobrecarga</th>
+                    <th className="p-2">Status</th>
+                    <th className="p-2">Servicos competindo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {capacityModel.overloadDiagnostics.slice(0, 10).map((item) => (
+                    <tr key={`${item.periodLabel}-${item.groupId ?? item.groupName}`} className="border-b last:border-0">
+                      <td className="p-2">{item.periodLabel}</td>
+                      <td className="p-2">{item.groupName}</td>
+                      <td className="p-2">{formatNumber(item.plannedQuantity, 1)}</td>
+                      <td className="p-2">{item.availableCapacity === null ? '-' : formatNumber(item.availableCapacity, 1)}</td>
+                      <td className="p-2">
+                        {item.overloadQuantity > 0
+                          ? `${formatNumber(item.overloadQuantity, 1)} (${formatNumber(item.overloadPercent, 1)}%)`
+                          : '-'}
+                      </td>
+                      <td className="p-2">
+                        <Badge variant={capacityStatusVariant(item.status)}>
+                          {capacityStatusLabel(item.status)}
+                        </Badge>
+                      </td>
+                      <td className="p-2">{item.servicesCompetingForSameGroup.slice(0, 3).join(', ') || '-'}</td>
+                    </tr>
+                  ))}
+                  {capacityModel.overloadDiagnostics.length === 0 && (
+                    <tr>
+                      <td className="p-6 text-center text-muted-foreground" colSpan={7}>
+                        Nenhuma meta semanal vinculada a frente compartilhada foi encontrada para calcular sobrecarga.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {sharedCapacityOverloads.length > 0 && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+              {sharedCapacityOverloads.length} periodo(s) com sobrecarga em frentes compartilhadas. A leitura e somente diagnostica e nao bloqueia o Planejamento Semanal.
+            </div>
+          )}
         </CardContent>
       </Card>
 
