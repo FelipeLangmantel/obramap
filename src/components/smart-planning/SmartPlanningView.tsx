@@ -315,7 +315,7 @@ export function SmartPlanningView() {
         ...current,
         periods: current.periods + 1,
         firstDate: [current.firstDate, start].filter(Boolean).sort()[0] || null,
-        lastDate: [current.lastDate, end].filter(Boolean).sort().at(-1) || null,
+        lastDate: (() => { const s = [current.lastDate, end].filter(Boolean).sort(); return s[s.length - 1] || null; })(),
         plannedQuantity: current.plannedQuantity + (pkg.plannedQuantity || 0),
         realizedQuantity: current.realizedQuantity + (pkg.realizedQuantity || 0),
         remainingQuantity: current.remainingQuantity + (pkg.remainingQuantity || 0),
