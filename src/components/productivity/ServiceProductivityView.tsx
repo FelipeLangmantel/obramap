@@ -17,6 +17,9 @@ import {
   Info,
 } from 'lucide-react';
 import { ServiceProductivityDialog } from './ServiceProductivityDialog';
+import { TeamWorkGroupsPanel } from './TeamWorkGroupsPanel';
+import { ServicePlanningSettingsPanel } from './ServicePlanningSettingsPanel';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import type { ServiceProductivity } from '@/hooks/useServiceProductivity';
 
 interface ServiceInfo {
