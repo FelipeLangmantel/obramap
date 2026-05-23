@@ -1660,9 +1660,12 @@ export function Map3DView() {
         return null;
       }
 
-      const publicUrl = supabase.storage.from(MAP3D_STORAGE_BUCKET).getPublicUrl(data.path).data.publicUrl;
+      const { data: signedData, error: signedError } = await supabase.storage
+        .from(MAP3D_STORAGE_BUCKET)
+        .createSignedUrl(data.path, MAP3D_SIGNED_URL_TTL_SECONDS);
+      const publicUrl = signedData?.signedUrl ?? "";
       if (!publicUrl) {
-        toast.error("Upload concluido, mas nao foi possivel gerar a URL publica do modelo.");
+        console.error("[3D] Failed to sign uploaded URL", signedError);
         return null;
       }
 
