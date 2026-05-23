@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { format, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { AlertTriangle, CalendarClock, FileText, Printer, Users } from 'lucide-react';
@@ -165,6 +166,21 @@ const getRecommendedAction = (reason: string, fallback: string) => {
   return fallback || 'Revisar produtividade, equipe e sequencia do servico.';
 };
 
+const getFrontRecommendation = (
+  status: CapacityDiagnosticStatus,
+  additionalTeams: number,
+  demand: number,
+  capacity: number | null,
+) => {
+  if (status === 'missing_productivity') return 'Revisar ou cadastrar produtividade da frente.';
+  if (capacity === null || capacity <= 0) return 'Cadastrar produtividade para calcular necessidade de equipe.';
+  if (demand <= 0) return 'Sem demanda planejada suficiente para recomendar ajuste.';
+  if (status === 'ok') return 'Manter equipe atual e acompanhar proximas metas.';
+  if (additionalTeams > 0) return `Adicionar ${additionalTeams} equipe(s) ou replanejar prazo.`;
+  if (status === 'attention') return 'Monitorar a frente e redistribuir servicos se houver atraso.';
+  return 'Redistribuir servicos ou revisar produtividade da frente.';
+};
+
 export function PlanningForecastView({ project, companyName, officialView }: PlanningForecastViewProps) {
   const forecast = usePlanningForecast(project.id, officialView, project);
   const capacityModel = usePlanningCapacityModel(project.id);
@@ -184,8 +200,48 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
   const missingProductivity = serviceForecasts.filter((item) => item.remainingQuantity > 0 && !item.productivityValue);
   const overloadedTeams = teamRequirements.filter((item) => item.status === 'overloaded');
   const sharedCapacityOverloads = capacityModel.overloadDiagnostics.filter((item) => item.status === 'overloaded');
-  const activeCapacityGroups = capacityModel.workGroups.filter((group) => group.active);
-  const capacityGroupsWithServices = activeCapacityGroups.filter((group) => group.services.length > 0);
+  const activeCapacityGroups = useMemo(
+    () => capacityModel.workGroups.filter((group) => group.active),
+    [capacityModel.workGroups],
+  );
+  const frontCapacityRows = useMemo(() => {
+    return activeCapacityGroups.map((group) => {
+      const groupCapacity = capacityModel.serviceCapacityMap.find((entry) => entry.groupId === group.id);
+      const groupDiagnostics = capacityModel.overloadDiagnostics.filter((item) => item.groupId === group.id);
+      const peakDemand = groupDiagnostics.reduce((max, item) => Math.max(max, item.plannedQuantity), 0);
+      const availableCapacity = groupCapacity?.weeklyCapacity ?? null;
+      const teamCount = Math.max(group.simultaneousTeamCount || 0, 0);
+      const capacityPerTeam = availableCapacity && teamCount > 0 ? availableCapacity / teamCount : null;
+      const requiredTeams = capacityPerTeam && peakDemand > 0 ? Math.ceil(peakDemand / capacityPerTeam) : null;
+      const additionalTeams = requiredTeams === null ? 0 : Math.max(requiredTeams - teamCount, 0);
+      const overloadQuantity = availableCapacity === null ? 0 : Math.max(peakDemand - availableCapacity, 0);
+      const overloadPercent = availableCapacity && availableCapacity > 0 ? (overloadQuantity / availableCapacity) * 100 : 0;
+      const status: CapacityDiagnosticStatus =
+        availableCapacity === null || availableCapacity <= 0
+          ? 'missing_productivity'
+          : peakDemand <= availableCapacity
+            ? 'ok'
+            : overloadPercent <= 20
+              ? 'attention'
+              : 'overloaded';
+
+      return {
+        id: group.id,
+        name: group.name,
+        services: group.services,
+        weeklyCapacity: availableCapacity,
+        productivityUnit: group.productivityUnit || group.baseUnit || '',
+        teamCount,
+        totalPeople: group.totalPeople,
+        peakDemand,
+        capacityPerTeam,
+        requiredTeams,
+        additionalTeams,
+        status,
+        recommendation: getFrontRecommendation(status, additionalTeams, peakDemand, availableCapacity),
+      };
+    });
+  }, [activeCapacityGroups, capacityModel.overloadDiagnostics, capacityModel.serviceCapacityMap]);
   const missingDateCount = serviceForecasts.filter((item) => item.remainingQuantity > 0 && !item.estimatedFinishDate).length;
   const confidence = getConfidence(forecastSummary.missingProductivityCount, forecastSummary.totalServices, missingDateCount);
   const generatedAt = new Date();
@@ -347,10 +403,11 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Users className="h-4 w-4" />
-            Diagnostico de capacidade por frente
+            Capacidade por frente de trabalho
           </CardTitle>
           <p className="text-sm text-muted-foreground">
-            Este diagnostico ainda nao altera Gantt, Linha de Balanco, Planejamento Semanal, Producao ou Diario. Ele apenas calcula capacidade.
+            As frentes compartilhadas indicam a capacidade real de equipes que executam multiplos servicos. Este diagnostico
+            nao altera producao, diario, medicao ou planejamento oficial.
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -379,40 +436,52 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
 
           <div className="grid gap-4 xl:grid-cols-2">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[760px] text-sm">
+              <table className="w-full min-w-[980px] text-sm">
                 <thead className="border-b text-left text-xs text-muted-foreground">
                   <tr>
                     <th className="p-2">Frente</th>
+                    <th className="p-2">Servicos vinculados</th>
                     <th className="p-2">Capacidade semanal</th>
                     <th className="p-2">Equipes</th>
                     <th className="p-2">Pessoas</th>
-                    <th className="p-2">Servicos vinculados</th>
+                    <th className="p-2">Demanda prevista</th>
+                    <th className="p-2">Status</th>
+                    <th className="p-2">Recomendacao</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {capacityGroupsWithServices.slice(0, 8).map((group) => {
-                    const groupCapacity = capacityModel.serviceCapacityMap.find((entry) => entry.groupId === group.id);
-                    return (
-                      <tr key={group.id} className="border-b last:border-0">
-                        <td className="p-2 font-medium">{group.name}</td>
-                        <td className="p-2">
-                          {groupCapacity?.weeklyCapacity === null || groupCapacity?.weeklyCapacity === undefined
-                            ? 'Sem produtividade'
-                            : `${formatNumber(groupCapacity.weeklyCapacity, 1)} ${group.productivityUnit || group.baseUnit || ''}/semana`}
-                        </td>
-                        <td className="p-2">{group.simultaneousTeamCount}</td>
-                        <td className="p-2">{group.totalPeople}</td>
-                        <td className="p-2">
-                          {group.services.slice(0, 4).map((service) => service.serviceName || service.scopeId || 'Servico').join(', ')}
-                          {group.services.length > 4 ? ` +${group.services.length - 4}` : ''}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {capacityGroupsWithServices.length === 0 && (
+                  {frontCapacityRows.slice(0, 10).map((row) => (
+                    <tr key={row.id} className="border-b last:border-0">
+                      <td className="p-2 font-medium">{row.name}</td>
+                      <td className="p-2">
+                        {row.services.slice(0, 4).map((service) => service.serviceName || service.scopeId || 'Servico').join(', ')}
+                        {row.services.length > 4 ? ` +${row.services.length - 4}` : ''}
+                      </td>
+                      <td className="p-2">
+                        {row.weeklyCapacity === null
+                          ? 'Sem produtividade'
+                          : `${formatNumber(row.weeklyCapacity, 1)} ${row.productivityUnit}/semana`}
+                      </td>
+                      <td className="p-2">
+                        <div>{row.teamCount}</div>
+                        {row.requiredTeams !== null && row.requiredTeams > row.teamCount && (
+                          <div className="text-xs text-destructive">necessarias: {row.requiredTeams}</div>
+                        )}
+                      </td>
+                      <td className="p-2">{row.totalPeople}</td>
+                      <td className="p-2">{row.peakDemand > 0 ? formatNumber(row.peakDemand, 1) : 'Sem demanda'}</td>
+                      <td className="p-2">
+                        <Badge variant={capacityStatusVariant(row.status)}>
+                          {capacityStatusLabel(row.status)}
+                        </Badge>
+                      </td>
+                      <td className="p-2">{row.recommendation}</td>
+                    </tr>
+                  ))}
+                  {frontCapacityRows.length === 0 && (
                     <tr>
-                      <td className="p-6 text-center text-muted-foreground" colSpan={5}>
-                        Nenhuma frente ativa com servicos vinculados para diagnosticar capacidade compartilhada.
+                      <td className="p-6 text-center text-muted-foreground" colSpan={8}>
+                        Nenhuma frente compartilhada cadastrada. Cadastre frentes em Produtividade e Equipes para obter diagnostico de capacidade.
                       </td>
                     </tr>
                   )}
@@ -931,7 +1000,50 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
           </section>
 
           <section className="print-section">
-            <h2 className="text-lg font-semibold">4. Curva planejado x realizado</h2>
+            <h2 className="text-lg font-semibold">4. Capacidade por frente de trabalho</h2>
+            <p className="mt-2 text-sm text-muted-foreground print-muted">
+              As frentes compartilhadas indicam a capacidade real das equipes responsaveis por multiplos servicos.
+              O diagnostico nao altera producao, diario, medicao ou planejamento oficial; serve para apoiar decisao
+              de reforco de equipe ou replanejamento.
+            </p>
+            <table className="print-table mt-3 w-full text-sm">
+              <thead>
+                <tr>
+                  <th>Frente</th>
+                  <th>Servicos vinculados</th>
+                  <th>Capacidade semanal</th>
+                  <th>Equipes atuais</th>
+                  <th>Pessoas</th>
+                  <th>Demanda prevista</th>
+                  <th>Status</th>
+                  <th>Recomendacao</th>
+                </tr>
+              </thead>
+              <tbody>
+                {frontCapacityRows.slice(0, 10).map((row) => (
+                  <tr key={row.id}>
+                    <td>{row.name}</td>
+                    <td>
+                      {row.services.slice(0, 3).map((service) => service.serviceName || service.scopeId || 'Servico').join(', ')}
+                      {row.services.length > 3 ? ` +${row.services.length - 3}` : ''}
+                    </td>
+                    <td>{row.weeklyCapacity === null ? 'Sem produtividade' : `${formatNumber(row.weeklyCapacity, 1)} ${row.productivityUnit}/semana`}</td>
+                    <td>{row.requiredTeams !== null && row.requiredTeams > row.teamCount ? `${row.teamCount} / necessarias ${row.requiredTeams}` : row.teamCount}</td>
+                    <td>{row.totalPeople}</td>
+                    <td>{row.peakDemand > 0 ? formatNumber(row.peakDemand, 1) : 'Sem demanda'}</td>
+                    <td>{capacityStatusLabel(row.status)}</td>
+                    <td>{row.recommendation}</td>
+                  </tr>
+                ))}
+                {frontCapacityRows.length === 0 && (
+                  <tr><td colSpan={8}>Nenhuma frente compartilhada cadastrada para diagnostico de capacidade.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </section>
+
+          <section className="print-section">
+            <h2 className="text-lg font-semibold">5. Curva planejado x realizado</h2>
             <table className="print-table mt-3 w-full text-sm">
               <thead>
                 <tr>
@@ -960,7 +1072,7 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
           </section>
 
           <section className="print-section">
-            <h2 className="text-lg font-semibold">5. Plano de acao recomendado</h2>
+            <h2 className="text-lg font-semibold">6. Plano de acao recomendado</h2>
             <table className="print-table mt-3 w-full text-sm">
               <thead>
                 <tr>
@@ -987,7 +1099,7 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
           </section>
 
           <section className="print-section">
-            <h2 className="text-lg font-semibold">6. Analise de prazo</h2>
+            <h2 className="text-lg font-semibold">7. Analise de prazo</h2>
             <p className="mt-2 text-sm text-muted-foreground print-muted">
               Com base nos dados disponiveis ate a data-base, produtividade cadastrada e saldo de servicos pendentes,
               a previsao atual de termino da obra e {formatDate(forecastSummary.estimatedFinishDate)}.
@@ -1005,7 +1117,7 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
           </section>
 
           <section className="print-section">
-            <h2 className="text-lg font-semibold">7. Servicos criticos</h2>
+            <h2 className="text-lg font-semibold">8. Servicos criticos</h2>
             <table className="print-table mt-3 w-full text-sm">
               <thead>
                 <tr>
@@ -1043,7 +1155,7 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
           </section>
 
           <section className="print-section">
-            <h2 className="text-lg font-semibold">8. Necessidade de equipes</h2>
+            <h2 className="text-lg font-semibold">9. Necessidade de equipes</h2>
             <table className="print-table mt-3 w-full text-sm">
               <thead>
                 <tr>
@@ -1078,7 +1190,7 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
           </section>
 
           <section className="print-section">
-            <h2 className="text-lg font-semibold">9. Servicos sem produtividade</h2>
+            <h2 className="text-lg font-semibold">10. Servicos sem produtividade</h2>
             <table className="print-table mt-3 w-full text-sm">
               <thead>
                 <tr>
@@ -1105,7 +1217,7 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
           </section>
 
           <section className="print-section">
-            <h2 className="text-lg font-semibold">10. Desvios e justificativas</h2>
+            <h2 className="text-lg font-semibold">11. Desvios e justificativas</h2>
             <table className="print-table mt-3 w-full text-sm">
               <thead>
                 <tr>
@@ -1137,13 +1249,13 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
 
           <section className="print-section grid gap-3 md:grid-cols-2">
             <div className="print-card rounded-lg border p-3">
-              <h2 className="text-base font-semibold">11. Gantt resumido</h2>
+              <h2 className="text-base font-semibold">12. Gantt resumido</h2>
               <p className="mt-2 text-sm text-muted-foreground print-muted">
                 O cronograma detalhado encontra-se disponivel na aba Gantt do Planejamento Inteligente.
               </p>
             </div>
             <div className="print-card rounded-lg border p-3">
-              <h2 className="text-base font-semibold">12. Linha de Balanco</h2>
+              <h2 className="text-base font-semibold">13. Linha de Balanco</h2>
               <p className="mt-2 text-sm text-muted-foreground print-muted">
                 A Linha de Balanco detalhada encontra-se disponivel na aba Linha de Balanco do Planejamento Inteligente.
               </p>
@@ -1151,7 +1263,7 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
           </section>
 
           <section className="print-section">
-            <h2 className="text-lg font-semibold">13. Conclusao tecnica</h2>
+            <h2 className="text-lg font-semibold">14. Conclusao tecnica</h2>
             <p className="mt-2 text-sm text-muted-foreground print-muted">
               Com base nos dados disponiveis ate a data-base, a obra apresenta progresso realizado de {formatPercent(forecastSummary.realProgress)}
               frente a {formatPercent(forecastSummary.plannedProgress)} planejado, resultando em desvio de {formatPercent(forecastSummary.realProgress - forecastSummary.plannedProgress)}.
