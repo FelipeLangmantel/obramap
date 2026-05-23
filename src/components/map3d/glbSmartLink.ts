@@ -722,13 +722,14 @@ export function scoreGlbSimilarCandidates(
         : detectedHouseNumber != null || parsedHouseNumber != null
           ? "text_anchor"
           : inferredHouse.source;
-      const suggestionDistance = inferredHouse.distance;
-      const suggestionHorizontalDistance = inferredHouse.horizontalDistance;
-      const suggestion3dDistance = inferredHouse.distance3d;
-      const secondSuggestionDistance = inferredHouse.secondDistance;
-      const suggestionDistanceGap = inferredHouse.distanceGap;
-      const suggestionDistanceRatio = inferredHouse.distanceRatio;
-      const acceptedDominantAnchor = inferredHouse.acceptedDominantAnchor;
+      const inferredAny = inferredHouse as any;
+      const suggestionDistance = inferredAny.distance;
+      const suggestionHorizontalDistance = inferredAny.horizontalDistance;
+      const suggestion3dDistance = inferredAny.distance3d;
+      const secondSuggestionDistance = inferredAny.secondDistance;
+      const suggestionDistanceGap = inferredAny.distanceGap;
+      const suggestionDistanceRatio = inferredAny.distanceRatio;
+      const acceptedDominantAnchor = inferredAny.acceptedDominantAnchor;
       const groupMatch = getLocalGroupMatch(base, mesh, baseTokens, baseHouseForGrouping, suggestedHouseNumber);
       const score = Math.min(100, baseScore + groupMatch.bonus);
       const isStrongMatch = score >= 90
@@ -813,11 +814,11 @@ export function scoreGlbSimilarCandidates(
         acceptedDominantAnchor,
         suggestionSource,
         suggestionIgnoredLinkedNeighbor: textAnchorBlockedLinkedNeighbor,
-        suggestionAnchorLayerKey: inferredHouse.nearestLayerKey,
-        suggestionAnchorName: inferredHouse.nearestAnchorName,
-        suggestionAnchorCenter: inferredHouse.nearestAnchorCenter,
-        suggestionTopTextAnchors: inferredHouse.topTextAnchors,
-        suggestionTopConfirmedAnchors: inferredHouse.topConfirmedAnchors,
+        suggestionAnchorLayerKey: inferredAny.nearestLayerKey,
+        suggestionAnchorName: inferredAny.nearestAnchorName,
+        suggestionAnchorCenter: inferredAny.nearestAnchorCenter,
+        suggestionTopTextAnchors: inferredAny.topTextAnchors,
+        suggestionTopConfirmedAnchors: inferredAny.topConfirmedAnchors,
         houseSuggestionRejectReason,
         selectedByDefault: false,
       };

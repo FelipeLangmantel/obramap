@@ -2757,7 +2757,7 @@ export function Map3DView() {
 
     setSmartLinkBase({ ...base, saved: baseSaved });
     setSmartLinkBaseKey(layerKey);
-    setSmartLinkCandidates(candidates);
+    setSmartLinkCandidates(candidates as any);
     setSmartLinkSelectedKeys(selected);
     setSmartLinkFocusedCandidateKey(null);
     setSmartLinkPreviewEnabled(true);

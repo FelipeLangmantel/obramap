@@ -297,7 +297,8 @@ export function LineOfBalance({ ganttServices, projectStartDate, onUpdatePredece
         .map((house: any) => {
           const houseNumber = Number(house.house_number || house.id);
           const quadra = quadras.find((q: any) => q.houses?.includes(houseNumber) || q.id === house.quadra_id);
-          const groupName = quadra?.name || quadra?.label || quadra?.numero || `Quadra ${Math.ceil(houseNumber / 15)}`;
+          const q: any = quadra;
+          const groupName = q?.name || q?.label || q?.numero || `Quadra ${Math.ceil(houseNumber / 15)}`;
           return {
             id: houseNumber,
             houseNumber,
