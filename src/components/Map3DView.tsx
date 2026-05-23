@@ -1624,9 +1624,12 @@ export function Map3DView() {
         return null;
       }
 
-      const publicUrl = supabase.storage.from(MAP3D_STORAGE_BUCKET).getPublicUrl(data.path).data.publicUrl;
-      if (!publicUrl) {
-        toast.error("Upload concluido, mas nao foi possivel gerar a URL publica do modelo.");
+      const { data: signed, error: signError } = await supabase.storage
+        .from(MAP3D_STORAGE_BUCKET)
+        .createSignedUrl(data.path, 60 * 60 * 24 * 7);
+      const publicUrl = signed?.signedUrl;
+      if (signError || !publicUrl) {
+        toast.error("Upload concluido, mas nao foi possivel gerar a URL assinada do modelo.");
         return null;
       }
 
