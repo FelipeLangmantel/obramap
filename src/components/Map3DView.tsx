@@ -4469,7 +4469,13 @@ export function Map3DView() {
         if (data.model_3d_url && data.model_3d_type) {
           setGlbLinkScope("preserve");
           setTrustedGlbLinkKeys(new Set());
-          setModelData({ url: data.model_3d_url, type: data.model_3d_type as "gltf" | "obj", mtlUrl: data.model_mtl_url || undefined });
+          const [signedModel, signedMtl] = await Promise.all([
+            resolveMap3DSignedUrl(data.model_3d_url),
+            resolveMap3DSignedUrl(data.model_mtl_url),
+          ]);
+          if (signedModel) {
+            setModelData({ url: signedModel, type: data.model_3d_type as "gltf" | "obj", mtlUrl: signedMtl || undefined });
+          }
         }
         if (data.house_markers_3d && Array.isArray(data.house_markers_3d) && data.house_markers_3d.length > 0)
           setMarkers(data.house_markers_3d as unknown as HouseMarker[]);
