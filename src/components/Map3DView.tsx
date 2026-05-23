@@ -65,7 +65,7 @@ type GlbMeshInventoryInput = {
   detected_house_number: number | null;
 };
 
-import { MAP3D_STORAGE_BUCKET, resolveMap3DSignedUrl } from "@/lib/map3dStorage";
+import { MAP3D_STORAGE_BUCKET, createMap3DSignedUrlFromPath, resolveMap3DSignedUrl } from "@/lib/map3dStorage";
 const MAP3D_ZOOM_SENSITIVITY_KEY = "obramap:map3d:zoom-sensitivity";
 const MAP3D_WALK_HELP_HIDDEN_KEY = "obramap:map3d:walk-help-hidden";
 
@@ -1541,16 +1541,22 @@ export function Map3DView() {
     });
   }, []);
 
-  const toSupplementalGlbPart = useCallback((row: any): SupplementalGlbPart => ({
-    id: row.id,
-    name: row.name || row.file_name || "Parte GLB",
-    url: row.public_url,
-    visible: true,
-    persisted: true,
-    fileName: row.file_name ?? null,
-    storagePath: row.storage_path ?? null,
-    partOrder: row.part_order ?? 0,
-  }), []);
+  const toSupplementalGlbPart = useCallback(async (row: any): Promise<SupplementalGlbPart | null> => {
+    const signedUrl = row.storage_path
+      ? await createMap3DSignedUrlFromPath(row.storage_path)
+      : await resolveMap3DSignedUrl(row.public_url);
+    if (!signedUrl) return null;
+    return {
+      id: row.id,
+      name: row.name || row.file_name || "Parte GLB",
+      url: signedUrl,
+      visible: true,
+      persisted: true,
+      fileName: row.file_name ?? null,
+      storagePath: row.storage_path ?? null,
+      partOrder: row.part_order ?? 0,
+    };
+  }, []);
 
   const loadSupplementalGlbParts = useCallback(async () => {
     if (!projectId) {
@@ -1571,6 +1577,8 @@ export function Map3DView() {
       return;
     }
 
+    const resolvedParts = (await Promise.all(((data || []) as any[]).map(toSupplementalGlbPart)))
+      .filter((part): part is SupplementalGlbPart => Boolean(part));
     setSupplementalGlbParts((current) => {
       current
         .filter((part) => !part.persisted)
@@ -1578,10 +1586,7 @@ export function Map3DView() {
       const currentVisibility = new Map(current.map((part) => [part.id, part.visible]));
       supplementalGlbScenesRef.current.clear();
       supplementalInventoriedPartIdsRef.current.clear();
-      return ((data || []) as any[]).map((row) => {
-        const part = toSupplementalGlbPart(row);
-        return { ...part, visible: currentVisibility.get(part.id) ?? true };
-      });
+      return resolvedParts.map((part) => ({ ...part, visible: currentVisibility.get(part.id) ?? true }));
     });
   }, [clearSupplementalGlbPartsFromState, projectId, toSupplementalGlbPart]);
 
