@@ -7,7 +7,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Project } from '@/contexts/ConstructionContext';
 import type { PlanningOfficialViewResult } from './hooks/usePlanningOfficialView';
-import { usePlanningForecast, type ForecastStatus, type TeamRequirementStatus } from './hooks/usePlanningForecast';
+import {
+  usePlanningForecast,
+  type ForecastStatus,
+  type RecommendedActionSeverity,
+  type StageForecastStatus,
+  type TeamRequirementStatus,
+} from './hooks/usePlanningForecast';
 
 interface PlanningForecastViewProps {
   project: Project;
@@ -56,6 +62,38 @@ const teamStatusLabel = (status: TeamRequirementStatus) => {
     missing_productivity: 'Sem produtividade',
   };
   return labels[status];
+};
+
+const stageStatusLabel = (status: StageForecastStatus) => {
+  const labels: Record<StageForecastStatus, string> = {
+    ok: 'OK',
+    attention: 'Atencao',
+    delayed: 'Atrasada',
+    missing_data: 'Dados incompletos',
+  };
+  return labels[status];
+};
+
+const stageStatusVariant = (status: StageForecastStatus): 'default' | 'secondary' | 'destructive' | 'outline' => {
+  if (status === 'delayed') return 'destructive';
+  if (status === 'attention') return 'secondary';
+  if (status === 'ok') return 'default';
+  return 'outline';
+};
+
+const actionSeverityVariant = (severity: RecommendedActionSeverity): 'default' | 'secondary' | 'destructive' | 'outline' => {
+  if (severity === 'critical') return 'destructive';
+  if (severity === 'warning') return 'secondary';
+  return 'outline';
+};
+
+const actionSeverityLabel = (severity: RecommendedActionSeverity) => {
+  const labels: Record<RecommendedActionSeverity, string> = {
+    critical: 'Critico',
+    warning: 'Atencao',
+    info: 'Informativo',
+  };
+  return labels[severity];
 };
 
 const getTopRisksText = (items: { service: string }[]) => {
@@ -113,6 +151,10 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
     serviceForecasts,
     teamRequirements,
     criticalItems,
+    stageForecasts,
+    laborDemandByPeriod,
+    progressCurve,
+    recommendedActions,
     deviations,
     loading,
   } = forecast;
@@ -122,6 +164,22 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
   const missingDateCount = serviceForecasts.filter((item) => item.remainingQuantity > 0 && !item.estimatedFinishDate).length;
   const confidence = getConfidence(forecastSummary.missingProductivityCount, forecastSummary.totalServices, missingDateCount);
   const generatedAt = new Date();
+  const totalLabor = laborDemandByPeriod.reduce(
+    (acc, period) => ({
+      teams: acc.teams + period.totalTeams,
+      professionals: acc.professionals + period.totalProfessionals,
+      helpers: acc.helpers + period.totalHelpers,
+      people: acc.people + period.totalPeople,
+      overloaded: acc.overloaded + period.overloadedServicesCount,
+      missingProductivity: acc.missingProductivity + period.missingProductivityCount,
+    }),
+    { teams: 0, professionals: 0, helpers: 0, people: 0, overloaded: 0, missingProductivity: 0 },
+  );
+  const criticalStagesText = stageForecasts
+    .filter((stage) => stage.status === 'delayed' || stage.status === 'missing_data')
+    .slice(0, 3)
+    .map((stage) => stage.macroName)
+    .join(', ') || 'sem etapas criticas identificadas';
   const delayText = forecastSummary.delayDays === null
     ? 'estimada sem base completa'
     : `${forecastSummary.delayDays} dia(s)`;
@@ -256,6 +314,193 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
             <AlertTriangle className="mr-2 inline h-4 w-4 text-amber-600" />
             Previsao estimada com base nas produtividades cadastradas. Servicos sem produtividade reduzem a confiabilidade.
             Frentes compartilhadas ainda estao em diagnostico e nao unem lancamentos de producao, diario, desvios ou Mapa 3D.
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="print:hidden">
+        <CardHeader>
+          <CardTitle>Resumo por etapa</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[920px] text-sm">
+              <thead className="border-b text-left text-xs text-muted-foreground">
+                <tr>
+                  <th className="p-2">Etapa</th>
+                  <th className="p-2">Servicos</th>
+                  <th className="p-2">Planejado</th>
+                  <th className="p-2">Realizado</th>
+                  <th className="p-2">Saldo</th>
+                  <th className="p-2">Desvio</th>
+                  <th className="p-2">Criticos</th>
+                  <th className="p-2">Sem produtividade</th>
+                  <th className="p-2">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stageForecasts.slice(0, 14).map((stage) => (
+                  <tr key={stage.macroId} className="border-b last:border-0">
+                    <td className="p-2 font-medium">{stage.macroName}</td>
+                    <td className="p-2">{stage.servicesCount}</td>
+                    <td className="p-2">{formatNumber(stage.plannedQuantity)}</td>
+                    <td className="p-2">{formatNumber(stage.realizedQuantity)}</td>
+                    <td className="p-2">{formatNumber(stage.remainingQuantity)}</td>
+                    <td className="p-2">{formatPercent(stage.deviation)}</td>
+                    <td className="p-2">{stage.criticalServicesCount}</td>
+                    <td className="p-2">{stage.missingProductivityCount}</td>
+                    <td className="p-2">
+                      <Badge variant={stageStatusVariant(stage.status)}>
+                        {stageStatusLabel(stage.status)}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+                {stageForecasts.length === 0 && (
+                  <tr>
+                    <td className="p-6 text-center text-muted-foreground" colSpan={9}>
+                      Ainda nao ha etapas suficientes para montar o resumo executivo.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 xl:grid-cols-2 print:hidden">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Users className="h-4 w-4" />
+              Mao de obra prevista
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-6">
+              {[
+                ['Equipes', totalLabor.teams],
+                ['Profissionais', totalLabor.professionals],
+                ['Auxiliares', totalLabor.helpers],
+                ['Total pessoas', totalLabor.people],
+                ['Sobrecargas', totalLabor.overloaded],
+                ['Sem produtividade', totalLabor.missingProductivity],
+              ].map(([label, value]) => (
+                <div key={String(label)} className="rounded-lg border bg-card p-3">
+                  <p className="text-xs text-muted-foreground">{label}</p>
+                  <p className="mt-1 text-lg font-semibold">{formatNumber(Number(value))}</p>
+                </div>
+              ))}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[720px] text-sm">
+                <thead className="border-b text-left text-xs text-muted-foreground">
+                  <tr>
+                    <th className="p-2">Periodo</th>
+                    <th className="p-2">Equipes</th>
+                    <th className="p-2">Profissionais</th>
+                    <th className="p-2">Auxiliares</th>
+                    <th className="p-2">Total pessoas</th>
+                    <th className="p-2">Sobrecargas</th>
+                    <th className="p-2">Sem produtividade</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {laborDemandByPeriod.slice(0, 10).map((period) => (
+                    <tr key={period.periodLabel} className="border-b last:border-0">
+                      <td className="p-2">{period.periodLabel}</td>
+                      <td className="p-2">{formatNumber(period.totalTeams)}</td>
+                      <td className="p-2">{formatNumber(period.totalProfessionals)}</td>
+                      <td className="p-2">{formatNumber(period.totalHelpers)}</td>
+                      <td className="p-2">{formatNumber(period.totalPeople)}</td>
+                      <td className="p-2">{period.overloadedServicesCount}</td>
+                      <td className="p-2">{period.missingProductivityCount}</td>
+                    </tr>
+                  ))}
+                  {laborDemandByPeriod.length === 0 && (
+                    <tr>
+                      <td className="p-6 text-center text-muted-foreground" colSpan={7}>
+                        Nenhuma meta semanal ou periodo com equipe suficiente para montar mao de obra prevista.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <FileText className="h-4 w-4" />
+              Curva planejado x realizado
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[560px] text-sm">
+                <thead className="border-b text-left text-xs text-muted-foreground">
+                  <tr>
+                    <th className="p-2">Data/periodo</th>
+                    <th className="p-2">Planejado</th>
+                    <th className="p-2">Realizado</th>
+                    <th className="p-2">Desvio</th>
+                    <th className="p-2">Base</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {progressCurve.slice(0, 12).map((point) => (
+                    <tr key={point.dateLabel} className="border-b last:border-0">
+                      <td className="p-2">{point.dateLabel}</td>
+                      <td className="p-2">{formatPercent(point.plannedProgress)}</td>
+                      <td className="p-2">{formatPercent(point.realProgress)}</td>
+                      <td className="p-2">{formatPercent(point.deviation)}</td>
+                      <td className="p-2">{point.estimated ? 'Estimado' : 'Planejado'}</td>
+                    </tr>
+                  ))}
+                  {progressCurve.length === 0 && (
+                    <tr>
+                      <td className="p-6 text-center text-muted-foreground" colSpan={5}>
+                        Nao ha datas suficientes para montar uma curva historica confiavel.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="print:hidden">
+        <CardHeader>
+          <CardTitle>Plano de acao recomendado</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {recommendedActions.map((action) => (
+              <div key={action.id} className="rounded-lg border bg-card p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="font-medium">{action.title}</p>
+                  <Badge variant={actionSeverityVariant(action.severity)}>
+                    {actionSeverityLabel(action.severity)}
+                  </Badge>
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">{action.description}</p>
+                {(action.relatedStage || action.relatedService) && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {[action.relatedStage, action.relatedService].filter(Boolean).join(' / ')}
+                  </p>
+                )}
+              </div>
+            ))}
+            {recommendedActions.length === 0 && (
+              <div className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground">
+                Nenhuma acao recomendada foi gerada com os dados atuais.
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -461,7 +706,133 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
           </section>
 
           <section className="print-section">
-            <h2 className="text-lg font-semibold">2. Analise de prazo</h2>
+            <h2 className="text-lg font-semibold">2. Resumo por etapa</h2>
+            <table className="print-table mt-3 w-full text-sm">
+              <thead>
+                <tr>
+                  <th>Etapa</th>
+                  <th>Servicos</th>
+                  <th>Planejado</th>
+                  <th>Realizado</th>
+                  <th>Saldo</th>
+                  <th>Desvio</th>
+                  <th>Criticos</th>
+                  <th>Sem prod.</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stageForecasts.slice(0, 10).map((stage) => (
+                  <tr key={stage.macroId}>
+                    <td>{stage.macroName}</td>
+                    <td>{stage.servicesCount}</td>
+                    <td>{formatNumber(stage.plannedQuantity)}</td>
+                    <td>{formatNumber(stage.realizedQuantity)}</td>
+                    <td>{formatNumber(stage.remainingQuantity)}</td>
+                    <td>{formatPercent(stage.deviation)}</td>
+                    <td>{stage.criticalServicesCount}</td>
+                    <td>{stage.missingProductivityCount}</td>
+                    <td>{stageStatusLabel(stage.status)}</td>
+                  </tr>
+                ))}
+                {stageForecasts.length === 0 && (
+                  <tr><td colSpan={9}>Nao ha etapas suficientes para o resumo por etapa.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </section>
+
+          <section className="print-section">
+            <h2 className="text-lg font-semibold">3. Mao de obra prevista</h2>
+            <table className="print-table mt-3 w-full text-sm">
+              <thead>
+                <tr>
+                  <th>Periodo</th>
+                  <th>Equipes</th>
+                  <th>Profissionais</th>
+                  <th>Auxiliares</th>
+                  <th>Total pessoas</th>
+                  <th>Sobrecargas</th>
+                  <th>Sem produtividade</th>
+                </tr>
+              </thead>
+              <tbody>
+                {laborDemandByPeriod.slice(0, 10).map((period) => (
+                  <tr key={period.periodLabel}>
+                    <td>{period.periodLabel}</td>
+                    <td>{formatNumber(period.totalTeams)}</td>
+                    <td>{formatNumber(period.totalProfessionals)}</td>
+                    <td>{formatNumber(period.totalHelpers)}</td>
+                    <td>{formatNumber(period.totalPeople)}</td>
+                    <td>{period.overloadedServicesCount}</td>
+                    <td>{period.missingProductivityCount}</td>
+                  </tr>
+                ))}
+                {laborDemandByPeriod.length === 0 && (
+                  <tr><td colSpan={7}>Nao ha metas por periodo suficientes para calcular mao de obra prevista.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </section>
+
+          <section className="print-section">
+            <h2 className="text-lg font-semibold">4. Curva planejado x realizado</h2>
+            <table className="print-table mt-3 w-full text-sm">
+              <thead>
+                <tr>
+                  <th>Data/periodo</th>
+                  <th>Planejado</th>
+                  <th>Realizado</th>
+                  <th>Desvio</th>
+                  <th>Base</th>
+                </tr>
+              </thead>
+              <tbody>
+                {progressCurve.slice(0, 10).map((point) => (
+                  <tr key={point.dateLabel}>
+                    <td>{point.dateLabel}</td>
+                    <td>{formatPercent(point.plannedProgress)}</td>
+                    <td>{formatPercent(point.realProgress)}</td>
+                    <td>{formatPercent(point.deviation)}</td>
+                    <td>{point.estimated ? 'Estimado' : 'Planejado'}</td>
+                  </tr>
+                ))}
+                {progressCurve.length === 0 && (
+                  <tr><td colSpan={5}>Nao ha datas suficientes para gerar curva historica confiavel.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </section>
+
+          <section className="print-section">
+            <h2 className="text-lg font-semibold">5. Plano de acao recomendado</h2>
+            <table className="print-table mt-3 w-full text-sm">
+              <thead>
+                <tr>
+                  <th>Prioridade</th>
+                  <th>Acao</th>
+                  <th>Descricao</th>
+                  <th>Referencia</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recommendedActions.slice(0, 8).map((action) => (
+                  <tr key={action.id}>
+                    <td>{actionSeverityLabel(action.severity)}</td>
+                    <td>{action.title}</td>
+                    <td>{action.description}</td>
+                    <td>{[action.relatedStage, action.relatedService].filter(Boolean).join(' / ') || '-'}</td>
+                  </tr>
+                ))}
+                {recommendedActions.length === 0 && (
+                  <tr><td colSpan={4}>Nenhuma acao recomendada foi gerada com os dados atuais.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </section>
+
+          <section className="print-section">
+            <h2 className="text-lg font-semibold">6. Analise de prazo</h2>
             <p className="mt-2 text-sm text-muted-foreground print-muted">
               Com base nos dados disponiveis ate a data-base, produtividade cadastrada e saldo de servicos pendentes,
               a previsao atual de termino da obra e {formatDate(forecastSummary.estimatedFinishDate)}.
@@ -479,7 +850,7 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
           </section>
 
           <section className="print-section">
-            <h2 className="text-lg font-semibold">3. Servicos criticos</h2>
+            <h2 className="text-lg font-semibold">7. Servicos criticos</h2>
             <table className="print-table mt-3 w-full text-sm">
               <thead>
                 <tr>
@@ -517,7 +888,7 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
           </section>
 
           <section className="print-section">
-            <h2 className="text-lg font-semibold">4. Necessidade de equipes</h2>
+            <h2 className="text-lg font-semibold">8. Necessidade de equipes</h2>
             <table className="print-table mt-3 w-full text-sm">
               <thead>
                 <tr>
@@ -552,7 +923,7 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
           </section>
 
           <section className="print-section">
-            <h2 className="text-lg font-semibold">5. Servicos sem produtividade</h2>
+            <h2 className="text-lg font-semibold">9. Servicos sem produtividade</h2>
             <table className="print-table mt-3 w-full text-sm">
               <thead>
                 <tr>
@@ -579,7 +950,7 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
           </section>
 
           <section className="print-section">
-            <h2 className="text-lg font-semibold">6. Desvios e justificativas</h2>
+            <h2 className="text-lg font-semibold">10. Desvios e justificativas</h2>
             <table className="print-table mt-3 w-full text-sm">
               <thead>
                 <tr>
@@ -611,13 +982,13 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
 
           <section className="print-section grid gap-3 md:grid-cols-2">
             <div className="print-card rounded-lg border p-3">
-              <h2 className="text-base font-semibold">7. Gantt resumido</h2>
+              <h2 className="text-base font-semibold">11. Gantt resumido</h2>
               <p className="mt-2 text-sm text-muted-foreground print-muted">
                 O cronograma detalhado encontra-se disponivel na aba Gantt do Planejamento Inteligente.
               </p>
             </div>
             <div className="print-card rounded-lg border p-3">
-              <h2 className="text-base font-semibold">8. Linha de Balanco</h2>
+              <h2 className="text-base font-semibold">12. Linha de Balanco</h2>
               <p className="mt-2 text-sm text-muted-foreground print-muted">
                 A Linha de Balanco detalhada encontra-se disponivel na aba Linha de Balanco do Planejamento Inteligente.
               </p>
@@ -625,11 +996,14 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
           </section>
 
           <section className="print-section">
-            <h2 className="text-lg font-semibold">9. Conclusao tecnica</h2>
+            <h2 className="text-lg font-semibold">13. Conclusao tecnica</h2>
             <p className="mt-2 text-sm text-muted-foreground print-muted">
-              A obra encontra-se em situacao {statusLabel(forecastSummary.status).toLowerCase()}.
-              Os principais pontos de atencao sao {getTopRisksText(criticalItems)}.
-              Recomenda-se revisar produtividade, equipes e metas dos servicos criticos para manter ou recuperar o prazo previsto.
+              Com base nos dados disponiveis ate a data-base, a obra apresenta progresso realizado de {formatPercent(forecastSummary.realProgress)}
+              frente a {formatPercent(forecastSummary.plannedProgress)} planejado, resultando em desvio de {formatPercent(forecastSummary.realProgress - forecastSummary.plannedProgress)}.
+              A previsao estimada de termino e {formatDate(forecastSummary.estimatedFinishDate)} e a situacao geral e {statusLabel(forecastSummary.status).toLowerCase()}.
+              Os principais pontos de atencao concentram-se em {criticalStagesText}, com servicos criticos como {getTopRisksText(criticalItems)}.
+              Recomenda-se revisar produtividade, reforcar equipes nos servicos com capacidade insuficiente e reprogramar saldos pendentes nos proximos periodos.
+              A previsao deve ser interpretada com confiabilidade {confidence.label.toLowerCase()}, pois {confidence.reason.toLowerCase()}
             </p>
           </section>
 
