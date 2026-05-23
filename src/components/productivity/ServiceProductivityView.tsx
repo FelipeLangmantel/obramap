@@ -449,6 +449,14 @@ export function ServiceProductivityView() {
         </p>
       </div>
 
+      <Tabs defaultValue="produtividade" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="produtividade">Produtividade por servico</TabsTrigger>
+          <TabsTrigger value="frentes">Frentes compartilhadas</TabsTrigger>
+          <TabsTrigger value="configplan">Config. planejamento fisico</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="produtividade" className="space-y-6">
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <Card>
