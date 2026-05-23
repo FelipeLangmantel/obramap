@@ -13,6 +13,7 @@ import { PlanningOnboarding } from './PlanningOnboarding';
 import { PlanningDashboard } from './PlanningDashboard';
 import { StrategicGanttChart } from './StrategicGanttChart';
 import { LineOfBalance } from './LineOfBalance';
+import { PlanningForecastView } from './PlanningForecastView';
 import { LaborHistogramView } from '@/components/labor-histogram/LaborHistogramView';
 import { ProductivityConfigDialog } from '@/components/labor-histogram/ProductivityConfigDialog';
 import { 
@@ -23,7 +24,8 @@ import {
   Target,
   Loader2,
   Users,
-  ClipboardList
+  ClipboardList,
+  FileText
 } from 'lucide-react';
 import { format, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -465,7 +467,7 @@ export function SmartPlanningView() {
       )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-        <TabsList className="grid grid-cols-6 w-full max-w-5xl">
+        <TabsList className="grid grid-cols-7 w-full max-w-6xl">
           <TabsTrigger value="dashboard" className="gap-2">
             <BarChart3 className="h-4 w-4" />
             Dashboard
@@ -481,6 +483,10 @@ export function SmartPlanningView() {
           <TabsTrigger value="histogram" className="gap-2">
             <Users className="h-4 w-4" />
             Mão de Obra
+          </TabsTrigger>
+          <TabsTrigger value="forecast" className="gap-2">
+            <FileText className="h-4 w-4" />
+            Previsão
           </TabsTrigger>
           <TabsTrigger value="alerts" className="gap-2 relative">
             <AlertTriangle className="h-4 w-4" />
@@ -577,6 +583,14 @@ export function SmartPlanningView() {
           {currentProject?.id && (
             <LaborHistogramView projectId={currentProject.id} />
           )}
+        </TabsContent>
+
+        <TabsContent value="forecast" className="flex-1 mt-4">
+          <PlanningForecastView
+            project={currentProject}
+            companyName={company?.name}
+            officialView={planningOfficialView}
+          />
         </TabsContent>
 
         <TabsContent value="diagnostics" className="flex-1 mt-4">
