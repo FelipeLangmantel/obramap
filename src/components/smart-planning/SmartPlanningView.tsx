@@ -518,6 +518,7 @@ export function SmartPlanningView() {
 
         <TabsContent value="gantt" className="flex-1 mt-4">
           <StrategicGanttChart
+            projectId={currentProject.id}
             services={strategicGanttServices}
             projectStartDate={strategicStartDate}
             projectedEndDate={strategicProjectedEndDate}

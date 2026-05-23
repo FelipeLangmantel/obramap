@@ -25,6 +25,7 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -56,8 +57,10 @@ import {
   MoveHorizontal,
 } from 'lucide-react';
 import type { GanttService } from './hooks/useStrategicGanttData';
+import { usePlanningCapacityModel } from './hooks/usePlanningCapacityModel';
 
 interface StrategicGanttChartProps {
+  projectId?: string;
   services: GanttService[];
   projectStartDate: string;
   projectedEndDate: Date | null;
@@ -80,6 +83,20 @@ const getServiceStatus = (svc: GanttService) => {
     return 'in_progress';
   }
   return 'planned';
+};
+
+const normalizeGanttText = (value: unknown) =>
+  String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+
+const getGanttSettingKey = (macroId?: string | null, scopeId?: string | null, serviceName?: string | null) => {
+  const macro = String(macroId ?? '').trim();
+  const scope = String(scopeId ?? '').trim();
+  if (macro || scope) return `${macro || 'sem_macro'}::${scope || 'sem_servico'}`;
+  return `name::${normalizeGanttText(serviceName) || 'sem_nome'}`;
 };
 
 const getPlannedPercent = (svc: GanttService) => {
@@ -122,6 +139,7 @@ const SCALE_CONFIG: Record<GanttScale, { label: string; minZoom: number; maxZoom
 };
 
 export function StrategicGanttChart({
+  projectId,
   services,
   projectStartDate,
   projectedEndDate,
@@ -129,6 +147,7 @@ export function StrategicGanttChart({
   onUpdatePredecessor,
 }: StrategicGanttChartProps) {
   const { canEdit } = useAuth();
+  const capacityModel = usePlanningCapacityModel(projectId);
   const scrollAreaRef = useRef<HTMLDivElement | null>(null);
   const [editingService, setEditingService] = useState<GanttService | null>(null);
   const [editProductivity, setEditProductivity] = useState(1);
@@ -151,31 +170,70 @@ export function StrategicGanttChart({
   const [teamFilter, setTeamFilter] = useState('all');
   const [capacityFilter, setCapacityFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [showHiddenServices, setShowHiddenServices] = useState(false);
 
   const zoom = zoomByScale[ganttScale];
   const dayWidth = ganttScale === 'day' ? zoom : ganttScale === 'week' ? zoom / 7 : zoom / 30;
 
+  const ganttSettingsByKey = useMemo(() => {
+    const exact = new Map<string, boolean>();
+    const byName = new Map<string, boolean>();
+    capacityModel.planningServiceSettings.forEach((setting) => {
+      const key = getGanttSettingKey(setting.macroId, setting.scopeId, setting.serviceName);
+      exact.set(key, setting.includeInGantt);
+      if (setting.serviceName) {
+        byName.set(getGanttSettingKey(null, null, setting.serviceName), setting.includeInGantt);
+      }
+    });
+    return { exact, byName };
+  }, [capacityModel.planningServiceSettings]);
+
+  const getIncludeInGantt = (svc: GanttService) => {
+    if (capacityModel.loading) return true;
+    const exact = ganttSettingsByKey.exact.get(getGanttSettingKey(svc.macro_id, svc.scope_id, svc.scope_name));
+    if (exact !== undefined) return exact;
+    const byName = ganttSettingsByKey.byName.get(getGanttSettingKey(null, null, svc.scope_name));
+    if (byName !== undefined) return byName;
+    return true;
+  };
+
+  const hiddenServiceIds = useMemo(() => {
+    const hidden = new Set<string>();
+    services.forEach((svc) => {
+      if (!getIncludeInGantt(svc)) hidden.add(svc.id);
+    });
+    return hidden;
+  }, [capacityModel.loading, ganttSettingsByKey, services]);
+
+  const servicesForGantt = useMemo(
+    () => (showHiddenServices ? services : services.filter((svc) => !hiddenServiceIds.has(svc.id))),
+    [hiddenServiceIds, services, showHiddenServices]
+  );
+
+  const visibleGanttCount = services.length - hiddenServiceIds.size;
+  const hiddenGanttCount = hiddenServiceIds.size;
+
   const stageOptions = useMemo(() => {
     const map = new Map<string, string>();
-    services.forEach((svc) => map.set(svc.macro_id, svc.macro_name));
+    servicesForGantt.forEach((svc) => map.set(svc.macro_id, svc.macro_name));
     return Array.from(map.entries());
-  }, [services]);
+  }, [servicesForGantt]);
 
   const serviceOptions = useMemo(() => {
     const map = new Map<string, string>();
-    services.forEach((svc) => map.set(svc.scope_id, svc.scope_name));
+    servicesForGantt.forEach((svc) => map.set(svc.scope_id, svc.scope_name));
     return Array.from(map.entries());
-  }, [services]);
+  }, [servicesForGantt]);
 
   const teamOptions = useMemo(
-    () => Array.from(new Set(services.map((svc) => String(svc.teams)))).sort((a, b) => Number(a) - Number(b)),
-    [services]
+    () => Array.from(new Set(servicesForGantt.map((svc) => String(svc.teams)))).sort((a, b) => Number(a) - Number(b)),
+    [servicesForGantt]
   );
 
   const filteredServices = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
-    return services.filter((svc) => {
+    return servicesForGantt.filter((svc) => {
       const status = getServiceStatus(svc);
       if (stageFilter !== 'all' && svc.macro_id !== stageFilter) return false;
       if (serviceFilter !== 'all' && svc.scope_id !== serviceFilter) return false;
@@ -196,7 +254,7 @@ export function StrategicGanttChart({
       }
       return true;
     });
-  }, [services, stageFilter, serviceFilter, statusFilter, teamFilter, capacityFilter, searchTerm]);
+  }, [servicesForGantt, stageFilter, serviceFilter, statusFilter, teamFilter, capacityFilter, searchTerm]);
 
   const { minDate, maxDate, ticks, totalWidth } = useMemo(() => {
     if (filteredServices.length === 0) {
@@ -362,7 +420,7 @@ export function StrategicGanttChart({
         </div>
 
         {/* KPI cards */}
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
           {[
             { label: 'Serviços exibidos', value: `${filteredServices.length}/${services.length}`, accent: 'text-slate-900 dark:text-foreground' },
             {
@@ -385,6 +443,11 @@ export function StrategicGanttChart({
               accent: 'text-red-600',
             },
             {
+              label: 'Ocultos no Gantt',
+              value: `${hiddenGanttCount} de ${services.length}`,
+              accent: 'text-slate-600',
+            },
+            {
               label: 'Capacidade insuf.',
               value: filteredServices.filter((svc) => svc.capacity_status === 'insufficient').length,
               accent: 'text-amber-600',
@@ -400,6 +463,40 @@ export function StrategicGanttChart({
               <p className={`text-2xl font-semibold mt-1 ${kpi.accent}`}>{kpi.value}</p>
             </div>
           ))}
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 dark:border-border bg-white dark:bg-card p-3 md:p-4 shadow-sm">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="font-medium text-slate-900 dark:text-foreground">
+                  {visibleGanttCount} visiveis
+                </span>
+                <span className="text-muted-foreground">|</span>
+                <span className="font-medium text-slate-600 dark:text-muted-foreground">
+                  {hiddenGanttCount} ocultos
+                </span>
+                <span className="text-muted-foreground">|</span>
+                <span className="font-medium text-slate-600 dark:text-muted-foreground">
+                  {services.length} total
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Servicos marcados como fora do Gantt sao ocultados apenas da visualizacao do cronograma fisico.
+                Producao, diario, medicao e Mapa 3D continuam separados por servico.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 rounded-full border bg-slate-50 px-3 py-2 dark:bg-background">
+              <Switch
+                id="show-hidden-gantt-services"
+                checked={showHiddenServices}
+                onCheckedChange={setShowHiddenServices}
+              />
+              <Label htmlFor="show-hidden-gantt-services" className="cursor-pointer text-xs font-medium">
+                Mostrar ocultos
+              </Label>
+            </div>
+          </div>
         </div>
 
         {/* Filters toolbar */}
@@ -563,9 +660,15 @@ export function StrategicGanttChart({
                   ? services.find((s) => s.stage_id === svc.depends_on)
                   : null;
                 const capacityConfig = CAPACITY_CONFIG[svc.capacity_status];
+                const isHiddenFromGantt = hiddenServiceIds.has(svc.id);
 
                 return (
-                  <div key={svc.id} className="flex border-b border-slate-100 dark:border-border hover:bg-blue-50/40 dark:hover:bg-muted/20 transition-colors group">
+                  <div
+                    key={svc.id}
+                    className={`flex border-b border-slate-100 dark:border-border hover:bg-blue-50/40 dark:hover:bg-muted/20 transition-colors group ${
+                      isHiddenFromGantt ? 'opacity-60' : ''
+                    }`}
+                  >
                     {/* Service label */}
                     <div className="w-96 shrink-0 border-r border-slate-100 dark:border-border px-4 py-3 flex items-start gap-2.5">
 
@@ -584,6 +687,11 @@ export function StrategicGanttChart({
                           <Badge variant="outline" className={`h-5 text-[10px] ${capacityConfig.className}`}>
                             {capacityConfig.label}
                           </Badge>
+                          {isHiddenFromGantt && (
+                            <Badge variant="secondary" className="h-5 text-[10px]">
+                              Oculto no Gantt
+                            </Badge>
+                          )}
                         </div>
                         <div className="truncate text-[11px] text-muted-foreground">
                           {svc.macro_name}
@@ -708,7 +816,7 @@ export function StrategicGanttChart({
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <div
-                              className={`absolute top-1/2 -translate-y-1/2 h-6 rounded-full cursor-grab active:cursor-grabbing transition-all hover:h-7 hover:shadow-md ring-1 ring-black/5 overflow-hidden ${statusConfig.color} ${activeDragPreview ? 'ring-2 ring-red-400 shadow-lg' : ''}`}
+                              className={`absolute top-1/2 -translate-y-1/2 h-6 rounded-full cursor-grab active:cursor-grabbing transition-all hover:h-7 hover:shadow-md ring-1 ring-black/5 overflow-hidden ${statusConfig.color} ${activeDragPreview ? 'ring-2 ring-red-400 shadow-lg' : ''} ${isHiddenFromGantt ? 'grayscale' : ''}`}
                               style={{ left: dragLeft, width: pos.width }}
                               onClick={() => handleEditOpen(svc)}
                               onPointerDown={(event) => handleBarPointerDown(event, svc)}
@@ -756,6 +864,9 @@ export function StrategicGanttChart({
                                 <div>Diferenca de prazo: {svc.duration_delta_days >= 0 ? '+' : ''}{svc.duration_delta_days} dias</div>
                               )}
                               <div>Capacidade: {capacityConfig.label}</div>
+                              {isHiddenFromGantt && (
+                                <div>Configuracao: oculto da visualizacao principal do Gantt.</div>
+                              )}
                               <div>Status: {statusConfig.label}</div>
                               <div>Planejado x realizado: {plannedPercent.toFixed(0)}% x {svc.completion_percent.toFixed(0)}%</div>
                               <div>Diferenca: {variance >= 0 ? '+' : ''}{variance.toFixed(0)} p.p.</div>
