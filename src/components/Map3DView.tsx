@@ -65,7 +65,7 @@ type GlbMeshInventoryInput = {
   detected_house_number: number | null;
 };
 
-const MAP3D_STORAGE_BUCKET = "3d-models";
+import { MAP3D_STORAGE_BUCKET, resolveMap3DSignedUrl } from "@/lib/map3dStorage";
 const MAP3D_ZOOM_SENSITIVITY_KEY = "obramap:map3d:zoom-sensitivity";
 const MAP3D_WALK_HELP_HIDDEN_KEY = "obramap:map3d:walk-help-hidden";
 
