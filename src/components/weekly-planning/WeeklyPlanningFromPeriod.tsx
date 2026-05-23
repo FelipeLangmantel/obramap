@@ -8,7 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { usePlanningCapacityModel } from "@/components/smart-planning/hooks/usePlanningCapacityModel";
 import { toast } from "sonner";
 import {
   Calendar, Home, Save, RefreshCcw, Zap,
@@ -84,6 +86,28 @@ interface WeekDefinition {
   days: Date[];
 }
 
+type WeeklyCapacityStatus = "ok" | "attention" | "overloaded" | "missing_productivity";
+
+interface WeeklyCapacityServiceDemand {
+  macroName: string;
+  scopeName: string;
+  plannedQuantity: number;
+  ignoredFromWeekly: boolean;
+}
+
+interface WeeklyCapacityDiagnosticRow {
+  key: string;
+  periodLabel: string;
+  groupName: string;
+  plannedQuantity: number;
+  availableCapacity: number | null;
+  overloadQuantity: number;
+  overloadPercent: number;
+  status: WeeklyCapacityStatus;
+  services: WeeklyCapacityServiceDemand[];
+  ignoredServicesCount: number;
+}
+
 // ── Helpers ────────────────────────────────────────────────
 function getMacroColor(macroId: string, macros: any[]): string {
   return macros?.find((m: any) => m.id === macroId)?.color || "#6b7280";
@@ -92,6 +116,55 @@ function getMacroColor(macroId: string, macros: any[]): string {
 function svcKey(s: { macro_id: string; scope_id: string }) {
   return `${s.macro_id}:${s.scope_id}`;
 }
+
+const normalizeCapacityText = (value: unknown) =>
+  String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+
+const capacityServiceKey = (macroId?: unknown, scopeId?: unknown, serviceName?: unknown) => {
+  const macro = String(macroId ?? "").trim();
+  const scope = String(scopeId ?? "").trim();
+  if (macro || scope) return `${macro || "sem_macro"}::${scope || "sem_servico"}`;
+  return `name::${normalizeCapacityText(serviceName) || "sem_nome"}`;
+};
+
+const formatCapacityNumber = (value: number | null | undefined) => {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "Sem produtividade";
+  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(value);
+};
+
+const formatWeeklyCapacityDate = (value: unknown) => {
+  try {
+    if (!value) return "Sem data";
+    const parsed = parseISO(String(value));
+    if (Number.isNaN(parsed.getTime())) return "Sem data";
+    return format(parsed, "dd/MM", { locale: ptBR });
+  } catch {
+    return "Sem data";
+  }
+};
+
+const weeklyCapacityStatusConfig: Record<WeeklyCapacityStatus, { label: string; className: string }> = {
+  ok: {
+    label: "OK",
+    className: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-900",
+  },
+  attention: {
+    label: "Atencao",
+    className: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-900",
+  },
+  overloaded: {
+    label: "Sobrecarregado",
+    className: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-300 dark:border-red-900",
+  },
+  missing_productivity: {
+    label: "Sem produtividade",
+    className: "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700",
+  },
+};
 
 function getHouseProgress(house: any, macroId: string, scopeId: string): number {
   const macro = house.macros?.find((m: any) => m.id === macroId);
@@ -650,6 +723,9 @@ export function WeeklyPlanningFromPeriod() {
   const macros = currentProject?.macrosTemplate || [];
   const houses = currentProject?.houses || [];
   const quadras = currentProject?.quadras || [];
+  const capacityModel = usePlanningCapacityModel(projectId);
+  const capacityServiceMap = capacityModel.serviceCapacityMap;
+  const capacityWorkGroups = capacityModel.workGroups;
 
   const [periods, setPeriods] = useState<PeriodForWeekly[]>([]);
   const [selectedPeriodId, setSelectedPeriodId] = useState("");
@@ -659,6 +735,7 @@ export function WeeklyPlanningFromPeriod() {
   const [isReverting, setIsReverting] = useState(false);
   const [isGenerated, setIsGenerated] = useState(false);
   const [showWeekConfig, setShowWeekConfig] = useState(false);
+  const [showIgnoredWeeklyServices, setShowIgnoredWeeklyServices] = useState(false);
 
   // Contractor services for this project
   const [contractorServices, setContractorServices] = useState<ContractorServiceOption[]>([]);
@@ -756,6 +833,117 @@ export function WeeklyPlanningFromPeriod() {
     }
     return map;
   }, [weekPlans]);
+
+  const weeklyCapacityDiagnostics = useMemo(() => {
+    const exactCapacity = new Map<string, (typeof capacityServiceMap)[number]>();
+    const nameCapacity = new Map<string, (typeof capacityServiceMap)[number]>();
+
+    for (const entry of capacityServiceMap) {
+      exactCapacity.set(capacityServiceKey(entry.macroId, entry.scopeId, entry.serviceName), entry);
+      nameCapacity.set(capacityServiceKey(null, null, entry.serviceName), entry);
+    }
+
+    const findCapacity = (service: WeekServicePlan) =>
+      exactCapacity.get(capacityServiceKey(service.macro_id, service.scope_id, service.scope_name))
+      ?? nameCapacity.get(capacityServiceKey(null, null, service.scope_name))
+      ?? null;
+
+    const grouped = new Map<string, {
+      periodLabel: string;
+      groupName: string;
+      plannedQuantity: number;
+      availableCapacity: number | null;
+      services: WeeklyCapacityServiceDemand[];
+      ignoredServicesCount: number;
+    }>();
+    let servicesWithoutGroup = 0;
+    let servicesWithoutProductivity = 0;
+    let ignoredServices = 0;
+
+    for (const week of weekPlans) {
+      for (const service of week.services) {
+        const plannedQuantity = service.planned_house_ids.length || service.planned_houses || 0;
+        if (plannedQuantity <= 0) continue;
+
+        const capacity = findCapacity(service);
+        const includeInWeeklyPlanning = capacity?.includeInWeeklyPlanning !== false;
+
+        if (!includeInWeeklyPlanning) {
+          ignoredServices += 1;
+          if (!showIgnoredWeeklyServices) continue;
+        }
+
+        if (!capacity?.groupId) {
+          servicesWithoutGroup += 1;
+          if (capacity?.capacitySource === "missing") servicesWithoutProductivity += 1;
+          continue;
+        }
+
+        if (capacity.weeklyCapacity === null || capacity.weeklyCapacity <= 0) {
+          servicesWithoutProductivity += 1;
+        }
+
+        const key = `${week.week_number}::${capacity.groupId}`;
+        const serviceDemand: WeeklyCapacityServiceDemand = {
+          macroName: service.macro_name || "Etapa nao informada",
+          scopeName: service.scope_name || "Servico nao informado",
+          plannedQuantity,
+          ignoredFromWeekly: !includeInWeeklyPlanning,
+        };
+        const existing = grouped.get(key);
+
+        if (existing) {
+          existing.plannedQuantity += plannedQuantity;
+          existing.services.push(serviceDemand);
+          if (!includeInWeeklyPlanning) existing.ignoredServicesCount += 1;
+        } else {
+          grouped.set(key, {
+            periodLabel: `Semana ${week.week_number} (${formatWeeklyCapacityDate(week.week_start)} - ${formatWeeklyCapacityDate(week.week_end)})`,
+            groupName: capacity.groupName || "Frente sem nome",
+            plannedQuantity,
+            availableCapacity: capacity.weeklyCapacity,
+            services: [serviceDemand],
+            ignoredServicesCount: includeInWeeklyPlanning ? 0 : 1,
+          });
+        }
+      }
+    }
+
+    const rows: WeeklyCapacityDiagnosticRow[] = Array.from(grouped.entries()).map(([key, item]) => {
+      const available = item.availableCapacity;
+      const overloadQuantity = available === null ? 0 : Math.max(item.plannedQuantity - available, 0);
+      const overloadPercent = available && available > 0 ? (overloadQuantity / available) * 100 : 0;
+      const status: WeeklyCapacityStatus =
+        available === null || available <= 0
+          ? "missing_productivity"
+          : overloadQuantity <= 0
+            ? "ok"
+            : overloadPercent <= 20
+              ? "attention"
+              : "overloaded";
+
+      return {
+        key,
+        periodLabel: item.periodLabel,
+        groupName: item.groupName,
+        plannedQuantity: item.plannedQuantity,
+        availableCapacity: available,
+        overloadQuantity,
+        overloadPercent,
+        status,
+        services: item.services.sort((a, b) => a.scopeName.localeCompare(b.scopeName)),
+        ignoredServicesCount: item.ignoredServicesCount,
+      };
+    }).sort((a, b) => a.periodLabel.localeCompare(b.periodLabel) || a.groupName.localeCompare(b.groupName));
+
+    return {
+      rows,
+      servicesWithoutGroup,
+      servicesWithoutProductivity,
+      ignoredServices,
+      hasWorkGroups: capacityWorkGroups.some((group) => group.active),
+    };
+  }, [capacityServiceMap, capacityWorkGroups, showIgnoredWeeklyServices, weekPlans]);
 
   // ── Data Loading ────────────────────────────────────────
   const loadPeriods = useCallback(async () => {
@@ -1647,6 +1835,142 @@ export function WeeklyPlanningFromPeriod() {
                 </div>
                 <ScrollBar orientation="horizontal" />
               </ScrollArea>
+            </CardContent>
+          </Card>
+
+          {/* Shared work group capacity diagnostic */}
+          <Card className="border-slate-200 dark:border-border">
+            <CardHeader className="py-3 px-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <HardHat className="h-4 w-4 text-primary" />
+                    Capacidade das frentes na semana
+                  </CardTitle>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Diagnostico somente leitura. O Planejamento Semanal continua por servico; a frente apenas soma a demanda
+                    dos servicos que disputam a mesma capacidade.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 rounded-full border bg-muted/40 px-3 py-2">
+                  <Switch
+                    id="show-ignored-weekly-services"
+                    checked={showIgnoredWeeklyServices}
+                    onCheckedChange={setShowIgnoredWeeklyServices}
+                  />
+                  <Label htmlFor="show-ignored-weekly-services" className="cursor-pointer text-xs font-medium">
+                    Mostrar ignorados no semanal
+                  </Label>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0 px-4 pb-4 space-y-3">
+              <div className="grid gap-2 md:grid-cols-4">
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Frentes avaliadas</div>
+                  <div className="text-lg font-semibold">{weeklyCapacityDiagnostics.rows.length}</div>
+                </div>
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Servicos sem frente</div>
+                  <div className="text-lg font-semibold">{weeklyCapacityDiagnostics.servicesWithoutGroup}</div>
+                </div>
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Sem produtividade</div>
+                  <div className="text-lg font-semibold">{weeklyCapacityDiagnostics.servicesWithoutProductivity}</div>
+                </div>
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Fora do semanal</div>
+                  <div className="text-lg font-semibold">{weeklyCapacityDiagnostics.ignoredServices}</div>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">
+                Este diagnostico nao bloqueia salvamento e nao altera metas, producao, diario, medicao, Gantt, Linha de Balanco ou Mapa 3D.
+              </div>
+
+              {capacityModel.loading ? (
+                <div className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground">
+                  Carregando capacidade das frentes...
+                </div>
+              ) : !weeklyCapacityDiagnostics.hasWorkGroups ? (
+                <div className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground">
+                  Nenhuma frente compartilhada cadastrada. Cadastre frentes em Produtividade e Equipes para calcular capacidade semanal.
+                </div>
+              ) : weekPlans.every((week) => week.services.every((service) => (service.planned_house_ids.length || service.planned_houses || 0) <= 0)) ? (
+                <div className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground">
+                  Nenhuma meta semanal encontrada para este periodo.
+                </div>
+              ) : weeklyCapacityDiagnostics.rows.length === 0 ? (
+                <div className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground">
+                  Nenhuma frente com demanda planejada nesta semana. Servicos sem frente continuam planejados por servico.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {weeklyCapacityDiagnostics.rows.map((row) => {
+                    const statusConfig = weeklyCapacityStatusConfig[row.status];
+                    const remainingCapacity = row.availableCapacity === null ? null : row.availableCapacity - row.plannedQuantity;
+
+                    return (
+                      <div key={row.key} className="rounded-xl border bg-card p-3">
+                        <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-semibold">{row.groupName}</span>
+                              <Badge variant="outline" className={`border ${statusConfig.className}`}>
+                                {statusConfig.label}
+                              </Badge>
+                              {row.ignoredServicesCount > 0 && (
+                                <Badge variant="secondary" className="text-[10px]">
+                                  {row.ignoredServicesCount} fora do Semanal
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="mt-1 text-xs text-muted-foreground">{row.periodLabel}</div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+                            <div className="rounded border bg-muted/30 px-2 py-1">
+                              <div className="text-muted-foreground">Planejado</div>
+                              <div className="font-semibold">{formatCapacityNumber(row.plannedQuantity)}</div>
+                            </div>
+                            <div className="rounded border bg-muted/30 px-2 py-1">
+                              <div className="text-muted-foreground">Capacidade</div>
+                              <div className="font-semibold">{formatCapacityNumber(row.availableCapacity)}</div>
+                            </div>
+                            <div className="rounded border bg-muted/30 px-2 py-1">
+                              <div className="text-muted-foreground">{remainingCapacity !== null && remainingCapacity >= 0 ? "Sobra" : "Sobrecarga"}</div>
+                              <div className={remainingCapacity !== null && remainingCapacity < 0 ? "font-semibold text-destructive" : "font-semibold"}>
+                                {row.availableCapacity === null ? "Sem produtividade" : formatCapacityNumber(Math.abs(remainingCapacity ?? 0))}
+                              </div>
+                            </div>
+                            <div className="rounded border bg-muted/30 px-2 py-1">
+                              <div className="text-muted-foreground">Percentual</div>
+                              <div className={row.overloadQuantity > 0 ? "font-semibold text-destructive" : "font-semibold"}>
+                                {row.overloadQuantity > 0 ? `${formatCapacityNumber(row.overloadPercent)}%` : "0%"}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 space-y-1">
+                          {row.services.map((service) => (
+                            <div key={`${row.key}:${service.macroName}:${service.scopeName}`} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/30 px-2 py-1 text-xs">
+                              <span className="font-medium">
+                                {service.macroName} / {service.scopeName}
+                              </span>
+                              <span className="flex items-center gap-2">
+                                {service.ignoredFromWeekly && (
+                                  <Badge variant="secondary" className="text-[10px]">Fora do Semanal</Badge>
+                                )}
+                                <span>{formatCapacityNumber(service.plannedQuantity)} casa(s)</span>
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
 
