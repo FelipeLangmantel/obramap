@@ -1722,8 +1722,8 @@ export function Map3DView() {
         throw error;
       }
 
-      const part = toSupplementalGlbPart(data);
-      setSupplementalGlbParts((current) => [...current, part]);
+      const part = await toSupplementalGlbPart(data);
+      if (part) setSupplementalGlbParts((current) => [...current, part]);
       toast.success("Parte GLB complementar salva e carregada.");
     } catch (error) {
       console.error("[GLB Parts] add error", error);
