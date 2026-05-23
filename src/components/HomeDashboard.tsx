@@ -122,11 +122,18 @@ function RealModel3DPreview({ projectId }: { projectId: string }) {
         .eq("project_id", projectId)
         .maybeSingle();
       if (data?.model_3d_url) {
-        setModelData({
-          url: data.model_3d_url,
-          type: (data.model_3d_type as "gltf" | "obj") || "gltf",
-          mtlUrl: data.model_mtl_url || undefined,
-        });
+        const { resolveMap3DSignedUrl } = await import("@/lib/map3dStorage");
+        const [signedUrl, signedMtl] = await Promise.all([
+          resolveMap3DSignedUrl(data.model_3d_url),
+          resolveMap3DSignedUrl(data.model_mtl_url),
+        ]);
+        if (signedUrl) {
+          setModelData({
+            url: signedUrl,
+            type: (data.model_3d_type as "gltf" | "obj") || "gltf",
+            mtlUrl: signedMtl || undefined,
+          });
+        }
       }
     };
     fetchModel();

@@ -65,43 +65,7 @@ type GlbMeshInventoryInput = {
   detected_house_number: number | null;
 };
 
-const MAP3D_STORAGE_BUCKET = "3d-models";
-const MAP3D_SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
-
-/**
- * Extract the storage object path from a stored Supabase Storage URL
- * (public or signed). Returns null if the URL doesn't look like one.
- */
-function extractMap3DStoragePath(url: string | null | undefined): string | null {
-  if (!url) return null;
-  const marker = `/storage/v1/object/`;
-  const idx = url.indexOf(marker);
-  if (idx === -1) return url.startsWith("http") ? null : url; // assume already a path
-  let tail = url.slice(idx + marker.length);
-  // strip 'public/' or 'sign/'
-  tail = tail.replace(/^(public|sign|authenticated)\//, "");
-  // strip bucket prefix
-  const bucketPrefix = `${MAP3D_STORAGE_BUCKET}/`;
-  if (tail.startsWith(bucketPrefix)) tail = tail.slice(bucketPrefix.length);
-  // drop query (e.g. ?token=...)
-  const q = tail.indexOf("?");
-  if (q !== -1) tail = tail.slice(0, q);
-  return tail || null;
-}
-
-async function resolveMap3DSignedUrl(url: string | null | undefined): Promise<string | null> {
-  if (!url) return null;
-  const path = extractMap3DStoragePath(url);
-  if (!path) return url ?? null;
-  const { data, error } = await supabase.storage
-    .from(MAP3D_STORAGE_BUCKET)
-    .createSignedUrl(path, MAP3D_SIGNED_URL_TTL_SECONDS);
-  if (error || !data?.signedUrl) {
-    console.error("[3D] Failed to sign URL for", path, error);
-    return null;
-  }
-  return data.signedUrl;
-}
+import { MAP3D_STORAGE_BUCKET, resolveMap3DSignedUrl } from "@/lib/map3dStorage";
 const MAP3D_ZOOM_SENSITIVITY_KEY = "obramap:map3d:zoom-sensitivity";
 const MAP3D_WALK_HELP_HIDDEN_KEY = "obramap:map3d:walk-help-hidden";
 
@@ -1660,12 +1624,12 @@ export function Map3DView() {
         return null;
       }
 
-      const { data: signedData, error: signedError } = await supabase.storage
+      const { data: signed, error: signError } = await supabase.storage
         .from(MAP3D_STORAGE_BUCKET)
-        .createSignedUrl(data.path, MAP3D_SIGNED_URL_TTL_SECONDS);
-      const publicUrl = signedData?.signedUrl ?? "";
-      if (!publicUrl) {
-        console.error("[3D] Failed to sign uploaded URL", signedError);
+        .createSignedUrl(data.path, 60 * 60 * 24 * 7);
+      const publicUrl = signed?.signedUrl;
+      if (signError || !publicUrl) {
+        toast.error("Upload concluido, mas nao foi possivel gerar a URL assinada do modelo.");
         return null;
       }
 
