@@ -1323,8 +1323,84 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
             </table>
           </section>
 
+          {selectedSimulationFront && selectedSimulationInput && simulatedCapacityResult && (
+            <section className="print-section">
+              <h2 className="text-lg font-semibold">5. Cenario simulado de capacidade</h2>
+              <p className="mt-2 text-sm text-muted-foreground print-muted">
+                Este cenario e apenas uma simulacao local e nao altera o planejamento oficial, producao, diario,
+                medicao, Gantt, Linha de Balanco ou Planejamento Semanal.
+              </p>
+              <table className="print-table mt-3 w-full text-sm">
+                <tbody>
+                  <tr>
+                    <th>Frente simulada</th>
+                    <td>{selectedSimulationFront.name}</td>
+                    <th>Status simulado</th>
+                    <td>{capacityStatusLabel(simulatedCapacityResult.simulatedStatus)}</td>
+                  </tr>
+                  <tr>
+                    <th>Capacidade atual</th>
+                    <td>
+                      {simulatedCapacityResult.currentCapacity === null
+                        ? 'Sem produtividade cadastrada'
+                        : `${formatNumber(simulatedCapacityResult.currentCapacity, 1)}/semana`}
+                    </td>
+                    <th>Demanda considerada</th>
+                    <td>
+                      {simulatedCapacityResult.demand > 0
+                        ? formatNumber(simulatedCapacityResult.demand, 1)
+                        : 'Sem demanda suficiente para comparacao'}
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Equipes atuais</th>
+                    <td>{selectedSimulationFront.teamCount}</td>
+                    <th>Equipes simuladas</th>
+                    <td>{selectedSimulationInput.teamCount}</td>
+                  </tr>
+                  <tr>
+                    <th>Produtividade simulada</th>
+                    <td>
+                      {selectedSimulationInput.productivityValue > 0
+                        ? `${formatNumber(selectedSimulationInput.productivityValue, 2)} ${selectedSimulationFront.productivityUnit || 'unidade'}`
+                        : 'Sem produtividade cadastrada para simulacao'}
+                    </td>
+                    <th>Dias trabalhados simulados</th>
+                    <td>{selectedSimulationInput.workingDaysPerWeek}</td>
+                  </tr>
+                  <tr>
+                    <th>Capacidade semanal simulada</th>
+                    <td>
+                      {simulatedCapacityResult.simulatedCapacity === null
+                        ? 'Sem produtividade cadastrada para simulacao'
+                        : `${formatNumber(simulatedCapacityResult.simulatedCapacity, 1)}/semana`}
+                    </td>
+                    <th>Pessoas adicionais estimadas</th>
+                    <td>{formatNumber(simulatedCapacityResult.additionalPeople, 0)}</td>
+                  </tr>
+                  <tr>
+                    <th>Sobrecarga ou sobra simulada</th>
+                    <td colSpan={3}>
+                      {simulatedCapacityResult.simulatedCapacity === null
+                        ? 'Sem produtividade cadastrada para simulacao'
+                        : simulatedCapacityResult.simulatedOverload > 0
+                          ? `Sobrecarga de ${formatNumber(simulatedCapacityResult.simulatedOverload, 1)}/semana`
+                          : simulatedCapacityResult.simulatedSurplus > 0
+                            ? `Sobra de ${formatNumber(simulatedCapacityResult.simulatedSurplus, 1)}/semana`
+                            : 'Capacidade simulada igual a demanda considerada'}
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Recomendacao simulada</th>
+                    <td colSpan={3}>{simulatedCapacityResult.recommendation}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+          )}
+
           <section className="print-section">
-            <h2 className="text-lg font-semibold">5. Curva planejado x realizado</h2>
+            <h2 className="text-lg font-semibold">6. Curva planejado x realizado</h2>
             <table className="print-table mt-3 w-full text-sm">
               <thead>
                 <tr>
@@ -1353,7 +1429,7 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
           </section>
 
           <section className="print-section">
-            <h2 className="text-lg font-semibold">6. Plano de acao recomendado</h2>
+            <h2 className="text-lg font-semibold">7. Plano de acao recomendado</h2>
             <table className="print-table mt-3 w-full text-sm">
               <thead>
                 <tr>
@@ -1380,7 +1456,7 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
           </section>
 
           <section className="print-section">
-            <h2 className="text-lg font-semibold">7. Analise de prazo</h2>
+            <h2 className="text-lg font-semibold">8. Analise de prazo</h2>
             <p className="mt-2 text-sm text-muted-foreground print-muted">
               Com base nos dados disponiveis ate a data-base, produtividade cadastrada e saldo de servicos pendentes,
               a previsao atual de termino da obra e {formatDate(forecastSummary.estimatedFinishDate)}.
@@ -1398,7 +1474,7 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
           </section>
 
           <section className="print-section">
-            <h2 className="text-lg font-semibold">8. Servicos criticos</h2>
+            <h2 className="text-lg font-semibold">9. Servicos criticos</h2>
             <table className="print-table mt-3 w-full text-sm">
               <thead>
                 <tr>
@@ -1436,7 +1512,7 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
           </section>
 
           <section className="print-section">
-            <h2 className="text-lg font-semibold">9. Necessidade de equipes</h2>
+            <h2 className="text-lg font-semibold">10. Necessidade de equipes</h2>
             <table className="print-table mt-3 w-full text-sm">
               <thead>
                 <tr>
@@ -1471,7 +1547,7 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
           </section>
 
           <section className="print-section">
-            <h2 className="text-lg font-semibold">10. Servicos sem produtividade</h2>
+            <h2 className="text-lg font-semibold">11. Servicos sem produtividade</h2>
             <table className="print-table mt-3 w-full text-sm">
               <thead>
                 <tr>
@@ -1498,7 +1574,7 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
           </section>
 
           <section className="print-section">
-            <h2 className="text-lg font-semibold">11. Desvios e justificativas</h2>
+            <h2 className="text-lg font-semibold">12. Desvios e justificativas</h2>
             <table className="print-table mt-3 w-full text-sm">
               <thead>
                 <tr>
@@ -1530,13 +1606,13 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
 
           <section className="print-section grid gap-3 md:grid-cols-2">
             <div className="print-card rounded-lg border p-3">
-              <h2 className="text-base font-semibold">12. Gantt resumido</h2>
+              <h2 className="text-base font-semibold">13. Gantt resumido</h2>
               <p className="mt-2 text-sm text-muted-foreground print-muted">
                 O cronograma detalhado encontra-se disponivel na aba Gantt do Planejamento Inteligente.
               </p>
             </div>
             <div className="print-card rounded-lg border p-3">
-              <h2 className="text-base font-semibold">13. Linha de Balanco</h2>
+              <h2 className="text-base font-semibold">14. Linha de Balanco</h2>
               <p className="mt-2 text-sm text-muted-foreground print-muted">
                 A Linha de Balanco detalhada encontra-se disponivel na aba Linha de Balanco do Planejamento Inteligente.
               </p>
@@ -1544,7 +1620,7 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
           </section>
 
           <section className="print-section">
-            <h2 className="text-lg font-semibold">14. Conclusao tecnica</h2>
+            <h2 className="text-lg font-semibold">15. Conclusao tecnica</h2>
             <p className="mt-2 text-sm text-muted-foreground print-muted">
               Com base nos dados disponiveis ate a data-base, a obra apresenta progresso realizado de {formatPercent(forecastSummary.realProgress)}
               frente a {formatPercent(forecastSummary.plannedProgress)} planejado, resultando em desvio de {formatPercent(forecastSummary.realProgress - forecastSummary.plannedProgress)}.
