@@ -763,6 +763,43 @@ export function ServiceProductivityView() {
           onSave={saveProductivity}
         />
       )}
+        </TabsContent>
+
+        <TabsContent value="frentes">
+          <TeamWorkGroupsPanel
+            projectId={currentProject?.id}
+            allServices={allServices.map((s) => ({
+              macroId: s.macroId,
+              scopeId: s.scopeId,
+              macroName: s.macroName,
+              scopeName: s.scopeName,
+            }))}
+            suggestions={capacityDiagnostics.suggestedGroups.map((g) => ({
+              id: g.id,
+              title: g.title,
+              services: g.services.map((it) => ({
+                macroId: it.service.macroId,
+                scopeId: it.service.scopeId,
+                macroName: it.service.macroName,
+                scopeName: it.service.scopeName,
+              })),
+            }))}
+          />
+        </TabsContent>
+
+        <TabsContent value="configplan">
+          <ServicePlanningSettingsPanel
+            projectId={currentProject?.id}
+            allServices={allServices.map((s) => ({
+              macroId: s.macroId,
+              scopeId: s.scopeId,
+              macroName: s.macroName,
+              scopeName: s.scopeName,
+            }))}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
+
