@@ -9597,11 +9597,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "project_team_work_group_services_group_id_fkey"
-            columns: ["group_id"]
+            foreignKeyName: "project_team_work_group_services_group_scope_fkey"
+            columns: ["group_id", "project_id", "company_id"]
             isOneToOne: false
             referencedRelation: "project_team_work_groups"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "project_id", "company_id"]
           },
         ]
       }
