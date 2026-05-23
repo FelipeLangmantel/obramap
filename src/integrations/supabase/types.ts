@@ -9383,6 +9383,60 @@ export type Database = {
           },
         ]
       }
+      project_service_planning_settings: {
+        Row: {
+          company_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          include_in_gantt: boolean
+          include_in_line_of_balance: boolean
+          include_in_weekly_planning: boolean
+          macro_id: string | null
+          notes: string | null
+          project_id: string
+          scope_id: string | null
+          service_name: string | null
+          service_planning_type: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          include_in_gantt?: boolean
+          include_in_line_of_balance?: boolean
+          include_in_weekly_planning?: boolean
+          macro_id?: string | null
+          notes?: string | null
+          project_id: string
+          scope_id?: string | null
+          service_name?: string | null
+          service_planning_type?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          include_in_gantt?: boolean
+          include_in_line_of_balance?: boolean
+          include_in_weekly_planning?: boolean
+          macro_id?: string | null
+          notes?: string | null
+          project_id?: string
+          scope_id?: string | null
+          service_name?: string | null
+          service_planning_type?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       project_service_productivity: {
         Row: {
           company_id: string
@@ -9485,6 +9539,131 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      project_team_work_group_services: {
+        Row: {
+          active: boolean
+          company_id: string
+          created_at: string
+          created_by: string | null
+          group_id: string
+          id: string
+          lag_days: number | null
+          macro_id: string | null
+          productivity_override: number | null
+          productivity_unit_override: string | null
+          project_id: string
+          scope_id: string | null
+          sequence_order: number | null
+          service_name: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          active?: boolean
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          group_id: string
+          id?: string
+          lag_days?: number | null
+          macro_id?: string | null
+          productivity_override?: number | null
+          productivity_unit_override?: string | null
+          project_id: string
+          scope_id?: string | null
+          sequence_order?: number | null
+          service_name?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          active?: boolean
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          group_id?: string
+          id?: string
+          lag_days?: number | null
+          macro_id?: string | null
+          productivity_override?: number | null
+          productivity_unit_override?: string | null
+          project_id?: string
+          scope_id?: string | null
+          sequence_order?: number | null
+          service_name?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_team_work_group_services_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "project_team_work_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_team_work_groups: {
+        Row: {
+          active: boolean
+          auxiliary_count: number | null
+          base_unit: string | null
+          company_id: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          name: string
+          productivity_unit: string | null
+          productivity_value: number | null
+          professional_count: number | null
+          project_id: string
+          simultaneous_team_count: number | null
+          updated_at: string
+          updated_by: string | null
+          working_days_per_week: number | null
+        }
+        Insert: {
+          active?: boolean
+          auxiliary_count?: number | null
+          base_unit?: string | null
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          productivity_unit?: string | null
+          productivity_value?: number | null
+          professional_count?: number | null
+          project_id: string
+          simultaneous_team_count?: number | null
+          updated_at?: string
+          updated_by?: string | null
+          working_days_per_week?: number | null
+        }
+        Update: {
+          active?: boolean
+          auxiliary_count?: number | null
+          base_unit?: string | null
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          productivity_unit?: string | null
+          productivity_value?: number | null
+          professional_count?: number | null
+          project_id?: string
+          simultaneous_team_count?: number | null
+          updated_at?: string
+          updated_by?: string | null
+          working_days_per_week?: number | null
+        }
+        Relationships: []
       }
       project_unit_capacities: {
         Row: {
