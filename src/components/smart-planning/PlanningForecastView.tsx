@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { format, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { AlertTriangle, CalendarClock, FileText, Printer, Users } from 'lucide-react';
@@ -181,9 +181,47 @@ const getFrontRecommendation = (
   return 'Redistribuir servicos ou revisar produtividade da frente.';
 };
 
+const normalizeUnitText = (value: string | null | undefined) =>
+  String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+
+const calculateWeeklyCapacity = (
+  productivityValue: number | null | undefined,
+  productivityUnit: string | null | undefined,
+  workingDaysPerWeek: number,
+  teamCount: number,
+) => {
+  const value = Number(productivityValue);
+  const days = Math.max(Number(workingDaysPerWeek) || 0, 0);
+  const teams = Math.max(Number(teamCount) || 0, 0);
+  if (!Number.isFinite(value) || value <= 0 || days <= 0 || teams <= 0) return null;
+
+  const unit = normalizeUnitText(productivityUnit);
+  if (unit.includes('semana')) return value * teams;
+  if (unit.includes('mes')) return (value / 22) * days * teams;
+  return value * days * teams;
+};
+
+const getCapacityStatus = (demand: number, capacity: number | null): CapacityDiagnosticStatus => {
+  if (capacity === null || capacity <= 0) return 'missing_productivity';
+  if (demand <= capacity) return 'ok';
+  return demand <= capacity * 1.2 ? 'attention' : 'overloaded';
+};
+
+interface CapacitySimulationInput {
+  teamCount: number;
+  productivityValue: number;
+  workingDaysPerWeek: number;
+}
+
 export function PlanningForecastView({ project, companyName, officialView }: PlanningForecastViewProps) {
   const forecast = usePlanningForecast(project.id, officialView, project);
   const capacityModel = usePlanningCapacityModel(project.id);
+  const [selectedSimulationFrontId, setSelectedSimulationFrontId] = useState('');
+  const [capacitySimulations, setCapacitySimulations] = useState<Record<string, CapacitySimulationInput>>({});
   const {
     forecastSummary,
     serviceForecasts,
@@ -230,9 +268,12 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
         name: group.name,
         services: group.services,
         weeklyCapacity: availableCapacity,
+        productivityValue: group.productivityValue,
         productivityUnit: group.productivityUnit || group.baseUnit || '',
+        workingDaysPerWeek: group.workingDaysPerWeek,
         teamCount,
         totalPeople: group.totalPeople,
+        peoplePerTeam: teamCount > 0 ? group.totalPeople / teamCount : group.professionalCount + group.auxiliaryCount,
         peakDemand,
         capacityPerTeam,
         requiredTeams,
@@ -242,6 +283,86 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
       };
     });
   }, [activeCapacityGroups, capacityModel.overloadDiagnostics, capacityModel.serviceCapacityMap]);
+  const selectedSimulationFront = useMemo(() => {
+    if (frontCapacityRows.length === 0) return null;
+    return frontCapacityRows.find((row) => row.id === selectedSimulationFrontId) ?? frontCapacityRows[0];
+  }, [frontCapacityRows, selectedSimulationFrontId]);
+  const selectedSimulationInput = useMemo(() => {
+    if (!selectedSimulationFront) return null;
+    return capacitySimulations[selectedSimulationFront.id] ?? {
+      teamCount: Math.max(selectedSimulationFront.teamCount || 1, 1),
+      productivityValue: selectedSimulationFront.productivityValue ?? 0,
+      workingDaysPerWeek: Math.max(selectedSimulationFront.workingDaysPerWeek || 5, 1),
+    };
+  }, [capacitySimulations, selectedSimulationFront]);
+  const simulatedCapacityResult = useMemo(() => {
+    if (!selectedSimulationFront || !selectedSimulationInput) return null;
+
+    const demand = selectedSimulationFront.peakDemand;
+    const simulatedCapacity = calculateWeeklyCapacity(
+      selectedSimulationInput.productivityValue,
+      selectedSimulationFront.productivityUnit,
+      selectedSimulationInput.workingDaysPerWeek,
+      selectedSimulationInput.teamCount,
+    );
+    const simulatedStatus = getCapacityStatus(demand, simulatedCapacity);
+    const simulatedOverload = simulatedCapacity === null ? 0 : Math.max(demand - simulatedCapacity, 0);
+    const simulatedSurplus = simulatedCapacity === null ? 0 : Math.max(simulatedCapacity - demand, 0);
+    const currentCapacity = selectedSimulationFront.weeklyCapacity;
+    const currentStatus = getCapacityStatus(demand, currentCapacity);
+    const currentOverload = currentCapacity === null ? 0 : Math.max(demand - currentCapacity, 0);
+    const additionalTeams = Math.max(selectedSimulationInput.teamCount - selectedSimulationFront.teamCount, 0);
+    const additionalPeople = additionalTeams * Math.max(selectedSimulationFront.peoplePerTeam || 0, 0);
+    const recommendation =
+      simulatedStatus === 'missing_productivity'
+        ? 'Cadastre produtividade da frente para simular capacidade.'
+        : demand <= 0
+          ? 'Sem demanda suficiente para avaliar necessidade de equipe.'
+          : simulatedOverload <= 0 && currentOverload > 0
+            ? 'Cenario simulado resolve a sobrecarga atual.'
+            : simulatedOverload <= 0
+              ? 'Cenario mantem capacidade suficiente para a demanda prevista.'
+              : simulatedStatus === 'attention'
+                ? 'Cenario reduz o risco, mas ainda exige acompanhamento.'
+                : 'Cenario ainda fica sobrecarregado; avalie mais equipe, produtividade ou replanejamento.';
+
+    return {
+      demand,
+      currentCapacity,
+      currentStatus,
+      currentOverload,
+      simulatedCapacity,
+      simulatedStatus,
+      simulatedOverload,
+      simulatedSurplus,
+      additionalTeams,
+      additionalPeople,
+      recommendation,
+    };
+  }, [selectedSimulationFront, selectedSimulationInput]);
+  const updateSimulationInput = (field: keyof CapacitySimulationInput, value: number) => {
+    if (!selectedSimulationFront) return;
+    const fallback = selectedSimulationInput ?? {
+      teamCount: Math.max(selectedSimulationFront.teamCount || 1, 1),
+      productivityValue: selectedSimulationFront.productivityValue ?? 0,
+      workingDaysPerWeek: Math.max(selectedSimulationFront.workingDaysPerWeek || 5, 1),
+    };
+    setCapacitySimulations((current) => ({
+      ...current,
+      [selectedSimulationFront.id]: {
+        ...fallback,
+        [field]: Math.max(Number.isFinite(value) ? value : 0, field === 'productivityValue' ? 0 : 1),
+      },
+    }));
+  };
+  const resetSimulation = () => {
+    if (!selectedSimulationFront) return;
+    setCapacitySimulations((current) => {
+      const next = { ...current };
+      delete next[selectedSimulationFront.id];
+      return next;
+    });
+  };
   const missingDateCount = serviceForecasts.filter((item) => item.remainingQuantity > 0 && !item.estimatedFinishDate).length;
   const confidence = getConfidence(forecastSummary.missingProductivityCount, forecastSummary.totalServices, missingDateCount);
   const generatedAt = new Date();
@@ -537,6 +658,166 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
           {sharedCapacityOverloads.length > 0 && (
             <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
               {sharedCapacityOverloads.length} periodo(s) com sobrecarga em frentes compartilhadas. A leitura e somente diagnostica e nao bloqueia o Planejamento Semanal.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="print:hidden">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <CalendarClock className="h-4 w-4" />
+            Simulador de capacidade
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Teste cenarios locais de equipe, produtividade e dias trabalhados por semana. Esta simulacao nao altera
+            planejamento oficial, producao, diario, medicao, Gantt, Linha ou Planejamento Semanal.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {frontCapacityRows.length === 0 ? (
+            <div className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground">
+              Nenhuma frente compartilhada cadastrada. Cadastre frentes em Produtividade e Equipes para simular capacidade.
+            </div>
+          ) : selectedSimulationFront && selectedSimulationInput && simulatedCapacityResult ? (
+            <>
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,2fr)]">
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-muted-foreground" htmlFor="capacity-simulation-front">
+                    Frente de trabalho
+                  </label>
+                  <select
+                    id="capacity-simulation-front"
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                    value={selectedSimulationFront.id}
+                    onChange={(event) => setSelectedSimulationFrontId(event.target.value)}
+                  >
+                    {frontCapacityRows.map((front) => (
+                      <option key={front.id} value={front.id}>
+                        {front.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+                    <p className="font-medium text-foreground">Servicos vinculados</p>
+                    <p className="mt-1">
+                      {selectedSimulationFront.services.map((service) => service.serviceName || service.scopeId || 'Servico').join(', ') || 'Nenhum servico vinculado'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-5">
+                  {[
+                    ['Capacidade atual', selectedSimulationFront.weeklyCapacity === null ? 'Sem produtividade' : `${formatNumber(selectedSimulationFront.weeklyCapacity, 1)}/semana`],
+                    ['Demanda', simulatedCapacityResult.demand > 0 ? formatNumber(simulatedCapacityResult.demand, 1) : 'Sem demanda'],
+                    ['Equipes atuais', selectedSimulationFront.teamCount],
+                    ['Pessoas atuais', selectedSimulationFront.totalPeople],
+                    ['Status atual', capacityStatusLabel(simulatedCapacityResult.currentStatus)],
+                  ].map(([label, value]) => (
+                    <div key={String(label)} className="rounded-lg border bg-card p-3">
+                      <p className="text-xs text-muted-foreground">{label}</p>
+                      <p className="mt-1 text-lg font-semibold">{value}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-muted-foreground" htmlFor="simulated-team-count">
+                    Equipes simultaneas simuladas
+                  </label>
+                  <input
+                    id="simulated-team-count"
+                    type="number"
+                    min={1}
+                    step={1}
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                    value={selectedSimulationInput.teamCount}
+                    onChange={(event) => updateSimulationInput('teamCount', Number(event.target.value))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-muted-foreground" htmlFor="simulated-productivity">
+                    Produtividade simulada
+                  </label>
+                  <input
+                    id="simulated-productivity"
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                    value={selectedSimulationInput.productivityValue}
+                    onChange={(event) => updateSimulationInput('productivityValue', Number(event.target.value))}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Unidade: {selectedSimulationFront.productivityUnit || 'nao informada'}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-muted-foreground" htmlFor="simulated-working-days">
+                    Dias trabalhados por semana
+                  </label>
+                  <input
+                    id="simulated-working-days"
+                    type="number"
+                    min={1}
+                    max={7}
+                    step={1}
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                    value={selectedSimulationInput.workingDaysPerWeek}
+                    onChange={(event) => updateSimulationInput('workingDaysPerWeek', Number(event.target.value))}
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-4">
+                {[
+                  ['Capacidade simulada', simulatedCapacityResult.simulatedCapacity === null ? 'Sem produtividade' : `${formatNumber(simulatedCapacityResult.simulatedCapacity, 1)}/semana`],
+                  ['Sobra simulada', simulatedCapacityResult.simulatedCapacity === null ? '-' : formatNumber(simulatedCapacityResult.simulatedSurplus, 1)],
+                  ['Sobrecarga simulada', simulatedCapacityResult.simulatedCapacity === null ? '-' : formatNumber(simulatedCapacityResult.simulatedOverload, 1)],
+                  ['Pessoas adicionais', formatNumber(simulatedCapacityResult.additionalPeople, 0)],
+                ].map(([label, value]) => (
+                  <div key={String(label)} className="rounded-lg border bg-card p-3">
+                    <p className="text-xs text-muted-foreground">{label}</p>
+                    <p className="mt-1 text-xl font-semibold">{value}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-3 md:flex-row md:items-center md:justify-between">
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant={capacityStatusVariant(simulatedCapacityResult.simulatedStatus)}>
+                      {capacityStatusLabel(simulatedCapacityResult.simulatedStatus)}
+                    </Badge>
+                    {simulatedCapacityResult.additionalTeams > 0 && (
+                      <span className="text-sm text-muted-foreground">
+                        +{simulatedCapacityResult.additionalTeams} equipe(s) em relacao ao cenario atual
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground">{simulatedCapacityResult.recommendation}</p>
+                </div>
+                <Button type="button" variant="outline" onClick={resetSimulation}>
+                  Restaurar cenario atual
+                </Button>
+              </div>
+
+              {selectedSimulationFront.weeklyCapacity === null && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  Cadastre produtividade da frente para comparar capacidade atual e simulada com mais confiabilidade.
+                </div>
+              )}
+              {simulatedCapacityResult.demand <= 0 && (
+                <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
+                  Sem demanda suficiente para simular necessidade de equipe. O simulador continua disponivel para testar capacidade teorica.
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground">
+              Dados incompletos para montar o simulador de capacidade.
             </div>
           )}
         </CardContent>
