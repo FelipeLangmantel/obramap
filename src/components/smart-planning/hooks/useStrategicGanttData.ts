@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { addDays, startOfDay, parseISO } from 'date-fns';
 import { toast } from 'sonner';
+import { ServiceCapacityEntry, usePlanningCapacityModel } from './usePlanningCapacityModel';
 
 export interface StrategicService {
   macro_id: string;
@@ -33,6 +34,15 @@ export type CapacityStatus = 'ok' | 'attention' | 'insufficient' | 'missing_prod
 
 export interface GanttService {
   id: string; // macro_id + scope_id
+  package_type?: 'service' | 'work_group';
+  group_id?: string | null;
+  internal_services?: {
+    id: string;
+    macro_id: string;
+    scope_id: string;
+    macro_name: string;
+    scope_name: string;
+  }[];
   macro_id: string;
   scope_id: string;
   macro_name: string;
@@ -53,6 +63,8 @@ export interface GanttService {
   suggested_duration_days: number | null;
   duration_delta_days: number | null;
   capacity_status: CapacityStatus;
+  schedule_source?: 'official_productivity' | 'legacy_fallback' | 'missing_productivity';
+  has_explicit_predecessor?: boolean;
   planned_start: Date;
   planned_end: Date;
   depends_on: string | null; // id of predecessor service
@@ -93,6 +105,7 @@ const getCapacityStatus = (
 
 export function useStrategicGanttData(projectId: string | undefined) {
   const { company, canEdit } = useAuth();
+  const capacityModel = usePlanningCapacityModel(projectId);
   const [services, setServices] = useState<StrategicService[]>([]);
   const [productivities, setProductivities] = useState<ServiceProductivityConfig[]>([]);
   const [ganttServices, setGanttServices] = useState<GanttService[]>([]);
@@ -233,8 +246,9 @@ export function useStrategicGanttData(projectId: string | undefined) {
       // Planning stages
       setStages(stagesRes.data || []);
 
-      // Build Gantt services
-      const gantt = buildGanttServices(uniqueServices, prods, stagesRes.data || [], startDate);
+      // Build inicial. Um efeito abaixo reconcilia com usePlanningCapacityModel
+      // para agrupar frentes compartilhadas quando o adapter terminar de carregar.
+      const gantt = buildGanttServices(uniqueServices, prods, stagesRes.data || [], startDate, []);
       setGanttServices(gantt);
     } catch (error) {
       console.error('Error loading strategic gantt data:', error);
@@ -265,10 +279,17 @@ export function useStrategicGanttData(projectId: string | undefined) {
     svcs: StrategicService[],
     prods: ServiceProductivityConfig[],
     stgs: any[],
-    startDateStr: string
+    startDateStr: string,
+    capacityEntries: ServiceCapacityEntry[]
   ): GanttService[] => {
     const prodMap = new Map<string, ServiceProductivityConfig>();
     prods.forEach((p) => prodMap.set(getServiceKey(p.macro_id, p.scope_id), p));
+    const capacityByKey = new Map<string, ServiceCapacityEntry>();
+    const capacityByName = new Map<string, ServiceCapacityEntry>();
+    capacityEntries.forEach((entry) => {
+      capacityByKey.set(getServiceKey(entry.macroId, entry.scopeId), entry);
+      capacityByName.set(String(entry.serviceName || '').trim().toLowerCase(), entry);
+    });
 
     const exactStageMap = new Map<string, any>();
     const macroStageMap = new Map<string, any>();
@@ -300,41 +321,101 @@ export function useStrategicGanttData(projectId: string | undefined) {
       return null;
     };
 
+    const servicePackages: Array<{ svc: StrategicService; stage: any; order: number; capacity: ServiceCapacityEntry | null }> = [];
+    const groupPackages = new Map<string, {
+      groupId: string;
+      groupName: string;
+      services: StrategicService[];
+      stages: any[];
+      order: number;
+      capacity: ServiceCapacityEntry;
+    }>();
+
+    svcs.forEach((svc, idx) => {
+      const stage = getStageForService(svc.macro_id, svc.scope_id);
+      const order = stage?.sequence_order ?? idx;
+      const capacity = capacityByKey.get(getServiceKey(svc.macro_id, svc.scope_id))
+        ?? capacityByName.get(svc.scope_name.trim().toLowerCase())
+        ?? null;
+
+      if (capacity?.groupId) {
+        const existing = groupPackages.get(capacity.groupId);
+        if (existing) {
+          existing.services.push(svc);
+          if (stage) existing.stages.push(stage);
+          existing.order = Math.min(existing.order, order);
+          return;
+        }
+        groupPackages.set(capacity.groupId, {
+          groupId: capacity.groupId,
+          groupName: capacity.groupName || 'Frente sem nome',
+          services: [svc],
+          stages: stage ? [stage] : [],
+          order,
+          capacity,
+        });
+        return;
+      }
+
+      servicePackages.push({ svc, stage, order, capacity });
+    });
+
+    const sorted = [
+      ...Array.from(groupPackages.values()).map((group) => ({ type: 'work_group' as const, group, order: group.order })),
+      ...servicePackages.map((item) => ({ type: 'service' as const, item, order: item.order })),
+    ].sort((a, b) => a.order - b.order);
+
     const result: GanttService[] = [];
     const scheduleMap = new Map<string, { start: Date; end: Date }>();
 
-    // Sort by stage sequence if available, otherwise by service order
-    const sorted = [...svcs].map((svc, idx) => {
-      const stage = getStageForService(svc.macro_id, svc.scope_id);
-      return { svc, stage, order: stage?.sequence_order ?? idx };
-    }).sort((a, b) => a.order - b.order);
-
-    let nextStart = startOfDay(parseISO(startDateStr));
-
-    for (const { svc, stage } of sorted) {
+    for (const sortedItem of sorted) {
+      const isWorkGroup = sortedItem.type === 'work_group';
+      const group = isWorkGroup ? sortedItem.group : null;
+      const svc: StrategicService = isWorkGroup
+        ? {
+            macro_id: `work_group:${group!.groupId}`,
+            scope_id: group!.groupId,
+            macro_name: 'Frente compartilhada',
+            scope_name: group!.groupName,
+            macro_color: '#0f766e',
+            total_houses: Math.max(...group!.services.map((item) => item.total_houses), 0),
+            executed_houses: Math.max(...group!.services.map((item) => item.executed_houses), 0),
+            remaining_houses: Math.max(...group!.services.map((item) => item.remaining_houses), 0),
+            completion_percent: group!.services.length
+              ? group!.services.reduce((sum, item) => sum + item.completion_percent, 0) / group!.services.length
+              : 0,
+          }
+        : sortedItem.item.svc;
+      const stage = isWorkGroup ? null : sortedItem.item.stage;
+      const capacity = isWorkGroup ? group!.capacity : sortedItem.item.capacity;
       const serviceKey = getServiceKey(svc.macro_id, svc.scope_id);
-      const id = getLegacyServiceId(svc.macro_id, svc.scope_id);
+      const id = isWorkGroup ? `work_group_${group!.groupId}` : getLegacyServiceId(svc.macro_id, svc.scope_id);
       const prod = prodMap.get(serviceKey);
       const stageProductivity = Number(stage?.planned_productivity) || 0;
-      const hasProjectProductivitySource = prod?.source === 'project';
-      const hasProjectProductivity = hasProjectProductivitySource && prod.base_productivity > 0;
-      const hasLegacyProductivity = !hasProjectProductivitySource && stageProductivity > 0;
-      const hasDefaultProductivity = !hasProjectProductivitySource && !!prod && prod.base_productivity > 0;
+      const capacityTeams = Math.max(Number(capacity?.teamCount) || 0, 0);
+      const capacityDailyPerTeam = capacity?.dailyCapacity && capacityTeams > 0
+        ? capacity.dailyCapacity / capacityTeams
+        : null;
+      const hasCapacityModelProductivity = Boolean(capacity?.dailyCapacity && capacity.dailyCapacity > 0);
+      const hasProjectProductivitySource = prod?.source === 'project' || capacity?.capacitySource === 'service_productivity' || capacity?.capacitySource === 'work_group';
+      const hasProjectProductivity = (prod?.source === 'project' && prod.base_productivity > 0) || hasCapacityModelProductivity;
+      const hasLegacyProductivity = !hasProjectProductivity && stageProductivity > 0;
+      const hasDefaultProductivity = !hasProjectProductivity && !!prod && prod.base_productivity > 0;
       const hasProductivity = hasProjectProductivity || hasLegacyProductivity || hasDefaultProductivity;
       const productivity = hasProjectProductivitySource
-        ? prod.base_productivity || 1
+        ? capacityDailyPerTeam || prod?.base_productivity || 1
         : stageProductivity || prod?.base_productivity || 1;
       const productivitySource = hasProjectProductivitySource
-        ? prod.source
+        ? 'project'
         : stageProductivity > 0
           ? 'manual'
           : prod?.source || 'missing';
       const productivityType = prod?.productivity_type || 'casa_por_dia';
       const teams = hasProjectProductivitySource
-        ? prod.default_team_count || 1
+        ? capacityTeams || prod?.default_team_count || 1
         : stage?.planned_teams || prod?.default_team_count || 1;
       const dependsOn = stage?.depends_on || null;
-      const sequenceOrder = stage?.sequence_order ?? result.length;
+      const sequenceOrder = stage?.sequence_order ?? sortedItem.order;
 
       // Calculate suggested duration from productivity without persisting dates.
       const remaining = svc.remaining_houses;
@@ -354,7 +435,7 @@ export function useStrategicGanttData(projectId: string | undefined) {
       const capacityStatus = getCapacityStatus(durationDays, suggestedDurationDays);
 
       // Determine start date based on predecessor
-      let plannedStart = nextStart;
+      let plannedStart = startOfDay(parseISO(startDateStr));
       if (dependsOn) {
         const depSchedule = scheduleMap.get(dependsOn);
         if (depSchedule) {
@@ -365,13 +446,17 @@ export function useStrategicGanttData(projectId: string | undefined) {
       const plannedEnd = addDays(plannedStart, durationDays - 1);
       scheduleMap.set(stage?.id || id, { start: plannedStart, end: plannedEnd });
 
-      // Only advance nextStart if no explicit predecessor (sequential by default)
-      if (!dependsOn) {
-        nextStart = addDays(plannedEnd, 1);
-      }
-
       result.push({
         id,
+        package_type: isWorkGroup ? 'work_group' : 'service',
+        group_id: group?.groupId ?? null,
+        internal_services: group?.services.map((item) => ({
+          id: getLegacyServiceId(item.macro_id, item.scope_id),
+          macro_id: item.macro_id,
+          scope_id: item.scope_id,
+          macro_name: item.macro_name,
+          scope_name: item.scope_name,
+        })),
         macro_id: svc.macro_id,
         scope_id: svc.scope_id,
         macro_name: svc.macro_name,
@@ -392,6 +477,12 @@ export function useStrategicGanttData(projectId: string | undefined) {
         suggested_duration_days: suggestedDurationDays,
         duration_delta_days: durationDeltaDays,
         capacity_status: capacityStatus,
+        schedule_source: hasProjectProductivity
+          ? 'official_productivity'
+          : hasLegacyProductivity
+            ? 'legacy_fallback'
+            : 'missing_productivity',
+        has_explicit_predecessor: Boolean(dependsOn),
         planned_start: plannedStart,
         planned_end: plannedEnd,
         depends_on: dependsOn,
@@ -402,6 +493,17 @@ export function useStrategicGanttData(projectId: string | undefined) {
 
     return result;
   };
+
+  useEffect(() => {
+    if (!projectStartDate) return;
+    setGanttServices(buildGanttServices(
+      services,
+      productivities,
+      stages,
+      projectStartDate,
+      capacityModel.serviceCapacityMap,
+    ));
+  }, [capacityModel.serviceCapacityMap, productivities, projectStartDate, services, stages]);
 
   // Update productivity for a service
   const updateServiceProductivity = useCallback(async (
@@ -461,10 +563,10 @@ export function useStrategicGanttData(projectId: string | undefined) {
     setProductivities(updatedProds);
 
     // Rebuild gantt
-    const gantt = buildGanttServices(services, updatedProds, stages, projectStartDate);
+    const gantt = buildGanttServices(services, updatedProds, stages, projectStartDate, capacityModel.serviceCapacityMap);
     setGanttServices(gantt);
     toast.success('Produtividade atualizada');
-  }, [company?.id, productivities, stages, services, projectStartDate]);
+  }, [canEdit, capacityModel.serviceCapacityMap, company?.id, productivities, stages, services, projectStartDate]);
 
   // Update predecessor
   const updatePredecessor = useCallback(async (
@@ -487,7 +589,7 @@ export function useStrategicGanttData(projectId: string | undefined) {
     // Rebuild
     await loadData();
     toast.success('Predecessora atualizada');
-  }, [projectId, ganttServices, loadData]);
+  }, [canEdit, projectId, ganttServices, loadData]);
 
   // Update sequence order
   const updateSequenceOrder = useCallback(async (
@@ -504,7 +606,7 @@ export function useStrategicGanttData(projectId: string | undefined) {
       .eq('id', service.stage_id);
 
     await loadData();
-  }, [ganttServices, loadData]);
+  }, [canEdit, ganttServices, loadData]);
 
   // Projected end date
   const projectedEndDate = useMemo(() => {

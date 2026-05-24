@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useCallback, useState, useMemo, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   format,
@@ -124,7 +124,7 @@ const CAPACITY_CONFIG: Record<GanttService['capacity_status'], { label: string; 
 };
 
 const PRODUCTIVITY_SOURCE_LABEL: Record<GanttService['productivity_source'], string> = {
-  project: 'Especifica da obra',
+  project: 'Produtividade e Equipes',
   default: 'Padrao',
   manual: 'Manual',
   missing: 'Sem produtividade',
@@ -188,14 +188,14 @@ export function StrategicGanttChart({
     return { exact, byName };
   }, [capacityModel.planningServiceSettings]);
 
-  const getIncludeInGantt = (svc: GanttService) => {
+  const getIncludeInGantt = useCallback((svc: GanttService) => {
     if (capacityModel.loading) return true;
     const exact = ganttSettingsByKey.exact.get(getGanttSettingKey(svc.macro_id, svc.scope_id, svc.scope_name));
     if (exact !== undefined) return exact;
     const byName = ganttSettingsByKey.byName.get(getGanttSettingKey(null, null, svc.scope_name));
     if (byName !== undefined) return byName;
     return true;
-  };
+  }, [capacityModel.loading, ganttSettingsByKey]);
 
   const hiddenServiceIds = useMemo(() => {
     const hidden = new Set<string>();
@@ -203,7 +203,7 @@ export function StrategicGanttChart({
       if (!getIncludeInGantt(svc)) hidden.add(svc.id);
     });
     return hidden;
-  }, [capacityModel.loading, ganttSettingsByKey, services]);
+  }, [getIncludeInGantt, services]);
 
   const servicesForGantt = useMemo(
     () => (showHiddenServices ? services : services.filter((svc) => !hiddenServiceIds.has(svc.id))),
@@ -364,6 +364,10 @@ export function StrategicGanttChart({
   };
 
   const handleEditOpen = (svc: GanttService) => {
+    if (svc.package_type === 'work_group') {
+      toast.info('Esta frente é controlada em Produtividade e Equipes.');
+      return;
+    }
     setEditingService(svc);
     setEditProductivity(svc.productivity);
     setEditTeams(svc.teams);
@@ -371,6 +375,11 @@ export function StrategicGanttChart({
 
   const handleEditSave = () => {
     if (!editingService) return;
+    if (editingService.package_type === 'work_group') {
+      toast.info('Configure frentes compartilhadas em Produtividade e Equipes.');
+      setEditingService(null);
+      return;
+    }
     onUpdateProductivity(
       editingService.macro_id,
       editingService.scope_id,
@@ -681,6 +690,11 @@ export function StrategicGanttChart({
                           <span className="text-xs font-semibold truncate block">
                             {svc.scope_name}
                           </span>
+                          {svc.package_type === 'work_group' && (
+                            <Badge variant="secondary" className="h-5 text-[10px]">
+                              Frente
+                            </Badge>
+                          )}
                           <Badge variant="outline" className="h-5 text-[10px]">
                             {statusConfig.label}
                           </Badge>
@@ -696,6 +710,12 @@ export function StrategicGanttChart({
                         <div className="truncate text-[11px] text-muted-foreground">
                           {svc.macro_name}
                         </div>
+                        {svc.package_type === 'work_group' && Boolean(svc.internal_services?.length) && (
+                          <div className="mt-0.5 text-[10px] text-muted-foreground">
+                            {svc.internal_services?.length} serviços internos: {svc.internal_services?.slice(0, 3).map((item) => item.scope_name).join(', ')}
+                            {(svc.internal_services?.length || 0) > 3 ? ` +${(svc.internal_services?.length || 0) - 3}` : ''}
+                          </div>
+                        )}
                         <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground">
                           <span>{svc.executed_houses}/{svc.total_houses} casas</span>
                           <span>{svc.duration_days} dias</span>

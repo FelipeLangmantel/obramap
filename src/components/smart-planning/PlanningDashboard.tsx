@@ -59,6 +59,18 @@ export function PlanningDashboard({
     };
   }, [projectedEndDate, expectedEndDate]);
 
+  const projectionSourceLabel = useMemo(() => {
+    if (!ganttServices.length) return 'Sem pacotes';
+    if (ganttServices.some((service) => service.has_explicit_predecessor)) return 'Fonte: predecessoras definidas';
+    if (ganttServices.some((service) => service.schedule_source === 'official_productivity')) {
+      return 'Fonte: estimativa por produtividade oficial';
+    }
+    if (ganttServices.some((service) => service.schedule_source === 'legacy_fallback')) {
+      return 'Fonte: fallback legado';
+    }
+    return 'Sem macrofluxo definido';
+  }, [ganttServices]);
+
   // Service progress data for chart
   const serviceProgressData = useMemo(() => {
     return ganttServices.map((s) => ({
@@ -208,6 +220,7 @@ export function PlanningDashboard({
                 )
               ) : null}
             </div>
+            <p className="mt-1 text-[11px] text-muted-foreground">{projectionSourceLabel}</p>
           </CardContent>
         </Card>
 

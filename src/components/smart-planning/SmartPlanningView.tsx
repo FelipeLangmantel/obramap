@@ -190,7 +190,6 @@ export function SmartPlanningView({ onOpenProductivity }: SmartPlanningViewProps
   const [packageViewMode, setPackageViewMode] = useState<'consolidated' | 'period'>('consolidated');
 
   const {
-    projectedEndDate,
     overallProgress
   } = usePlanningCalculations({
     stages,
@@ -520,7 +519,7 @@ export function SmartPlanningView({ onOpenProductivity }: SmartPlanningViewProps
             teams={teams}
             ganttServices={strategicGanttServices}
             overallProgress={overallProgress}
-            projectedEndDate={strategicProjectedEndDate || projectedEndDate}
+            projectedEndDate={strategicProjectedEndDate}
             expectedEndDate={currentProject.expectedEndDate}
             totalUnits={currentProject.totalHouses}
             unresolvedAlerts={unresolvedAlerts}
