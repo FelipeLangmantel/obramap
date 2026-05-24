@@ -52,12 +52,14 @@ import {
   Link2,
   Home,
   CalendarDays,
+  Plus,
   ZoomIn,
   ZoomOut,
   MoveHorizontal,
 } from 'lucide-react';
 import type { GanttService } from './hooks/useStrategicGanttData';
 import { usePlanningCapacityModel } from './hooks/usePlanningCapacityModel';
+import { MacroflowDialog } from './MacroflowDialog';
 
 interface StrategicGanttChartProps {
   projectId?: string;
@@ -71,6 +73,7 @@ interface StrategicGanttChartProps {
     teams: number
   ) => void;
   onUpdatePredecessor: (serviceId: string, predecessorStageId: string | null) => void;
+  onMacroflowChanged?: () => Promise<void> | void;
 }
 
 const getServiceStatus = (svc: GanttService) => {
@@ -145,6 +148,7 @@ export function StrategicGanttChart({
   projectedEndDate,
   onUpdateProductivity,
   onUpdatePredecessor,
+  onMacroflowChanged,
 }: StrategicGanttChartProps) {
   const { canEdit } = useAuth();
   const capacityModel = usePlanningCapacityModel(projectId);
@@ -171,6 +175,7 @@ export function StrategicGanttChart({
   const [capacityFilter, setCapacityFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [showHiddenServices, setShowHiddenServices] = useState(false);
+  const [showMacroflowDialog, setShowMacroflowDialog] = useState(false);
 
   const zoom = zoomByScale[ganttScale];
   const dayWidth = ganttScale === 'day' ? zoom : ganttScale === 'week' ? zoom / 7 : zoom / 30;
@@ -416,6 +421,16 @@ export function StrategicGanttChart({
             </p>
           </div>
           <div className="flex gap-1.5 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-2 rounded-full bg-white dark:bg-card"
+              onClick={() => setShowMacroflowDialog(true)}
+              disabled={!canEdit}
+            >
+              <Plus className="h-4 w-4" />
+              Criar Macrofluxo
+            </Button>
             {Object.entries(STATUS_CONFIG).map(([key, config]) => (
               <div
                 key={key}
@@ -1025,6 +1040,15 @@ export function StrategicGanttChart({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <MacroflowDialog
+        open={showMacroflowDialog}
+        onOpenChange={setShowMacroflowDialog}
+        projectId={projectId}
+        packages={services}
+        canEdit={canEdit}
+        onChanged={onMacroflowChanged}
+      />
     </>
   );
 }

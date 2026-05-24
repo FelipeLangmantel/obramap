@@ -174,6 +174,7 @@ export function SmartPlanningView({ onOpenProductivity }: SmartPlanningViewProps
     projectStartDate: strategicStartDate,
     updateServiceProductivity,
     updatePredecessor,
+    loadData: reloadStrategicGanttData,
   } = useStrategicGanttData(currentProject?.id);
 
   // Adapter virtual da arquitetura definitiva. Nesta fase fica em modo diagnostico
@@ -534,6 +535,7 @@ export function SmartPlanningView({ onOpenProductivity }: SmartPlanningViewProps
             projectedEndDate={strategicProjectedEndDate}
             onUpdateProductivity={updateServiceProductivity}
             onUpdatePredecessor={updatePredecessor}
+            onMacroflowChanged={reloadStrategicGanttData}
           />
         </TabsContent>
 
@@ -543,6 +545,7 @@ export function SmartPlanningView({ onOpenProductivity }: SmartPlanningViewProps
             ganttServices={strategicGanttServices}
             projectStartDate={strategicStartDate}
             onUpdatePredecessor={updatePredecessor}
+            onMacroflowChanged={reloadStrategicGanttData}
           />
         </TabsContent>
 

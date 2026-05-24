@@ -61,6 +61,7 @@ export function PlanningDashboard({
 
   const projectionSourceLabel = useMemo(() => {
     if (!ganttServices.length) return 'Sem pacotes';
+    if (ganttServices.some((service) => service.schedule_source === 'macroflow')) return 'Fonte: Macrofluxo';
     if (ganttServices.some((service) => service.has_explicit_predecessor)) return 'Fonte: predecessoras definidas';
     if (ganttServices.some((service) => service.schedule_source === 'official_productivity')) {
       return 'Fonte: estimativa por produtividade oficial';

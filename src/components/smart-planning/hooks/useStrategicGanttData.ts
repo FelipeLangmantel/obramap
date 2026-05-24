@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { addDays, startOfDay, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 import { ServiceCapacityEntry, usePlanningCapacityModel } from './usePlanningCapacityModel';
+import { PlanningMacroflowDependency, hasMacroflowCycle } from './usePlanningMacroflow';
 
 export interface StrategicService {
   macro_id: string;
@@ -63,7 +64,7 @@ export interface GanttService {
   suggested_duration_days: number | null;
   duration_delta_days: number | null;
   capacity_status: CapacityStatus;
-  schedule_source?: 'official_productivity' | 'legacy_fallback' | 'missing_productivity';
+  schedule_source?: 'macroflow' | 'official_productivity' | 'legacy_fallback' | 'missing_productivity';
   has_explicit_predecessor?: boolean;
   planned_start: Date;
   planned_end: Date;
@@ -110,6 +111,7 @@ export function useStrategicGanttData(projectId: string | undefined) {
   const [productivities, setProductivities] = useState<ServiceProductivityConfig[]>([]);
   const [ganttServices, setGanttServices] = useState<GanttService[]>([]);
   const [stages, setStages] = useState<any[]>([]);
+  const [macroflowDependencies, setMacroflowDependencies] = useState<PlanningMacroflowDependency[]>([]);
   const [loading, setLoading] = useState(true);
   const [projectStartDate, setProjectStartDate] = useState<string>('');
   const [totalHouses, setTotalHouses] = useState(0);
@@ -246,15 +248,53 @@ export function useStrategicGanttData(projectId: string | undefined) {
       // Planning stages
       setStages(stagesRes.data || []);
 
+      let loadedMacroflowDependencies: PlanningMacroflowDependency[] = [];
+      const { data: macroflowRows, error: macroflowError } = await supabase
+        .from('planning_macroflows' as any)
+        .select('*')
+        .eq('project_id', projectId)
+        .eq('company_id', company.id)
+        .eq('active', true)
+        .order('created_at', { ascending: true })
+        .limit(1);
+
+      if (!macroflowError && macroflowRows?.[0]) {
+        const { data: dependencyRows, error: dependencyError } = await supabase
+          .from('planning_macroflow_dependencies' as any)
+          .select('*')
+          .eq('macroflow_id', macroflowRows[0].id)
+          .order('created_at', { ascending: true });
+
+        if (!dependencyError) {
+          loadedMacroflowDependencies = (dependencyRows ?? []).map((row: any) => ({
+            id: String(row.id),
+            macroflowId: String(row.macroflow_id),
+            projectId: String(row.project_id),
+            companyId: String(row.company_id),
+            predecessorType: row.predecessor_type === 'work_group' ? 'work_group' : 'service',
+            predecessorKey: String(row.predecessor_key),
+            predecessorLabel: String(row.predecessor_label ?? 'Pacote sem nome'),
+            successorType: row.successor_type === 'work_group' ? 'work_group' : 'service',
+            successorKey: String(row.successor_key),
+            successorLabel: String(row.successor_label ?? 'Pacote sem nome'),
+            relationType: row.relation_type === 'SS' ? 'SS' : 'FS',
+            lagDays: Number(row.lag_days) || 0,
+          }));
+        }
+      }
+      setMacroflowDependencies(loadedMacroflowDependencies);
+
       // Build inicial. Um efeito abaixo reconcilia com usePlanningCapacityModel
       // para agrupar frentes compartilhadas quando o adapter terminar de carregar.
-      const gantt = buildGanttServices(uniqueServices, prods, stagesRes.data || [], startDate, []);
+      const gantt = buildGanttServices(uniqueServices, prods, stagesRes.data || [], startDate, [], loadedMacroflowDependencies);
       setGanttServices(gantt);
     } catch (error) {
       console.error('Error loading strategic gantt data:', error);
     } finally {
       setLoading(false);
     }
+  // buildGanttServices is a local pure builder; loadData is intentionally tied to project/company changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, company?.id]);
 
   useEffect(() => {
@@ -280,7 +320,8 @@ export function useStrategicGanttData(projectId: string | undefined) {
     prods: ServiceProductivityConfig[],
     stgs: any[],
     startDateStr: string,
-    capacityEntries: ServiceCapacityEntry[]
+    capacityEntries: ServiceCapacityEntry[],
+    dependencies: PlanningMacroflowDependency[]
   ): GanttService[] => {
     const prodMap = new Map<string, ServiceProductivityConfig>();
     prods.forEach((p) => prodMap.set(getServiceKey(p.macro_id, p.scope_id), p));
@@ -491,7 +532,86 @@ export function useStrategicGanttData(projectId: string | undefined) {
       });
     }
 
-    return result;
+    return applyMacroflowSchedule(result, dependencies, startDateStr);
+  };
+
+  const applyMacroflowSchedule = (
+    items: GanttService[],
+    dependencies: PlanningMacroflowDependency[],
+    startDateStr: string,
+  ) => {
+    if (!dependencies.length) return items;
+
+    const projectStart = startOfDay(parseISO(startDateStr));
+    const packageKeys = items.map((item) => item.id);
+    const validDependencies = dependencies.filter((dependency) =>
+      packageKeys.includes(dependency.predecessorKey) && packageKeys.includes(dependency.successorKey)
+    );
+
+    if (!validDependencies.length || hasMacroflowCycle(packageKeys, validDependencies)) {
+      return items;
+    }
+
+    const byId = new Map(items.map((item) => [item.id, { ...item }]));
+    const indegree = new Map<string, number>();
+    const outgoing = new Map<string, PlanningMacroflowDependency[]>();
+    items.forEach((item) => indegree.set(item.id, 0));
+
+    validDependencies.forEach((dependency) => {
+      outgoing.set(dependency.predecessorKey, [...(outgoing.get(dependency.predecessorKey) ?? []), dependency]);
+      indegree.set(dependency.successorKey, (indegree.get(dependency.successorKey) ?? 0) + 1);
+    });
+
+    const queue = items
+      .filter((item) => (indegree.get(item.id) ?? 0) === 0)
+      .sort((a, b) => a.sequence_order - b.sequence_order)
+      .map((item) => item.id);
+    const earliestStart = new Map<string, Date>();
+    items.forEach((item) => earliestStart.set(item.id, projectStart));
+    const ordered: string[] = [];
+
+    while (queue.length) {
+      const currentId = queue.shift()!;
+      const current = byId.get(currentId);
+      if (!current) continue;
+
+      const currentStart = earliestStart.get(currentId) ?? projectStart;
+      current.planned_start = currentStart;
+      current.planned_end = addDays(currentStart, current.duration_days - 1);
+      current.schedule_source = 'macroflow';
+      byId.set(currentId, current);
+      ordered.push(currentId);
+
+      (outgoing.get(currentId) ?? []).forEach((dependency) => {
+        const successor = byId.get(dependency.successorKey);
+        if (!successor) return;
+        const lag = Number(dependency.lagDays) || 0;
+        const candidateStart = dependency.relationType === 'SS'
+          ? addDays(current.planned_start, lag)
+          : addDays(current.planned_end, lag + 1);
+        const previousStart = earliestStart.get(successor.id) ?? projectStart;
+        if (candidateStart.getTime() > previousStart.getTime()) {
+          earliestStart.set(successor.id, candidateStart);
+        }
+        successor.depends_on = dependency.predecessorKey;
+        successor.has_explicit_predecessor = true;
+        byId.set(successor.id, successor);
+        const nextCount = (indegree.get(successor.id) ?? 0) - 1;
+        indegree.set(successor.id, nextCount);
+        if (nextCount === 0) {
+          queue.push(successor.id);
+          queue.sort((a, b) => (byId.get(a)?.sequence_order ?? 0) - (byId.get(b)?.sequence_order ?? 0));
+        }
+      });
+    }
+
+    const scheduled = Array.from(byId.values()).sort((a, b) => {
+      const startDelta = a.planned_start.getTime() - b.planned_start.getTime();
+      if (startDelta !== 0) return startDelta;
+      return a.sequence_order - b.sequence_order;
+    });
+
+    return scheduled.map((item, index) => ({ ...item, sequence_order: ordered.includes(item.id) ? index : item.sequence_order }));
   };
 
   useEffect(() => {
@@ -502,8 +622,11 @@ export function useStrategicGanttData(projectId: string | undefined) {
       stages,
       projectStartDate,
       capacityModel.serviceCapacityMap,
+      macroflowDependencies,
     ));
-  }, [capacityModel.serviceCapacityMap, productivities, projectStartDate, services, stages]);
+  // buildGanttServices is pure and reads only the dependencies passed above.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [capacityModel.serviceCapacityMap, macroflowDependencies, productivities, projectStartDate, services, stages]);
 
   // Update productivity for a service
   const updateServiceProductivity = useCallback(async (
@@ -563,10 +686,12 @@ export function useStrategicGanttData(projectId: string | undefined) {
     setProductivities(updatedProds);
 
     // Rebuild gantt
-    const gantt = buildGanttServices(services, updatedProds, stages, projectStartDate, capacityModel.serviceCapacityMap);
+    const gantt = buildGanttServices(services, updatedProds, stages, projectStartDate, capacityModel.serviceCapacityMap, macroflowDependencies);
     setGanttServices(gantt);
     toast.success('Produtividade atualizada');
-  }, [canEdit, capacityModel.serviceCapacityMap, company?.id, productivities, stages, services, projectStartDate]);
+  // buildGanttServices is pure and reads only the dependencies passed above.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canEdit, capacityModel.serviceCapacityMap, company?.id, macroflowDependencies, productivities, stages, services, projectStartDate]);
 
   // Update predecessor
   const updatePredecessor = useCallback(async (

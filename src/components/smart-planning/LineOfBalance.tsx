@@ -33,12 +33,14 @@ import { Switch } from '@/components/ui/switch';
 
 import { GanttService } from './hooks/useStrategicGanttData';
 import { usePlanningCapacityModel } from './hooks/usePlanningCapacityModel';
+import { MacroflowDialog } from './MacroflowDialog';
 
 interface LineOfBalanceProps {
   projectId?: string;
   ganttServices: GanttService[];
   projectStartDate: string;
   onUpdatePredecessor?: (serviceId: string, predecessorStageId: string | null) => Promise<void>;
+  onMacroflowChanged?: () => Promise<void> | void;
 }
 
 type FlowScale = 'day' | 'week' | 'month';
@@ -269,11 +271,12 @@ const getDaysFromPixels = (pixels: number, columns: TimelineColumn[], scale: Flo
   return Math.round(pixels / width);
 };
 
-export function LineOfBalance({ projectId, ganttServices, projectStartDate, onUpdatePredecessor }: LineOfBalanceProps) {
+export function LineOfBalance({ projectId, ganttServices, projectStartDate, onUpdatePredecessor, onMacroflowChanged }: LineOfBalanceProps) {
   const { canEdit } = useAuth();
   const { currentProject } = useConstruction();
   const capacityModel = usePlanningCapacityModel(projectId);
   const [showSequenceDialog, setShowSequenceDialog] = useState(false);
+  const [showMacroflowDialog, setShowMacroflowDialog] = useState(false);
   const [selectedMacroflowId, setSelectedMacroflowId] = useState('housing');
   const [scale, setScale] = useState<FlowScale>('week');
   const [zoom, setZoom] = useState(1);
@@ -332,6 +335,7 @@ export function LineOfBalance({ projectId, ganttServices, projectStartDate, onUp
   const macroflows = useMemo(() => getMacroflowPresets(servicesForLine), [servicesForLine]);
   const selectedMacroflow = macroflows.find((flow) => flow.id === selectedMacroflowId) || macroflows[0];
   const flowServices = selectedMacroflow?.services || servicesForLine;
+  const hasPersistentMacroflow = servicesForLine.some((svc) => svc.schedule_source === 'macroflow');
 
   const maxUnits = useMemo(() => {
     const fromServices = ganttServices.length ? Math.max(...ganttServices.map((s) => s.total_houses)) : 0;
@@ -639,7 +643,9 @@ export function LineOfBalance({ projectId, ganttServices, projectStartDate, onUp
             )}
           </div>
           <p className="mt-0.5 text-xs text-slate-500 dark:text-muted-foreground">
-            Planejamento por fluxo, unidades e servicos. Alteracoes nesta fase ficam em simulacao local.
+            {hasPersistentMacroflow
+              ? 'Linha de Balanço ordenada pelo macrofluxo persistente. Alterações de simulação continuam locais.'
+              : 'Linha de Balanço sem macrofluxo definido. Configure predecessoras para ordenar os pacotes.'}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -659,7 +665,7 @@ export function LineOfBalance({ projectId, ganttServices, projectStartDate, onUp
             variant="outline"
             size="sm"
             className="h-9 gap-2"
-            onClick={() => toast.info('Macrofluxos persistentes exigem estrutura de dados futura. Nesta fase use os presets locais.')}
+            onClick={() => setShowMacroflowDialog(true)}
             disabled={!canEdit}
           >
             <Plus className="h-4 w-4" />
@@ -669,7 +675,7 @@ export function LineOfBalance({ projectId, ganttServices, projectStartDate, onUp
             variant="outline"
             size="sm"
             className="h-9 gap-2"
-            onClick={() => toast.info('Edicao persistente de macrofluxo ainda nao foi gravada nesta fase.')}
+            onClick={() => setShowMacroflowDialog(true)}
             disabled={!canEdit}
           >
             <Pencil className="h-4 w-4" />
@@ -990,6 +996,15 @@ export function LineOfBalance({ projectId, ganttServices, projectStartDate, onUp
           </div>
         </CardContent>
       </Card>
+
+      <MacroflowDialog
+        open={showMacroflowDialog}
+        onOpenChange={setShowMacroflowDialog}
+        projectId={projectId}
+        packages={servicesForLine}
+        canEdit={canEdit}
+        onChanged={onMacroflowChanged}
+      />
 
       <SequenceDialog
         open={showSequenceDialog}
