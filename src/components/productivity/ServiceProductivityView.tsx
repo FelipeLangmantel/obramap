@@ -904,6 +904,76 @@ export function ServiceProductivityView() {
     reviewPlanning: recommendedActions.filter((action) => action.actionType === 'review_planning').length,
   }), [recommendedActions]);
 
+  const executiveSummary = useMemo(() => {
+    const priorityRank: Record<RecommendedProductivityPriority, number> = { Alta: 0, Media: 1, Baixa: 2 };
+    const actionRank: Record<RecommendedProductivityActionType, number> = {
+      increase_team: 0,
+      extend_deadline: 1,
+      redistribute_targets: 2,
+      register_productivity: 3,
+      collect_real_data: 4,
+      review_registered_productivity: 5,
+      review_planning: 6,
+      keep_team: 7,
+    };
+    const statusRank: Record<RequiredProductivityStatus, number> = {
+      below_required: 0,
+      missing_registered: 1,
+      missing_real: 2,
+      attention: 3,
+      missing_planning: 4,
+      ok: 5,
+    };
+
+    const topActions = [...recommendedActions]
+      .sort((a, b) =>
+        priorityRank[a.priority] - priorityRank[b.priority]
+        || actionRank[a.actionType] - actionRank[b.actionType]
+        || statusRank[a.status] - statusRank[b.status]
+        || a.service.scopeName.localeCompare(b.service.scopeName),
+      )
+      .slice(0, 5);
+
+    const additionalByGroup = new Map<string, { teams: number; people: number }>();
+    capacityModel.overloadDiagnostics.forEach((diagnostic) => {
+      if (diagnostic.status !== 'overloaded') return;
+      const group = capacityModel.workGroups.find((item) =>
+        item.id === diagnostic.groupId || item.name === diagnostic.groupName,
+      );
+      const currentTeams = Math.max(Number(group?.simultaneousTeamCount) || 0, 1);
+      const peoplePerTeam = Math.max(Number(group?.professionalCount) || 0, 0) + Math.max(Number(group?.auxiliaryCount) || 0, 0);
+      const availableCapacity = Number(diagnostic.availableCapacity);
+      const capacityPerTeam = Number.isFinite(availableCapacity) && availableCapacity > 0
+        ? availableCapacity / currentTeams
+        : 0;
+      const requiredTeams = capacityPerTeam > 0
+        ? Math.ceil(Math.max(diagnostic.plannedQuantity, 0) / capacityPerTeam)
+        : currentTeams;
+      const additionalTeams = Math.max(requiredTeams - currentTeams, 0);
+      const key = diagnostic.groupId ?? diagnostic.groupName;
+      const previous = additionalByGroup.get(key);
+      const people = additionalTeams * peoplePerTeam;
+      if (!previous || additionalTeams > previous.teams) {
+        additionalByGroup.set(key, { teams: additionalTeams, people });
+      }
+    });
+
+    const additional = Array.from(additionalByGroup.values()).reduce(
+      (sum, item) => ({
+        teams: sum.teams + item.teams,
+        people: sum.people + item.people,
+      }),
+      { teams: 0, people: 0 },
+    );
+
+    return {
+      topActions,
+      overloadedFronts: overloadedFronts.size,
+      additionalTeams: additional.teams,
+      additionalPeople: additional.people,
+    };
+  }, [capacityModel.overloadDiagnostics, capacityModel.workGroups, overloadedFronts.size, recommendedActions]);
+
   if (!currentProject) {
     return (
       <div className="flex items-center justify-center h-64 text-muted-foreground">
@@ -924,6 +994,93 @@ export function ServiceProductivityView() {
           Defina produtividade e dimensionamento de equipes por serviço
         </p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <ClipboardList className="h-5 w-5 text-primary" />
+                Resumo executivo de produtividade
+              </CardTitle>
+              <CardDescription>
+                Leitura rapida das produtividades, frentes e acoes que precisam de decisao operacional.
+              </CardDescription>
+            </div>
+            <Badge variant="outline" className="w-fit gap-1">
+              <Info className="h-3 w-3" />
+              Diagnostico
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+            {[
+              ['Servicos analisados', requiredProductivitySummary.analyzed],
+              ['Servicos criticos', recommendedActionSummary.high],
+              ['Sem produtividade', requiredProductivitySummary.missingRegistered],
+              ['Sem dados reais', requiredProductivitySummary.missingReal],
+              ['Frentes sobrecarregadas', executiveSummary.overloadedFronts],
+              ['Equipes adicionais', executiveSummary.additionalTeams],
+            ].map(([label, value]) => (
+              <div key={String(label)} className="rounded-lg border bg-muted/30 p-3">
+                <p className="text-xs text-muted-foreground">{label}</p>
+                <p className="mt-1 text-xl font-semibold">{value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+            <div className="rounded-lg border p-4">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div>
+                  <h3 className="font-semibold">Prioridades de acao</h3>
+                  <p className="text-sm text-muted-foreground">As 5 recomendacoes mais urgentes para revisar agora.</p>
+                </div>
+                {executiveSummary.additionalPeople > 0 && (
+                  <Badge variant="secondary">{executiveSummary.additionalPeople} pessoa(s) adicionais estimadas</Badge>
+                )}
+              </div>
+              <div className="space-y-3">
+                {executiveSummary.topActions.map((action) => (
+                  <div key={action.id} className="rounded-md border bg-background p-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <div className="font-medium">{action.service.scopeName || 'Servico sem nome'}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {action.frontName ? `Frente: ${action.frontName}` : 'Sem frente vinculada'}
+                        </div>
+                      </div>
+                      <Badge variant={priorityVariant(action.priority)}>{action.priority}</Badge>
+                    </div>
+                    <div className="mt-2 text-sm font-medium">{action.actionLabel}</div>
+                    <div className="text-xs text-muted-foreground">{action.justification}</div>
+                  </div>
+                ))}
+                {executiveSummary.topActions.length === 0 && (
+                  <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                    Nenhuma acao recomendada disponivel. Cadastre planejamento e produtividade para gerar diagnosticos.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-lg border p-4">
+              <h3 className="font-semibold">Proximos passos sugeridos</h3>
+              <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+                <li>Cadastrar produtividade dos servicos sem parametro.</li>
+                <li>Revisar frentes com sobrecarga.</li>
+                <li>Comparar produtividade real com produtividade necessaria.</li>
+                <li>Redistribuir metas semanais quando houver sobrecarga.</li>
+                <li>Usar o simulador de capacidade antes de alterar equipes.</li>
+              </ul>
+              <div className="mt-4 rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+                Este resumo e diagnostico. Nao altera produtividade, equipes, metas, producao, diario, medicao ou planejamento oficial.
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Tabs defaultValue="produtividade" className="space-y-4">
         <TabsList>
