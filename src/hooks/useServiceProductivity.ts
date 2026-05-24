@@ -44,6 +44,23 @@ export interface ServiceProductivityInput {
   team_composition?: TeamMemberRow[];
 }
 
+const normalizeProfessionName = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+
+const aggregateCounts = (rows: TeamMemberRow[] | undefined) => {
+  const prof = (rows || [])
+    .filter((r) => r.role_type === 'professional')
+    .reduce((s, r) => s + (Number(r.quantity) || 0), 0);
+  const help = (rows || [])
+    .filter((r) => r.role_type === 'helper')
+    .reduce((s, r) => s + (Number(r.quantity) || 0), 0);
+  return { prof, help };
+};
+
 export function useServiceProductivity(projectId: string | undefined) {
   const [productivities, setProductivities] = useState<ServiceProductivity[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -120,15 +137,44 @@ export function useServiceProductivity(projectId: string | undefined) {
     }
   };
 
-  const aggregateCounts = (rows: TeamMemberRow[] | undefined) => {
-    const prof = (rows || [])
-      .filter((r) => r.role_type === 'professional')
-      .reduce((s, r) => s + (Number(r.quantity) || 0), 0);
-    const help = (rows || [])
-      .filter((r) => r.role_type === 'helper')
-      .reduce((s, r) => s + (Number(r.quantity) || 0), 0);
-    return { prof, help };
-  };
+  const ensureProfessions = useCallback(async (companyId: string, rows: TeamMemberRow[] | undefined) => {
+    const candidates = (rows || [])
+      .map((row) => ({
+        name: row.role_name?.trim(),
+        worker_type: row.role_type === 'helper' ? 'helper' : 'professional',
+      }))
+      .filter((row) => row.name);
+    if (!candidates.length) return;
+
+    const { data: existing } = await (supabase as any)
+      .from('professions')
+      .select('name')
+      .eq('company_id', companyId);
+    const existingNames = new Set(((existing as any[]) || []).map((item) => normalizeProfessionName(item.name || '')));
+    const seen = new Set<string>();
+    const payload = candidates
+      .filter((row) => {
+        const normalized = normalizeProfessionName(row.name || '');
+        if (!normalized || existingNames.has(normalized) || seen.has(normalized)) return false;
+        seen.add(normalized);
+        return true;
+      })
+      .map((row) => ({
+        company_id: companyId,
+        name: row.name,
+        category: 'Outros',
+        worker_type: row.worker_type,
+        active: true,
+      }));
+
+    if (!payload.length) return;
+    const { error } = await (supabase as any)
+      .from('professions')
+      .insert(payload);
+    if (error && error.code !== '23505') {
+      console.warn('[useServiceProductivity] profissao nao cadastrada automaticamente', error);
+    }
+  }, []);
 
   const saveProductivity = useCallback(
     async (input: ServiceProductivityInput) => {
@@ -142,6 +188,8 @@ export function useServiceProductivity(projectId: string | undefined) {
           .single();
 
         if (!project) throw new Error('Projeto não encontrado');
+
+        await ensureProfessions(project.company_id, input.team_composition);
 
         const { data: existing } = await supabase
           .from('project_service_productivity' as any)
@@ -214,7 +262,7 @@ export function useServiceProductivity(projectId: string | undefined) {
         return null;
       }
     },
-    [projectId, loadProductivities]
+    [ensureProfessions, projectId, loadProductivities]
   );
 
   const deleteProductivity = useCallback(

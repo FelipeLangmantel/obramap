@@ -14,6 +14,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useTeamWorkGroups, type TeamWorkGroup } from '@/hooks/useTeamWorkGroups';
+import { useServiceProductivity } from '@/hooks/useServiceProductivity';
 import { usePlanningCapacityModel } from '@/components/smart-planning/hooks/usePlanningCapacityModel';
 import { TeamWorkGroupDialog, type ServiceRef, type TeamWorkGroupDialogValues } from './TeamWorkGroupDialog';
 import { AddServiceToGroupDialog } from './AddServiceToGroupDialog';
@@ -76,6 +77,7 @@ export function TeamWorkGroupsPanel({ projectId, allServices, suggestions = [] }
   const {
     groups,
     groupServices,
+    groupComposition,
     isLoading,
     canEdit,
     createGroup,
@@ -85,6 +87,7 @@ export function TeamWorkGroupsPanel({ projectId, allServices, suggestions = [] }
     addServiceToGroup,
     removeServiceFromGroup,
   } = useTeamWorkGroups(projectId);
+  const { productivities } = useServiceProductivity(projectId);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogInitial, setDialogInitial] = useState<Partial<TeamWorkGroupDialogValues> | undefined>(undefined);
@@ -109,6 +112,17 @@ export function TeamWorkGroupsPanel({ projectId, allServices, suggestions = [] }
     });
     return map;
   }, [groupServices, allServices]);
+
+  const compositionByGroup = useMemo(() => {
+    const map = new Map<string, typeof groupComposition>();
+    groupComposition.forEach((row) => {
+      if (!row.group_id) return;
+      const arr = map.get(row.group_id) ?? [];
+      arr.push(row);
+      map.set(row.group_id, arr);
+    });
+    return map;
+  }, [groupComposition]);
 
   const recommendedSizingRows = useMemo(() => {
     return groups.map((group) => {
@@ -212,6 +226,7 @@ export function TeamWorkGroupsPanel({ projectId, allServices, suggestions = [] }
       simultaneous_team_count: g.simultaneous_team_count ?? 1,
       professional_count: g.professional_count ?? 0,
       auxiliary_count: g.auxiliary_count ?? 0,
+      composition: compositionByGroup.get(g.id) ?? [],
       services: servicesByGroup.get(g.id) ?? [],
     });
     setDialogOpen(true);
@@ -229,6 +244,7 @@ export function TeamWorkGroupsPanel({ projectId, allServices, suggestions = [] }
         simultaneous_team_count: values.simultaneous_team_count,
         professional_count: values.professional_count,
         auxiliary_count: values.auxiliary_count,
+        composition: values.composition,
       });
     } else {
       await createGroup(
@@ -242,6 +258,7 @@ export function TeamWorkGroupsPanel({ projectId, allServices, suggestions = [] }
           simultaneous_team_count: values.simultaneous_team_count,
           professional_count: values.professional_count,
           auxiliary_count: values.auxiliary_count,
+          composition: values.composition,
         },
         values.services.map((s, idx) => ({
           macro_id: s.macroId || null,
@@ -436,6 +453,7 @@ export function TeamWorkGroupsPanel({ projectId, allServices, suggestions = [] }
         <div className="grid gap-3 lg:grid-cols-2">
           {groups.map((g) => {
             const svcs = servicesByGroup.get(g.id) ?? [];
+            const composition = compositionByGroup.get(g.id) ?? [];
             const total = (Number(g.professional_count) || 0) + (Number(g.auxiliary_count) || 0);
             return (
               <Card key={g.id} className={!g.active ? 'opacity-60' : ''}>
@@ -501,6 +519,22 @@ export function TeamWorkGroupsPanel({ projectId, allServices, suggestions = [] }
                   </div>
 
                   <div>
+                    {composition.length > 0 && (
+                      <div className="mb-3">
+                        <p className="mb-1 text-xs font-medium text-muted-foreground">Composicao da frente</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {composition.slice(0, 4).map((row) => (
+                            <Badge key={row.id ?? `${row.profession_name}-${row.role}`} variant="outline" className="font-normal">
+                              {row.profession_name}: {row.quantity} {row.role === 'professional' ? 'prof.' : 'aux.'}
+                            </Badge>
+                          ))}
+                          {composition.length > 4 && (
+                            <Badge variant="outline" className="font-normal">+{composition.length - 4}</Badge>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="mb-1 flex items-center justify-between gap-2">
                       <p className="text-xs font-medium text-muted-foreground">Servicos vinculados ({svcs.length})</p>
                       <Button
@@ -552,6 +586,7 @@ export function TeamWorkGroupsPanel({ projectId, allServices, suggestions = [] }
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
         initialValues={dialogInitial}
+        serviceProductivities={productivities}
         onSubmit={handleSubmit}
       />
 

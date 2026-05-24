@@ -109,6 +109,7 @@ export interface PlanningCapacityModelResult {
 interface CapacityRawState {
   groups: any[];
   groupServices: any[];
+  groupComposition: any[];
   settings: any[];
   productivities: any[];
   teamComposition: any[];
@@ -281,6 +282,7 @@ export function usePlanningCapacityModel(projectId: string | undefined): Plannin
   const [raw, setRaw] = useState<CapacityRawState>({
     groups: [],
     groupServices: [],
+    groupComposition: [],
     settings: [],
     productivities: [],
     teamComposition: [],
@@ -301,6 +303,7 @@ export function usePlanningCapacityModel(projectId: string | undefined): Plannin
         setRaw({
           groups: [],
           groupServices: [],
+          groupComposition: [],
           settings: [],
           productivities: [],
           teamComposition: [],
@@ -318,6 +321,7 @@ export function usePlanningCapacityModel(projectId: string | undefined): Plannin
       const [
         groups,
         groupServices,
+        groupComposition,
         settings,
         productivities,
         periodServices,
@@ -333,6 +337,10 @@ export function usePlanningCapacityModel(projectId: string | undefined): Plannin
         safeRead(
           'project_team_work_group_services',
           supabase.from('project_team_work_group_services' as any).select('*').eq('project_id', projectId),
+        ),
+        safeRead(
+          'project_team_work_group_composition',
+          supabase.from('project_team_work_group_composition' as any).select('*').eq('project_id', projectId),
         ),
         safeRead(
           'project_service_planning_settings',
@@ -376,6 +384,7 @@ export function usePlanningCapacityModel(projectId: string | undefined): Plannin
       setRaw({
         groups: groups.data,
         groupServices: groupServices.data,
+        groupComposition: groupComposition.data,
         settings: settings.data,
         productivities: productivities.data,
         teamComposition: teamComposition.data,
@@ -387,6 +396,7 @@ export function usePlanningCapacityModel(projectId: string | undefined): Plannin
         diagnostics: [
           groups.warning,
           groupServices.warning,
+          groupComposition.warning,
           settings.warning,
           productivities.warning,
           teamComposition.warning,
@@ -420,11 +430,29 @@ export function usePlanningCapacityModel(projectId: string | undefined): Plannin
       if (!groupId) continue;
       groupServicesByGroup.set(groupId, [...(groupServicesByGroup.get(groupId) ?? []), row]);
     }
+    const groupCompositionByGroup = new Map<string, any[]>();
+    for (const row of raw.groupComposition) {
+      const groupId = textOrNull(row?.group_id);
+      if (!groupId) continue;
+      groupCompositionByGroup.set(groupId, [...(groupCompositionByGroup.get(groupId) ?? []), row]);
+    }
 
     const workGroups: PlanningCapacityWorkGroup[] = raw.groups.map((group) => {
       const teamCount = Math.max(toNumber(group?.simultaneous_team_count, 1), 1);
-      const professionalCount = Math.max(toNumber(group?.professional_count, 0), 0);
-      const auxiliaryCount = Math.max(toNumber(group?.auxiliary_count, 0), 0);
+      const detailedComposition = groupCompositionByGroup.get(String(group.id)) ?? [];
+      const detailedProfessionalCount = detailedComposition
+        .filter((row) => row?.role === 'professional')
+        .reduce((sum, row) => sum + Math.max(toNumber(row?.quantity, 0), 0), 0);
+      const detailedAuxiliaryCount = detailedComposition
+        .filter((row) => row?.role === 'helper')
+        .reduce((sum, row) => sum + Math.max(toNumber(row?.quantity, 0), 0), 0);
+      const hasDetailedComposition = detailedComposition.length > 0;
+      const professionalCount = hasDetailedComposition
+        ? detailedProfessionalCount
+        : Math.max(toNumber(group?.professional_count, 0), 0);
+      const auxiliaryCount = hasDetailedComposition
+        ? detailedAuxiliaryCount
+        : Math.max(toNumber(group?.auxiliary_count, 0), 0);
       const services = (groupServicesByGroup.get(group.id) ?? []).map((service) => ({
         macroId: textOrNull(service?.macro_id),
         scopeId: textOrNull(service?.scope_id),
