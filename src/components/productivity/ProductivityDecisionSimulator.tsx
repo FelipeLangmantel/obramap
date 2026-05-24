@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
-import { Copy, RotateCcw, SlidersHorizontal } from 'lucide-react';
+import { Copy, Printer, RotateCcw, SlidersHorizontal } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 type SimulationStatus = 'resolved' | 'reduced' | 'not_resolved' | 'insufficient_data';
+type ReportCopyMode = 'summary' | 'full';
 
 interface SimulatorServiceRow {
   service: {
@@ -221,6 +222,7 @@ export function ProductivityDecisionSimulator({ rows, formatNumber }: Productivi
     const simulatedDemand = result.simulatedDemand;
     const currentDifference = result.currentDifference;
     const simulatedDifference = result.simulatedDifference;
+    const generatedAt = new Date().toLocaleString('pt-BR');
 
     const capacityGain = isValidNumber(simulatedCapacity) && isValidNumber(currentCapacity)
       ? simulatedCapacity - currentCapacity
@@ -282,6 +284,7 @@ export function ProductivityDecisionSimulator({ rows, formatNumber }: Productivi
       currentRequired,
       decision,
       decisionText,
+      generatedAt,
       gapReduction,
       improvementPercent,
       simulatedCapacity,
@@ -305,42 +308,87 @@ export function ProductivityDecisionSimulator({ rows, formatNumber }: Productivi
     isValidNumber(value) ? `${formatNumber(value, digits)}${suffix}` : 'Sem dado suficiente'
   );
 
-  const copyReportSummary = async () => {
+  const buildReportText = (mode: ReportCopyMode) => {
     if (!selectedItem || !executiveReport || !result) return;
 
-    const reportText = [
-      'Relatorio executivo do cenario simulado',
-      '',
-      `Servico/Frente: ${selectedItem.label}`,
-      '',
-      'Situacao atual:',
-      `- Produtividade necessaria: ${formatReportValue(executiveReport.currentRequired, 2, '/dia')}`,
-      `- Capacidade atual: ${formatReportValue(executiveReport.currentCapacity, 2, '/dia')}`,
-      `- Demanda atual: ${formatReportValue(executiveReport.currentDemand, 1)}`,
-      `- Diferenca atual: ${formatReportValue(executiveReport.currentDifference, 2, '/dia')}`,
-      '',
-      'Cenario simulado:',
+    const inputsText = [
       `- Equipes adicionais: ${Math.max(parseNumericInput(extraTeams), 0)}`,
       `- Ganho de produtividade: ${Math.max(parseNumericInput(productivityGain), 0)}%`,
       `- Prazo adicional: ${Math.max(parseNumericInput(extraDays), 0)} dia(s)`,
       `- Reducao/redistribuicao de meta: ${Math.min(Math.max(parseNumericInput(demandReduction), 0), 100)}%`,
+    ];
+
+    if (mode === 'summary') {
+      return [
+        'Resumo executivo do cenario simulado',
+        '',
+        `Servico/Frente: ${selectedItem.label}`,
+        `Gerado em: ${executiveReport.generatedAt}`,
+        '',
+        `Resultado: ${statusLabel[result.status]}.`,
+        `Decisao sugerida: ${executiveReport.decision}.`,
+        `Confianca: ${executiveReport.confidence}.`,
+        '',
+        executiveReport.summary,
+        '',
+        `Recomendacao: ${executiveReport.decisionText}`,
+        '',
+        'Observacao: simulacao local. Nao altera produtividade, equipe, meta, prazo, producao, diario, medicao, Mapa 3D ou planejamento oficial.',
+      ].join('\n');
+    }
+
+    return [
+      'Relatorio de decisao de produtividade',
+      'Simulacao local - nao altera planejamento oficial',
+      '',
+      `Servico/Frente: ${selectedItem.label}`,
+      `Data/hora local de geracao: ${executiveReport.generatedAt}`,
+      `Status atual: ${selectedItem.currentStatus || 'Nao informado'}`,
+      `Resultado simulado: ${statusLabel[result.status]}`,
+      '',
+      'Situacao atual:',
+      `- Produtividade necessaria: ${formatReportValue(executiveReport.currentRequired, 2, '/dia')}`,
+      `- Produtividade cadastrada: ${formatReportValue(selectedItem.registeredProductivity, 2, '/dia')}`,
+      `- Produtividade real: ${formatReportValue(selectedItem.realProductivity, 2, '/dia')}`,
+      `- Capacidade atual: ${formatReportValue(executiveReport.currentCapacity, 2, '/dia')}`,
+      `- Demanda atual: ${formatReportValue(executiveReport.currentDemand, 1)}`,
+      `- Diferenca atual: ${formatReportValue(executiveReport.currentDifference, 2, '/dia')}`,
+      `- Status atual: ${selectedItem.currentStatus || 'Nao informado'}`,
+      '',
+      'Cenario simulado:',
+      ...inputsText,
+      `- Demanda simulada: ${formatReportValue(executiveReport.simulatedDemand, 1)}`,
       `- Capacidade simulada: ${formatReportValue(executiveReport.simulatedCapacity, 2, '/dia')}`,
       `- Produtividade necessaria simulada: ${formatReportValue(executiveReport.simulatedRequired, 2, '/dia')}`,
-      `- Demanda simulada: ${formatReportValue(executiveReport.simulatedDemand, 1)}`,
       `- Diferenca simulada: ${formatReportValue(executiveReport.simulatedDifference, 2, '/dia')}`,
+      `- Status simulado: ${statusLabel[result.status]}`,
       '',
-      `Resultado: ${statusLabel[result.status]}.`,
+      'Impacto esperado:',
+      `- Ganho de capacidade: ${formatReportValue(executiveReport.capacityGain, 2, '/dia')}`,
+      `- Reducao da diferenca: ${formatReportValue(executiveReport.gapReduction, 2, '/dia')}`,
+      `- Percentual de melhoria: ${isValidNumber(executiveReport.improvementPercent) ? `${formatNumber(executiveReport.improvementPercent, 0)}%` : 'Sem comparacao suficiente'}`,
+      `- Leitura do impacto: ${executiveReport.summary}`,
       '',
-      `Recomendacao: ${executiveReport.decisionText}`,
+      `Decisao sugerida: ${executiveReport.decision}`,
+      executiveReport.decisionText,
       '',
-      `Confianca: ${executiveReport.confidence}. ${executiveReport.confidenceReason}`,
+      `Confianca da analise: ${executiveReport.confidence}`,
+      executiveReport.confidenceReason,
       '',
-      'Observacao: este cenario e apenas uma simulacao local e nao altera o planejamento oficial, producao, diario, medicao, Gantt, Linha de Balanco ou Planejamento Semanal.',
+      'Observacoes:',
+      '- Este relatorio e uma simulacao local.',
+      '- Nao altera produtividade, equipe, meta, prazo, producao, diario, medicao, Mapa 3D ou planejamento oficial.',
+      '- Valide as premissas com o responsavel da obra antes de qualquer mudanca oficial.',
     ].join('\n');
+  };
+
+  const copyReport = async (mode: ReportCopyMode) => {
+    const reportText = buildReportText(mode);
+    if (!reportText) return;
 
     try {
       await navigator.clipboard.writeText(reportText);
-      setCopyFeedback('Resumo copiado.');
+      setCopyFeedback(mode === 'summary' ? 'Resumo copiado.' : 'Relatorio completo copiado.');
     } catch {
       setCopyFeedback('Nao foi possivel copiar automaticamente.');
     }
@@ -348,9 +396,13 @@ export function ProductivityDecisionSimulator({ rows, formatNumber }: Productivi
     window.setTimeout(() => setCopyFeedback(''), 2500);
   };
 
+  const printReport = () => {
+    window.print();
+  };
+
   return (
-    <div className="space-y-4 rounded-lg border p-4">
-      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+    <div className="space-y-4 rounded-lg border p-4 print:border-0 print:p-0">
+      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between print:hidden">
         <div>
           <h3 className="flex items-center gap-2 text-base font-semibold">
             <SlidersHorizontal className="h-4 w-4 text-primary" />
@@ -363,11 +415,11 @@ export function ProductivityDecisionSimulator({ rows, formatNumber }: Productivi
         <Badge variant="outline" className="w-fit">Simulacao local</Badge>
       </div>
 
-      <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+      <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground print:hidden">
         Simulacao local. Nao altera produtividade, equipe, meta, prazo, producao, diario, medicao ou planejamento oficial.
       </div>
 
-      <div className="grid gap-3 md:grid-cols-5">
+      <div className="grid gap-3 md:grid-cols-5 print:hidden">
         <div className="space-y-1 md:col-span-2">
           <label className="text-xs font-medium text-muted-foreground" htmlFor="decision-simulator-target">
             Servico ou frente
@@ -425,7 +477,7 @@ export function ProductivityDecisionSimulator({ rows, formatNumber }: Productivi
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+      <div className="grid gap-3 md:grid-cols-[1fr_auto] print:hidden">
         <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground" htmlFor="decision-simulator-demand">
             Reducao/redistribuicao da meta %
@@ -452,7 +504,7 @@ export function ProductivityDecisionSimulator({ rows, formatNumber }: Productivi
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="grid gap-4 lg:grid-cols-3">
+          <div className="grid gap-4 lg:grid-cols-3 print:hidden">
             <div className="rounded-lg border bg-background p-3">
               <h4 className="font-medium">Situacao atual</h4>
               <dl className="mt-3 space-y-2 text-sm">
@@ -489,22 +541,125 @@ export function ProductivityDecisionSimulator({ rows, formatNumber }: Productivi
           </div>
 
           {executiveReport && result ? (
-            <div className="rounded-lg border bg-background p-4">
+            <div className="rounded-lg border bg-background p-4 print:border-0 print:p-0">
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div>
-                  <h4 className="font-semibold">Relatorio executivo do cenario simulado</h4>
-                  <p className="mt-1 text-sm text-muted-foreground">{executiveReport.summary}</p>
+                  <p className="text-xs font-medium uppercase text-muted-foreground">Relatorio de decisao de produtividade</p>
+                  <h4 className="mt-1 text-lg font-semibold">Relatorio executivo do cenario simulado</h4>
+                  <p className="mt-1 text-sm text-muted-foreground">Simulacao local - nao altera planejamento oficial</p>
                 </div>
-                <div className="flex flex-col items-start gap-2 md:items-end">
-                  <Button type="button" variant="outline" size="sm" onClick={copyReportSummary}>
-                    <Copy className="mr-2 h-4 w-4" />
-                    Copiar resumo
-                  </Button>
+                <div className="flex flex-col items-start gap-2 md:items-end print:hidden">
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" variant="outline" size="sm" onClick={() => copyReport('summary')}>
+                      <Copy className="mr-2 h-4 w-4" />
+                      Copiar resumo
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => copyReport('full')}>
+                      <Copy className="mr-2 h-4 w-4" />
+                      Copiar relatorio completo
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={printReport}>
+                      <Printer className="mr-2 h-4 w-4" />
+                      Imprimir / salvar em PDF
+                    </Button>
+                  </div>
                   {copyFeedback ? <span className="text-xs text-muted-foreground">{copyFeedback}</span> : null}
                 </div>
               </div>
 
-              <div className="mt-4 overflow-x-auto">
+              <div className="mt-4 grid gap-3 text-sm md:grid-cols-4 print:grid-cols-2">
+                <div className="rounded-md border bg-muted/20 p-3">
+                  <p className="text-xs font-medium uppercase text-muted-foreground">Servico ou frente</p>
+                  <p className="mt-1 font-medium">{selectedItem.label}</p>
+                </div>
+                <div className="rounded-md border bg-muted/20 p-3">
+                  <p className="text-xs font-medium uppercase text-muted-foreground">Gerado em</p>
+                  <p className="mt-1 font-medium">{executiveReport.generatedAt}</p>
+                </div>
+                <div className="rounded-md border bg-muted/20 p-3">
+                  <p className="text-xs font-medium uppercase text-muted-foreground">Status atual</p>
+                  <p className="mt-1 font-medium">{selectedItem.currentStatus || 'Nao informado'}</p>
+                </div>
+                <div className="rounded-md border bg-muted/20 p-3">
+                  <p className="text-xs font-medium uppercase text-muted-foreground">Resultado simulado</p>
+                  <p className="mt-1 font-medium">{statusLabel[result.status]}</p>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-md border bg-muted/20 p-3">
+                <p className="text-xs font-medium uppercase text-muted-foreground">Resumo executivo</p>
+                <p className="mt-1 text-sm text-muted-foreground">{executiveReport.summary}</p>
+              </div>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <div className="rounded-md border p-3">
+                  <h5 className="font-medium">Situacao atual</h5>
+                  <dl className="mt-3 space-y-2 text-sm">
+                    <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Produtividade necessaria</dt><dd>{formatReportValue(executiveReport.currentRequired, 2, '/dia')}</dd></div>
+                    <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Produtividade cadastrada</dt><dd>{formatReportValue(selectedItem.registeredProductivity, 2, '/dia')}</dd></div>
+                    <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Produtividade real</dt><dd>{formatReportValue(selectedItem.realProductivity, 2, '/dia')}</dd></div>
+                    <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Demanda atual</dt><dd>{formatReportValue(executiveReport.currentDemand, 1)}</dd></div>
+                    <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Capacidade atual</dt><dd>{formatReportValue(executiveReport.currentCapacity, 2, '/dia')}</dd></div>
+                    <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Diferenca atual</dt><dd>{formatReportValue(executiveReport.currentDifference, 2, '/dia')}</dd></div>
+                  </dl>
+                </div>
+
+                <div className="rounded-md border p-3">
+                  <h5 className="font-medium">Cenario simulado</h5>
+                  <dl className="mt-3 space-y-2 text-sm">
+                    <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Equipes adicionais</dt><dd>{Math.max(parseNumericInput(extraTeams), 0)}</dd></div>
+                    <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Ganho de produtividade</dt><dd>{Math.max(parseNumericInput(productivityGain), 0)}%</dd></div>
+                    <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Prazo adicional</dt><dd>{Math.max(parseNumericInput(extraDays), 0)} dia(s)</dd></div>
+                    <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Reducao/redistribuicao</dt><dd>{Math.min(Math.max(parseNumericInput(demandReduction), 0), 100)}%</dd></div>
+                    <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Demanda simulada</dt><dd>{formatReportValue(executiveReport.simulatedDemand, 1)}</dd></div>
+                    <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Capacidade simulada</dt><dd>{formatReportValue(executiveReport.simulatedCapacity, 2, '/dia')}</dd></div>
+                    <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Necessaria simulada</dt><dd>{formatReportValue(executiveReport.simulatedRequired, 2, '/dia')}</dd></div>
+                    <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Diferenca simulada</dt><dd>{formatReportValue(executiveReport.simulatedDifference, 2, '/dia')}</dd></div>
+                  </dl>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-md border p-3">
+                <h5 className="font-medium">Impacto esperado</h5>
+                <div className="mt-3 grid gap-3 text-sm md:grid-cols-3">
+                  <div>
+                    <p className="text-xs uppercase text-muted-foreground">Ganho de capacidade</p>
+                    <p className="font-medium">{formatReportValue(executiveReport.capacityGain, 2, '/dia')}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-muted-foreground">Reducao da diferenca</p>
+                    <p className="font-medium">{formatReportValue(executiveReport.gapReduction, 2, '/dia')}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-muted-foreground">Melhoria estimada</p>
+                    <p className="font-medium">
+                      {isValidNumber(executiveReport.improvementPercent)
+                        ? `${formatNumber(executiveReport.improvementPercent, 0)}%`
+                        : 'Sem comparacao suficiente'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <div className="rounded-md border bg-muted/20 p-3">
+                  <p className="text-xs font-medium uppercase text-muted-foreground">Decisao sugerida</p>
+                  <p className="mt-1 font-medium">{executiveReport.decision}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{executiveReport.decisionText}</p>
+                </div>
+                <div className="rounded-md border bg-muted/20 p-3">
+                  <p className="text-xs font-medium uppercase text-muted-foreground">Confianca da analise</p>
+                  <p className="mt-1 font-medium">{executiveReport.confidence}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{executiveReport.confidenceReason}</p>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+                Este relatorio e uma simulacao local. Nao altera produtividade, equipe, meta, prazo, producao, diario, medicao, Mapa 3D ou planejamento oficial.
+              </div>
+
+              <div className="mt-4 overflow-x-auto print:hidden">
+                <p className="mb-2 text-xs font-medium uppercase text-muted-foreground">Tabela comparativa detalhada</p>
                 <table className="w-full min-w-[640px] text-sm">
                   <thead>
                     <tr className="border-b text-left text-xs uppercase text-muted-foreground">
@@ -564,22 +719,13 @@ export function ProductivityDecisionSimulator({ rows, formatNumber }: Productivi
                 </table>
               </div>
 
-              <div className="mt-4 grid gap-3 md:grid-cols-2">
-                <div className="rounded-md border bg-muted/20 p-3">
-                  <p className="text-xs font-medium uppercase text-muted-foreground">Decisao sugerida</p>
-                  <p className="mt-1 font-medium">{executiveReport.decision}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">{executiveReport.decisionText}</p>
-                </div>
-                <div className="rounded-md border bg-muted/20 p-3">
-                  <p className="text-xs font-medium uppercase text-muted-foreground">Confianca da analise</p>
-                  <p className="mt-1 font-medium">{executiveReport.confidence}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">{executiveReport.confidenceReason}</p>
-                </div>
+              <div className="mt-4 rounded-md border bg-muted/20 p-3 print:block hidden">
+                <p className="text-xs font-medium uppercase text-muted-foreground">Observacoes para reuniao</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Valide as premissas da simulacao com o responsavel da obra antes de qualquer mudanca oficial em equipe, meta, produtividade ou prazo.
+                </p>
               </div>
 
-              <div className="mt-4 rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
-                Este cenario e apenas uma simulacao local e nao altera o planejamento oficial, producao, diario, medicao, Gantt, Linha de Balanco ou Planejamento Semanal.
-              </div>
             </div>
           ) : null}
         </div>
