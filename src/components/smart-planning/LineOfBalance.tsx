@@ -2,12 +2,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { addDays, addMonths, addWeeks, differenceInDays, endOfMonth, format, isWeekend, startOfDay, startOfMonth, startOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
-  ArrowRight,
   CalendarDays,
   ChevronDown,
   ChevronRight,
   FlaskConical,
-  GripVertical,
   Link2,
   MousePointer2,
   Pencil,
@@ -27,7 +25,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 
@@ -39,10 +36,9 @@ interface LineOfBalanceProps {
   projectId?: string;
   ganttServices: GanttService[];
   projectStartDate: string;
-  onUpdatePredecessor?: (serviceId: string, predecessorStageId: string | null) => Promise<void>;
   onMacroflowChanged?: () => Promise<void> | void;
+  hasConfiguredMacroflow?: boolean;
 }
-
 type FlowScale = 'day' | 'week' | 'month';
 
 type TimelineColumn = {
@@ -271,11 +267,10 @@ const getDaysFromPixels = (pixels: number, columns: TimelineColumn[], scale: Flo
   return Math.round(pixels / width);
 };
 
-export function LineOfBalance({ projectId, ganttServices, projectStartDate, onUpdatePredecessor, onMacroflowChanged }: LineOfBalanceProps) {
+export function LineOfBalance({ projectId, ganttServices, projectStartDate, onMacroflowChanged, hasConfiguredMacroflow = false }: LineOfBalanceProps) {
   const { canEdit } = useAuth();
   const { currentProject } = useConstruction();
   const capacityModel = usePlanningCapacityModel(projectId);
-  const [showSequenceDialog, setShowSequenceDialog] = useState(false);
   const [showMacroflowDialog, setShowMacroflowDialog] = useState(false);
   const [selectedMacroflowId, setSelectedMacroflowId] = useState('housing');
   const [scale, setScale] = useState<FlowScale>('week');
@@ -335,8 +330,6 @@ export function LineOfBalance({ projectId, ganttServices, projectStartDate, onUp
   const macroflows = useMemo(() => getMacroflowPresets(servicesForLine), [servicesForLine]);
   const selectedMacroflow = macroflows.find((flow) => flow.id === selectedMacroflowId) || macroflows[0];
   const flowServices = selectedMacroflow?.services || servicesForLine;
-  const hasPersistentMacroflow = servicesForLine.some((svc) => svc.schedule_source === 'macroflow');
-
   const maxUnits = useMemo(() => {
     const fromServices = ganttServices.length ? Math.max(...ganttServices.map((s) => s.total_houses)) : 0;
     const fromProject = currentProject?.houses?.length || currentProject?.totalHouses || 0;
@@ -617,6 +610,46 @@ export function LineOfBalance({ projectId, ganttServices, projectStartDate, onUp
     );
   }
 
+  if (!hasConfiguredMacroflow) {
+    return (
+      <>
+        <div className="rounded-2xl bg-slate-50 p-6 dark:bg-transparent">
+          <Card className="rounded-2xl border-slate-200 shadow-sm dark:border-border">
+            <CardContent className="py-16 text-center">
+              <Link2 className="mx-auto mb-4 h-12 w-12 text-primary/70" />
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-foreground">
+                Configure um Macrofluxo para visualizar a Linha de Balanco.
+              </h3>
+              <p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground">
+                A Linha de Balanco usa a sequencia oficial definida no Macrofluxo.
+                Crie um macrofluxo e conecte os servicos para visualizar o ritmo planejado.
+              </p>
+              <p className="mx-auto mt-2 max-w-xl text-xs text-muted-foreground">
+                Filtros por etapa do contrato apenas agrupam servicos; eles nao criam predecessoras oficiais.
+              </p>
+              <Button
+                className="mt-6 gap-2"
+                onClick={() => setShowMacroflowDialog(true)}
+                disabled={!canEdit}
+              >
+                <Plus className="h-4 w-4" />
+                Criar/Editar Macrofluxo
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+        <MacroflowDialog
+          open={showMacroflowDialog}
+          onOpenChange={setShowMacroflowDialog}
+          projectId={projectId}
+          packages={servicesForLine}
+          canEdit={canEdit}
+          onChanged={onMacroflowChanged}
+        />
+      </>
+    );
+  }
+
   const selectedDragPackage = dragState ? packages.find((pkg) => pkg.key === dragState.packageKey) : null;
   const dragStart = selectedDragPackage && dragState
     ? addDays(dragState.originalStart, dragState.mode === 'move' ? dragState.previewOffsetDays : 0)
@@ -643,9 +676,7 @@ export function LineOfBalance({ projectId, ganttServices, projectStartDate, onUp
             )}
           </div>
           <p className="mt-0.5 text-xs text-slate-500 dark:text-muted-foreground">
-            {hasPersistentMacroflow
-              ? 'Linha de Balanço ordenada pelo macrofluxo persistente. Alterações de simulação continuam locais.'
-              : 'Linha de Balanço sem macrofluxo definido. Configure predecessoras para ordenar os pacotes.'}
+            Linha de Balanco ordenada pelo macrofluxo persistente. Alteracoes de simulacao continuam locais.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -761,9 +792,9 @@ export function LineOfBalance({ projectId, ganttServices, projectStartDate, onUp
             <Badge variant="outline" className="h-8 rounded-full px-3">
               {selectedMacroflow?.description}
             </Badge>
-            <Button variant="outline" size="sm" className="h-8 gap-2" onClick={() => setShowSequenceDialog(true)}>
+            <Button variant="outline" size="sm" className="h-8 gap-2" onClick={() => setShowMacroflowDialog(true)}>
               <Settings2 className="h-4 w-4" />
-              Dependencias
+              Editar Macrofluxo
             </Button>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -916,7 +947,7 @@ export function LineOfBalance({ projectId, ganttServices, projectStartDate, onUp
                           backgroundColor: pkg.color,
                           opacity: pkg.isHiddenFromLine ? 0.55 : pkg.isExecuted ? 1 : 0.78,
                         }}
-                        title={`${pkg.service.name}\n${pkg.unit.label}\n${formatShortDate(pkg.start)} - ${formatShortDate(pkg.end)}\n${pkg.durationDays} dias • ${pkg.teams} equipe(s)`}
+                        title={`${pkg.service.name}\n${pkg.unit.label}\n${formatShortDate(pkg.start)} - ${formatShortDate(pkg.end)}\n${pkg.durationDays} dias - ${pkg.teams} equipe(s)`}
                         onPointerDown={(event) => {
                           if ((event.target as HTMLElement).dataset.resizeHandle === 'true') return;
                           event.currentTarget.setPointerCapture(event.pointerId);
@@ -1006,14 +1037,6 @@ export function LineOfBalance({ projectId, ganttServices, projectStartDate, onUp
         onChanged={onMacroflowChanged}
       />
 
-      <SequenceDialog
-        open={showSequenceDialog}
-        onOpenChange={setShowSequenceDialog}
-        services={flowServices}
-        allServices={ganttServices}
-        onUpdatePredecessor={onUpdatePredecessor}
-        canEdit={canEdit}
-      />
       <PackageDialog
         workPackage={selectedPackage}
         open={Boolean(selectedPackage)}
@@ -1068,7 +1091,7 @@ function PackageDialog({ open, workPackage, simulationMode, onOpenChange, onAppl
             </div>
             <p className="text-muted-foreground">{workPackage.unit.label}</p>
             <p className="mt-2 text-xs text-muted-foreground">
-              {formatShortDate(workPackage.start)} ate {formatShortDate(workPackage.end)} • {workPackage.durationDays} dias
+              {formatShortDate(workPackage.start)} ate {formatShortDate(workPackage.end)} - {workPackage.durationDays} dias
             </p>
           </div>
 
@@ -1116,99 +1139,6 @@ function PackageDialog({ open, workPackage, simulationMode, onOpenChange, onAppl
             </Button>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-interface SequenceDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  services: GanttService[];
-  allServices: GanttService[];
-  canEdit: boolean;
-  onUpdatePredecessor?: (serviceId: string, predecessorStageId: string | null) => Promise<void>;
-}
-
-function SequenceDialog({ open, onOpenChange, services, allServices, canEdit, onUpdatePredecessor }: SequenceDialogProps) {
-  const [updating, setUpdating] = useState<string | null>(null);
-
-  const handlePredecessorChange = async (serviceId: string, predecessorStageId: string | null) => {
-    if (!canEdit) {
-      toast.error('Voce nao tem permissao para alterar dependencias do planejamento.');
-      return;
-    }
-    if (!onUpdatePredecessor) return;
-    setUpdating(serviceId);
-    try {
-      await onUpdatePredecessor(serviceId, predecessorStageId);
-    } finally {
-      setUpdating(null);
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[80vh] max-w-2xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Link2 className="h-5 w-5" />
-            Organizar Fluxograma - Sequencia de Servicos
-          </DialogTitle>
-        </DialogHeader>
-        <p className="text-sm text-muted-foreground">
-          Defina a ordem e predecessoras dos servicos. Visualizadores podem consultar, mas nao salvar alteracoes.
-        </p>
-        <ScrollArea className="max-h-[55vh]">
-          <div className="space-y-3 pr-2">
-            {services.map((svc, idx) => {
-              const color = COLORS[idx % COLORS.length];
-              return (
-                <div key={svc.id} className="flex items-center gap-3 rounded-lg border bg-card p-3">
-                  <div className="flex items-center gap-1 text-muted-foreground">
-                    <GripVertical className="h-4 w-4" />
-                    <span className="w-5 font-mono text-sm">{idx + 1}</span>
-                  </div>
-                  <div className="flex min-w-0 flex-1 items-center gap-2">
-                    <div className="h-4 w-4 shrink-0 rounded-sm" style={{ backgroundColor: color }} />
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{svc.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {svc.remaining_houses} un restantes • {svc.duration_days}d
-                      </p>
-                    </div>
-                  </div>
-                  <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <Select
-                    value={svc.depends_on || 'none'}
-                    onValueChange={(value) => handlePredecessorChange(svc.id, value === 'none' ? null : value)}
-                    disabled={!canEdit || updating === svc.id}
-                  >
-                    <SelectTrigger className="w-[200px] text-xs">
-                      <SelectValue placeholder="Sem predecessora" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Sem predecessora</SelectItem>
-                      {allServices
-                        .filter((item) => item.id !== svc.id)
-                        .map((item) => (
-                          <SelectItem key={item.stage_id || item.id} value={item.stage_id || item.id}>
-                            <div className="flex items-center gap-2">
-                              <div
-                                className="h-2 w-2 rounded-full"
-                                style={{ backgroundColor: COLORS[allServices.indexOf(item) % COLORS.length] }}
-                              />
-                              {item.name.length > 30 ? `${item.name.substring(0, 30)}...` : item.name}
-                            </div>
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              );
-            })}
-          </div>
-        </ScrollArea>
       </DialogContent>
     </Dialog>
   );

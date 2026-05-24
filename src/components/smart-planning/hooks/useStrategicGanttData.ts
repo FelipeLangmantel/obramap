@@ -740,6 +740,14 @@ export function useStrategicGanttData(projectId: string | undefined) {
     return new Date(Math.max(...dates.map((d) => d.getTime())));
   }, [ganttServices]);
 
+  const hasConfiguredMacroflow = useMemo(() => {
+    if (!macroflowDependencies.length || !ganttServices.length) return false;
+    const packageIds = new Set(ganttServices.map((service) => service.id));
+    return macroflowDependencies.some((dependency) =>
+      packageIds.has(dependency.predecessorKey) && packageIds.has(dependency.successorKey)
+    );
+  }, [ganttServices, macroflowDependencies]);
+
   return {
     services,
     ganttServices,
@@ -748,6 +756,7 @@ export function useStrategicGanttData(projectId: string | undefined) {
     totalHouses,
     projectStartDate,
     projectedEndDate,
+    hasConfiguredMacroflow,
     loadData,
     updateServiceProductivity,
     updatePredecessor,

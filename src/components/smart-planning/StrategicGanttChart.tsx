@@ -42,11 +42,6 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import {
   Clock,
   Settings2,
   Link2,
@@ -74,6 +69,7 @@ interface StrategicGanttChartProps {
   ) => void;
   onUpdatePredecessor: (serviceId: string, predecessorStageId: string | null) => void;
   onMacroflowChanged?: () => Promise<void> | void;
+  hasConfiguredMacroflow?: boolean;
 }
 
 const getServiceStatus = (svc: GanttService) => {
@@ -147,8 +143,8 @@ export function StrategicGanttChart({
   projectStartDate,
   projectedEndDate,
   onUpdateProductivity,
-  onUpdatePredecessor,
   onMacroflowChanged,
+  hasConfiguredMacroflow = false,
 }: StrategicGanttChartProps) {
   const { canEdit } = useAuth();
   const capacityModel = usePlanningCapacityModel(projectId);
@@ -404,6 +400,46 @@ export function StrategicGanttChart({
           </CardContent>
         </Card>
       </div>
+    );
+  }
+
+  if (!hasConfiguredMacroflow) {
+    return (
+      <>
+        <div className="bg-slate-50 dark:bg-transparent rounded-2xl p-6">
+          <Card className="rounded-2xl border-slate-200 dark:border-border shadow-sm">
+            <CardContent className="py-16 text-center">
+              <Link2 className="h-12 w-12 mx-auto mb-4 text-primary/70" />
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-foreground">
+                Configure um Macrofluxo para gerar o Gantt.
+              </h3>
+              <p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground">
+                O Gantt usa o Macrofluxo para definir predecessoras, FS/SS e defasagens.
+                Sem macrofluxo, o sistema não assume uma sequência automática.
+              </p>
+              <p className="mx-auto mt-2 max-w-xl text-xs text-muted-foreground">
+                Filtros por etapa do contrato ajudam a encontrar serviços, mas não substituem a sequência oficial.
+              </p>
+              <Button
+                className="mt-6 gap-2"
+                onClick={() => setShowMacroflowDialog(true)}
+                disabled={!canEdit}
+              >
+                <Plus className="h-4 w-4" />
+                Criar/Editar Macrofluxo
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+        <MacroflowDialog
+          open={showMacroflowDialog}
+          onOpenChange={setShowMacroflowDialog}
+          projectId={projectId}
+          packages={services}
+          canEdit={canEdit}
+          onChanged={onMacroflowChanged}
+        />
+      </>
     );
   }
 
@@ -767,44 +803,21 @@ export function StrategicGanttChart({
                           </Tooltip>
                         </TooltipProvider>
 
-                        {/* Edit predecessor */}
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <button className="p-1 rounded hover:bg-accent">
-                              <Link2 className="h-3 w-3 text-muted-foreground" />
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-56 p-3" align="start">
-                            <div className="space-y-2">
-                              <Label className="text-xs font-medium">Predecessora</Label>
-                              <Select
-                                value={svc.depends_on || 'none'}
-                                onValueChange={(v) =>
-                                  onUpdatePredecessor(svc.id, v === 'none' ? null : v)
-                                }
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                className="p-1 rounded hover:bg-accent"
+                                onClick={() => setShowMacroflowDialog(true)}
                               >
-                                <SelectTrigger className="h-8 text-xs">
-                                  <SelectValue placeholder="Nenhuma" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="none">Nenhuma</SelectItem>
-                                  {services
-                                    .filter((s) => s.id !== svc.id && s.stage_id)
-                                    .map((s) => (
-                                      <SelectItem key={s.stage_id!} value={s.stage_id!}>
-                                        {s.name}
-                                      </SelectItem>
-                                    ))}
-                                </SelectContent>
-                              </Select>
-                              {svc.depends_on && (
-                                <p className="text-[10px] text-muted-foreground">
-                                  Inicia após a predecessora terminar
-                                </p>
-                              )}
-                            </div>
-                          </PopoverContent>
-                        </Popover>
+                                <Link2 className="h-3 w-3 text-muted-foreground" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="text-xs">Editar sequência no Macrofluxo</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </div>}
                     </div>
 

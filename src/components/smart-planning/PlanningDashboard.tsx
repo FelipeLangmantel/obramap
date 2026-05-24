@@ -35,6 +35,7 @@ interface PlanningDashboardProps {
   expectedEndDate: string;
   totalUnits: number;
   unresolvedAlerts: any[];
+  hasConfiguredMacroflow?: boolean;
 }
 
 export function PlanningDashboard({
@@ -46,10 +47,11 @@ export function PlanningDashboard({
   expectedEndDate,
   totalUnits,
   unresolvedAlerts,
+  hasConfiguredMacroflow = false,
 }: PlanningDashboardProps) {
   // Delay analysis
   const delayInfo = useMemo(() => {
-    if (!projectedEndDate || !expectedEndDate) return null;
+    if (!hasConfiguredMacroflow || !projectedEndDate || !expectedEndDate) return null;
     const expected = new Date(expectedEndDate);
     const diff = differenceInCalendarDays(projectedEndDate, expected);
     return {
@@ -57,10 +59,11 @@ export function PlanningDashboard({
       isDelayed: diff > 0,
       isAhead: diff < 0,
     };
-  }, [projectedEndDate, expectedEndDate]);
+  }, [hasConfiguredMacroflow, projectedEndDate, expectedEndDate]);
 
   const projectionSourceLabel = useMemo(() => {
     if (!ganttServices.length) return 'Sem pacotes';
+    if (!hasConfiguredMacroflow) return 'Previsão sem macrofluxo configurado';
     if (ganttServices.some((service) => service.schedule_source === 'macroflow')) return 'Fonte: Macrofluxo';
     if (ganttServices.some((service) => service.has_explicit_predecessor)) return 'Fonte: predecessoras definidas';
     if (ganttServices.some((service) => service.schedule_source === 'official_productivity')) {
@@ -70,7 +73,7 @@ export function PlanningDashboard({
       return 'Fonte: fallback legado';
     }
     return 'Sem macrofluxo definido';
-  }, [ganttServices]);
+  }, [ganttServices, hasConfiguredMacroflow]);
 
   // Service progress data for chart
   const serviceProgressData = useMemo(() => {
@@ -202,7 +205,7 @@ export function PlanningDashboard({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {projectedEndDate
+              {hasConfiguredMacroflow && projectedEndDate
                 ? format(projectedEndDate, 'dd/MM/yyyy', { locale: ptBR })
                 : '-'}
             </div>

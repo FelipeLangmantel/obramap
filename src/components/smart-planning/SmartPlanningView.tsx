@@ -196,6 +196,7 @@ export function SmartPlanningView({ onOpenProductivity }: SmartPlanningViewProps
     ganttServices: strategicGanttServices,
     projectedEndDate: strategicProjectedEndDate,
     projectStartDate: strategicStartDate,
+    hasConfiguredMacroflow,
     updateServiceProductivity,
     updatePredecessor,
     loadData: reloadStrategicGanttData,
@@ -631,6 +632,7 @@ export function SmartPlanningView({ onOpenProductivity }: SmartPlanningViewProps
             expectedEndDate={currentProject.expectedEndDate}
             totalUnits={currentProject.totalHouses}
             unresolvedAlerts={unresolvedAlerts}
+            hasConfiguredMacroflow={hasConfiguredMacroflow}
           />
         </TabsContent>
 
@@ -643,6 +645,7 @@ export function SmartPlanningView({ onOpenProductivity }: SmartPlanningViewProps
             onUpdateProductivity={updateServiceProductivity}
             onUpdatePredecessor={updatePredecessor}
             onMacroflowChanged={reloadStrategicGanttData}
+            hasConfiguredMacroflow={hasConfiguredMacroflow}
           />
         </TabsContent>
 
@@ -651,8 +654,8 @@ export function SmartPlanningView({ onOpenProductivity }: SmartPlanningViewProps
             projectId={currentProject.id}
             ganttServices={strategicGanttServices}
             projectStartDate={strategicStartDate}
-            onUpdatePredecessor={updatePredecessor}
             onMacroflowChanged={reloadStrategicGanttData}
+            hasConfiguredMacroflow={hasConfiguredMacroflow}
           />
         </TabsContent>
 
