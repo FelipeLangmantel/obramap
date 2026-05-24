@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -78,9 +78,17 @@ interface Props {
   projectId: string | undefined;
   allServices: ServiceRef[];
   suggestions?: { id: string; title: string; services: ServiceRef[] }[];
+  openGroupId?: string | null;
+  onOpenGroupHandled?: () => void;
 }
 
-export function TeamWorkGroupsPanel({ projectId, allServices, suggestions = [] }: Props) {
+export function TeamWorkGroupsPanel({
+  projectId,
+  allServices,
+  suggestions = [],
+  openGroupId,
+  onOpenGroupHandled,
+}: Props) {
   const capacityModel = usePlanningCapacityModel(projectId);
   const {
     groups,
@@ -219,7 +227,7 @@ export function TeamWorkGroupsPanel({ projectId, allServices, suggestions = [] }
   const openCreateFromSuggestion = (sug: { title: string; services: ServiceRef[] }) => {
     const existing = groups.find((group) => group.active && normalizeGroupName(group.name) === normalizeGroupName(sug.title));
     if (existing) {
-      toast.info('Esta frente ja existe. Abrimos a frente existente para revisao.');
+      toast.info('Esta frente já existe. Abrimos a frente existente para revisão.');
       openEdit(existing, sug.services);
       return;
     }
@@ -253,6 +261,28 @@ export function TeamWorkGroupsPanel({ projectId, allServices, suggestions = [] }
     });
     setDialogOpen(true);
   };
+
+  useEffect(() => {
+    if (!openGroupId) return;
+    const group = groups.find((item) => item.id === openGroupId);
+    if (!group) return;
+    setEditingGroupId(group.id);
+    setDialogInitial({
+      name: group.name,
+      description: group.description ?? '',
+      base_unit: group.base_unit ?? '',
+      productivity_value: group.productivity_value,
+      productivity_unit: group.productivity_unit ?? '',
+      working_days_per_week: group.working_days_per_week ?? 5,
+      simultaneous_team_count: group.simultaneous_team_count ?? 1,
+      professional_count: group.professional_count ?? 0,
+      auxiliary_count: group.auxiliary_count ?? 0,
+      composition: compositionByGroup.get(group.id) ?? [],
+      services: servicesByGroup.get(group.id) ?? [],
+    });
+    setDialogOpen(true);
+    onOpenGroupHandled?.();
+  }, [compositionByGroup, groups, onOpenGroupHandled, openGroupId, servicesByGroup]);
 
   const syncGroupServices = async (groupId: string, nextServices: ServiceRef[]) => {
     const currentLinks = groupServices.filter((link) => link.group_id === groupId);
@@ -299,7 +329,7 @@ export function TeamWorkGroupsPanel({ projectId, allServices, suggestions = [] }
     } else {
       const existing = groups.find((group) => group.active && normalizeGroupName(group.name) === normalizeGroupName(values.name));
       if (existing) {
-        toast.info('Esta frente ja existe. Abrimos a frente existente para revisao.');
+        toast.info('Esta frente já existe. Abrimos a frente existente para revisão.');
         setDialogOpen(false);
         openEdit(existing, values.services);
         return;

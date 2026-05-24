@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useConstruction } from '@/contexts/ConstructionContext';
 import { useServiceProductivity } from '@/hooks/useServiceProductivity';
+import { useTeamWorkGroups } from '@/hooks/useTeamWorkGroups';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -526,9 +527,12 @@ const formatSharedCapacity = (services: ServiceCapacityInsight[]) => {
 export function ServiceProductivityView() {
   const { currentProject } = useConstruction();
   const { productivities, isLoading, saveProductivity } = useServiceProductivity(currentProject?.id);
+  const { groups: workGroups, groupServices, groupComposition } = useTeamWorkGroups(currentProject?.id);
   const capacityModel = usePlanningCapacityModel(currentProject?.id);
   const serviceCapacityMap = capacityModel.serviceCapacityMap;
+  const [activeTab, setActiveTab] = useState('produtividade');
   const [selectedService, setSelectedService] = useState<ServiceInfo | null>(null);
+  const [openWorkGroupId, setOpenWorkGroupId] = useState<string | null>(null);
   const [requiredProductivityFilter, setRequiredProductivityFilter] = useState<'all' | RequiredProductivityStatus>('all');
   const [requiredProductivityFrontFilter, setRequiredProductivityFrontFilter] = useState('all');
   const [recommendedActionFilter, setRecommendedActionFilter] = useState<'all' | 'high' | RecommendedProductivityActionType>('all');
@@ -616,11 +620,59 @@ export function ServiceProductivityView() {
     };
   }, [currentProject?.id]);
 
+  const workGroupLinksByService = useMemo(() => {
+    const activeGroups = new Map(workGroups.filter((group) => group.active).map((group) => [group.id, group]));
+    const compositionByGroup = new Map<string, typeof groupComposition>();
+    groupComposition.forEach((row) => {
+      if (!row.group_id) return;
+      const rows = compositionByGroup.get(row.group_id) ?? [];
+      rows.push(row);
+      compositionByGroup.set(row.group_id, rows);
+    });
+
+    const map = new Map<string, Array<{
+      group: (typeof workGroups)[number];
+      isComplete: boolean;
+    }>>();
+
+    groupServices.forEach((link) => {
+      const group = activeGroups.get(link.group_id);
+      if (!group) return;
+      const detailedPeople = (compositionByGroup.get(group.id) ?? [])
+        .reduce((sum, row) => sum + (Number(row.quantity) || 0), 0);
+      const aggregatePeople = (Number(group.professional_count) || 0) + (Number(group.auxiliary_count) || 0);
+      const isComplete = Boolean(
+        Number(group.productivity_value) > 0
+        && String(group.productivity_unit ?? '').trim()
+        && (detailedPeople > 0 || aggregatePeople > 0),
+      );
+      const keys = [
+        link.scope_id,
+        link.service_name ? normalizeText(link.service_name) : null,
+      ].filter(Boolean) as string[];
+
+      keys.forEach((key) => {
+        const rows = map.get(key) ?? [];
+        rows.push({ group, isComplete });
+        map.set(key, rows);
+      });
+    });
+
+    return map;
+  }, [groupComposition, groupServices, workGroups]);
+
+  const getWorkGroupLinksForService = useCallback((service: ServiceInfo) => {
+    const byScope = workGroupLinksByService.get(service.scopeId) ?? [];
+    if (byScope.length > 0) return byScope;
+    return workGroupLinksByService.get(normalizeText(service.scopeName)) ?? [];
+  }, [workGroupLinksByService]);
+
   const stats = useMemo(() => {
     const total = allServices.length;
-    const configured = allServices.filter((service) =>
-      !!findProductivityForService(service, productivities)
-    ).length;
+    const configured = allServices.filter((service) => {
+      const links = getWorkGroupLinksForService(service);
+      return !!findProductivityForService(service, productivities) || links.some((link) => link.isComplete);
+    }).length;
     const missing = total - configured;
     const totalProfessionals = productivities.reduce(
       (sum, p) => sum + p.default_team_count * p.professionals_per_team, 0
@@ -629,7 +681,7 @@ export function ServiceProductivityView() {
       (sum, p) => sum + p.default_team_count * p.helpers_per_team, 0
     );
     return { total, configured, missing, totalProfessionals, totalHelpers };
-  }, [allServices, productivities]);
+  }, [allServices, getWorkGroupLinksForService, productivities]);
 
   const capacityDiagnostics = useMemo(() => {
     const serviceInsights: ServiceCapacityInsight[] = allServices.map((service) => {
@@ -989,7 +1041,7 @@ export function ServiceProductivityView() {
           Produtividade e Equipes
         </h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Defina produtividade e dimensionamento de equipes por serviço
+          Defina produtividade e dimensionamento de equipes por serviço ou por frente compartilhada
         </p>
       </div>
 
@@ -1006,12 +1058,12 @@ export function ServiceProductivityView() {
         additionalPeople={executiveSummary.additionalPeople}
       />
 
-      <Tabs defaultValue="produtividade" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList>
-          <TabsTrigger value="produtividade">Produtividade por servico</TabsTrigger>
+          <TabsTrigger value="produtividade">Produtividade por serviço</TabsTrigger>
           <TabsTrigger value="frentes">Frentes compartilhadas</TabsTrigger>
-          <TabsTrigger value="configplan">Config. planejamento fisico</TabsTrigger>
-          <TabsTrigger value="necessaria">Produtividade necessaria</TabsTrigger>
+          <TabsTrigger value="configplan">Config. planejamento físico</TabsTrigger>
+          <TabsTrigger value="necessaria">Produtividade necessária</TabsTrigger>
         </TabsList>
 
         <TabsContent value="produtividade" className="space-y-6">
@@ -1241,7 +1293,9 @@ export function ServiceProductivityView() {
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Serviços da Obra</CardTitle>
-          <CardDescription>Configure produtividade e equipes para cada serviço</CardDescription>
+          <CardDescription>
+            Serviços vinculados a uma frente ativa usam a capacidade principal da frente compartilhada.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <ScrollArea className="h-[calc(100vh-420px)]">
@@ -1249,6 +1303,11 @@ export function ServiceProductivityView() {
               {allServices.map((service) => {
                 const productivity = findProductivityForService(service, productivities);
                 const isConfigured = !!productivity;
+                const frontLinks = getWorkGroupLinksForService(service);
+                const primaryFront = frontLinks[0];
+                const hasActiveFront = frontLinks.length > 0;
+                const isControlledByFront = frontLinks.some((link) => link.isComplete);
+                const hasMultipleFronts = frontLinks.length > 1;
 
                 return (
                   <div
@@ -1265,6 +1324,28 @@ export function ServiceProductivityView() {
                           {service.scopeName}
                         </p>
                         <p className="text-xs text-muted-foreground">{service.macroName}</p>
+
+                        {hasActiveFront && (
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                            {frontLinks.map((link) => (
+                              <Badge key={link.group.id} variant="secondary" className="text-xs">
+                                Na frente: {link.group.name}
+                              </Badge>
+                            ))}
+                            {isControlledByFront ? (
+                              <Badge variant="default" className="text-xs">Controlado pela frente</Badge>
+                            ) : (
+                              <Badge variant="outline" className="border-amber-300 text-xs text-amber-700">
+                                Frente incompleta
+                              </Badge>
+                            )}
+                            {hasMultipleFronts && (
+                              <Badge variant="destructive" className="text-xs">
+                                Serviço vinculado a mais de uma frente. Revise os vínculos.
+                              </Badge>
+                            )}
+                          </div>
+                        )}
 
                         {productivity && (
                           <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
@@ -1285,18 +1366,49 @@ export function ServiceProductivityView() {
                     <div className="flex items-center gap-2 shrink-0 ml-3">
                       {isConfigured ? (
                         <Badge variant="default" className="text-xs">Configurado</Badge>
+                      ) : isControlledByFront ? (
+                        <Badge variant="default" className="text-xs">Na frente</Badge>
+                      ) : hasActiveFront ? (
+                        <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">
+                          Frente incompleta
+                        </Badge>
                       ) : (
                         <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">
                           Pendente
                         </Badge>
                       )}
-                      <Button
-                        size="sm"
-                        variant={isConfigured ? 'outline' : 'default'}
-                        onClick={() => setSelectedService(service)}
-                      >
-                        {isConfigured ? 'Editar' : 'Configurar'}
-                      </Button>
+                      {hasActiveFront && primaryFront ? (
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="default"
+                            onClick={() => {
+                              setOpenWorkGroupId(primaryFront.group.id);
+                              setActiveTab('frentes');
+                            }}
+                          >
+                            {isControlledByFront ? 'Abrir frente' : 'Configurar frente'}
+                          </Button>
+                          {isConfigured && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setSelectedService(service)}
+                              title="Dado individual/base. A capacidade principal está na frente."
+                            >
+                              Editar individual
+                            </Button>
+                          )}
+                        </div>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant={isConfigured ? 'outline' : 'default'}
+                          onClick={() => setSelectedService(service)}
+                        >
+                          {isConfigured ? 'Editar' : 'Configurar'}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 );
@@ -1326,6 +1438,8 @@ export function ServiceProductivityView() {
         <TabsContent value="frentes">
           <TeamWorkGroupsPanel
             projectId={currentProject?.id}
+            openGroupId={openWorkGroupId}
+            onOpenGroupHandled={() => setOpenWorkGroupId(null)}
             allServices={allServices.map((s) => ({
               macroId: s.macroId,
               scopeId: s.scopeId,

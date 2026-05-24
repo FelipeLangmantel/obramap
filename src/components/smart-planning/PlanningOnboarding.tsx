@@ -264,7 +264,7 @@ export function PlanningOnboarding({
             Configurar Planejamento Inteligente
           </CardTitle>
           <CardDescription>
-            Configure a produtividade e composição de equipes para cada etapa.
+            A produtividade e composição de equipes são configuradas em Produtividade e Equipes.
             As etapas já estão carregadas do cadastro do projeto.
           </CardDescription>
         </CardHeader>
@@ -305,8 +305,8 @@ export function PlanningOnboarding({
             Fonte oficial de produtividade
           </CardTitle>
           <CardDescription className="text-amber-900 dark:text-amber-200">
-            A produtividade e composiÃ§Ã£o de equipes oficiais agora sÃ£o configuradas em Produtividade e Equipes.
-            Esta tela mantÃ©m dados legados/iniciais apenas para compatibilidade do Planejamento Inteligente.
+            A produtividade e composição de equipes são configuradas exclusivamente em Produtividade e Equipes.
+            Esta tela não cria nem edita produtividade paralela.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -316,7 +316,7 @@ export function PlanningOnboarding({
                 ? 'Verificando fonte oficial...'
                 : hasOfficialSource
                   ? 'Fonte oficial encontrada'
-                  : 'Produtividade oficial ainda nÃ£o configurada'}
+                  : 'Produtividade oficial ainda não configurada'}
             </Badge>
             {hasLegacySource && (
               <Badge variant="outline">
@@ -331,7 +331,7 @@ export function PlanningOnboarding({
               <p className="text-xl font-semibold">{sourceSummary.projectProductivities}</p>
             </div>
             <div className="rounded-md border bg-background/70 p-3">
-              <p className="text-xs text-muted-foreground">ComposiÃ§Ãµes oficiais</p>
+              <p className="text-xs text-muted-foreground">Composições oficiais</p>
               <p className="text-xl font-semibold">{sourceSummary.teamCompositions}</p>
             </div>
             <div className="rounded-md border bg-background/70 p-3">
@@ -339,28 +339,28 @@ export function PlanningOnboarding({
               <p className="text-xl font-semibold">{sourceSummary.workGroups}</p>
             </div>
             <div className="rounded-md border bg-background/70 p-3">
-              <p className="text-xs text-muted-foreground">VÃ­nculos em frentes</p>
+              <p className="text-xs text-muted-foreground">Vínculos em frentes</p>
               <p className="text-xl font-semibold">{sourceSummary.workGroupServices}</p>
             </div>
           </div>
 
           {hasOfficialSource ? (
             <p className="text-sm text-amber-900 dark:text-amber-100">
-              Este projeto possui dados oficiais e esta tela nÃ£o deve criar produtividade/equipe paralela em
+              Este projeto possui dados oficiais e esta tela não deve criar produtividade/equipe paralela em
               <span className="font-medium"> planning_stages</span> ou <span className="font-medium">planning_teams</span>.
               Use Produtividade e Equipes para revisar ou completar os dados.
             </p>
           ) : (
             <p className="text-sm text-amber-900 dark:text-amber-100">
-              Ainda nÃ£o hÃ¡ produtividade oficial para este projeto. Configure em Produtividade e Equipes.
-              Se precisar iniciar o planejamento antes disso, os campos abaixo serÃ£o tratados como dados legados/iniciais.
+              Ainda não há produtividade oficial para este projeto. Configure em Produtividade e Equipes.
+              Se precisar iniciar o planejamento antes disso, use o modo legado apenas como compatibilidade.
             </p>
           )}
 
           {hasLegacySource && (
             <p className="rounded-md border bg-background/70 p-3 text-sm text-muted-foreground">
               Este projeto possui dados legados no Planejamento Inteligente: {sourceSummary.legacyStages} etapa(s)
-              e {sourceSummary.legacyTeams} equipe(s). Eles nÃ£o serÃ£o apagados nem migrados automaticamente.
+              e {sourceSummary.legacyTeams} equipe(s). Eles não serão apagados nem migrados automaticamente.
             </p>
           )}
 
@@ -379,11 +379,37 @@ export function PlanningOnboarding({
         </CardContent>
       </Card>
 
+      {hasOfficialSource ? (
+        <Card>
+          <CardContent className="space-y-3 py-5">
+            <div className="flex items-start gap-3">
+              <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-600" />
+              <div>
+                <p className="font-medium">Fonte oficial ativa</p>
+                <p className="text-sm text-muted-foreground">
+                  Os campos legados de produtividade, número de equipes, profissionais/equipe e ajudantes/equipe
+                  foram ocultados para evitar configuração paralela. Continue no planejamento ou abra Produtividade e Equipes
+                  para revisar produtividade, composição detalhada e frentes compartilhadas.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <details className="rounded-lg border bg-muted/20 p-4">
+          <summary className="cursor-pointer text-sm font-medium">
+            Modo legado de compatibilidade
+          </summary>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Use estes campos apenas para projetos antigos sem fonte oficial. O caminho recomendado é configurar
+            Produtividade e Equipes.
+          </p>
+
       {/* Stages Configuration */}
-      <div className="space-y-4">
+      <div className="mt-4 space-y-4">
         <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
           {hasOfficialSource
-            ? 'Campos legados bloqueados porque jÃ¡ existe fonte oficial em Produtividade e Equipes.'
+            ? 'Campos legados bloqueados porque já existe fonte oficial em Produtividade e Equipes.'
             : 'Campos legados/iniciais. A fonte oficial continua sendo Produtividade e Equipes.'}
         </div>
         {stages.map((stage, index) => (
@@ -527,7 +553,7 @@ export function PlanningOnboarding({
         <Button
           size="lg"
           onClick={handleComplete}
-          disabled={saving || hasOfficialSource}
+          disabled={saving}
           className="gap-2"
         >
           <PlayCircle className="h-5 w-5" />
@@ -535,6 +561,8 @@ export function PlanningOnboarding({
           <ArrowRight className="h-4 w-4" />
         </Button>
       </div>
+        </details>
+      )}
     </div>
   );
 }
