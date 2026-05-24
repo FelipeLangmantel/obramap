@@ -129,6 +129,33 @@ interface RequiredProductivityRow {
   recommendation: string;
 }
 
+type RecommendedProductivityActionType =
+  | 'register_productivity'
+  | 'collect_real_data'
+  | 'keep_team'
+  | 'review_registered_productivity'
+  | 'increase_team'
+  | 'redistribute_targets'
+  | 'extend_deadline'
+  | 'review_planning';
+
+type RecommendedProductivityPriority = 'Alta' | 'Media' | 'Baixa';
+
+interface RecommendedProductivityAction {
+  id: string;
+  service: ServiceInfo;
+  frontName: string | null;
+  status: RequiredProductivityStatus;
+  requiredProductivity: number | null;
+  registeredProductivity: number | null;
+  realProductivity: number | null;
+  diffPercent: number | null;
+  actionType: RecommendedProductivityActionType;
+  actionLabel: string;
+  priority: RecommendedProductivityPriority;
+  justification: string;
+}
+
 const TYPE_LABELS: Record<SuggestedServiceType, string> = {
   physical_repetitive: 'Fisico repetitivo',
   physical_one_time: 'Fisico pontual',
@@ -147,10 +174,27 @@ const REQUIRED_STATUS_LABELS: Record<RequiredProductivityStatus, string> = {
   missing_planning: 'Sem planejamento suficiente',
 };
 
+const RECOMMENDED_ACTION_LABELS: Record<RecommendedProductivityActionType, string> = {
+  register_productivity: 'Cadastrar produtividade',
+  collect_real_data: 'Coletar dados reais',
+  keep_team: 'Manter equipe atual',
+  review_registered_productivity: 'Revisar produtividade cadastrada',
+  increase_team: 'Aumentar equipe',
+  redistribute_targets: 'Redistribuir metas',
+  extend_deadline: 'Alongar prazo',
+  review_planning: 'Revisar planejamento',
+};
+
 const requiredStatusVariant = (status: RequiredProductivityStatus): 'default' | 'secondary' | 'destructive' | 'outline' => {
   if (status === 'below_required') return 'destructive';
   if (status === 'attention') return 'secondary';
   if (status === 'ok') return 'default';
+  return 'outline';
+};
+
+const priorityVariant = (priority: RecommendedProductivityPriority): 'default' | 'secondary' | 'destructive' | 'outline' => {
+  if (priority === 'Alta') return 'destructive';
+  if (priority === 'Media') return 'secondary';
   return 'outline';
 };
 
@@ -504,6 +548,7 @@ export function ServiceProductivityView() {
   const [selectedService, setSelectedService] = useState<ServiceInfo | null>(null);
   const [requiredProductivityFilter, setRequiredProductivityFilter] = useState<'all' | RequiredProductivityStatus>('all');
   const [requiredProductivityFrontFilter, setRequiredProductivityFrontFilter] = useState('all');
+  const [recommendedActionFilter, setRecommendedActionFilter] = useState<'all' | 'high' | RecommendedProductivityActionType>('all');
   const [weeklyTargets, setWeeklyTargets] = useState<WeeklyTargetReadRow[]>([]);
   const [weeklyWeeks, setWeeklyWeeks] = useState<WeeklyPlanWeekReadRow[]>([]);
   const [actualProductions, setActualProductions] = useState<ActualProductionReadRow[]>([]);
@@ -757,6 +802,107 @@ export function ServiceProductivityView() {
     missingRegistered: requiredProductivityRows.filter((row) => row.status === 'missing_registered').length,
     missingReal: requiredProductivityRows.filter((row) => row.status === 'missing_real').length,
   }), [requiredProductivityRows]);
+
+  const overloadedFronts = useMemo(() => {
+    const fronts = new Set<string>();
+    capacityModel.overloadDiagnostics.forEach((diagnostic) => {
+      if (diagnostic.status === 'overloaded' && diagnostic.groupName) {
+        fronts.add(diagnostic.groupName);
+      }
+    });
+    return fronts;
+  }, [capacityModel.overloadDiagnostics]);
+
+  const recommendedActions = useMemo<RecommendedProductivityAction[]>(() =>
+    requiredProductivityRows.map((row) => {
+      const frontOverloaded = !!row.frontName && overloadedFronts.has(row.frontName);
+      const registeredGap = row.diffRegisteredPercent;
+      const realGap = row.diffRealPercent;
+      const realVsRegisteredGap =
+        row.realProductivity !== null && row.registeredProductivity
+          ? ((row.realProductivity - row.registeredProductivity) / row.registeredProductivity) * 100
+          : null;
+
+      let actionType: RecommendedProductivityActionType = 'review_planning';
+      let priority: RecommendedProductivityPriority = 'Baixa';
+      let justification = 'Dados insuficientes para recomendar ajuste operacional.';
+
+      if (row.status === 'missing_registered') {
+        actionType = 'register_productivity';
+        priority = row.requiredProductivity ? 'Alta' : 'Media';
+        justification = 'Nao ha produtividade cadastrada para este servico com planejamento ativo.';
+      } else if (row.status === 'missing_planning') {
+        actionType = 'review_planning';
+        priority = 'Baixa';
+        justification = 'Nao ha planejamento suficiente para calcular produtividade necessaria.';
+      } else if (row.status === 'missing_real') {
+        actionType = 'collect_real_data';
+        priority = frontOverloaded ? 'Alta' : 'Media';
+        justification = 'Nao ha dados reais suficientes para comparar a execucao com o planejamento.';
+      } else if (frontOverloaded && row.status !== 'below_required') {
+        actionType = 'redistribute_targets';
+        priority = 'Alta';
+        justification = 'A frente vinculada apresenta sobrecarga no periodo analisado.';
+      } else if (realGap !== null && realGap < -20) {
+        actionType = row.requiredProductivity && row.realProductivity !== null && row.requiredProductivity > row.realProductivity * 1.5
+          ? 'extend_deadline'
+          : 'increase_team';
+        priority = 'Alta';
+        justification = 'A produtividade real esta mais de 20% abaixo da necessaria.';
+      } else if (registeredGap !== null && registeredGap < -20) {
+        actionType = 'increase_team';
+        priority = 'Alta';
+        justification = 'A produtividade cadastrada esta abaixo da necessaria para cumprir o planejamento.';
+      } else if (row.status === 'attention') {
+        actionType = 'increase_team';
+        priority = 'Media';
+        justification = 'A produtividade esta ate 20% abaixo da necessaria; monitore e avalie reforco pontual.';
+      } else if (realVsRegisteredGap !== null && Math.abs(realVsRegisteredGap) >= 25) {
+        actionType = 'review_registered_productivity';
+        priority = 'Media';
+        justification = 'A produtividade cadastrada esta muito diferente da produtividade real observada.';
+      } else if (row.status === 'ok') {
+        actionType = 'keep_team';
+        priority = 'Baixa';
+        justification = 'A produtividade atual atende ao planejamento.';
+      }
+
+      const diffPercent =
+        row.diffRealPercent
+        ?? row.diffRegisteredPercent
+        ?? realVsRegisteredGap
+        ?? null;
+
+      return {
+        id: `${row.service.macroId}::${row.service.scopeId}`,
+        service: row.service,
+        frontName: row.frontName,
+        status: row.status,
+        requiredProductivity: row.requiredProductivity,
+        registeredProductivity: row.registeredProductivity,
+        realProductivity: row.realProductivity,
+        diffPercent,
+        actionType,
+        actionLabel: RECOMMENDED_ACTION_LABELS[actionType],
+        priority,
+        justification,
+      };
+    }), [overloadedFronts, requiredProductivityRows]);
+
+  const filteredRecommendedActions = useMemo(() =>
+    recommendedActions.filter((action) =>
+      recommendedActionFilter === 'all'
+      || (recommendedActionFilter === 'high' && action.priority === 'Alta')
+      || action.actionType === recommendedActionFilter,
+    ), [recommendedActionFilter, recommendedActions]);
+
+  const recommendedActionSummary = useMemo(() => ({
+    high: recommendedActions.filter((action) => action.priority === 'Alta').length,
+    register: recommendedActions.filter((action) => action.actionType === 'register_productivity').length,
+    collect: recommendedActions.filter((action) => action.actionType === 'collect_real_data').length,
+    keep: recommendedActions.filter((action) => action.actionType === 'keep_team').length,
+    reviewPlanning: recommendedActions.filter((action) => action.actionType === 'review_planning').length,
+  }), [recommendedActions]);
 
   if (!currentProject) {
     return (
@@ -1210,6 +1356,105 @@ export function ServiceProductivityView() {
                 {requiredProductivityLoading && (
                   <div className="pb-2 text-sm text-muted-foreground">Carregando fontes de produtividade real...</div>
                 )}
+              </div>
+
+              <div className="space-y-4 rounded-lg border p-4">
+                <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <h3 className="text-base font-semibold">Acoes recomendadas</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Recomendacoes praticas geradas a partir da produtividade necessaria, cadastrada e real.
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="w-fit">Diagnostico local</Badge>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-5">
+                  {[
+                    ['Alta prioridade', recommendedActionSummary.high],
+                    ['Precisam produtividade', recommendedActionSummary.register],
+                    ['Precisam dados reais', recommendedActionSummary.collect],
+                    ['Equipe adequada', recommendedActionSummary.keep],
+                    ['Revisar planejamento', recommendedActionSummary.reviewPlanning],
+                  ].map(([label, value]) => (
+                    <div key={String(label)} className="rounded-lg border bg-background p-3">
+                      <p className="text-xs text-muted-foreground">{label}</p>
+                      <p className="mt-1 text-xl font-semibold">{value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+                  Estas acoes sao recomendacoes de diagnostico. Elas nao alteram produtividade, equipes, metas,
+                  producao, diario, medicao ou planejamento oficial.
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground" htmlFor="recommended-action-filter">
+                    Filtrar acoes
+                  </label>
+                  <select
+                    id="recommended-action-filter"
+                    className="h-10 rounded-md border bg-background px-3 text-sm"
+                    value={recommendedActionFilter}
+                    onChange={(event) => setRecommendedActionFilter(event.target.value as 'all' | 'high' | RecommendedProductivityActionType)}
+                  >
+                    <option value="all">Todas</option>
+                    <option value="high">Alta prioridade</option>
+                    <option value="register_productivity">Cadastrar produtividade</option>
+                    <option value="increase_team">Aumentar equipe</option>
+                    <option value="collect_real_data">Coletar dados reais</option>
+                    <option value="keep_team">Manter equipe</option>
+                    <option value="review_planning">Revisar planejamento</option>
+                  </select>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[980px] text-sm">
+                    <thead className="border-b text-left text-xs text-muted-foreground">
+                      <tr>
+                        <th className="p-2">Prioridade</th>
+                        <th className="p-2">Servico</th>
+                        <th className="p-2">Frente</th>
+                        <th className="p-2">Acao recomendada</th>
+                        <th className="p-2">Justificativa</th>
+                        <th className="p-2">Diferenca</th>
+                        <th className="p-2">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredRecommendedActions.map((action) => (
+                        <tr key={action.id} className="border-b last:border-0">
+                          <td className="p-2">
+                            <Badge variant={priorityVariant(action.priority)}>{action.priority}</Badge>
+                          </td>
+                          <td className="p-2">
+                            <div className="font-medium">{action.service.scopeName || 'Servico sem nome'}</div>
+                            <div className="text-xs text-muted-foreground">{action.service.macroName || 'Etapa nao informada'}</div>
+                          </td>
+                          <td className="p-2">{action.frontName ?? 'Sem frente'}</td>
+                          <td className="p-2 font-medium">{action.actionLabel}</td>
+                          <td className="p-2">{action.justification}</td>
+                          <td className="p-2">
+                            {action.diffPercent === null ? '-' : `${formatNumber(action.diffPercent, 1)}%`}
+                          </td>
+                          <td className="p-2">
+                            <Badge variant={requiredStatusVariant(action.status)}>
+                              {REQUIRED_STATUS_LABELS[action.status]}
+                            </Badge>
+                          </td>
+                        </tr>
+                      ))}
+                      {filteredRecommendedActions.length === 0 && (
+                        <tr>
+                          <td className="p-6 text-center text-muted-foreground" colSpan={7}>
+                            Nenhuma acao encontrada para o filtro selecionado.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
               <div className="overflow-x-auto">
