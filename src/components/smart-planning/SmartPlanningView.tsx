@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useConstruction } from '@/contexts/ConstructionContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -137,10 +137,15 @@ class PlanningDiagnosticRenderBoundary extends React.Component<
 }
 
 
-export function SmartPlanningView() {
+interface SmartPlanningViewProps {
+  onOpenProductivity?: () => void;
+}
+
+export function SmartPlanningView({ onOpenProductivity }: SmartPlanningViewProps) {
   const { currentProject } = useConstruction();
   const { company, canEdit, requireEdit } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [showOfficialPlanningView, setShowOfficialPlanningView] = useState(false);
   const [productivityService, setProductivityService] = useState<{
     macro_id: string; scope_id: string; macro_name: string; scope_name: string;
   } | null>(null);
@@ -195,13 +200,17 @@ export function SmartPlanningView() {
     projectStartDate: currentProject?.startDate || ''
   });
 
+  useEffect(() => {
+    setShowOfficialPlanningView(false);
+  }, [currentProject?.id]);
+
   const handleOnboardingComplete = async (
     stagesData: Omit<PlanningStage, 'id' | 'created_at' | 'updated_at'>[],
     teamCompositions: Record<string, TeamComposition>
   ) => {
     if (!requireEdit()) return;
     for (const stage of stagesData) {
-      const macroId = (stage as any).macro_id;
+      const macroId = stage.macro_id;
       const composition = teamCompositions[macroId] || { professionals: 1, helpers: 1 };
       await addStageWithTeams(stage, composition);
     }
@@ -424,7 +433,7 @@ export function SmartPlanningView() {
     );
   }
 
-  if (!isSetupComplete) {
+  if (!isSetupComplete && !showOfficialPlanningView) {
     return (
       <div className="p-6">
         {canEdit ? (
@@ -434,6 +443,8 @@ export function SmartPlanningView() {
             macrosTemplate={currentProject.macrosTemplate}
             templates={templates}
             onComplete={handleOnboardingComplete}
+            onOpenProductivity={onOpenProductivity}
+            onContinueWithOfficialSource={() => setShowOfficialPlanningView(true)}
           />
         ) : (
           <div className="text-center py-12 text-muted-foreground">

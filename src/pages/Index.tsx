@@ -481,7 +481,7 @@ function Index() {
 
                 {activeView === "smart-planning" && (
                   <div className="flex-1">
-                    <SmartPlanningView />
+                    <SmartPlanningView onOpenProductivity={() => setActiveView("productivity")} />
                   </div>
                 )}
 
