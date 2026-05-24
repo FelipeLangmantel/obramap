@@ -26,7 +26,8 @@ import {
   Loader2,
   Users,
   ClipboardList,
-  FileText
+  FileText,
+  CheckCircle2
 } from 'lucide-react';
 import { format, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
