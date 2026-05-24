@@ -125,6 +125,9 @@ interface RequiredProductivityRow {
   registeredLabel: string;
   realProductivity: number | null;
   requiredProductivity: number | null;
+  plannedDemand: number | null;
+  planningDays: number | null;
+  capacityPerTeam: number | null;
   diffRegisteredPercent: number | null;
   diffRealPercent: number | null;
   status: RequiredProductivityStatus;
@@ -686,9 +689,17 @@ export function ServiceProductivityView() {
           || capacityEntry?.workingDaysPerWeek
           || productivity?.working_days_per_week
           || 5;
-        return days > 0 && quantity > 0 ? quantity / days : 0;
+        return {
+          quantity,
+          days,
+          required: days > 0 && quantity > 0 ? quantity / days : 0,
+        };
       });
-      const requiredProductivity = targetRequirements.length ? Math.max(...targetRequirements) : null;
+      const peakRequirement = targetRequirements.reduce<{ quantity: number; days: number; required: number } | null>(
+        (selected, item) => (!selected || item.required > selected.required ? item : selected),
+        null,
+      );
+      const requiredProductivity = peakRequirement ? peakRequirement.required : null;
       const registeredProductivity =
         capacityEntry?.weeklyCapacity && capacityEntry.workingDaysPerWeek > 0
           ? capacityEntry.weeklyCapacity / capacityEntry.workingDaysPerWeek
@@ -698,6 +709,10 @@ export function ServiceProductivityView() {
             productivity?.working_days_per_week ?? 5,
             productivity?.default_team_count ?? 1,
           );
+      const currentTeamCount = capacityEntry?.teamCount ?? productivity?.default_team_count ?? 1;
+      const capacityPerTeam = registeredProductivity !== null && currentTeamCount > 0
+        ? registeredProductivity / currentTeamCount
+        : null;
       const registeredLabel = capacityEntry?.groupName
         ? `${formatNumber(registeredProductivity, 2)}/dia via ${capacityEntry.groupName}`
         : registeredProductivity !== null
@@ -754,6 +769,9 @@ export function ServiceProductivityView() {
         registeredLabel,
         realProductivity,
         requiredProductivity,
+        plannedDemand: peakRequirement?.quantity ?? null,
+        planningDays: peakRequirement?.days ?? null,
+        capacityPerTeam,
         diffRegisteredPercent,
         diffRealPercent,
         status,
@@ -1349,6 +1367,7 @@ export function ServiceProductivityView() {
             frontOptions={requiredFrontOptions}
             loading={requiredProductivityLoading}
             rows={filteredRequiredProductivityRows}
+            simulatorRows={requiredProductivityRows}
             actionSummary={recommendedActionSummary}
             actionFilter={recommendedActionFilter}
             onActionFilterChange={setRecommendedActionFilter}

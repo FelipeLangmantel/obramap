@@ -2,6 +2,7 @@ import { Info, TrendingUp } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ProductivityDecisionSimulator } from './ProductivityDecisionSimulator';
 
 type RequiredProductivityStatus =
   | 'ok'
@@ -35,6 +36,9 @@ interface RequiredProductivityRowView {
   registeredLabel: string;
   realProductivity: number | null;
   requiredProductivity: number | null;
+  plannedDemand: number | null;
+  planningDays: number | null;
+  capacityPerTeam: number | null;
   diffRegisteredPercent: number | null;
   diffRealPercent: number | null;
   status: RequiredProductivityStatus;
@@ -68,6 +72,7 @@ interface RequiredProductivityTabProps {
   frontOptions: string[];
   loading: boolean;
   rows: RequiredProductivityRowView[];
+  simulatorRows: RequiredProductivityRowView[];
   actionSummary: {
     high: number;
     register: number;
@@ -112,6 +117,7 @@ export function RequiredProductivityTab({
   frontOptions,
   loading,
   rows,
+  simulatorRows,
   actionSummary,
   actionFilter,
   onActionFilterChange,
@@ -298,6 +304,8 @@ export function RequiredProductivityTab({
             </table>
           </div>
         </div>
+
+        <ProductivityDecisionSimulator rows={simulatorRows} formatNumber={formatNumber} />
 
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1080px] text-sm">
