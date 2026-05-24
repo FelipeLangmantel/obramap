@@ -316,11 +316,23 @@ export function useStrategicGanttData(projectId: string | undefined) {
       const id = getLegacyServiceId(svc.macro_id, svc.scope_id);
       const prod = prodMap.get(serviceKey);
       const stageProductivity = Number(stage?.planned_productivity) || 0;
-      const hasProductivity = (!!prod && prod.base_productivity > 0) || stageProductivity > 0;
-      const productivity = prod?.base_productivity || stageProductivity || 1;
-      const productivitySource = prod?.source || (stageProductivity > 0 ? 'manual' : 'missing');
+      const hasProjectProductivitySource = prod?.source === 'project';
+      const hasProjectProductivity = hasProjectProductivitySource && prod.base_productivity > 0;
+      const hasLegacyProductivity = !hasProjectProductivitySource && stageProductivity > 0;
+      const hasDefaultProductivity = !hasProjectProductivitySource && !!prod && prod.base_productivity > 0;
+      const hasProductivity = hasProjectProductivity || hasLegacyProductivity || hasDefaultProductivity;
+      const productivity = hasProjectProductivitySource
+        ? prod.base_productivity || 1
+        : stageProductivity || prod?.base_productivity || 1;
+      const productivitySource = hasProjectProductivitySource
+        ? prod.source
+        : stageProductivity > 0
+          ? 'manual'
+          : prod?.source || 'missing';
       const productivityType = prod?.productivity_type || 'casa_por_dia';
-      const teams = stage?.planned_teams || prod?.default_team_count || 1;
+      const teams = hasProjectProductivitySource
+        ? prod.default_team_count || 1
+        : stage?.planned_teams || prod?.default_team_count || 1;
       const dependsOn = stage?.depends_on || null;
       const sequenceOrder = stage?.sequence_order ?? result.length;
 
@@ -332,7 +344,9 @@ export function useStrategicGanttData(projectId: string | undefined) {
         : null;
       const durationDays = Math.max(
         1,
-        Number(stage?.duration_days) || suggestedDurationDays || Math.ceil(remaining / Math.max(dailyCapacity, 0.01))
+        hasProjectProductivitySource
+          ? suggestedDurationDays || Math.ceil(remaining / Math.max(dailyCapacity, 0.01))
+          : Number(stage?.duration_days) || suggestedDurationDays || Math.ceil(remaining / Math.max(dailyCapacity, 0.01))
       );
       const durationDeltaDays = suggestedDurationDays !== null
         ? durationDays - suggestedDurationDays
@@ -420,12 +434,12 @@ export function useStrategicGanttData(projectId: string | undefined) {
         .eq('id', existing.id);
     }
 
-    // Update planning_stages if exists
+    // Update planning_stages only when the service still relies on legacy/manual data.
     const stage = stages.find((s: any) => s.macro_id === macroId && s.scope_id === scopeId)
       || (services.filter((s) => s.macro_id === macroId).length <= 1
         ? stages.find((s: any) => s.macro_id === macroId && !s.scope_id)
         : null);
-    if (stage) {
+    if (stage && existing?.source !== 'project') {
       await supabase
         .from('planning_stages')
         .update({ planned_productivity: newProductivity, planned_teams: newTeams })

@@ -606,6 +606,7 @@ const buildOfficialView = (
   if (rows.servicePlans.length > 0) {
     rows.servicePlans.forEach((plan) => {
       const productivity = productivityByService.get(getServiceKey(plan.macro_id, plan.scope_id));
+      const hasProjectProductivity = productivity?.source === 'project_service_productivity';
       const targetHouses = Number(plan.target_houses) || 0;
       const houseIds = targetHouses > 0 && targetHouses === allHouseNumbers.length ? allHouseNumbers : [];
       const plannedQuantity = targetHouses || houseIds.length || allHouseNumbers.length || 1;
@@ -628,9 +629,15 @@ const buildOfficialView = (
         unitLabel: houseIds.length ? 'Todas as casas da obra' : `${plannedQuantity} unidade(s) planejada(s)`,
         plannedStartDate,
         plannedEndDate,
-        teamCount: Number(plan.team_count || plan.teams_planned) || productivity?.teamCount || null,
-        productivityValue: Number(plan.productivity_per_team || plan.productivity_planned) || productivity?.value || null,
-        productivityUnit: plan.unit_label || productivity?.unit || null,
+        teamCount: hasProjectProductivity
+          ? productivity?.teamCount || null
+          : Number(plan.team_count || plan.teams_planned) || productivity?.teamCount || null,
+        productivityValue: hasProjectProductivity
+          ? productivity?.value || null
+          : Number(plan.productivity_per_team || plan.productivity_planned) || productivity?.value || null,
+        productivityUnit: hasProjectProductivity
+          ? productivity?.unit || null
+          : plan.unit_label || productivity?.unit || null,
         plannedQuantity,
         source: 'service_planning_by_period',
         predecessorId: null,
@@ -641,6 +648,7 @@ const buildOfficialView = (
   } else {
     rows.stages.forEach((stage) => {
       const productivity = productivityByService.get(getServiceKey(stage.macro_id, stage.scope_id));
+      const hasProjectProductivity = productivity?.source === 'project_service_productivity';
       const plannedQuantity = allHouseNumbers.length || 1;
       rawOfficialPackages.push(makePackage({
         id: `stage:${stage.id}`,
@@ -655,9 +663,15 @@ const buildOfficialView = (
         unitLabel: 'Todas as casas da obra',
         plannedStartDate: null,
         plannedEndDate: null,
-        teamCount: Number(stage.planned_teams) || productivity?.teamCount || null,
-        productivityValue: Number(stage.planned_productivity) || productivity?.value || null,
-        productivityUnit: stage.unit_label || productivity?.unit || null,
+        teamCount: hasProjectProductivity
+          ? productivity?.teamCount || null
+          : Number(stage.planned_teams) || productivity?.teamCount || null,
+        productivityValue: hasProjectProductivity
+          ? productivity?.value || null
+          : Number(stage.planned_productivity) || productivity?.value || null,
+        productivityUnit: hasProjectProductivity
+          ? productivity?.unit || null
+          : stage.unit_label || productivity?.unit || null,
         plannedQuantity,
         source: 'planning_stages',
         predecessorId: stage.depends_on || null,
