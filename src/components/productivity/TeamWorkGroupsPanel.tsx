@@ -18,6 +18,7 @@ import { useServiceProductivity } from '@/hooks/useServiceProductivity';
 import { usePlanningCapacityModel } from '@/components/smart-planning/hooks/usePlanningCapacityModel';
 import { TeamWorkGroupDialog, type ServiceRef, type TeamWorkGroupDialogValues } from './TeamWorkGroupDialog';
 import { AddServiceToGroupDialog } from './AddServiceToGroupDialog';
+import { toast } from 'sonner';
 
 type SizingStatus = 'ok' | 'attention' | 'overloaded' | 'missing_productivity' | 'no_demand';
 
@@ -30,6 +31,13 @@ const normalizeUnitText = (value: string | null | undefined) =>
 
 const formatNumber = (value: number | null | undefined, digits = 0) =>
   Number.isFinite(Number(value)) ? Number(value).toLocaleString('pt-BR', { maximumFractionDigits: digits }) : '-';
+
+const normalizeGroupName = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
 
 const calculateWeeklyCapacity = (
   productivityValue: number | null | undefined,
@@ -209,12 +217,26 @@ export function TeamWorkGroupsPanel({ projectId, allServices, suggestions = [] }
   };
 
   const openCreateFromSuggestion = (sug: { title: string; services: ServiceRef[] }) => {
+    const existing = groups.find((group) => group.active && normalizeGroupName(group.name) === normalizeGroupName(sug.title));
+    if (existing) {
+      toast.info('Esta frente ja existe. Abrimos a frente existente para revisao.');
+      openEdit(existing, sug.services);
+      return;
+    }
     setEditingGroupId(null);
     setDialogInitial({ name: sug.title, services: sug.services });
     setDialogOpen(true);
   };
 
-  const openEdit = (g: TeamWorkGroup) => {
+  const openEdit = (g: TeamWorkGroup, suggestedServices?: ServiceRef[]) => {
+    const currentServices = servicesByGroup.get(g.id) ?? [];
+    const mergedServices = [...currentServices];
+    (suggestedServices ?? []).forEach((service) => {
+      const exists = mergedServices.some((item) => item.scopeId === service.scopeId || (
+        item.macroId === service.macroId && item.scopeName === service.scopeName
+      ));
+      if (!exists) mergedServices.push(service);
+    });
     setEditingGroupId(g.id);
     setDialogInitial({
       name: g.name,
@@ -227,14 +249,39 @@ export function TeamWorkGroupsPanel({ projectId, allServices, suggestions = [] }
       professional_count: g.professional_count ?? 0,
       auxiliary_count: g.auxiliary_count ?? 0,
       composition: compositionByGroup.get(g.id) ?? [],
-      services: servicesByGroup.get(g.id) ?? [],
+      services: mergedServices,
     });
     setDialogOpen(true);
   };
 
+  const syncGroupServices = async (groupId: string, nextServices: ServiceRef[]) => {
+    const currentLinks = groupServices.filter((link) => link.group_id === groupId);
+    const nextKeys = new Set(nextServices.map((service) => service.scopeId || `${service.macroId}:${service.scopeName}`));
+    const currentKeys = new Set(currentLinks.map((link) => link.scope_id || `${link.macro_id}:${link.service_name}`));
+
+    for (const link of currentLinks) {
+      const key = link.scope_id || `${link.macro_id}:${link.service_name}`;
+      if (!nextKeys.has(key)) {
+        await removeServiceFromGroup(link.id);
+      }
+    }
+
+    for (const [index, service] of nextServices.entries()) {
+      const key = service.scopeId || `${service.macroId}:${service.scopeName}`;
+      if (!currentKeys.has(key)) {
+        await addServiceToGroup(groupId, {
+          macro_id: service.macroId || null,
+          scope_id: service.scopeId || null,
+          service_name: service.scopeName,
+          sequence_order: index,
+        });
+      }
+    }
+  };
+
   const handleSubmit = async (values: TeamWorkGroupDialogValues) => {
     if (editingGroupId) {
-      await updateGroup(editingGroupId, {
+      const updated = await updateGroup(editingGroupId, {
         name: values.name,
         description: values.description ?? null,
         base_unit: values.base_unit ?? null,
@@ -246,8 +293,18 @@ export function TeamWorkGroupsPanel({ projectId, allServices, suggestions = [] }
         auxiliary_count: values.auxiliary_count,
         composition: values.composition,
       });
+      if (updated) {
+        await syncGroupServices(editingGroupId, values.services);
+      }
     } else {
-      await createGroup(
+      const existing = groups.find((group) => group.active && normalizeGroupName(group.name) === normalizeGroupName(values.name));
+      if (existing) {
+        toast.info('Esta frente ja existe. Abrimos a frente existente para revisao.');
+        setDialogOpen(false);
+        openEdit(existing, values.services);
+        return;
+      }
+      const createdId = await createGroup(
         {
           name: values.name,
           description: values.description ?? null,
@@ -267,6 +324,9 @@ export function TeamWorkGroupsPanel({ projectId, allServices, suggestions = [] }
           sequence_order: idx,
         })),
       );
+      if (createdId && !groups.some((group) => group.id === createdId)) {
+        setEditingGroupId(createdId);
+      }
     }
   };
 

@@ -58,6 +58,18 @@ const normalizeProfessionName = (value: string) =>
     .trim()
     .toLowerCase();
 
+const mostCommon = <T extends string | number>(values: T[]) => {
+  const counts = new Map<T, number>();
+  values.forEach((value) => counts.set(value, (counts.get(value) ?? 0) + 1));
+  return Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0];
+};
+
+const deriveBaseUnit = (productivityUnit: string | null | undefined) => {
+  const value = String(productivityUnit ?? '').trim();
+  if (!value) return '';
+  return value.split('/')[0]?.trim() || value;
+};
+
 export function TeamWorkGroupDialog({
   open,
   onClose,
@@ -77,6 +89,7 @@ export function TeamWorkGroupDialog({
   const [picker, setPicker] = useState('');
   const [services, setServices] = useState<ServiceRef[]>([]);
   const [saving, setSaving] = useState(false);
+  const [autoSuggestionKey, setAutoSuggestionKey] = useState('');
   const { professions: dbProfessions, groupedByCategory } = useProfessions({ onlyActive: true });
 
   const groupedProfessions = useMemo(() => {
@@ -118,6 +131,41 @@ export function TeamWorkGroupDialog({
     return Array.from(byProfession.values());
   }, [serviceProductivities, services]);
 
+  const suggestedSettings = useMemo(() => {
+    const selectedScopeIds = new Set((services || []).map((service) => service.scopeId));
+    const linked = serviceProductivities.filter((productivity) => selectedScopeIds.has(productivity.scope_id));
+    const positiveProductivities = linked
+      .map((productivity) => ({
+        value: Number(productivity.productivity_value) || 0,
+        unit: productivity.productivity_unit || '',
+      }))
+      .filter((item) => item.value > 0)
+      .sort((a, b) => a.value - b.value);
+    const referenceProductivity = positiveProductivities[0];
+    const productivityUnits = linked.map((productivity) => productivity.productivity_unit || '').filter(Boolean);
+    const workingDaysValues = linked
+      .map((productivity) => Number(productivity.working_days_per_week) || 0)
+      .filter((value) => value > 0);
+    const teamCountValues = linked
+      .map((productivity) => Number(productivity.default_team_count) || 0)
+      .filter((value) => value > 0);
+    const commonProductivityUnit = mostCommon(productivityUnits) || referenceProductivity?.unit || '';
+    return {
+      hasServiceData: linked.length > 0,
+      hasProductivityData: positiveProductivities.length > 0,
+      baseUnit: deriveBaseUnit(commonProductivityUnit),
+      productivityValue: referenceProductivity?.value ?? null,
+      productivityUnit: referenceProductivity?.unit || commonProductivityUnit,
+      workingDays: mostCommon(workingDaysValues) || 5,
+      simultaneousTeams: teamCountValues.length ? Math.max(...teamCountValues) : 1,
+    };
+  }, [serviceProductivities, services]);
+
+  const suggestionKey = useMemo(
+    () => services.map((service) => service.scopeId || `${service.macroId}:${service.scopeName}`).sort().join('|'),
+    [services],
+  );
+
   useEffect(() => {
     if (!open) return;
     setName(initialValues?.name ?? '');
@@ -136,16 +184,50 @@ export function TeamWorkGroupDialog({
       setTeamComposition([]);
     }
     setPicker('');
+    setAutoSuggestionKey('');
   }, [open, initialValues]);
 
   useEffect(() => {
     if (!open) return;
-    if (initialValues?.composition?.length) return;
-    if (teamComposition.length > 0) return;
+    if (!suggestionKey || autoSuggestionKey === suggestionKey) return;
+    if (!suggestedSettings.hasServiceData && suggestedComposition.length === 0) return;
+    if (!baseUnit.trim() && suggestedSettings.baseUnit) setBaseUnit(suggestedSettings.baseUnit);
+    if (!productivityValue.trim() && suggestedSettings.productivityValue) setProductivityValue(String(suggestedSettings.productivityValue));
+    if (!productivityUnit.trim() && suggestedSettings.productivityUnit) setProductivityUnit(suggestedSettings.productivityUnit);
+    if ((!workingDays.trim() || Number(workingDays) <= 0) && suggestedSettings.workingDays) setWorkingDays(String(suggestedSettings.workingDays));
+    if ((!simultaneousTeams.trim() || Number(simultaneousTeams) <= 0) && suggestedSettings.simultaneousTeams) {
+      setSimultaneousTeams(String(suggestedSettings.simultaneousTeams));
+    }
+    if (!initialValues?.composition?.length && teamComposition.length === 0 && suggestedComposition.length > 0) {
+      setTeamComposition(suggestedComposition.map((row) => ({ ...row })));
+    }
+    setAutoSuggestionKey(suggestionKey);
+  }, [
+    autoSuggestionKey,
+    baseUnit,
+    initialValues?.composition?.length,
+    open,
+    productivityUnit,
+    productivityValue,
+    simultaneousTeams,
+    suggestionKey,
+    suggestedComposition,
+    suggestedSettings,
+    teamComposition.length,
+    workingDays,
+  ]);
+
+  const applyServiceSuggestions = () => {
+    if (suggestedSettings.baseUnit) setBaseUnit(suggestedSettings.baseUnit);
+    if (suggestedSettings.productivityValue) setProductivityValue(String(suggestedSettings.productivityValue));
+    if (suggestedSettings.productivityUnit) setProductivityUnit(suggestedSettings.productivityUnit);
+    setWorkingDays(String(suggestedSettings.workingDays || 5));
+    setSimultaneousTeams(String(suggestedSettings.simultaneousTeams || 1));
     if (suggestedComposition.length > 0) {
       setTeamComposition(suggestedComposition.map((row) => ({ ...row })));
     }
-  }, [open, initialValues?.composition?.length, suggestedComposition, teamComposition.length]);
+    setAutoSuggestionKey(suggestionKey);
+  };
 
   const compositionTotals = useMemo(() => {
     const professional_count = teamComposition
@@ -309,15 +391,28 @@ export function TeamWorkGroupDialog({
                   Defina uma equipe-padrao da frente. Os totais agregados serao sincronizados automaticamente.
                 </p>
               </div>
-              {suggestedComposition.length > 0 && (
+              {suggestedSettings.hasServiceData && (
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setTeamComposition(suggestedComposition.map((row) => ({ ...row })))}
+                  onClick={applyServiceSuggestions}
                 >
-                  Preencher a partir dos servicos
+                  Atualizar pelos servicos vinculados
                 </Button>
+              )}
+            </div>
+
+            <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+              {services.length === 0
+                ? 'Vincule servicos para sugerir produtividade e composicao da frente.'
+                : suggestedSettings.hasProductivityData
+                  ? 'Dados sugeridos a partir dos servicos vinculados. Revise antes de salvar.'
+                  : 'Servicos vinculados sem produtividade oficial suficiente para sugerir capacidade.'}
+              {(initialValues?.composition?.length || initialValues?.productivity_value) && (
+                <span className="ml-1">
+                  Esta frente ja possui configuracao propria; use o botao de atualizacao se desejar substituir pelos servicos.
+                </span>
               )}
             </div>
 

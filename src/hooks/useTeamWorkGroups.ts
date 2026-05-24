@@ -110,7 +110,7 @@ export function useTeamWorkGroups(projectId: string | undefined) {
     }
     setIsLoading(true);
     try {
-      const [{ data: gs, error: e1 }, { data: ss, error: e2 }, { data: cs, error: e3 }] = await Promise.all([
+      const [{ data: gs, error: e1 }, { data: ss, error: e2 }] = await Promise.all([
         supabase
           .from('project_team_work_groups' as any)
           .select('*')
@@ -120,16 +120,21 @@ export function useTeamWorkGroups(projectId: string | undefined) {
           .from('project_team_work_group_services' as any)
           .select('*')
           .eq('project_id', projectId),
-        supabase
-          .from('project_team_work_group_composition' as any)
-          .select('*')
-          .eq('project_id', projectId),
       ]);
       if (e1) throw e1;
       if (e2) throw e2;
-      if (e3) throw e3;
       setGroups((gs as any[]) || []);
       setGroupServices((ss as any[]) || []);
+
+      const { data: cs, error: e3 } = await supabase
+        .from('project_team_work_group_composition' as any)
+        .select('*')
+        .eq('project_id', projectId);
+      if (e3) {
+        console.warn('[useTeamWorkGroups] composicao detalhada indisponivel; usando agregados antigos', e3);
+        setGroupComposition([]);
+        return;
+      }
       setGroupComposition(((cs as any[]) || []).map((row) => ({
         id: row.id,
         group_id: row.group_id,
@@ -144,6 +149,21 @@ export function useTeamWorkGroups(projectId: string | undefined) {
     } finally {
       setIsLoading(false);
     }
+  }, [projectId]);
+
+  const findExistingGroupByName = useCallback(async (name: string) => {
+    if (!projectId) return null;
+    const normalizedName = normalizeProfessionName(name);
+    const { data, error } = await supabase
+      .from('project_team_work_groups' as any)
+      .select('*')
+      .eq('project_id', projectId)
+      .eq('active', true);
+    if (error) {
+      console.warn('[useTeamWorkGroups] nao foi possivel procurar frente existente', error);
+      return null;
+    }
+    return ((data as any[]) || []).find((group) => normalizeProfessionName(group.name || '') === normalizedName) ?? null;
   }, [projectId]);
 
   const ensureProfessions = useCallback(async (rows: TeamWorkGroupComposition[] | undefined) => {
@@ -274,11 +294,23 @@ export function useTeamWorkGroups(projectId: string | undefined) {
         return newId;
       } catch (err: any) {
         console.error(err);
+        const isDuplicate = err?.code === '23505' || String(err?.message || '').includes('uq_work_groups_proj_name');
+        if (isDuplicate) {
+          const existing = await findExistingGroupByName(input.name);
+          if (existing?.id) {
+            toast.info('Esta frente ja existe. Abrimos a frente existente para revisao.');
+            await load();
+            return existing.id as string;
+          }
+          toast.info('Esta frente ja existe neste projeto. Atualize a lista e revise a frente existente.');
+          await load();
+          return null;
+        }
         toast.error('Erro ao criar frente: ' + (err?.message || ''));
         return null;
       }
     },
-    [ensureProfessions, guard, projectId, profile, load, replaceComposition],
+    [ensureProfessions, findExistingGroupByName, guard, projectId, profile, load, replaceComposition],
   );
 
   const updateGroup = useCallback(
