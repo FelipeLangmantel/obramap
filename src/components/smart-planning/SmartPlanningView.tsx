@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useConstruction } from '@/contexts/ConstructionContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -141,11 +142,33 @@ interface SmartPlanningViewProps {
   onOpenProductivity?: () => void;
 }
 
+interface CountResult<T = { id: string }> {
+  data: T[] | null;
+  count: number | null;
+}
+
+interface ReadQuery<T = { id: string }> extends PromiseLike<CountResult<T>> {
+  eq(column: string, value: string): ReadQuery<T>;
+  in(column: string, values: string[]): ReadQuery<T>;
+}
+
+interface ReadOnlySupabase {
+  from<T = { id: string }>(table: string): {
+    select(columns: string, options?: { count?: 'exact' }): ReadQuery<T>;
+  };
+}
+
+const readOnlySupabase = supabase as unknown as ReadOnlySupabase;
+
 export function SmartPlanningView({ onOpenProductivity }: SmartPlanningViewProps) {
   const { currentProject } = useConstruction();
   const { company, canEdit, requireEdit } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showOfficialPlanningView, setShowOfficialPlanningView] = useState(false);
+  const [officialSourceState, setOfficialSourceState] = useState({
+    loading: true,
+    hasOfficialSource: false,
+  });
   const [productivityService, setProductivityService] = useState<{
     macro_id: string; scope_id: string; macro_name: string; scope_name: string;
   } | null>(null);
@@ -202,6 +225,78 @@ export function SmartPlanningView({ onOpenProductivity }: SmartPlanningViewProps
 
   useEffect(() => {
     setShowOfficialPlanningView(false);
+  }, [currentProject?.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadOfficialSourceState = async () => {
+      if (!currentProject?.id) {
+        setOfficialSourceState({ loading: false, hasOfficialSource: false });
+        return;
+      }
+
+      setOfficialSourceState((current) => ({ ...current, loading: true }));
+
+      try {
+        const [
+          projectProductivitiesResult,
+          workGroupsResult,
+          workGroupServicesResult,
+          workGroupCompositionResult,
+        ] = await Promise.all([
+          readOnlySupabase
+            .from<{ id: string }>('project_service_productivity')
+            .select('id', { count: 'exact' })
+            .eq('project_id', currentProject.id),
+          readOnlySupabase
+            .from('project_team_work_groups')
+            .select('id', { count: 'exact' })
+            .eq('project_id', currentProject.id),
+          readOnlySupabase
+            .from('project_team_work_group_services')
+            .select('id', { count: 'exact' })
+            .eq('project_id', currentProject.id),
+          readOnlySupabase
+            .from('project_team_work_group_composition')
+            .select('id', { count: 'exact' })
+            .eq('project_id', currentProject.id),
+        ]);
+
+        const productivityIds = ((projectProductivitiesResult.data as Array<{ id: string }> | null) || [])
+          .map((item) => item.id)
+          .filter(Boolean);
+        const teamCompositionResult = productivityIds.length
+          ? await readOnlySupabase
+            .from('project_service_team_composition')
+            .select('id', { count: 'exact' })
+            .in('productivity_id', productivityIds)
+          : { count: 0 };
+
+        if (cancelled) return;
+
+        setOfficialSourceState({
+          loading: false,
+          hasOfficialSource: Boolean(
+            (projectProductivitiesResult.count || 0) > 0
+            || (teamCompositionResult.count || 0) > 0
+            || (workGroupsResult.count || 0) > 0
+            || (workGroupServicesResult.count || 0) > 0
+            || (workGroupCompositionResult.count || 0) > 0
+          ),
+        });
+      } catch (error) {
+        if (cancelled) return;
+        console.error('[SmartPlanningView] erro ao verificar fonte oficial', error);
+        setOfficialSourceState({ loading: false, hasOfficialSource: false });
+      }
+    };
+
+    void loadOfficialSourceState();
+
+    return () => {
+      cancelled = true;
+    };
   }, [currentProject?.id]);
 
   const handleOnboardingComplete = async (
@@ -425,7 +520,7 @@ export function SmartPlanningView({ onOpenProductivity }: SmartPlanningViewProps
     );
   }
 
-  if (loading) {
+  if (loading || officialSourceState.loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -433,7 +528,7 @@ export function SmartPlanningView({ onOpenProductivity }: SmartPlanningViewProps
     );
   }
 
-  if (!isSetupComplete && !showOfficialPlanningView) {
+  if (!officialSourceState.hasOfficialSource && !isSetupComplete && !showOfficialPlanningView) {
     return (
       <div className="p-6">
         {canEdit ? (
@@ -458,6 +553,17 @@ export function SmartPlanningView({ onOpenProductivity }: SmartPlanningViewProps
 
   return (
     <div className="space-y-4 h-full flex flex-col">
+      {officialSourceState.hasOfficialSource && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="py-2.5">
+            <div className="flex items-center gap-2 text-sm text-primary">
+              <CheckCircle2 className="h-4 w-4" />
+              <span>Fonte oficial ativa: dados vindos de Produtividade e Equipes.</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Planning info banner */}
       {hasBaseline && latestBaseline && (
         <Card className="bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800">
