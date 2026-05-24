@@ -73,6 +73,11 @@ export interface GanttService {
   stage_id: string | null; // planning_stages id if exists
 }
 
+interface ActiveMacroflowPackage {
+  packageKey: string;
+  packageType: 'service' | 'work_group';
+}
+
 const getServiceKey = (macroId: string | null | undefined, scopeId: string | null | undefined) =>
   `${macroId || 'sem_macro'}::${scopeId || 'sem_servico'}`;
 
@@ -110,8 +115,10 @@ export function useStrategicGanttData(projectId: string | undefined) {
   const [services, setServices] = useState<StrategicService[]>([]);
   const [productivities, setProductivities] = useState<ServiceProductivityConfig[]>([]);
   const [ganttServices, setGanttServices] = useState<GanttService[]>([]);
+  const [allGanttServices, setAllGanttServices] = useState<GanttService[]>([]);
   const [stages, setStages] = useState<any[]>([]);
   const [macroflowDependencies, setMacroflowDependencies] = useState<PlanningMacroflowDependency[]>([]);
+  const [macroflowPackages, setMacroflowPackages] = useState<ActiveMacroflowPackage[]>([]);
   const [loading, setLoading] = useState(true);
   const [projectStartDate, setProjectStartDate] = useState<string>('');
   const [totalHouses, setTotalHouses] = useState(0);
@@ -249,6 +256,7 @@ export function useStrategicGanttData(projectId: string | undefined) {
       setStages(stagesRes.data || []);
 
       let loadedMacroflowDependencies: PlanningMacroflowDependency[] = [];
+      let loadedMacroflowPackages: ActiveMacroflowPackage[] = [];
       const { data: macroflowRows, error: macroflowError } = await supabase
         .from('planning_macroflows' as any)
         .select('*')
@@ -281,12 +289,42 @@ export function useStrategicGanttData(projectId: string | undefined) {
             lagDays: Number(row.lag_days) || 0,
           }));
         }
+
+        const { data: packageRows, error: packageError } = await supabase
+          .from('planning_macroflow_packages' as any)
+          .select('*')
+          .eq('macroflow_id', macroflowRows[0].id)
+          .order('sort_order', { ascending: true })
+          .order('created_at', { ascending: true });
+
+        if (!packageError && packageRows?.length) {
+          loadedMacroflowPackages = packageRows.map((row: any) => ({
+            packageKey: String(row.package_key),
+            packageType: row.package_type === 'work_group' ? 'work_group' : 'service',
+          }));
+        } else if (!packageError && loadedMacroflowDependencies.length > 0) {
+          const inferred = new Map<string, ActiveMacroflowPackage>();
+          loadedMacroflowDependencies.forEach((dependency) => {
+            inferred.set(dependency.predecessorKey, {
+              packageKey: dependency.predecessorKey,
+              packageType: dependency.predecessorType,
+            });
+            inferred.set(dependency.successorKey, {
+              packageKey: dependency.successorKey,
+              packageType: dependency.successorType,
+            });
+          });
+          loadedMacroflowPackages = Array.from(inferred.values());
+        }
       }
       setMacroflowDependencies(loadedMacroflowDependencies);
+      setMacroflowPackages(loadedMacroflowPackages);
 
       // Build inicial. Um efeito abaixo reconcilia com usePlanningCapacityModel
       // para agrupar frentes compartilhadas quando o adapter terminar de carregar.
-      const gantt = buildGanttServices(uniqueServices, prods, stagesRes.data || [], startDate, [], loadedMacroflowDependencies);
+      const allGantt = buildGanttServices(uniqueServices, prods, stagesRes.data || [], startDate, []);
+      const gantt = buildGanttServices(uniqueServices, prods, stagesRes.data || [], startDate, [], loadedMacroflowDependencies, loadedMacroflowPackages);
+      setAllGanttServices(allGantt);
       setGanttServices(gantt);
     } catch (error) {
       console.error('Error loading strategic gantt data:', error);
@@ -321,7 +359,8 @@ export function useStrategicGanttData(projectId: string | undefined) {
     stgs: any[],
     startDateStr: string,
     capacityEntries: ServiceCapacityEntry[],
-    dependencies: PlanningMacroflowDependency[]
+    dependencies: PlanningMacroflowDependency[] = [],
+    includedPackages: ActiveMacroflowPackage[] = [],
   ): GanttService[] => {
     const prodMap = new Map<string, ServiceProductivityConfig>();
     prods.forEach((p) => prodMap.set(getServiceKey(p.macro_id, p.scope_id), p));
@@ -532,7 +571,21 @@ export function useStrategicGanttData(projectId: string | undefined) {
       });
     }
 
-    return applyMacroflowSchedule(result, dependencies, startDateStr);
+    const includedKeys = new Set(includedPackages.map((item) => item.packageKey));
+    const hasConfiguredPackageList = includedKeys.size >= 2;
+    const validIncludedDependencies = dependencies.filter((dependency) =>
+      includedKeys.has(dependency.predecessorKey) && includedKeys.has(dependency.successorKey)
+    );
+
+    if (hasConfiguredPackageList && validIncludedDependencies.length > 0) {
+      return applyMacroflowSchedule(
+        result.filter((item) => includedKeys.has(item.id)),
+        validIncludedDependencies,
+        startDateStr,
+      );
+    }
+
+    return result;
   };
 
   const applyMacroflowSchedule = (
@@ -616,6 +669,13 @@ export function useStrategicGanttData(projectId: string | undefined) {
 
   useEffect(() => {
     if (!projectStartDate) return;
+    setAllGanttServices(buildGanttServices(
+      services,
+      productivities,
+      stages,
+      projectStartDate,
+      capacityModel.serviceCapacityMap,
+    ));
     setGanttServices(buildGanttServices(
       services,
       productivities,
@@ -623,10 +683,11 @@ export function useStrategicGanttData(projectId: string | undefined) {
       projectStartDate,
       capacityModel.serviceCapacityMap,
       macroflowDependencies,
+      macroflowPackages,
     ));
   // buildGanttServices is pure and reads only the dependencies passed above.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [capacityModel.serviceCapacityMap, macroflowDependencies, productivities, projectStartDate, services, stages]);
+  }, [capacityModel.serviceCapacityMap, macroflowDependencies, macroflowPackages, productivities, projectStartDate, services, stages]);
 
   // Update productivity for a service
   const updateServiceProductivity = useCallback(async (
@@ -686,12 +747,14 @@ export function useStrategicGanttData(projectId: string | undefined) {
     setProductivities(updatedProds);
 
     // Rebuild gantt
-    const gantt = buildGanttServices(services, updatedProds, stages, projectStartDate, capacityModel.serviceCapacityMap, macroflowDependencies);
+    const allGantt = buildGanttServices(services, updatedProds, stages, projectStartDate, capacityModel.serviceCapacityMap);
+    const gantt = buildGanttServices(services, updatedProds, stages, projectStartDate, capacityModel.serviceCapacityMap, macroflowDependencies, macroflowPackages);
+    setAllGanttServices(allGantt);
     setGanttServices(gantt);
     toast.success('Produtividade atualizada');
   // buildGanttServices is pure and reads only the dependencies passed above.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canEdit, capacityModel.serviceCapacityMap, company?.id, macroflowDependencies, productivities, stages, services, projectStartDate]);
+  }, [canEdit, capacityModel.serviceCapacityMap, company?.id, macroflowDependencies, macroflowPackages, productivities, stages, services, projectStartDate]);
 
   // Update predecessor
   const updatePredecessor = useCallback(async (
@@ -741,16 +804,17 @@ export function useStrategicGanttData(projectId: string | undefined) {
   }, [ganttServices]);
 
   const hasConfiguredMacroflow = useMemo(() => {
-    if (!macroflowDependencies.length || !ganttServices.length) return false;
-    const packageIds = new Set(ganttServices.map((service) => service.id));
+    if (macroflowPackages.length < 2 || !macroflowDependencies.length) return false;
+    const packageIds = new Set(macroflowPackages.map((item) => item.packageKey));
     return macroflowDependencies.some((dependency) =>
       packageIds.has(dependency.predecessorKey) && packageIds.has(dependency.successorKey)
     );
-  }, [ganttServices, macroflowDependencies]);
+  }, [macroflowDependencies, macroflowPackages]);
 
   return {
     services,
     ganttServices,
+    allGanttServices,
     productivities,
     loading,
     totalHouses,

@@ -194,6 +194,7 @@ export function SmartPlanningView({ onOpenProductivity }: SmartPlanningViewProps
   // Strategic Gantt data from long-term planning
   const {
     ganttServices: strategicGanttServices,
+    allGanttServices: strategicAllGanttServices,
     projectedEndDate: strategicProjectedEndDate,
     projectStartDate: strategicStartDate,
     hasConfiguredMacroflow,
@@ -640,6 +641,7 @@ export function SmartPlanningView({ onOpenProductivity }: SmartPlanningViewProps
           <StrategicGanttChart
             projectId={currentProject.id}
             services={strategicGanttServices}
+            macroflowPackages={strategicAllGanttServices}
             projectStartDate={strategicStartDate}
             projectedEndDate={strategicProjectedEndDate}
             onUpdateProductivity={updateServiceProductivity}
@@ -653,6 +655,7 @@ export function SmartPlanningView({ onOpenProductivity }: SmartPlanningViewProps
           <LineOfBalance 
             projectId={currentProject.id}
             ganttServices={strategicGanttServices}
+            macroflowPackages={strategicAllGanttServices}
             projectStartDate={strategicStartDate}
             onMacroflowChanged={reloadStrategicGanttData}
             hasConfiguredMacroflow={hasConfiguredMacroflow}
@@ -715,6 +718,8 @@ export function SmartPlanningView({ onOpenProductivity }: SmartPlanningViewProps
             project={currentProject}
             companyName={company?.name}
             officialView={planningOfficialView}
+            hasConfiguredMacroflow={hasConfiguredMacroflow}
+            ganttServices={strategicGanttServices}
           />
         </TabsContent>
 

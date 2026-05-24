@@ -39,6 +39,18 @@ export interface PlanningMacroflowDependency {
   lagDays: number;
 }
 
+export interface PlanningMacroflowPackage {
+  id: string;
+  macroflowId: string;
+  projectId: string;
+  companyId: string;
+  packageType: MacroflowPackageType;
+  packageKey: string;
+  packageLabel: string;
+  sortOrder: number;
+  inferred?: boolean;
+}
+
 export interface MacroflowDependencyInput {
   predecessorType: MacroflowPackageType;
   predecessorKey: string;
@@ -71,6 +83,17 @@ const normalizeMacroflow = (row: any): PlanningMacroflow => ({
   companyId: String(row.company_id),
   name: String(row.name ?? 'Macrofluxo principal'),
   active: row.active !== false,
+});
+
+const normalizeMacroflowPackage = (row: any): PlanningMacroflowPackage => ({
+  id: String(row.id),
+  macroflowId: String(row.macroflow_id),
+  projectId: String(row.project_id),
+  companyId: String(row.company_id),
+  packageType: row.package_type === 'work_group' ? 'work_group' : 'service',
+  packageKey: String(row.package_key),
+  packageLabel: String(row.package_label ?? 'Pacote sem nome'),
+  sortOrder: Number(row.sort_order) || 0,
 });
 
 export const hasMacroflowCycle = (
@@ -112,9 +135,12 @@ export function usePlanningMacroflow(projectId: string | undefined, packageOptio
   const [macroflow, setMacroflow] = useState<PlanningMacroflow | null>(null);
   const [selectedMacroflowId, setSelectedMacroflowId] = useState<string | null>(null);
   const [dependencies, setDependencies] = useState<PlanningMacroflowDependency[]>([]);
+  const [includedPackages, setIncludedPackages] = useState<PlanningMacroflowPackage[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const packageKeys = useMemo(() => packageOptions.map((option) => option.key), [packageOptions]);
+  const packageOptionByKey = useMemo(() => new Map(packageOptions.map((option) => [option.key, option])), [packageOptions]);
+  const includedPackageKeys = useMemo(() => includedPackages.map((item) => item.packageKey), [includedPackages]);
+  const packageKeys = includedPackageKeys;
 
   const load = useCallback(async () => {
     if (!projectId || !company?.id) {
@@ -122,6 +148,7 @@ export function usePlanningMacroflow(projectId: string | undefined, packageOptio
       setMacroflow(null);
       setSelectedMacroflowId(null);
       setDependencies([]);
+      setIncludedPackages([]);
       return;
     }
 
@@ -147,6 +174,7 @@ export function usePlanningMacroflow(projectId: string | undefined, packageOptio
         setMacroflow(null);
         setSelectedMacroflowId(null);
         setDependencies([]);
+        setIncludedPackages([]);
         return;
       }
 
@@ -160,7 +188,51 @@ export function usePlanningMacroflow(projectId: string | undefined, packageOptio
         .order('created_at', { ascending: true });
 
       if (dependencyError) throw dependencyError;
-      setDependencies((dependencyRows ?? []).map(normalizeDependency));
+      const loadedDependencies = (dependencyRows ?? []).map(normalizeDependency);
+      setDependencies(loadedDependencies);
+
+      const { data: packageRows, error: packageError } = await supabase
+        .from('planning_macroflow_packages' as any)
+        .select('*')
+        .eq('macroflow_id', flow.id)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: true });
+
+      if (packageError) throw packageError;
+      const loadedPackages = (packageRows ?? []).map(normalizeMacroflowPackage);
+      if (loadedPackages.length > 0) {
+        setIncludedPackages(loadedPackages);
+      } else {
+        const inferred = new Map<string, PlanningMacroflowPackage>();
+        loadedDependencies.forEach((dependency, index) => {
+          [
+            {
+              type: dependency.predecessorType,
+              key: dependency.predecessorKey,
+              label: dependency.predecessorLabel,
+            },
+            {
+              type: dependency.successorType,
+              key: dependency.successorKey,
+              label: dependency.successorLabel,
+            },
+          ].forEach((item) => {
+            if (inferred.has(item.key)) return;
+            inferred.set(item.key, {
+              id: `inferred-${item.key}`,
+              macroflowId: flow.id,
+              projectId: flow.projectId,
+              companyId: flow.companyId,
+              packageType: item.type,
+              packageKey: item.key,
+              packageLabel: item.label,
+              sortOrder: index,
+              inferred: true,
+            });
+          });
+        });
+        setIncludedPackages(Array.from(inferred.values()));
+      }
     } catch (error: any) {
       console.error('Erro ao carregar macrofluxo:', error);
       toast.error(error?.message || 'Não foi possível carregar o macrofluxo.');
@@ -244,23 +316,8 @@ export function usePlanningMacroflow(projectId: string | undefined, packageOptio
 
       if (error) throw error;
 
-      await supabase
-        .from('planning_macroflows' as any)
-        .update({ active: false, updated_by: user?.id ?? null })
-        .eq('project_id', projectId)
-        .eq('company_id', company.id)
-        .eq('active', true);
-
-      const { error: activateError } = await supabase
-        .from('planning_macroflows' as any)
-        .update({ active: true, updated_by: user?.id ?? null })
-        .eq('id', data.id);
-
-      if (activateError) throw activateError;
-
       const created = normalizeMacroflow(data);
-      const activeCreated = { ...created, active: true };
-      setMacroflow(activeCreated);
+      setMacroflow(created);
       setSelectedMacroflowId(created.id);
       await load();
       toast.success('Macrofluxo criado.');
@@ -491,6 +548,129 @@ export function usePlanningMacroflow(projectId: string | undefined, packageOptio
     }
   }, [canEdit, load]);
 
+  const addPackageToMacroflow = useCallback(async (packageKey: string) => {
+    if (!canEdit) {
+      toast.error('Voce nao tem permissao para editar o macrofluxo.');
+      return false;
+    }
+    const option = packageOptionByKey.get(packageKey);
+    if (!option) {
+      toast.error('Pacote nao encontrado.');
+      return false;
+    }
+
+    try {
+      const flow = await ensureMacroflow();
+      const { error } = await supabase
+        .from('planning_macroflow_packages' as any)
+        .upsert({
+          macroflow_id: flow.id,
+          project_id: flow.projectId,
+          company_id: flow.companyId,
+          package_type: option.type,
+          package_key: option.key,
+          package_label: option.label,
+          sort_order: includedPackages.length,
+        }, { onConflict: 'macroflow_id,package_key' });
+
+      if (error) throw error;
+      await load();
+      toast.success('Pacote adicionado ao macrofluxo.');
+      return true;
+    } catch (error: any) {
+      console.error('Erro ao adicionar pacote ao macrofluxo:', error);
+      toast.error(error?.message || 'Nao foi possivel adicionar o pacote.');
+      return false;
+    }
+  }, [canEdit, ensureMacroflow, includedPackages.length, load, packageOptionByKey]);
+
+  const setPackagesForMacroflow = useCallback(async (packageKeysToSet: string[]) => {
+    if (!canEdit) {
+      toast.error('Voce nao tem permissao para editar o macrofluxo.');
+      return false;
+    }
+
+    const uniqueKeys = Array.from(new Set(packageKeysToSet));
+    const options = uniqueKeys
+      .map((key) => packageOptionByKey.get(key))
+      .filter((option): option is MacroflowPackageOption => Boolean(option));
+
+    try {
+      const flow = await ensureMacroflow();
+      const existingKeys = new Set(includedPackages.filter((item) => !item.inferred).map((item) => item.packageKey));
+      const nextKeys = new Set(options.map((item) => item.key));
+      const toRemove = Array.from(existingKeys).filter((key) => !nextKeys.has(key));
+
+      if (toRemove.length > 0) {
+        await supabase
+          .from('planning_macroflow_dependencies' as any)
+          .delete()
+          .eq('macroflow_id', flow.id)
+          .or(`predecessor_key.in.(${toRemove.join(',')}),successor_key.in.(${toRemove.join(',')})`);
+
+        await supabase
+          .from('planning_macroflow_packages' as any)
+          .delete()
+          .eq('macroflow_id', flow.id)
+          .in('package_key', toRemove);
+      }
+
+      if (options.length > 0) {
+        const { error } = await supabase
+          .from('planning_macroflow_packages' as any)
+          .upsert(options.map((option, index) => ({
+            macroflow_id: flow.id,
+            project_id: flow.projectId,
+            company_id: flow.companyId,
+            package_type: option.type,
+            package_key: option.key,
+            package_label: option.label,
+            sort_order: index,
+          })), { onConflict: 'macroflow_id,package_key' });
+        if (error) throw error;
+      }
+
+      await load();
+      toast.success('Pacotes do macrofluxo atualizados.');
+      return true;
+    } catch (error: any) {
+      console.error('Erro ao salvar pacotes do macrofluxo:', error);
+      toast.error(error?.message || 'Nao foi possivel salvar os pacotes.');
+      return false;
+    }
+  }, [canEdit, ensureMacroflow, includedPackages, load, packageOptionByKey]);
+
+  const removePackageFromMacroflow = useCallback(async (packageKey: string) => {
+    if (!canEdit) {
+      toast.error('Voce nao tem permissao para editar o macrofluxo.');
+      return false;
+    }
+    if (!macroflow) return false;
+
+    try {
+      await supabase
+        .from('planning_macroflow_dependencies' as any)
+        .delete()
+        .eq('macroflow_id', macroflow.id)
+        .or(`predecessor_key.eq.${packageKey},successor_key.eq.${packageKey}`);
+
+      const { error } = await supabase
+        .from('planning_macroflow_packages' as any)
+        .delete()
+        .eq('macroflow_id', macroflow.id)
+        .eq('package_key', packageKey);
+
+      if (error) throw error;
+      await load();
+      toast.success('Pacote removido do macrofluxo.');
+      return true;
+    } catch (error: any) {
+      console.error('Erro ao remover pacote do macrofluxo:', error);
+      toast.error(error?.message || 'Nao foi possivel remover o pacote.');
+      return false;
+    }
+  }, [canEdit, load, macroflow]);
+
   const hasCycle = useMemo(() => hasMacroflowCycle(packageKeys, dependencies), [dependencies, packageKeys]);
 
   return {
@@ -498,6 +678,7 @@ export function usePlanningMacroflow(projectId: string | undefined, packageOptio
     macroflow,
     selectedMacroflowId,
     dependencies,
+    includedPackages,
     loading,
     hasCycle,
     load,
@@ -505,6 +686,9 @@ export function usePlanningMacroflow(projectId: string | undefined, packageOptio
     selectMacroflow,
     renameMacroflow,
     activateMacroflow,
+    addPackageToMacroflow,
+    removePackageFromMacroflow,
+    setPackagesForMacroflow,
     addDependency,
     updateDependency,
     removeDependency,

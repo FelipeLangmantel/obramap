@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { addDays, differenceInCalendarDays, isValid, parseISO, startOfDay } from 'date-fns';
+import { differenceInCalendarDays, isValid, parseISO, startOfDay } from 'date-fns';
 
 import { useAuth } from '@/contexts/AuthContext';
 import type { Project } from '@/contexts/ConstructionContext';
@@ -9,6 +9,7 @@ import type {
   PlanningOfficialViewResult,
   PlanningWorkPackageView,
 } from './usePlanningOfficialView';
+import type { GanttService } from './useStrategicGanttData';
 
 export type ForecastStatus = 'on_track' | 'attention' | 'delayed' | 'insufficient_data';
 export type TeamRequirementStatus = 'ok' | 'overloaded' | 'missing_productivity';
@@ -215,7 +216,9 @@ const getStageStatus = (
 export function usePlanningForecast(
   projectId: string | undefined,
   officialView: PlanningOfficialViewResult,
-  project: Project | null | undefined
+  project: Project | null | undefined,
+  hasConfiguredMacroflow = false,
+  ganttServices: GanttService[] = [],
 ): PlanningForecastResult {
   const { company } = useAuth();
   const [productivities, setProductivities] = useState<ProductivityConfig[]>([]);
@@ -294,6 +297,16 @@ export function usePlanningForecast(
     const weeklyTargets = Array.isArray(officialView.weeklyTargets) ? officialView.weeklyTargets : [];
     const deviations = Array.isArray(officialView.deviations) ? officialView.deviations : [];
     const productivityByService = new Map(productivities.map((item) => [serviceKey(item.macroId, item.scopeId), item]));
+    const ganttByService = new Map<string, GanttService>();
+    ganttServices.forEach((service) => {
+      if (service.package_type === 'work_group') {
+        service.internal_services?.forEach((internal) => {
+          ganttByService.set(serviceKey(internal.macro_id, internal.scope_id), service);
+        });
+      } else {
+        ganttByService.set(serviceKey(service.macro_id, service.scope_id), service);
+      }
+    });
 
     const grouped = new Map<string, PlanningWorkPackageView[]>();
     officialPackages.forEach((pkg) => {
@@ -301,11 +314,11 @@ export function usePlanningForecast(
     });
 
     const today = startOfDay(new Date());
-    let cursor = today;
     const serviceForecasts = Array.from(grouped.entries())
       .map(([key, packages]) => {
         const first = packages[0];
         const productivity = productivityByService.get(key) || null;
+        const ganttService = hasConfiguredMacroflow ? ganttByService.get(key) : null;
         const dailyProductivity = getDailyProductivity(productivity);
         const teamCount = Math.max(1, productivity?.teamCount || first.teamCount || 1);
         const plannedQuantity = packages.reduce((sum, pkg) => sum + toNumber(pkg.plannedQuantity), 0);
@@ -320,40 +333,39 @@ export function usePlanningForecast(
         const estimatedDurationDays = dailyProductivity
           ? Math.max(0, Math.ceil(remainingQuantity / Math.max(dailyProductivity * teamCount, 0.01)))
           : null;
-        const estimatedStartDate = remainingQuantity > 0 ? cursor : null;
-        const estimatedFinishDate = estimatedDurationDays !== null && remainingQuantity > 0
-          ? addDays(cursor, Math.max(estimatedDurationDays - 1, 0))
-          : null;
-
-        if (estimatedDurationDays !== null && remainingQuantity > 0) {
-          cursor = addDays(estimatedFinishDate || cursor, 1);
-        }
+        const estimatedStartDate = remainingQuantity > 0 && ganttService ? startOfDay(ganttService.planned_start) : null;
+        const estimatedFinishDate = remainingQuantity > 0 && ganttService ? startOfDay(ganttService.planned_end) : null;
+        const scheduleDurationDays = ganttService ? Math.max(1, ganttService.duration_days) : estimatedDurationDays;
 
         const currentPlannedFinish = getLatestDate(packages);
         const impactDays = estimatedFinishDate && currentPlannedFinish
           ? differenceInCalendarDays(estimatedFinishDate, currentPlannedFinish)
           : 0;
-        const status: ForecastStatus = !dailyProductivity && remainingQuantity > 0
+        const status: ForecastStatus = !hasConfiguredMacroflow && remainingQuantity > 0
+          ? 'insufficient_data'
+          : !dailyProductivity && remainingQuantity > 0
           ? 'insufficient_data'
           : impactDays > 7
             ? 'delayed'
             : impactDays > 0 || remainingQuantity > 0
               ? 'attention'
               : 'on_track';
-        const riskReason = status === 'insufficient_data'
+        const riskReason = !hasConfiguredMacroflow && remainingQuantity > 0
+          ? 'Configure o Macrofluxo para estimar prazo final com sequencia oficial.'
+          : status === 'insufficient_data'
           ? 'Sem produtividade cadastrada para estimar prazo.'
           : status === 'delayed'
-            ? `Previsão indica ${impactDays} dia(s) além do planejamento atual.`
+            ? `Previsao indica ${impactDays} dia(s) alem do planejamento atual.`
             : remainingQuantity > 0
               ? 'Existe saldo a executar com base no planejamento atual.'
-              : 'Serviço sem saldo relevante.';
+              : 'Servico sem saldo relevante.';
 
         return {
           id: key,
           macroId: first.macroId,
-          macroName: first.macroName || 'Etapa não informada',
+          macroName: first.macroName || 'Etapa nao informada',
           scopeId: first.scopeId,
-          scopeName: first.scopeName || 'Serviço não informado',
+          scopeName: first.scopeName || 'Servico nao informado',
           plannedQuantity,
           realizedQuantity,
           remainingQuantity,
@@ -362,7 +374,7 @@ export function usePlanningForecast(
           teamCount,
           professionalsPerTeam: productivity?.professionalsPerTeam || 0,
           helpersPerTeam: productivity?.helpersPerTeam || 0,
-          estimatedDurationDays,
+          estimatedDurationDays: scheduleDurationDays,
           estimatedStartDate: toIsoDate(estimatedStartDate),
           estimatedFinishDate: toIsoDate(estimatedFinishDate),
           status,
@@ -383,15 +395,17 @@ export function usePlanningForecast(
       : 0;
     const realProgress = totalPlanned > 0 ? Math.min(100, Math.max(0, (totalRealized / totalPlanned) * 100)) : 0;
     const currentPlannedFinishDate = toIsoDate(getLatestDate(officialPackages) || parseDate(project?.expectedEndDate));
-    const estimatedFinishDate = serviceForecasts
+    const estimatedFinishDate = hasConfiguredMacroflow ? serviceForecasts
       .map((item) => parseDate(item.estimatedFinishDate))
       .filter((date): date is Date => !!date)
-      .sort((a, b) => b.getTime() - a.getTime())[0] || null;
+      .sort((a, b) => b.getTime() - a.getTime())[0] || null : null;
     const delayDays = estimatedFinishDate && currentPlannedFinishDate
       ? differenceInCalendarDays(estimatedFinishDate, parseDate(currentPlannedFinishDate) || estimatedFinishDate)
       : null;
     const missingProductivityCount = serviceForecasts.filter((item) => item.remainingQuantity > 0 && !item.productivityValue).length;
-    const forecastStatus: ForecastStatus = missingProductivityCount > 0
+    const forecastStatus: ForecastStatus = !hasConfiguredMacroflow
+      ? 'insufficient_data'
+      : missingProductivityCount > 0
       ? 'insufficient_data'
       : delayDays !== null && delayDays > 7
         ? 'delayed'
@@ -399,12 +413,37 @@ export function usePlanningForecast(
           ? 'attention'
           : 'on_track';
 
-    const teamRequirements = weeklyTargets.map((target) => {
+    const hasWeeklyDemand = weeklyTargets.some((target) => (target.plannedHouses || target.plannedHouseIds.length || 0) > 0);
+    const demandTargets = hasWeeklyDemand
+      ? weeklyTargets.map((target) => ({
+        id: target.id,
+        macroId: target.macroId,
+        macroName: target.macroName,
+        scopeId: target.scopeId,
+        scopeName: target.scopeName,
+        plannedQuantity: target.plannedHouses || target.plannedHouseIds.length || 0,
+        startDate: target.weekStartDate,
+        endDate: target.weekEndDate,
+        periodLabel: [target.weekStartDate, target.weekEndDate].filter(Boolean).join(' - ') || 'Semana sem data',
+      }))
+      : officialPackages.map((pkg) => ({
+        id: pkg.id,
+        macroId: pkg.macroId,
+        macroName: pkg.macroName,
+        scopeId: pkg.scopeId,
+        scopeName: pkg.scopeName,
+        plannedQuantity: Math.max(pkg.remainingQuantity || 0, pkg.plannedQuantity || 0),
+        startDate: pkg.plannedStartDate,
+        endDate: pkg.plannedEndDate,
+        periodLabel: [pkg.plannedStartDate, pkg.plannedEndDate].filter(Boolean).join(' - ') || pkg.unitLabel || 'Periodo estrategico sem data',
+      }));
+
+    const teamRequirements = demandTargets.map((target) => {
       const productivity = productivityByService.get(serviceKey(target.macroId, target.scopeId)) || null;
       const dailyProductivity = getDailyProductivity(productivity);
       const currentTeams = Math.max(1, productivity?.teamCount || 1);
       const weekDays = Math.max(1, productivity?.workingDaysPerWeek || 5);
-      const plannedQuantity = target.plannedHouses || target.plannedHouseIds.length || 0;
+      const plannedQuantity = target.plannedQuantity;
       const capacityWithCurrentTeams = dailyProductivity ? dailyProductivity * currentTeams * weekDays : null;
       const requiredTeams = dailyProductivity
         ? Math.max(1, Math.ceil(plannedQuantity / Math.max(dailyProductivity * weekDays, 0.01)))
@@ -423,11 +462,11 @@ export function usePlanningForecast(
           : 'ok';
       return {
         id: target.id,
-        macroName: target.macroName || 'Etapa não informada',
-        scopeName: target.scopeName || 'Serviço não informado',
-        periodLabel: [target.weekStartDate, target.weekEndDate].filter(Boolean).join(' - ') || 'Semana sem data',
-        startDate: target.weekStartDate,
-        endDate: target.weekEndDate,
+        macroName: target.macroName || 'Etapa nao informada',
+        scopeName: target.scopeName || 'Servico nao informado',
+        periodLabel: target.periodLabel,
+        startDate: target.startDate,
+        endDate: target.endDate,
         plannedQuantity,
         capacityWithCurrentTeams,
         requiredTeams,
@@ -439,7 +478,6 @@ export function usePlanningForecast(
         status,
       } satisfies TeamRequirement;
     });
-
     const criticalItems: CriticalPlanningItem[] = [
       ...serviceForecasts
         .filter((item) => item.status === 'delayed' || item.status === 'insufficient_data')
@@ -452,8 +490,8 @@ export function usePlanningForecast(
             ? Math.max(0, differenceInCalendarDays(parseDate(item.estimatedFinishDate) || today, parseDate(currentPlannedFinishDate) || today))
             : 0,
           recommendedAction: item.status === 'insufficient_data'
-            ? 'Cadastrar produtividade e composição de equipe.'
-            : 'Revisar equipe, predecessoras e sequência executiva.',
+            ? 'Cadastrar produtividade e composicao de equipe.'
+            : 'Revisar equipe, predecessoras e sequencia executiva.',
         })),
       ...teamRequirements
         .filter((item) => item.status === 'overloaded')
@@ -463,7 +501,7 @@ export function usePlanningForecast(
           service: `${item.macroName} / ${item.scopeName}`,
           reason: `Meta acima da capacidade atual em ${item.teamGap} equipe(s).`,
           impactDays: 0,
-          recommendedAction: 'Revisar metas semanais ou reforçar equipe.',
+          recommendedAction: 'Revisar metas semanais ou reforcar equipe.',
         })),
     ];
 
@@ -570,29 +608,37 @@ export function usePlanningForecast(
       .filter((item): item is { pkg: PlanningWorkPackageView; date: Date } => !!item.date)
       .sort((a, b) => a.date.getTime() - b.date.getTime());
 
-    const progressCurve: ProgressCurvePoint[] = datedPackages.length
-      ? datedPackages.map((item, index) => {
-        const packagesUntilDate = datedPackages.slice(0, index + 1).map((entry) => entry.pkg);
-        const plannedUntilDate = packagesUntilDate.reduce((sum, pkg) => sum + toNumber(pkg.plannedQuantity), 0);
-        const realizedUntilDate = packagesUntilDate.reduce((sum, pkg) => sum + toNumber(pkg.realizedQuantity), 0);
-        const plannedCurveProgress = getProgress(plannedUntilDate, totalPlanned);
-        const realCurveProgress = getProgress(realizedUntilDate, totalPlanned);
+    const packagesByDate = new Map<string, PlanningWorkPackageView[]>();
+    datedPackages.forEach(({ pkg, date }) => {
+      const label = toIsoDate(date) || 'Sem data';
+      packagesByDate.set(label, [...(packagesByDate.get(label) || []), pkg]);
+    });
+
+    let cumulativePlanned = 0;
+    let cumulativeRealized = 0;
+    const progressCurve: ProgressCurvePoint[] = packagesByDate.size
+      ? Array.from(packagesByDate.entries()).map(([dateLabel, packagesAtDate]) => {
+        cumulativePlanned += packagesAtDate.reduce((sum, pkg) => sum + toNumber(pkg.plannedQuantity), 0);
+        cumulativeRealized += packagesAtDate.reduce((sum, pkg) => sum + toNumber(pkg.realizedQuantity), 0);
+        const plannedCurveProgress = getProgress(cumulativePlanned, totalPlanned);
+        const realCurveProgress = getProgress(cumulativeRealized, totalPlanned);
         return {
-          dateLabel: toIsoDate(item.date) || 'Sem data',
+          dateLabel,
           plannedProgress: plannedCurveProgress,
           realProgress: realCurveProgress,
           deviation: realCurveProgress - plannedCurveProgress,
           estimated: false,
         };
       })
-      : [{
-        dateLabel: toIsoDate(today) || 'Data-base',
-        plannedProgress,
-        realProgress,
-        deviation: realProgress - plannedProgress,
-        estimated: true,
-      }];
-
+      : [
+        {
+          dateLabel: toIsoDate(today) || 'Data-base',
+          plannedProgress,
+          realProgress,
+          deviation: realProgress - plannedProgress,
+          estimated: true,
+        },
+      ];
     const recommendedActions: RecommendedAction[] = [
       ...(missingProductivityCount > 0 ? [{
         id: 'missing-productivity',
@@ -650,5 +696,5 @@ export function usePlanningForecast(
       deviations,
       loading: loadingProductivities || officialView.loading,
     };
-  }, [loadingProductivities, officialView, productivities, project]);
+  }, [ganttServices, hasConfiguredMacroflow, loadingProductivities, officialView, productivities, project]);
 }

@@ -35,6 +35,7 @@ import { MacroflowDialog } from './MacroflowDialog';
 interface LineOfBalanceProps {
   projectId?: string;
   ganttServices: GanttService[];
+  macroflowPackages?: GanttService[];
   projectStartDate: string;
   onMacroflowChanged?: () => Promise<void> | void;
   hasConfiguredMacroflow?: boolean;
@@ -267,7 +268,7 @@ const getDaysFromPixels = (pixels: number, columns: TimelineColumn[], scale: Flo
   return Math.round(pixels / width);
 };
 
-export function LineOfBalance({ projectId, ganttServices, projectStartDate, onMacroflowChanged, hasConfiguredMacroflow = false }: LineOfBalanceProps) {
+export function LineOfBalance({ projectId, ganttServices, macroflowPackages, projectStartDate, onMacroflowChanged, hasConfiguredMacroflow = false }: LineOfBalanceProps) {
   const { canEdit } = useAuth();
   const { currentProject } = useConstruction();
   const capacityModel = usePlanningCapacityModel(projectId);
@@ -642,7 +643,7 @@ export function LineOfBalance({ projectId, ganttServices, projectStartDate, onMa
           open={showMacroflowDialog}
           onOpenChange={setShowMacroflowDialog}
           projectId={projectId}
-          packages={servicesForLine}
+          packages={macroflowPackages ?? servicesForLine}
           canEdit={canEdit}
           onChanged={onMacroflowChanged}
         />
@@ -1032,7 +1033,7 @@ export function LineOfBalance({ projectId, ganttServices, projectStartDate, onMa
         open={showMacroflowDialog}
         onOpenChange={setShowMacroflowDialog}
         projectId={projectId}
-        packages={servicesForLine}
+        packages={macroflowPackages ?? servicesForLine}
         canEdit={canEdit}
         onChanged={onMacroflowChanged}
       />

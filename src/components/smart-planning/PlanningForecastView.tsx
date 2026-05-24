@@ -19,11 +19,14 @@ import {
   type StageForecastStatus,
   type TeamRequirementStatus,
 } from './hooks/usePlanningForecast';
+import type { GanttService } from './hooks/useStrategicGanttData';
 
 interface PlanningForecastViewProps {
   project: Project;
   companyName?: string | null;
   officialView: PlanningOfficialViewResult;
+  hasConfiguredMacroflow?: boolean;
+  ganttServices?: GanttService[];
 }
 
 const formatDate = (value: string | null | undefined) => {
@@ -42,6 +45,20 @@ const formatNumber = (value: number | null | undefined, digits = 0) =>
 
 const formatPercent = (value: number | null | undefined) =>
   `${formatNumber(value, 1)}%`;
+
+const getWeeklyCapacityUnit = (productivityUnit: string | null | undefined, fallbackUnit?: string | null) => {
+  const base = String(productivityUnit || fallbackUnit || 'un')
+    .split('/')
+    .map((part) => part.trim())
+    .filter(Boolean)[0];
+  return `${base || 'un'}/semana`;
+};
+
+const demandSourceLabel = (source: string | null | undefined) => {
+  if (source === 'weekly_planning') return 'Planejamento Semanal';
+  if (source === 'strategic_period') return 'Planejamento Estrategico por Periodo';
+  return 'Sem demanda planejada';
+};
 
 const statusLabel = (status: ForecastStatus) => {
   const labels: Record<ForecastStatus, string> = {
@@ -217,8 +234,14 @@ interface CapacitySimulationInput {
   workingDaysPerWeek: number;
 }
 
-export function PlanningForecastView({ project, companyName, officialView }: PlanningForecastViewProps) {
-  const forecast = usePlanningForecast(project.id, officialView, project);
+export function PlanningForecastView({
+  project,
+  companyName,
+  officialView,
+  hasConfiguredMacroflow = false,
+  ganttServices = [],
+}: PlanningForecastViewProps) {
+  const forecast = usePlanningForecast(project.id, officialView, project, hasConfiguredMacroflow, ganttServices);
   const capacityModel = usePlanningCapacityModel(project.id);
   const [selectedSimulationFrontId, setSelectedSimulationFrontId] = useState('');
   const [capacitySimulations, setCapacitySimulations] = useState<Record<string, CapacitySimulationInput>>({});
@@ -249,6 +272,7 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
       const peakDemand = groupDiagnostics.reduce((max, item) => Math.max(max, item.plannedQuantity), 0);
       const availableCapacity = groupCapacity?.weeklyCapacity ?? null;
       const teamCount = Math.max(group.simultaneousTeamCount || 0, 0);
+      const demandSource = groupDiagnostics[0]?.demandSource ?? null;
       const capacityPerTeam = availableCapacity && teamCount > 0 ? availableCapacity / teamCount : null;
       const requiredTeams = capacityPerTeam && peakDemand > 0 ? Math.ceil(peakDemand / capacityPerTeam) : null;
       const additionalTeams = requiredTeams === null ? 0 : Math.max(requiredTeams - teamCount, 0);
@@ -268,9 +292,11 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
         name: group.name,
         services: group.services,
         weeklyCapacity: availableCapacity,
+        weeklyCapacityUnit: getWeeklyCapacityUnit(group.productivityUnit, group.baseUnit),
         productivityValue: group.productivityValue,
         productivityUnit: group.productivityUnit || group.baseUnit || '',
         workingDaysPerWeek: group.workingDaysPerWeek,
+        demandSource,
         teamCount,
         totalPeople: group.totalPeople,
         peoplePerTeam: teamCount > 0 ? group.totalPeople / teamCount : group.professionalCount + group.auxiliaryCount,
@@ -364,7 +390,13 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
     });
   };
   const missingDateCount = serviceForecasts.filter((item) => item.remainingQuantity > 0 && !item.estimatedFinishDate).length;
-  const confidence = getConfidence(forecastSummary.missingProductivityCount, forecastSummary.totalServices, missingDateCount);
+  const confidence = hasConfiguredMacroflow
+    ? getConfidence(forecastSummary.missingProductivityCount, forecastSummary.totalServices, missingDateCount)
+    : {
+      label: 'Indisponivel',
+      reason: 'Configure o Macrofluxo para estimar prazo final com sequencia oficial.',
+      variant: 'outline' as const,
+    };
   const generatedAt = new Date();
   const totalLabor = laborDemandByPeriod.reduce(
     (acc, period) => ({
@@ -382,8 +414,11 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
     .slice(0, 3)
     .map((stage) => stage.macroName)
     .join(', ') || 'sem etapas criticas identificadas';
+  const finishForecastText = forecastSummary.estimatedFinishDate
+    ? formatDate(forecastSummary.estimatedFinishDate)
+    : 'Configure o Macrofluxo para estimar termino';
   const delayText = forecastSummary.delayDays === null
-    ? 'estimada sem base completa'
+    ? 'Indisponivel'
     : `${forecastSummary.delayDays} dia(s)`;
   const printReport = () => window.print();
 
@@ -499,7 +534,7 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
               ['Progresso planejado', formatPercent(forecastSummary.plannedProgress)],
               ['Progresso realizado', formatPercent(forecastSummary.realProgress)],
               ['Desvio', formatPercent(forecastSummary.realProgress - forecastSummary.plannedProgress)],
-              ['Previsao de termino', formatDate(forecastSummary.estimatedFinishDate)],
+              ['Previsao de termino', finishForecastText],
               ['Atraso/adiantamento', delayText],
               ['Sem produtividade', forecastSummary.missingProductivityCount],
               ['Equipes com sobrecarga', overloadedTeams.length],
@@ -514,7 +549,10 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
 
           <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
             <AlertTriangle className="mr-2 inline h-4 w-4 text-amber-600" />
-            Previsao estimada com base nas produtividades cadastradas. Servicos sem produtividade reduzem a confiabilidade.
+            {hasConfiguredMacroflow
+              ? 'Previsao estimada com base no Macrofluxo, nas produtividades cadastradas e nas demandas planejadas.'
+              : 'Configure o Macrofluxo para estimar termino e atraso com sequencia oficial.'}
+            {' '}Servicos sem produtividade reduzem a confiabilidade.
             Frentes compartilhadas ainda estao em diagnostico e nao unem lancamentos de producao, diario, desvios ou Mapa 3D.
           </div>
         </CardContent>
@@ -581,7 +619,15 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
                       <td className="p-2">
                         {row.weeklyCapacity === null
                           ? 'Sem produtividade'
-                          : `${formatNumber(row.weeklyCapacity, 1)} ${row.productivityUnit}/semana`}
+                          : (
+                            <div>
+                              <div>{formatNumber(row.weeklyCapacity, 1)} {row.weeklyCapacityUnit}</div>
+                              <div className="text-xs text-muted-foreground">
+                                Produtividade: {row.productivityValue ? `${formatNumber(row.productivityValue, 2)} ${row.productivityUnit || 'un/dia'}` : 'Nao informada'}
+                              </div>
+                              <div className="text-xs text-muted-foreground">{row.workingDaysPerWeek} dias/semana</div>
+                            </div>
+                          )}
                       </td>
                       <td className="p-2">
                         <div>{row.teamCount}</div>
@@ -590,7 +636,10 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
                         )}
                       </td>
                       <td className="p-2">{row.totalPeople}</td>
-                      <td className="p-2">{row.peakDemand > 0 ? formatNumber(row.peakDemand, 1) : 'Sem demanda'}</td>
+                      <td className="p-2">
+                        <div>{row.peakDemand > 0 ? formatNumber(row.peakDemand, 1) : 'Sem demanda'}</div>
+                        <div className="text-xs text-muted-foreground">Base: {demandSourceLabel(row.demandSource)}</div>
+                      </td>
                       <td className="p-2">
                         <Badge variant={capacityStatusVariant(row.status)}>
                           {capacityStatusLabel(row.status)}
@@ -620,6 +669,7 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
                     <th className="p-2">Capacidade</th>
                     <th className="p-2">Sobrecarga</th>
                     <th className="p-2">Status</th>
+                    <th className="p-2">Base</th>
                     <th className="p-2">Servicos competindo</th>
                   </tr>
                 </thead>
@@ -640,13 +690,14 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
                           {capacityStatusLabel(item.status)}
                         </Badge>
                       </td>
+                      <td className="p-2">{demandSourceLabel(item.demandSource)}</td>
                       <td className="p-2">{item.servicesCompetingForSameGroup.slice(0, 3).join(', ') || '-'}</td>
                     </tr>
                   ))}
                   {capacityModel.overloadDiagnostics.length === 0 && (
                     <tr>
-                      <td className="p-6 text-center text-muted-foreground" colSpan={7}>
-                        Nenhuma meta semanal vinculada a frente compartilhada foi encontrada para calcular sobrecarga.
+                      <td className="p-6 text-center text-muted-foreground" colSpan={8}>
+                        Nenhuma demanda semanal ou estrategica vinculada a frente compartilhada foi encontrada para calcular sobrecarga.
                       </td>
                     </tr>
                   )}
@@ -708,7 +759,7 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
 
                 <div className="grid gap-3 md:grid-cols-5">
                   {[
-                    ['Capacidade atual', selectedSimulationFront.weeklyCapacity === null ? 'Sem produtividade' : `${formatNumber(selectedSimulationFront.weeklyCapacity, 1)}/semana`],
+                    ['Capacidade atual', selectedSimulationFront.weeklyCapacity === null ? 'Sem produtividade' : `${formatNumber(selectedSimulationFront.weeklyCapacity, 1)} ${selectedSimulationFront.weeklyCapacityUnit}`],
                     ['Demanda', simulatedCapacityResult.demand > 0 ? formatNumber(simulatedCapacityResult.demand, 1) : 'Sem demanda'],
                     ['Equipes atuais', selectedSimulationFront.teamCount],
                     ['Pessoas atuais', selectedSimulationFront.totalPeople],
@@ -773,7 +824,7 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
 
               <div className="grid gap-3 md:grid-cols-4">
                 {[
-                  ['Capacidade simulada', simulatedCapacityResult.simulatedCapacity === null ? 'Sem produtividade' : `${formatNumber(simulatedCapacityResult.simulatedCapacity, 1)}/semana`],
+                  ['Capacidade simulada', simulatedCapacityResult.simulatedCapacity === null ? 'Sem produtividade' : `${formatNumber(simulatedCapacityResult.simulatedCapacity, 1)} ${selectedSimulationFront.weeklyCapacityUnit}`],
                   ['Sobra simulada', simulatedCapacityResult.simulatedCapacity === null ? '-' : formatNumber(simulatedCapacityResult.simulatedSurplus, 1)],
                   ['Sobrecarga simulada', simulatedCapacityResult.simulatedCapacity === null ? '-' : formatNumber(simulatedCapacityResult.simulatedOverload, 1)],
                   ['Pessoas adicionais', formatNumber(simulatedCapacityResult.additionalPeople, 0)],
@@ -1182,7 +1233,7 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
               <div><strong>Data-base:</strong> {formatDate(new Date().toISOString())}</div>
               <div><strong>Emissao:</strong> {formatDateTime(generatedAt)}</div>
               <div><strong>Prazo planejado:</strong> {formatDate(forecastSummary.currentPlannedFinishDate)}</div>
-              <div><strong>Previsao atual:</strong> {formatDate(forecastSummary.estimatedFinishDate)}</div>
+              <div><strong>Previsao atual:</strong> {forecastSummary.estimatedFinishDate ? formatDate(forecastSummary.estimatedFinishDate) : 'Indisponivel'}</div>
             </div>
           </section>
 
@@ -1193,7 +1244,7 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
                 ['Progresso planejado', formatPercent(forecastSummary.plannedProgress)],
                 ['Progresso realizado', formatPercent(forecastSummary.realProgress)],
                 ['Desvio', formatPercent(forecastSummary.realProgress - forecastSummary.plannedProgress)],
-                ['Previsao de termino', formatDate(forecastSummary.estimatedFinishDate)],
+                ['Previsao de termino', forecastSummary.estimatedFinishDate ? formatDate(forecastSummary.estimatedFinishDate) : 'Indisponivel'],
                 ['Situacao', statusLabel(forecastSummary.status)],
                 ['Servicos criticos', criticalItems.length],
                 ['Sem produtividade', forecastSummary.missingProductivityCount],
@@ -1308,10 +1359,17 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
                       {row.services.slice(0, 3).map((service) => service.serviceName || service.scopeId || 'Servico').join(', ')}
                       {row.services.length > 3 ? ` +${row.services.length - 3}` : ''}
                     </td>
-                    <td>{row.weeklyCapacity === null ? 'Sem produtividade' : `${formatNumber(row.weeklyCapacity, 1)} ${row.productivityUnit}/semana`}</td>
+                    <td>
+                      {row.weeklyCapacity === null
+                        ? 'Sem produtividade'
+                        : `${formatNumber(row.weeklyCapacity, 1)} ${row.weeklyCapacityUnit}`}
+                    </td>
                     <td>{row.requiredTeams !== null && row.requiredTeams > row.teamCount ? `${row.teamCount} / necessarias ${row.requiredTeams}` : row.teamCount}</td>
                     <td>{row.totalPeople}</td>
-                    <td>{row.peakDemand > 0 ? formatNumber(row.peakDemand, 1) : 'Sem demanda'}</td>
+                    <td>
+                      {row.peakDemand > 0 ? formatNumber(row.peakDemand, 1) : 'Sem demanda'}
+                      {' '}({demandSourceLabel(row.demandSource)})
+                    </td>
                     <td>{capacityStatusLabel(row.status)}</td>
                     <td>{row.recommendation}</td>
                   </tr>
@@ -1343,7 +1401,7 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
                     <td>
                       {simulatedCapacityResult.currentCapacity === null
                         ? 'Sem produtividade cadastrada'
-                        : `${formatNumber(simulatedCapacityResult.currentCapacity, 1)}/semana`}
+                        : `${formatNumber(simulatedCapacityResult.currentCapacity, 1)} ${selectedSimulationFront.weeklyCapacityUnit}`}
                     </td>
                     <th>Demanda considerada</th>
                     <td>
@@ -1373,7 +1431,7 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
                     <td>
                       {simulatedCapacityResult.simulatedCapacity === null
                         ? 'Sem produtividade cadastrada para simulacao'
-                        : `${formatNumber(simulatedCapacityResult.simulatedCapacity, 1)}/semana`}
+                        : `${formatNumber(simulatedCapacityResult.simulatedCapacity, 1)} ${selectedSimulationFront.weeklyCapacityUnit}`}
                     </td>
                     <th>Pessoas adicionais estimadas</th>
                     <td>{formatNumber(simulatedCapacityResult.additionalPeople, 0)}</td>
@@ -1384,9 +1442,9 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
                       {simulatedCapacityResult.simulatedCapacity === null
                         ? 'Sem produtividade cadastrada para simulacao'
                         : simulatedCapacityResult.simulatedOverload > 0
-                          ? `Sobrecarga de ${formatNumber(simulatedCapacityResult.simulatedOverload, 1)}/semana`
+                          ? `Sobrecarga de ${formatNumber(simulatedCapacityResult.simulatedOverload, 1)} ${selectedSimulationFront.weeklyCapacityUnit}`
                           : simulatedCapacityResult.simulatedSurplus > 0
-                            ? `Sobra de ${formatNumber(simulatedCapacityResult.simulatedSurplus, 1)}/semana`
+                            ? `Sobra de ${formatNumber(simulatedCapacityResult.simulatedSurplus, 1)} ${selectedSimulationFront.weeklyCapacityUnit}`
                             : 'Capacidade simulada igual a demanda considerada'}
                     </td>
                   </tr>
@@ -1458,8 +1516,9 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
           <section className="print-section">
             <h2 className="text-lg font-semibold">8. Analise de prazo</h2>
             <p className="mt-2 text-sm text-muted-foreground print-muted">
-              Com base nos dados disponiveis ate a data-base, produtividade cadastrada e saldo de servicos pendentes,
-              a previsao atual de termino da obra e {formatDate(forecastSummary.estimatedFinishDate)}.
+              {forecastSummary.estimatedFinishDate
+                ? `Com base nos dados disponiveis ate a data-base, produtividade cadastrada, Macrofluxo e saldo de servicos pendentes, a previsao atual de termino da obra e ${formatDate(forecastSummary.estimatedFinishDate)}.`
+                : 'Previsao de termino: Indisponivel. Configure o Macrofluxo para estimar prazo final com sequencia oficial.'}
             </p>
             {forecastSummary.delayDays !== null && forecastSummary.delayDays > 0 && (
               <p className="mt-2 text-sm text-muted-foreground print-muted">
@@ -1468,7 +1527,7 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
             )}
             {forecastSummary.status === 'insufficient_data' && (
               <p className="mt-2 text-sm text-muted-foreground print-muted">
-                A previsao possui confiabilidade limitada porque existem servicos sem produtividade cadastrada ou sem datas planejadas suficientes.
+                A previsao possui confiabilidade limitada porque faltam Macrofluxo, produtividade cadastrada ou datas planejadas suficientes.
               </p>
             )}
           </section>
@@ -1624,7 +1683,7 @@ export function PlanningForecastView({ project, companyName, officialView }: Pla
             <p className="mt-2 text-sm text-muted-foreground print-muted">
               Com base nos dados disponiveis ate a data-base, a obra apresenta progresso realizado de {formatPercent(forecastSummary.realProgress)}
               frente a {formatPercent(forecastSummary.plannedProgress)} planejado, resultando em desvio de {formatPercent(forecastSummary.realProgress - forecastSummary.plannedProgress)}.
-              A previsao estimada de termino e {formatDate(forecastSummary.estimatedFinishDate)} e a situacao geral e {statusLabel(forecastSummary.status).toLowerCase()}.
+              A previsao estimada de termino e {forecastSummary.estimatedFinishDate ? formatDate(forecastSummary.estimatedFinishDate) : 'indisponivel ate configurar o Macrofluxo'} e a situacao geral e {statusLabel(forecastSummary.status).toLowerCase()}.
               Os principais pontos de atencao concentram-se em {criticalStagesText}, com servicos criticos como {getTopRisksText(criticalItems)}.
               Recomenda-se revisar produtividade, reforcar equipes nos servicos com capacidade insuficiente e reprogramar saldos pendentes nos proximos periodos.
               A previsao deve ser interpretada com confiabilidade {confidence.label.toLowerCase()}, pois {confidence.reason.toLowerCase()}

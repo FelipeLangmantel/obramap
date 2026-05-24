@@ -64,7 +64,7 @@ const GRID_Y = 180;
 const CANVAS_WIDTH = 3600;
 const CANVAS_HEIGHT = 2200;
 
-const packageTypeLabel = (type: string) => (type === 'work_group' ? 'Frente' : 'Serviço');
+const packageTypeLabel = (type: string) => (type === 'work_group' ? 'Frente' : 'ServiÃ§o');
 
 const relationLabel = (relation: MacroflowRelationType) =>
   relation === 'SS' ? 'Inicia para iniciar (SS)' : 'Termina para iniciar (FS)';
@@ -80,7 +80,7 @@ const describeDependency = (dependency: {
   relationType: MacroflowRelationType;
   lagDays: number;
 }) => {
-  const relation = dependency.relationType === 'SS' ? 'começa junto ao início' : 'começa depois do término';
+  const relation = dependency.relationType === 'SS' ? 'comeÃ§a junto ao inÃ­cio' : 'comeÃ§a depois do tÃ©rmino';
   return `${dependency.successorLabel} ${relation} de ${dependency.predecessorLabel}, ${describeLag(dependency.lagDays)}.`;
 };
 
@@ -176,12 +176,16 @@ export function MacroflowDialog({
     macroflow,
     selectedMacroflowId,
     dependencies,
+    includedPackages,
     loading,
     hasCycle,
     createMacroflow,
     selectMacroflow,
     renameMacroflow,
     activateMacroflow,
+    addPackageToMacroflow,
+    removePackageFromMacroflow,
+    setPackagesForMacroflow,
     addDependency,
     updateDependency,
     removeDependency,
@@ -208,15 +212,15 @@ export function MacroflowDialog({
 
   useEffect(() => {
     if (!open) return;
-    const layout = createAutoLayout(packages, dependencies);
+    const layout = createAutoLayout(includedCanvasPackages, dependencies);
     const saved = storageKey ? localStorage.getItem(storageKey) : null;
     const parsed = saved ? JSON.parse(saved) as Record<string, NodePosition> : {};
-    const merged = Object.fromEntries(packages.map((pkg) => [pkg.id, parsed[pkg.id] || layout[pkg.id] || { x: 120, y: 120 }]));
+    const merged = Object.fromEntries(includedCanvasPackages.map((pkg) => [pkg.id, parsed[pkg.id] || layout[pkg.id] || { x: 120, y: 120 }]));
     setPositions(merged);
     setSelection(null);
     setPendingConnection(null);
     setConnectingFrom(null);
-  }, [dependencies, open, packages, storageKey]);
+  }, [dependencies, includedCanvasPackages, open, storageKey]);
 
   useEffect(() => {
     if (!storageKey || !open || !Object.keys(positions).length) return;
@@ -232,6 +236,14 @@ export function MacroflowDialog({
     return names.sort((a, b) => a.localeCompare(b, 'pt-BR'));
   }, [packages]);
 
+  const includedPackageIds = useMemo(() => new Set(includedPackages.map((item) => item.packageKey)), [includedPackages]);
+  const includedCanvasPackages = useMemo(
+    () => includedPackages
+      .map((item) => packageMap.get(item.packageKey))
+      .filter((pkg): pkg is GanttService => Boolean(pkg)),
+    [includedPackages, packageMap],
+  );
+
   const filteredPackages = useMemo(() => {
     const term = normalizeText(search);
     return packages.filter((pkg) => {
@@ -244,7 +256,17 @@ export function MacroflowDialog({
     });
   }, [filter, packages, search, stageFilter]);
 
-  const visiblePackageIds = useMemo(() => new Set(filteredPackages.map((pkg) => pkg.id)), [filteredPackages]);
+  const availablePackages = useMemo(
+    () => filteredPackages.filter((pkg) => !includedPackageIds.has(pkg.id)),
+    [filteredPackages, includedPackageIds],
+  );
+
+  const visibleCanvasPackages = useMemo(() => {
+    const allowed = new Set(filteredPackages.map((pkg) => pkg.id));
+    return includedCanvasPackages.filter((pkg) => allowed.has(pkg.id));
+  }, [filteredPackages, includedCanvasPackages]);
+
+  const visiblePackageIds = useMemo(() => new Set(visibleCanvasPackages.map((pkg) => pkg.id)), [visibleCanvasPackages]);
   const visibleDependencies = useMemo(
     () => dependencies.filter((dependency) => visiblePackageIds.has(dependency.predecessorKey) && visiblePackageIds.has(dependency.successorKey)),
     [dependencies, visiblePackageIds],
@@ -426,8 +448,35 @@ export function MacroflowDialog({
 
   const removeSelectedEdge = async () => {
     if (!selectedEdge) return;
-    if (!window.confirm('Remover esta ligação do macrofluxo?')) return;
+    if (!window.confirm('Remover esta ligaÃ§Ã£o do macrofluxo?')) return;
     const removed = await removeDependency(selectedEdge.id);
+    if (removed) {
+      setSelection(null);
+      await onChanged?.();
+    }
+  };
+
+  const addPackage = async (packageKey: string) => {
+    const added = await addPackageToMacroflow(packageKey);
+    if (added) await onChanged?.();
+  };
+
+  const addVisiblePackages = async () => {
+    const keys = Array.from(new Set([
+      ...includedPackages.map((item) => item.packageKey),
+      ...availablePackages.map((item) => item.id),
+    ]));
+    const saved = await setPackagesForMacroflow(keys);
+    if (saved) await onChanged?.();
+  };
+
+  const removePackage = async (packageKey: string) => {
+    const hasLinks = dependencies.some((dependency) =>
+      dependency.predecessorKey === packageKey || dependency.successorKey === packageKey
+    );
+    if (hasLinks && !window.confirm('Remover este pacote tambem removera ligacoes relacionadas. Continuar?')) return;
+    if (!hasLinks && !window.confirm('Remover este pacote do macrofluxo?')) return;
+    const removed = await removePackageFromMacroflow(packageKey);
     if (removed) {
       setSelection(null);
       await onChanged?.();
@@ -454,7 +503,7 @@ export function MacroflowDialog({
   };
 
   const autoOrganize = () => {
-    setPositions(createAutoLayout(filteredPackages, visibleDependencies));
+    setPositions(createAutoLayout(visibleCanvasPackages, visibleDependencies));
   };
 
   const centerFlow = () => {
@@ -463,8 +512,8 @@ export function MacroflowDialog({
   };
 
   const fitView = () => {
-    if (!filteredPackages.length) return;
-    const used = filteredPackages.map((pkg) => positions[pkg.id]).filter(Boolean);
+    if (!visibleCanvasPackages.length) return;
+    const used = visibleCanvasPackages.map((pkg) => positions[pkg.id]).filter(Boolean);
     if (!used.length) return centerFlow();
     const minX = Math.min(...used.map((position) => position.x));
     const minY = Math.min(...used.map((position) => position.y));
@@ -490,7 +539,7 @@ export function MacroflowDialog({
                 Macrofluxo do Planejamento
               </DialogTitle>
               <p className="mt-1 text-sm text-muted-foreground">
-                Organize predecessoras entre frentes e serviços. Afeta apenas planejamento visual, Gantt, Linha e Dashboard.
+                Organize predecessoras entre frentes e serviÃ§os. Afeta apenas planejamento visual, Gantt, Linha e Dashboard.
               </p>
               <div className="mt-3 flex flex-wrap items-end gap-2">
                 <div className="min-w-[220px] space-y-1">
@@ -561,7 +610,7 @@ export function MacroflowDialog({
               </Button>
               <Button variant="outline" size="sm" className="gap-2" onClick={() => setSelection(null)}>
                 <X className="h-4 w-4" />
-                Limpar seleção
+                Limpar seleÃ§Ã£o
               </Button>
               <Button size="sm" className="gap-2" onClick={() => onOpenChange(false)}>
                 <Save className="h-4 w-4" />
@@ -575,8 +624,8 @@ export function MacroflowDialog({
           <aside className="min-h-0 border-r bg-background">
             <div className="space-y-3 border-b p-4">
               <div>
-                <p className="text-sm font-semibold">Pacotes disponíveis</p>
-                <p className="text-xs text-muted-foreground">Arraste no canvas e conecte pelos pontos laterais.</p>
+                <p className="text-sm font-semibold">Pacotes do macrofluxo</p>
+                <p className="text-xs text-muted-foreground">Adicione servicos/frentes ao macrofluxo real antes de conectar.</p>
               </div>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -596,14 +645,14 @@ export function MacroflowDialog({
                   </SelectContent>
                 </Select>
                 <p className="text-[11px] text-muted-foreground">
-                  Estas opções são grupos/etapas dos serviços, não macrofluxos salvos.
+                  Estas opcoes sao grupos/etapas dos servicos, nao macrofluxos salvos.
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-1">
                 {[
                   ['all', 'Todos'],
                   ['work_group', 'Frentes'],
-                  ['service', 'Serviços'],
+                  ['service', 'Servicos'],
                   ['missing', 'Sem prod.'],
                 ].map(([value, label]) => (
                   <Button
@@ -616,40 +665,103 @@ export function MacroflowDialog({
                   </Button>
                 ))}
               </div>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="w-full"
+                disabled={!canEdit || availablePackages.length === 0}
+                onClick={addVisiblePackages}
+              >
+                Adicionar todos visiveis
+              </Button>
             </div>
-            <ScrollArea className="h-[calc(92vh-218px)] p-4">
-              <div className="space-y-2 pr-3">
-                {filteredPackages.map((pkg) => (
-                  <button
-                    key={pkg.id}
-                    type="button"
-                    className={cn(
-                      'w-full rounded-lg border bg-card p-3 text-left transition hover:border-primary/50 hover:bg-primary/5',
-                      selection?.type === 'node' && selection.id === pkg.id && 'border-primary bg-primary/5'
-                    )}
-                    onClick={() => setSelection({ type: 'node', id: pkg.id })}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="line-clamp-2 text-sm font-medium">{getPackageLabel(pkg)}</p>
-                      <Badge variant={pkg.package_type === 'work_group' ? 'default' : 'outline'}>{packageTypeLabel(pkg.package_type)}</Badge>
+            <ScrollArea className="h-[calc(92vh-250px)] p-4">
+              <div className="space-y-5 pr-3">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">No macrofluxo</p>
+                    <Badge variant="outline">{includedCanvasPackages.length}</Badge>
+                  </div>
+                  {includedCanvasPackages.length === 0 && (
+                    <div className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
+                      Macrofluxo vazio. Adicione pacotes disponiveis para montar o canvas.
                     </div>
-                    <div className="mt-2 flex flex-wrap gap-1 text-xs text-muted-foreground">
-                      <span>{pkg.duration_days} dias</span>
-                      <span>•</span>
-                      <span>{formatNumber(pkg.productivity)} {pkg.productivity_unit}</span>
-                    </div>
-                    {!pkg.has_productivity && (
-                      <Badge variant="secondary" className="mt-2 gap-1 text-amber-700">
-                        <AlertTriangle className="h-3 w-3" />
-                        Sem produtividade
-                      </Badge>
-                    )}
-                  </button>
-                ))}
+                  )}
+                  {includedCanvasPackages.map((pkg) => (
+                    <button
+                      key={pkg.id}
+                      type="button"
+                      className={cn(
+                        'w-full rounded-lg border bg-card p-3 text-left transition hover:border-primary/50 hover:bg-primary/5',
+                        selection?.type === 'node' && selection.id === pkg.id && 'border-primary bg-primary/5'
+                      )}
+                      onClick={() => setSelection({ type: 'node', id: pkg.id })}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="line-clamp-2 text-sm font-medium">{getPackageLabel(pkg)}</p>
+                        <Badge variant={pkg.package_type === 'work_group' ? 'default' : 'outline'}>{packageTypeLabel(pkg.package_type)}</Badge>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1 text-xs text-muted-foreground">
+                        <span>{pkg.duration_days} dias</span>
+                        <span>-</span>
+                        <span>{formatNumber(pkg.productivity)} {pkg.productivity_unit}</span>
+                      </div>
+                      <div className="mt-2 flex justify-end">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2 text-xs"
+                          disabled={!canEdit}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void removePackage(pkg.id);
+                          }}
+                        >
+                          Remover
+                        </Button>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                <Separator />
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Disponiveis para adicionar</p>
+                    <Badge variant="outline">{availablePackages.length}</Badge>
+                  </div>
+                  {availablePackages.map((pkg) => (
+                    <button
+                      key={pkg.id}
+                      type="button"
+                      className="w-full rounded-lg border bg-card p-3 text-left transition hover:border-primary/50 hover:bg-primary/5"
+                      onClick={() => void addPackage(pkg.id)}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="line-clamp-2 text-sm font-medium">{getPackageLabel(pkg)}</p>
+                        <Badge variant={pkg.package_type === 'work_group' ? 'default' : 'outline'}>{packageTypeLabel(pkg.package_type)}</Badge>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1 text-xs text-muted-foreground">
+                        <span>{pkg.duration_days} dias</span>
+                        <span>-</span>
+                        <span>{formatNumber(pkg.productivity)} {pkg.productivity_unit}</span>
+                      </div>
+                      {!pkg.has_productivity && (
+                        <Badge variant="secondary" className="mt-2 gap-1 text-amber-700">
+                          <AlertTriangle className="h-3 w-3" />
+                          Sem produtividade
+                        </Badge>
+                      )}
+                      <div className="mt-2 text-xs font-medium text-primary">Adicionar ao macrofluxo</div>
+                    </button>
+                  ))}
+                </div>
               </div>
             </ScrollArea>
           </aside>
-
           <main className="relative min-w-0 overflow-hidden">
             <div className="absolute left-4 top-4 z-20 flex items-center gap-2 rounded-full border bg-background/90 p-1 shadow-sm">
               <Button variant="ghost" size="icon" onClick={() => setZoom((current) => Math.min(current + 0.1, 1.8))}>
@@ -667,9 +779,13 @@ export function MacroflowDialog({
               </div>
             )}
 
-            {!dependencies.length && (
+            {includedCanvasPackages.length === 0 ? (
               <div className="pointer-events-none absolute bottom-5 left-1/2 z-20 -translate-x-1/2 rounded-full border bg-background/90 px-4 py-2 text-sm text-muted-foreground shadow-sm">
-                Arraste uma conexão entre dois pacotes para criar a primeira predecessora.
+                Adicione pacotes ao macrofluxo para iniciar o canvas.
+              </div>
+            ) : !dependencies.length && (
+              <div className="pointer-events-none absolute bottom-5 left-1/2 z-20 -translate-x-1/2 rounded-full border bg-background/90 px-4 py-2 text-sm text-muted-foreground shadow-sm">
+                Arraste uma conexÃ£o entre dois pacotes para criar a primeira predecessora.
               </div>
             )}
 
@@ -739,7 +855,7 @@ export function MacroflowDialog({
                   )}
                 </svg>
 
-                {filteredPackages.map((pkg) => {
+                {visibleCanvasPackages.map((pkg) => {
                   const position = positions[pkg.id] || { x: 100, y: 100 };
                   const selected = selection?.type === 'node' && selection.id === pkg.id;
                   return (
@@ -768,7 +884,7 @@ export function MacroflowDialog({
                       </div>
                       <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                         <div className="rounded-md bg-muted/60 p-2">
-                          <p className="text-muted-foreground">Duração</p>
+                          <p className="text-muted-foreground">DuraÃ§Ã£o</p>
                           <p className="font-semibold">{pkg.duration_days} dias</p>
                         </div>
                         <div className="rounded-md bg-muted/60 p-2">
@@ -801,14 +917,14 @@ export function MacroflowDialog({
           <aside className="min-h-0 border-l bg-background">
             <div className="border-b p-4">
               <p className="text-sm font-semibold">Propriedades</p>
-              <p className="text-xs text-muted-foreground">Selecione um nó ou ligação para editar.</p>
+              <p className="text-xs text-muted-foreground">Selecione um nÃ³ ou ligaÃ§Ã£o para editar.</p>
             </div>
             <ScrollArea className="h-[calc(92vh-154px)]">
               <div className="space-y-4 p-4">
                 {selection?.type === 'pending' && pendingConnection && (
                   <div className="space-y-4 rounded-lg border bg-primary/5 p-4">
                     <div>
-                      <p className="text-sm font-semibold">Nova ligação</p>
+                      <p className="text-sm font-semibold">Nova ligaÃ§Ã£o</p>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {packageMap.get(pendingConnection.successorKey) ? getPackageLabel(packageMap.get(pendingConnection.successorKey)!) : 'Sucessor'} depois de {packageMap.get(pendingConnection.predecessorKey) ? getPackageLabel(packageMap.get(pendingConnection.predecessorKey)!) : 'predecessor'}.
                       </p>
@@ -822,7 +938,7 @@ export function MacroflowDialog({
                     />
                     <div className="flex gap-2">
                       <Button size="sm" className="flex-1" disabled={!canEdit || loading} onClick={savePendingConnection}>
-                        Salvar ligação
+                        Salvar ligaÃ§Ã£o
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => { setPendingConnection(null); setSelection(null); }}>
                         Cancelar
@@ -834,7 +950,7 @@ export function MacroflowDialog({
                 {selectedEdge && (
                   <div className="space-y-4 rounded-lg border p-4">
                     <div>
-                      <p className="text-sm font-semibold">Ligação selecionada</p>
+                      <p className="text-sm font-semibold">LigaÃ§Ã£o selecionada</p>
                       <p className="mt-1 text-xs text-muted-foreground">{describeDependency(selectedEdge)}</p>
                     </div>
                     <RelationEditor
@@ -870,16 +986,26 @@ export function MacroflowDialog({
                       </div>
                       <Separator className="my-3" />
                       <div className="space-y-2 text-sm">
-                        <InfoRow label="Duração" value={`${selectedNode.duration_days} dias`} />
+                        <InfoRow label="DuraÃ§Ã£o" value={`${selectedNode.duration_days} dias`} />
                         <InfoRow label="Produtividade" value={`${formatNumber(selectedNode.productivity)} ${selectedNode.productivity_unit}`} />
                         <InfoRow label="Demanda" value={`${formatNumber(selectedNode.remaining_houses, 0)} unidades`} />
                         <InfoRow label="Equipes" value={`${selectedNode.teams}`} />
                       </div>
                       {!selectedNode.has_productivity && (
                         <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-200">
-                          Pacote sem produtividade. O cronograma pode ficar preliminar até configurar Produtividade e Equipes.
+                          Pacote sem produtividade. O cronograma pode ficar preliminar atÃ© configurar Produtividade e Equipes.
                         </div>
                       )}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="mt-3 w-full"
+                        disabled={!canEdit}
+                        onClick={() => void removePackage(selectedNode.id)}
+                      >
+                        Remover do macrofluxo
+                      </Button>
                     </div>
 
                     <DependencyList title="Predecessoras" items={predecessors} empty="Sem predecessoras." />
@@ -890,14 +1016,14 @@ export function MacroflowDialog({
                 {!selection && (
                   <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
                     <Layers3 className="mx-auto mb-3 h-8 w-8 opacity-50" />
-                    Clique em um pacote ou ligação. Para criar predecessora, arraste o conector de um nó até outro.
+                    Clique em um pacote ou ligaÃ§Ã£o. Para criar predecessora, arraste o conector de um nÃ³ atÃ© outro.
                   </div>
                 )}
 
                 <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
                   <p className="font-medium text-foreground">Resumo</p>
-                  <p className="mt-1">{packages.length} pacote(s), {dependencies.length} ligação(ões).</p>
-                  <p className="mt-1">Macrofluxo ativo: {macroflow?.name || 'será criado ao salvar a primeira ligação'}.</p>
+                  <p className="mt-1">{includedCanvasPackages.length} pacote(s) incluidos, {dependencies.length} ligacao(oes).</p>
+                  <p className="mt-1">Macrofluxo ativo: {macroflow?.name || 'serÃ¡ criado ao salvar a primeira ligaÃ§Ã£o'}.</p>
                 </div>
               </div>
             </ScrollArea>
@@ -924,7 +1050,7 @@ function RelationEditor({
   return (
     <div className="grid gap-3">
       <div className="space-y-1.5">
-        <Label>Tipo de relação</Label>
+        <Label>Tipo de relaÃ§Ã£o</Label>
         <Select value={relationDraft} onValueChange={(value) => setRelationDraft(value as MacroflowRelationType)} disabled={disabled}>
           <SelectTrigger>
             <SelectValue />
@@ -964,7 +1090,7 @@ function DependencyList({ title, items, empty }: { title: string; items: Plannin
           {items.map((item) => (
             <div key={item.id} className="rounded-md bg-muted/50 p-2 text-xs">
               <p className="font-medium">{describeDependency(item)}</p>
-              <p className="mt-1 text-muted-foreground">{relationLabel(item.relationType)} • {describeLag(item.lagDays)}</p>
+              <p className="mt-1 text-muted-foreground">{relationLabel(item.relationType)} â€¢ {describeLag(item.lagDays)}</p>
             </div>
           ))}
         </div>

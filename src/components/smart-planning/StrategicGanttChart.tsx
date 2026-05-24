@@ -59,6 +59,7 @@ import { MacroflowDialog } from './MacroflowDialog';
 interface StrategicGanttChartProps {
   projectId?: string;
   services: GanttService[];
+  macroflowPackages?: GanttService[];
   projectStartDate: string;
   projectedEndDate: Date | null;
   onUpdateProductivity: (
@@ -140,6 +141,7 @@ const SCALE_CONFIG: Record<GanttScale, { label: string; minZoom: number; maxZoom
 export function StrategicGanttChart({
   projectId,
   services,
+  macroflowPackages,
   projectStartDate,
   projectedEndDate,
   onUpdateProductivity,
@@ -435,7 +437,7 @@ export function StrategicGanttChart({
           open={showMacroflowDialog}
           onOpenChange={setShowMacroflowDialog}
           projectId={projectId}
-          packages={services}
+          packages={macroflowPackages ?? services}
           canEdit={canEdit}
           onChanged={onMacroflowChanged}
         />
@@ -1058,7 +1060,7 @@ export function StrategicGanttChart({
         open={showMacroflowDialog}
         onOpenChange={setShowMacroflowDialog}
         projectId={projectId}
-        packages={services}
+        packages={macroflowPackages ?? services}
         canEdit={canEdit}
         onChanged={onMacroflowChanged}
       />

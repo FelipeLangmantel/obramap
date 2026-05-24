@@ -75,6 +75,7 @@ export interface OverloadDiagnostic {
   periodLabel: string;
   periodStart: string | null;
   periodEnd: string | null;
+  demandSource: 'weekly_planning' | 'strategic_period';
   groupId: string | null;
   groupName: string;
   plannedQuantity: number;
@@ -653,9 +654,14 @@ export function usePlanningCapacityModel(projectId: string | undefined): Plannin
       plannedQuantity: number;
       services: Set<string>;
       capacity: number | null;
+      demandSource: 'weekly_planning' | 'strategic_period';
     }>();
 
-    for (const row of raw.weeklyPlanServices) {
+    const weeklyDemandRows = raw.weeklyPlanServices.filter((row) => readHouseDemand(row) > 0);
+    const demandRows = weeklyDemandRows.length > 0 ? weeklyDemandRows : raw.periodServices.filter((row) => readHouseDemand(row) > 0);
+    const demandSource: 'weekly_planning' | 'strategic_period' = weeklyDemandRows.length > 0 ? 'weekly_planning' : 'strategic_period';
+
+    for (const row of demandRows) {
       const demand = readHouseDemand(row);
       if (demand <= 0) continue;
       const key = serviceKey(row?.macro_id, row?.scope_id, serviceNameFromRow(row));
@@ -678,6 +684,7 @@ export function usePlanningCapacityModel(projectId: string | undefined): Plannin
           plannedQuantity: demand,
           services: new Set([capacity.serviceName]),
           capacity: capacity.weeklyCapacity,
+          demandSource,
         });
       }
     }
@@ -698,6 +705,7 @@ export function usePlanningCapacityModel(projectId: string | undefined): Plannin
         periodLabel: item.periodLabel,
         periodStart: item.periodStart,
         periodEnd: item.periodEnd,
+        demandSource: item.demandSource,
         groupId: item.groupId,
         groupName: item.groupName,
         plannedQuantity: item.plannedQuantity,
