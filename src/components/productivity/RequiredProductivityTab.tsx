@@ -34,6 +34,7 @@ interface RequiredProductivityRowView {
   service: ServiceLabel;
   frontName: string | null;
   registeredLabel: string;
+  registeredProductivity: number | null;
   realProductivity: number | null;
   requiredProductivity: number | null;
   plannedDemand: number | null;
