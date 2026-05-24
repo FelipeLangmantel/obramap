@@ -1,4 +1,4 @@
-import { MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { MouseEvent, WheelEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowRight,
@@ -14,6 +14,7 @@ import {
   RotateCcw,
   Save,
   Search,
+  Star,
   Trash2,
   X,
   ZoomIn,
@@ -101,6 +102,8 @@ const formatNumber = (value: number | null | undefined, digits = 1) => {
 
 const getPackageLabel = (pkg: GanttService) => pkg.scope_name || pkg.name || 'Pacote sem nome';
 
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+
 const createGridLayout = (items: GanttService[]) => {
   const next: Record<string, NodePosition> = {};
   items.forEach((item, index) => {
@@ -169,10 +172,16 @@ export function MacroflowDialog({
 
   const packageMap = useMemo(() => new Map(packages.map((pkg) => [pkg.id, pkg])), [packages]);
   const {
+    macroflows,
     macroflow,
+    selectedMacroflowId,
     dependencies,
     loading,
     hasCycle,
+    createMacroflow,
+    selectMacroflow,
+    renameMacroflow,
+    activateMacroflow,
     addDependency,
     updateDependency,
     removeDependency,
@@ -183,13 +192,19 @@ export function MacroflowDialog({
   const [pan, setPan] = useState({ x: 40, y: 36 });
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<PackageFilter>('all');
+  const [stageFilter, setStageFilter] = useState('all');
   const [selection, setSelection] = useState<Selection>(null);
   const [connectingFrom, setConnectingFrom] = useState<string | null>(null);
+  const [temporaryConnectionPoint, setTemporaryConnectionPoint] = useState<NodePosition | null>(null);
   const [pendingConnection, setPendingConnection] = useState<{ predecessorKey: string; successorKey: string } | null>(null);
   const [relationDraft, setRelationDraft] = useState<MacroflowRelationType>('FS');
   const [lagDraft, setLagDraft] = useState(0);
+  const [newMacroflowName, setNewMacroflowName] = useState('');
+  const [renameDraft, setRenameDraft] = useState('');
 
-  const storageKey = projectId ? `obramap_macroflow_positions_${projectId}` : null;
+  const storageKey = projectId
+    ? `obramap_macroflow_positions_${projectId}_${selectedMacroflowId || 'draft'}`
+    : null;
 
   useEffect(() => {
     if (!open) return;
@@ -208,16 +223,32 @@ export function MacroflowDialog({
     localStorage.setItem(storageKey, JSON.stringify(positions));
   }, [open, positions, storageKey]);
 
+  useEffect(() => {
+    setRenameDraft(macroflow?.name || '');
+  }, [macroflow?.name]);
+
+  const stageFilterOptions = useMemo(() => {
+    const names = Array.from(new Set(packages.map((pkg) => pkg.macro_name).filter(Boolean) as string[]));
+    return names.sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [packages]);
+
   const filteredPackages = useMemo(() => {
     const term = normalizeText(search);
     return packages.filter((pkg) => {
       if (filter === 'work_group' && pkg.package_type !== 'work_group') return false;
       if (filter === 'service' && pkg.package_type === 'work_group') return false;
       if (filter === 'missing' && pkg.has_productivity) return false;
+      if (stageFilter !== 'all' && pkg.macro_name !== stageFilter) return false;
       if (!term) return true;
       return normalizeText(`${getPackageLabel(pkg)} ${pkg.macro_name} ${pkg.name}`).includes(term);
     });
-  }, [filter, packages, search]);
+  }, [filter, packages, search, stageFilter]);
+
+  const visiblePackageIds = useMemo(() => new Set(filteredPackages.map((pkg) => pkg.id)), [filteredPackages]);
+  const visibleDependencies = useMemo(
+    () => dependencies.filter((dependency) => visiblePackageIds.has(dependency.predecessorKey) && visiblePackageIds.has(dependency.successorKey)),
+    [dependencies, visiblePackageIds],
+  );
 
   const selectedNode = selection?.type === 'node' ? packageMap.get(selection.id) || null : null;
   const selectedEdge = selection?.type === 'edge'
@@ -236,6 +267,19 @@ export function MacroflowDialog({
     setLagDraft(0);
   }, [pendingConnection]);
 
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setConnectingFrom(null);
+      setTemporaryConnectionPoint(null);
+      setPendingConnection(null);
+      setSelection(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [open]);
+
   const getCanvasPoint = (event: MouseEvent) => {
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return { x: 0, y: 0 };
@@ -245,8 +289,27 @@ export function MacroflowDialog({
     };
   };
 
+  const zoomAtCursor = (event: MouseEvent | WheelEvent, nextZoom: number) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) {
+      setZoom(nextZoom);
+      return;
+    }
+
+    const currentPoint = {
+      x: (event.clientX - rect.left - pan.x) / zoom,
+      y: (event.clientY - rect.top - pan.y) / zoom,
+    };
+    setZoom(nextZoom);
+    setPan({
+      x: event.clientX - rect.left - currentPoint.x * nextZoom,
+      y: event.clientY - rect.top - currentPoint.y * nextZoom,
+    });
+  };
+
   const handleNodeMouseDown = (event: MouseEvent, nodeId: string) => {
     if (!canEdit) return;
+    if (event.button !== 0) return;
     event.stopPropagation();
     const point = getCanvasPoint(event);
     const position = positions[nodeId] || { x: 0, y: 0 };
@@ -259,6 +322,10 @@ export function MacroflowDialog({
   };
 
   const handleCanvasMouseMove = (event: MouseEvent) => {
+    if (connectingFrom) {
+      setTemporaryConnectionPoint(getCanvasPoint(event));
+    }
+
     if (draggedNodeRef.current) {
       const point = getCanvasPoint(event);
       const drag = draggedNodeRef.current;
@@ -285,10 +352,14 @@ export function MacroflowDialog({
     draggedNodeRef.current = null;
     panningRef.current = null;
     setConnectingFrom(null);
+    setTemporaryConnectionPoint(null);
   };
 
   const handleCanvasMouseDown = (event: MouseEvent) => {
-    if (event.target !== canvasRef.current) return;
+    if (event.button === 2 || event.button === 1) {
+      event.preventDefault();
+    }
+    if (![0, 1, 2].includes(event.button)) return;
     setSelection(null);
     panningRef.current = { x: pan.x, y: pan.y, startX: event.clientX, startY: event.clientY };
   };
@@ -296,7 +367,9 @@ export function MacroflowDialog({
   const handleConnectStart = (event: MouseEvent, nodeId: string) => {
     if (!canEdit) return;
     event.stopPropagation();
+    event.preventDefault();
     setConnectingFrom(nodeId);
+    setTemporaryConnectionPoint(getCanvasPoint(event));
     setSelection({ type: 'node', id: nodeId });
   };
 
@@ -306,6 +379,13 @@ export function MacroflowDialog({
     setPendingConnection({ predecessorKey: connectingFrom, successorKey: nodeId });
     setSelection({ type: 'pending' });
     setConnectingFrom(null);
+    setTemporaryConnectionPoint(null);
+  };
+
+  const handleCanvasWheel = (event: WheelEvent) => {
+    event.preventDefault();
+    const nextZoom = clamp(zoom + (event.deltaY < 0 ? 0.08 : -0.08), 0.35, 1.8);
+    zoomAtCursor(event, nextZoom);
   };
 
   const buildPayload = (predecessorKey: string, successorKey: string): MacroflowDependencyInput | null => {
@@ -354,8 +434,27 @@ export function MacroflowDialog({
     }
   };
 
+  const handleCreateMacroflow = async () => {
+    const created = await createMacroflow(newMacroflowName || 'Novo macrofluxo');
+    if (created) {
+      setNewMacroflowName('');
+      await onChanged?.();
+    }
+  };
+
+  const handleRenameMacroflow = async () => {
+    const saved = await renameMacroflow(renameDraft);
+    if (saved) await onChanged?.();
+  };
+
+  const handleActivateMacroflow = async () => {
+    if (!macroflow) return;
+    const saved = await activateMacroflow(macroflow.id);
+    if (saved) await onChanged?.();
+  };
+
   const autoOrganize = () => {
-    setPositions(createAutoLayout(packages, dependencies));
+    setPositions(createAutoLayout(filteredPackages, visibleDependencies));
   };
 
   const centerFlow = () => {
@@ -364,8 +463,8 @@ export function MacroflowDialog({
   };
 
   const fitView = () => {
-    if (!packages.length) return;
-    const used = packages.map((pkg) => positions[pkg.id]).filter(Boolean);
+    if (!filteredPackages.length) return;
+    const used = filteredPackages.map((pkg) => positions[pkg.id]).filter(Boolean);
     if (!used.length) return centerFlow();
     const minX = Math.min(...used.map((position) => position.x));
     const minY = Math.min(...used.map((position) => position.y));
@@ -393,6 +492,59 @@ export function MacroflowDialog({
               <p className="mt-1 text-sm text-muted-foreground">
                 Organize predecessoras entre frentes e serviços. Afeta apenas planejamento visual, Gantt, Linha e Dashboard.
               </p>
+              <div className="mt-3 flex flex-wrap items-end gap-2">
+                <div className="min-w-[220px] space-y-1">
+                  <Label className="text-xs">Macrofluxo real</Label>
+                  <Select value={selectedMacroflowId || 'none'} onValueChange={(value) => value !== 'none' && selectMacroflow(value)}>
+                    <SelectTrigger className="h-9 bg-background">
+                      <SelectValue placeholder="Selecione um macrofluxo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {macroflows.length === 0 ? (
+                        <SelectItem value="none" disabled>Nenhum macrofluxo salvo</SelectItem>
+                      ) : macroflows.map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.name}{item.active ? ' - principal' : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="min-w-[220px] space-y-1">
+                  <Label className="text-xs">Nome</Label>
+                  <Input
+                    value={renameDraft}
+                    onChange={(event) => setRenameDraft(event.target.value)}
+                    placeholder="Nome do macrofluxo"
+                    className="h-9 bg-background"
+                    disabled={!macroflow || !canEdit}
+                  />
+                </div>
+                <Button variant="outline" size="sm" disabled={!macroflow || !canEdit || renameDraft.trim() === macroflow.name} onClick={handleRenameMacroflow}>
+                  Renomear
+                </Button>
+                <Button variant={macroflow?.active ? 'secondary' : 'outline'} size="sm" disabled={!macroflow || macroflow.active || !canEdit} onClick={handleActivateMacroflow}>
+                  <Star className="mr-1 h-3.5 w-3.5" />
+                  Principal
+                </Button>
+                <div className="min-w-[220px] space-y-1">
+                  <Label className="text-xs">Criar macrofluxo</Label>
+                  <Input
+                    value={newMacroflowName}
+                    onChange={(event) => setNewMacroflowName(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') void handleCreateMacroflow();
+                    }}
+                    placeholder="Ex.: Unidades Habitacionais"
+                    className="h-9 bg-background"
+                    disabled={!canEdit}
+                  />
+                </div>
+                <Button size="sm" disabled={!canEdit} onClick={handleCreateMacroflow}>
+                  <Plus className="mr-1 h-3.5 w-3.5" />
+                  Criar
+                </Button>
+              </div>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" size="sm" className="gap-2" onClick={autoOrganize}>
@@ -429,6 +581,23 @@ export function MacroflowDialog({
               <div className="relative">
                 <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar pacote" className="pl-8" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Filtro por etapa do contrato</Label>
+                <Select value={stageFilter} onValueChange={setStageFilter}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as etapas</SelectItem>
+                    {stageFilterOptions.map((name) => (
+                      <SelectItem key={name} value={name}>{name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">
+                  Estas opções são grupos/etapas dos serviços, não macrofluxos salvos.
+                </p>
               </div>
               <div className="grid grid-cols-2 gap-1">
                 {[
@@ -483,11 +652,11 @@ export function MacroflowDialog({
 
           <main className="relative min-w-0 overflow-hidden">
             <div className="absolute left-4 top-4 z-20 flex items-center gap-2 rounded-full border bg-background/90 p-1 shadow-sm">
-              <Button variant="ghost" size="icon" onClick={() => setZoom((current) => Math.min(current + 0.1, 1.6))}>
+              <Button variant="ghost" size="icon" onClick={() => setZoom((current) => Math.min(current + 0.1, 1.8))}>
                 <ZoomIn className="h-4 w-4" />
               </Button>
               <span className="w-12 text-center text-xs font-medium">{Math.round(zoom * 100)}%</span>
-              <Button variant="ghost" size="icon" onClick={() => setZoom((current) => Math.max(current - 0.1, 0.45))}>
+              <Button variant="ghost" size="icon" onClick={() => setZoom((current) => Math.max(current - 0.1, 0.35))}>
                 <ZoomOut className="h-4 w-4" />
               </Button>
             </div>
@@ -511,6 +680,8 @@ export function MacroflowDialog({
               onMouseMove={handleCanvasMouseMove}
               onMouseUp={handleCanvasMouseUp}
               onMouseLeave={handleCanvasMouseUp}
+              onWheel={handleCanvasWheel}
+              onContextMenu={(event) => event.preventDefault()}
             >
               <div
                 className="relative"
@@ -527,7 +698,7 @@ export function MacroflowDialog({
                       <path d="M0,0 L0,6 L9,3 z" fill="hsl(var(--primary))" />
                     </marker>
                   </defs>
-                  {dependencies.map((dependency) => {
+                  {visibleDependencies.map((dependency) => {
                     const source = positions[dependency.predecessorKey];
                     const target = positions[dependency.successorKey];
                     if (!source || !target) return null;
@@ -556,9 +727,19 @@ export function MacroflowDialog({
                       </g>
                     );
                   })}
+                  {connectingFrom && temporaryConnectionPoint && positions[connectingFrom] && (
+                    <path
+                      d={`M ${positions[connectingFrom].x + NODE_WIDTH} ${positions[connectingFrom].y + NODE_HEIGHT / 2} C ${positions[connectingFrom].x + NODE_WIDTH + 120} ${positions[connectingFrom].y + NODE_HEIGHT / 2}, ${temporaryConnectionPoint.x - 120} ${temporaryConnectionPoint.y}, ${temporaryConnectionPoint.x} ${temporaryConnectionPoint.y}`}
+                      fill="none"
+                      stroke="hsl(var(--primary))"
+                      strokeDasharray="10 8"
+                      strokeWidth={3}
+                      markerEnd="url(#macroflow-arrow)"
+                    />
+                  )}
                 </svg>
 
-                {packages.map((pkg) => {
+                {filteredPackages.map((pkg) => {
                   const position = positions[pkg.id] || { x: 100, y: 100 };
                   const selected = selection?.type === 'node' && selection.id === pkg.id;
                   return (
@@ -567,6 +748,8 @@ export function MacroflowDialog({
                       className={cn(
                         'absolute rounded-xl border bg-card p-3 shadow-lg transition-shadow',
                         selected && 'border-primary ring-2 ring-primary/20',
+                        connectingFrom && connectingFrom !== pkg.id && 'ring-2 ring-emerald-400/40',
+                        connectingFrom === pkg.id && 'ring-2 ring-primary/40',
                         !pkg.has_productivity && 'border-amber-400 bg-amber-50 dark:bg-amber-950/20'
                       )}
                       style={{ left: position.x, top: position.y, width: NODE_WIDTH, height: NODE_HEIGHT }}

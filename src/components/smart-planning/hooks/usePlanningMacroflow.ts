@@ -65,6 +65,14 @@ const normalizeDependency = (row: any): PlanningMacroflowDependency => ({
   lagDays: Number(row.lag_days) || 0,
 });
 
+const normalizeMacroflow = (row: any): PlanningMacroflow => ({
+  id: String(row.id),
+  projectId: String(row.project_id),
+  companyId: String(row.company_id),
+  name: String(row.name ?? 'Macrofluxo principal'),
+  active: row.active !== false,
+});
+
 export const hasMacroflowCycle = (
   packageKeys: string[],
   dependencies: Array<Pick<PlanningMacroflowDependency, 'predecessorKey' | 'successorKey'>>,
@@ -100,7 +108,9 @@ export const hasMacroflowCycle = (
 
 export function usePlanningMacroflow(projectId: string | undefined, packageOptions: MacroflowPackageOption[] = []) {
   const { company, user, canEdit } = useAuth();
+  const [macroflows, setMacroflows] = useState<PlanningMacroflow[]>([]);
   const [macroflow, setMacroflow] = useState<PlanningMacroflow | null>(null);
+  const [selectedMacroflowId, setSelectedMacroflowId] = useState<string | null>(null);
   const [dependencies, setDependencies] = useState<PlanningMacroflowDependency[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -108,7 +118,9 @@ export function usePlanningMacroflow(projectId: string | undefined, packageOptio
 
   const load = useCallback(async () => {
     if (!projectId || !company?.id) {
+      setMacroflows([]);
       setMacroflow(null);
+      setSelectedMacroflowId(null);
       setDependencies([]);
       return;
     }
@@ -120,26 +132,26 @@ export function usePlanningMacroflow(projectId: string | undefined, packageOptio
         .select('*')
         .eq('project_id', projectId)
         .eq('company_id', company.id)
-        .eq('active', true)
         .order('created_at', { ascending: true })
-        .limit(1);
+        .order('name', { ascending: true });
 
       if (flowError) throw flowError;
-      const flow = flowRows?.[0] ?? null;
+      const flows = (flowRows ?? []).map(normalizeMacroflow);
+      setMacroflows(flows);
+      const flow = flows.find((item) => item.id === selectedMacroflowId)
+        ?? flows.find((item) => item.active)
+        ?? flows[0]
+        ?? null;
 
       if (!flow) {
         setMacroflow(null);
+        setSelectedMacroflowId(null);
         setDependencies([]);
         return;
       }
 
-      setMacroflow({
-        id: String(flow.id),
-        projectId: String(flow.project_id),
-        companyId: String(flow.company_id),
-        name: String(flow.name ?? 'Macrofluxo principal'),
-        active: flow.active !== false,
-      });
+      setMacroflow(flow);
+      setSelectedMacroflowId(flow.id);
 
       const { data: dependencyRows, error: dependencyError } = await supabase
         .from('planning_macroflow_dependencies' as any)
@@ -155,7 +167,7 @@ export function usePlanningMacroflow(projectId: string | undefined, packageOptio
     } finally {
       setLoading(false);
     }
-  }, [company?.id, projectId]);
+  }, [company?.id, projectId, selectedMacroflowId]);
 
   useEffect(() => {
     load();
@@ -192,27 +204,136 @@ export function usePlanningMacroflow(projectId: string | undefined, packageOptio
         .limit(1);
 
       if (existingError || !existingRows?.[0]) throw existingError || error;
-      const existing = {
-        id: String(existingRows[0].id),
-        projectId: String(existingRows[0].project_id),
-        companyId: String(existingRows[0].company_id),
-        name: String(existingRows[0].name ?? 'Macrofluxo principal'),
-        active: existingRows[0].active !== false,
-      };
+      const existing = normalizeMacroflow(existingRows[0]);
       setMacroflow(existing);
+      setSelectedMacroflowId(existing.id);
       return existing;
     }
 
-    const created = {
-      id: String(data.id),
-      projectId: String(data.project_id),
-      companyId: String(data.company_id),
-      name: String(data.name ?? 'Macrofluxo principal'),
-      active: data.active !== false,
-    };
+    const created = normalizeMacroflow(data);
     setMacroflow(created);
+    setSelectedMacroflowId(created.id);
     return created;
   }, [company?.id, macroflow, projectId, user?.id]);
+
+  const createMacroflow = useCallback(async (name: string) => {
+    if (!canEdit) {
+      toast.error('VocÃª nÃ£o tem permissÃ£o para criar macrofluxo.');
+      return null;
+    }
+    if (!projectId || !company?.id) {
+      toast.error('Projeto ou empresa nÃ£o informado.');
+      return null;
+    }
+
+    const cleanName = name.trim() || 'Novo macrofluxo';
+
+    try {
+      const { data, error } = await supabase
+        .from('planning_macroflows' as any)
+        .insert({
+          project_id: projectId,
+          company_id: company.id,
+          name: cleanName,
+          active: false,
+          created_by: user?.id ?? null,
+          updated_by: user?.id ?? null,
+        })
+        .select('*')
+        .single();
+
+      if (error) throw error;
+
+      await supabase
+        .from('planning_macroflows' as any)
+        .update({ active: false, updated_by: user?.id ?? null })
+        .eq('project_id', projectId)
+        .eq('company_id', company.id)
+        .eq('active', true);
+
+      const { error: activateError } = await supabase
+        .from('planning_macroflows' as any)
+        .update({ active: true, updated_by: user?.id ?? null })
+        .eq('id', data.id);
+
+      if (activateError) throw activateError;
+
+      const created = normalizeMacroflow(data);
+      const activeCreated = { ...created, active: true };
+      setMacroflow(activeCreated);
+      setSelectedMacroflowId(created.id);
+      await load();
+      toast.success('Macrofluxo criado.');
+      return created;
+    } catch (error: any) {
+      console.error('Erro ao criar macrofluxo:', error);
+      toast.error(error?.message || 'NÃ£o foi possÃ­vel criar o macrofluxo.');
+      return null;
+    }
+  }, [canEdit, company?.id, load, projectId, user?.id]);
+
+  const selectMacroflow = useCallback((macroflowId: string) => {
+    setSelectedMacroflowId(macroflowId);
+  }, []);
+
+  const renameMacroflow = useCallback(async (name: string) => {
+    if (!canEdit || !macroflow) return false;
+    const cleanName = name.trim();
+    if (!cleanName) {
+      toast.error('Informe um nome para o macrofluxo.');
+      return false;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('planning_macroflows' as any)
+        .update({ name: cleanName, updated_by: user?.id ?? null })
+        .eq('id', macroflow.id);
+
+      if (error) throw error;
+      await load();
+      toast.success('Macrofluxo renomeado.');
+      return true;
+    } catch (error: any) {
+      console.error('Erro ao renomear macrofluxo:', error);
+      toast.error(error?.message || 'NÃ£o foi possÃ­vel renomear o macrofluxo.');
+      return false;
+    }
+  }, [canEdit, load, macroflow, user?.id]);
+
+  const activateMacroflow = useCallback(async (macroflowId: string) => {
+    if (!canEdit) {
+      toast.error('VocÃª nÃ£o tem permissÃ£o para ativar macrofluxo.');
+      return false;
+    }
+    if (!projectId || !company?.id) return false;
+
+    try {
+      await supabase
+        .from('planning_macroflows' as any)
+        .update({ active: false, updated_by: user?.id ?? null })
+        .eq('project_id', projectId)
+        .eq('company_id', company.id)
+        .eq('active', true);
+
+      const { error } = await supabase
+        .from('planning_macroflows' as any)
+        .update({ active: true, updated_by: user?.id ?? null })
+        .eq('id', macroflowId)
+        .eq('project_id', projectId)
+        .eq('company_id', company.id);
+
+      if (error) throw error;
+      setSelectedMacroflowId(macroflowId);
+      await load();
+      toast.success('Macrofluxo definido como principal.');
+      return true;
+    } catch (error: any) {
+      console.error('Erro ao ativar macrofluxo:', error);
+      toast.error(error?.message || 'NÃ£o foi possÃ­vel ativar o macrofluxo.');
+      return false;
+    }
+  }, [canEdit, company?.id, load, projectId, user?.id]);
 
   const addDependency = useCallback(async (input: MacroflowDependencyInput) => {
     if (!canEdit) {
@@ -373,11 +494,17 @@ export function usePlanningMacroflow(projectId: string | undefined, packageOptio
   const hasCycle = useMemo(() => hasMacroflowCycle(packageKeys, dependencies), [dependencies, packageKeys]);
 
   return {
+    macroflows,
     macroflow,
+    selectedMacroflowId,
     dependencies,
     loading,
     hasCycle,
     load,
+    createMacroflow,
+    selectMacroflow,
+    renameMacroflow,
+    activateMacroflow,
     addDependency,
     updateDependency,
     removeDependency,
