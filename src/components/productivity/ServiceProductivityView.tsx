@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useConstruction } from '@/contexts/ConstructionContext';
 import { useServiceProductivity } from '@/hooks/useServiceProductivity';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +22,7 @@ import { TeamWorkGroupsPanel } from './TeamWorkGroupsPanel';
 import { ServicePlanningSettingsPanel } from './ServicePlanningSettingsPanel';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import type { ServiceProductivity } from '@/hooks/useServiceProductivity';
+import { usePlanningCapacityModel } from '@/components/smart-planning/hooks/usePlanningCapacityModel';
 
 interface ServiceInfo {
   macroId: string;
@@ -59,6 +61,74 @@ interface SuggestedTeamGroup {
   confidence: 'Alta' | 'Media' | 'Baixa';
 }
 
+interface ProjectMacroTemplate {
+  id: string;
+  name: string;
+  color?: string | null;
+  scopes?: Array<{
+    id: string;
+    name: string;
+  }>;
+}
+
+type RequiredProductivityStatus =
+  | 'ok'
+  | 'attention'
+  | 'below_required'
+  | 'missing_registered'
+  | 'missing_real'
+  | 'missing_planning';
+
+interface WeeklyTargetReadRow {
+  id: string;
+  weekly_plan_week_id: string | null;
+  macro_id: string | null;
+  macro_name: string | null;
+  scope_id: string | null;
+  scope_name: string | null;
+  planned_house_ids?: unknown;
+  house_ids?: unknown;
+  planned_houses?: number | null;
+  planned_quantity?: number | null;
+  quantity?: number | null;
+  target_quantity?: number | null;
+}
+
+interface WeeklyPlanWeekReadRow {
+  id: string;
+  week_start?: string | null;
+  week_end?: string | null;
+  week_number?: number | null;
+}
+
+interface ActualProductionReadRow {
+  id: string;
+  macro_id?: string | null;
+  scope_id?: string | null;
+  quantity?: number | null;
+  progress?: number | null;
+  house_ids?: unknown;
+  production_date?: string | null;
+  date?: string | null;
+  week_start?: string | null;
+  created_at?: string | null;
+  is_initial_bank?: boolean | null;
+  source?: string | null;
+}
+
+interface RequiredProductivityRow {
+  service: ServiceInfo;
+  frontName: string | null;
+  registeredProductivity: number | null;
+  registeredLabel: string;
+  realProductivity: number | null;
+  requiredProductivity: number | null;
+  diffRegisteredPercent: number | null;
+  diffRealPercent: number | null;
+  status: RequiredProductivityStatus;
+  recommendation: string;
+}
+
 const TYPE_LABELS: Record<SuggestedServiceType, string> = {
   physical_repetitive: 'Fisico repetitivo',
   physical_one_time: 'Fisico pontual',
@@ -66,6 +136,22 @@ const TYPE_LABELS: Record<SuggestedServiceType, string> = {
   support_service: 'Apoio/controle',
   milestone: 'Marco',
   undefined: 'Indefinido',
+};
+
+const REQUIRED_STATUS_LABELS: Record<RequiredProductivityStatus, string> = {
+  ok: 'OK',
+  attention: 'Atencao',
+  below_required: 'Abaixo do necessario',
+  missing_registered: 'Sem produtividade cadastrada',
+  missing_real: 'Sem dados reais',
+  missing_planning: 'Sem planejamento suficiente',
+};
+
+const requiredStatusVariant = (status: RequiredProductivityStatus): 'default' | 'secondary' | 'destructive' | 'outline' => {
+  if (status === 'below_required') return 'destructive';
+  if (status === 'attention') return 'secondary';
+  if (status === 'ok') return 'default';
+  return 'outline';
 };
 
 const normalizeText = (value: string | null | undefined) =>
@@ -76,9 +162,55 @@ const normalizeText = (value: string | null | undefined) =>
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
 
-const hasAny = (text: string, terms: string[]) => terms.some((term) => text.includes(term));
-
 const sameId = (a: unknown, b: unknown) => String(a ?? '') === String(b ?? '');
+
+const formatNumber = (value: number | null | undefined, digits = 1) =>
+  Number.isFinite(Number(value)) ? Number(value).toLocaleString('pt-BR', { maximumFractionDigits: digits }) : '-';
+
+const readQuantity = (row: Record<string, unknown>) => {
+  const numeric = Number(row.planned_quantity ?? row.quantity ?? row.target_quantity ?? row.planned_houses ?? row.progress);
+  if (Number.isFinite(numeric) && numeric > 0) return numeric;
+  const collections = [row.planned_house_ids, row.house_ids];
+  for (const value of collections) {
+    if (Array.isArray(value)) return value.length;
+    if (typeof value === 'string') {
+      const count = value.split(',').map((item) => item.trim()).filter(Boolean).length;
+      if (count > 0) return count;
+    }
+  }
+  return 0;
+};
+
+const dateOnly = (value: unknown) => {
+  if (!value) return null;
+  const date = new Date(String(value));
+  return Number.isFinite(date.getTime()) ? date.toISOString().slice(0, 10) : null;
+};
+
+const diffDaysInclusive = (start?: string | null, end?: string | null) => {
+  const startDate = start ? new Date(start) : null;
+  const endDate = end ? new Date(end) : null;
+  if (!startDate || !endDate || !Number.isFinite(startDate.getTime()) || !Number.isFinite(endDate.getTime())) return 0;
+  return Math.max(Math.ceil((endDate.getTime() - startDate.getTime()) / 86400000) + 1, 1);
+};
+
+const toDailyProductivity = (
+  value: number | null | undefined,
+  unit: string | null | undefined,
+  workingDaysPerWeek: number,
+  teamCount: number,
+) => {
+  const productivity = Number(value);
+  const days = Math.max(Number(workingDaysPerWeek) || 5, 1);
+  const teams = Math.max(Number(teamCount) || 1, 1);
+  if (!Number.isFinite(productivity) || productivity <= 0) return null;
+  const unitText = normalizeText(unit);
+  if (unitText.includes('semana')) return (productivity * teams) / days;
+  if (unitText.includes('mes')) return (productivity * teams) / 22;
+  return productivity * teams;
+};
+
+const hasAny = (text: string, terms: string[]) => terms.some((term) => text.includes(term));
 
 const findProductivityForService = (
   service: ServiceInfo,
@@ -367,14 +499,22 @@ const formatSharedCapacity = (services: ServiceCapacityInsight[]) => {
 export function ServiceProductivityView() {
   const { currentProject } = useConstruction();
   const { productivities, isLoading, saveProductivity } = useServiceProductivity(currentProject?.id);
+  const capacityModel = usePlanningCapacityModel(currentProject?.id);
+  const serviceCapacityMap = capacityModel.serviceCapacityMap;
   const [selectedService, setSelectedService] = useState<ServiceInfo | null>(null);
+  const [requiredProductivityFilter, setRequiredProductivityFilter] = useState<'all' | RequiredProductivityStatus>('all');
+  const [requiredProductivityFrontFilter, setRequiredProductivityFrontFilter] = useState('all');
+  const [weeklyTargets, setWeeklyTargets] = useState<WeeklyTargetReadRow[]>([]);
+  const [weeklyWeeks, setWeeklyWeeks] = useState<WeeklyPlanWeekReadRow[]>([]);
+  const [actualProductions, setActualProductions] = useState<ActualProductionReadRow[]>([]);
+  const [requiredProductivityLoading, setRequiredProductivityLoading] = useState(false);
 
   const allServices = useMemo(() => {
     if (!currentProject?.macrosTemplate) return [];
 
     const services: ServiceInfo[] = [];
-    currentProject.macrosTemplate.forEach((macro: any) => {
-      macro.scopes?.forEach((scope: any) => {
+    (currentProject.macrosTemplate as ProjectMacroTemplate[]).forEach((macro) => {
+      macro.scopes?.forEach((scope) => {
         services.push({
           macroId: macro.id,
           scopeId: scope.id,
@@ -386,6 +526,67 @@ export function ServiceProductivityView() {
     });
     return services;
   }, [currentProject]);
+
+  useEffect(() => {
+    let alive = true;
+
+    async function loadRequiredProductivitySources() {
+      if (!currentProject?.id) {
+        setWeeklyTargets([]);
+        setWeeklyWeeks([]);
+        setActualProductions([]);
+        return;
+      }
+
+      setRequiredProductivityLoading(true);
+      try {
+        const [targetsResult, weeksResult, weeklyProductionsResult, productionsResult] = await Promise.all([
+          supabase
+            .from('weekly_plan_services' as never)
+            .select('*')
+            .eq('project_id', currentProject.id),
+          supabase
+            .from('weekly_plan_weeks' as never)
+            .select('id, week_start, week_end, week_number')
+            .eq('project_id', currentProject.id),
+          supabase
+            .from('weekly_productions' as never)
+            .select('*')
+            .eq('project_id', currentProject.id),
+          supabase
+            .from('productions' as never)
+            .select('*')
+            .eq('project_id', currentProject.id),
+        ]);
+
+        if (!alive) return;
+
+        setWeeklyTargets((targetsResult.data as WeeklyTargetReadRow[]) ?? []);
+        setWeeklyWeeks((weeksResult.data as WeeklyPlanWeekReadRow[]) ?? []);
+        setActualProductions([
+          ...(((weeklyProductionsResult.data as ActualProductionReadRow[]) ?? []).map((row) => ({ ...row, source: row.source ?? 'weekly_productions' }))),
+          ...(((productionsResult.data as ActualProductionReadRow[]) ?? []).map((row) => ({ ...row, source: row.source ?? 'productions' }))),
+        ]);
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.warn('[Required Productivity Diagnostic]', error);
+        }
+        if (alive) {
+          setWeeklyTargets([]);
+          setWeeklyWeeks([]);
+          setActualProductions([]);
+        }
+      } finally {
+        if (alive) setRequiredProductivityLoading(false);
+      }
+    }
+
+    loadRequiredProductivitySources();
+
+    return () => {
+      alive = false;
+    };
+  }, [currentProject?.id]);
 
   const stats = useMemo(() => {
     const total = allServices.length;
@@ -428,6 +629,135 @@ export function ServiceProductivityView() {
     };
   }, [allServices, productivities]);
 
+  const weekById = useMemo(
+    () => new Map(weeklyWeeks.map((week) => [week.id, week])),
+    [weeklyWeeks],
+  );
+
+  const capacityByService = useMemo(() => {
+    const exact = new Map<string, (typeof serviceCapacityMap)[number]>();
+    const byName = new Map<string, (typeof serviceCapacityMap)[number]>();
+    serviceCapacityMap.forEach((entry) => {
+      exact.set(`${entry.macroId ?? ''}::${entry.scopeId ?? ''}`, entry);
+      byName.set(normalizeText(entry.serviceName), entry);
+    });
+    return { exact, byName };
+  }, [serviceCapacityMap]);
+
+  const requiredProductivityRows = useMemo<RequiredProductivityRow[]>(() => {
+    return allServices.map((service) => {
+      const capacityEntry =
+        capacityByService.exact.get(`${service.macroId ?? ''}::${service.scopeId ?? ''}`)
+        ?? capacityByService.byName.get(normalizeText(service.scopeName));
+      const productivity = findProductivityForService(service, productivities);
+      const serviceTargets = weeklyTargets.filter(
+        (target) => sameId(target.scope_id, service.scopeId) && (!target.macro_id || sameId(target.macro_id, service.macroId)),
+      );
+      const targetRequirements = serviceTargets.map((target) => {
+        const quantity = readQuantity(target as unknown as Record<string, unknown>);
+        const week = target.weekly_plan_week_id ? weekById.get(target.weekly_plan_week_id) : undefined;
+        const days =
+          diffDaysInclusive(week?.week_start, week?.week_end)
+          || capacityEntry?.workingDaysPerWeek
+          || productivity?.working_days_per_week
+          || 5;
+        return days > 0 && quantity > 0 ? quantity / days : 0;
+      });
+      const requiredProductivity = targetRequirements.length ? Math.max(...targetRequirements) : null;
+      const registeredProductivity =
+        capacityEntry?.weeklyCapacity && capacityEntry.workingDaysPerWeek > 0
+          ? capacityEntry.weeklyCapacity / capacityEntry.workingDaysPerWeek
+          : toDailyProductivity(
+            productivity?.productivity_value,
+            productivity?.productivity_unit,
+            productivity?.working_days_per_week ?? 5,
+            productivity?.default_team_count ?? 1,
+          );
+      const registeredLabel = capacityEntry?.groupName
+        ? `${formatNumber(registeredProductivity, 2)}/dia via ${capacityEntry.groupName}`
+        : registeredProductivity !== null
+          ? `${formatNumber(registeredProductivity, 2)}/dia`
+          : 'Sem produtividade';
+
+      const matchingActual = actualProductions.filter((row) => {
+        if (row.is_initial_bank || normalizeText(row.source).includes('initial')) return false;
+        return sameId(row.scope_id, service.scopeId) && (!row.macro_id || sameId(row.macro_id, service.macroId));
+      });
+      const realQuantity = matchingActual.reduce((sum, row) => sum + readQuantity(row as unknown as Record<string, unknown>), 0);
+      const realDates = new Set(
+        matchingActual
+          .map((row) => dateOnly(row.production_date ?? row.date ?? row.week_start ?? row.created_at))
+          .filter(Boolean) as string[],
+      );
+      const realProductivity = realQuantity > 0 && realDates.size > 0 ? realQuantity / realDates.size : null;
+      const diffRegisteredPercent = requiredProductivity && registeredProductivity !== null
+        ? ((registeredProductivity - requiredProductivity) / requiredProductivity) * 100
+        : null;
+      const diffRealPercent = requiredProductivity && realProductivity !== null
+        ? ((realProductivity - requiredProductivity) / requiredProductivity) * 100
+        : null;
+      const comparisonValue = realProductivity ?? registeredProductivity;
+      const status: RequiredProductivityStatus =
+        !requiredProductivity
+          ? 'missing_planning'
+          : registeredProductivity === null
+            ? 'missing_registered'
+            : realProductivity === null
+              ? 'missing_real'
+              : comparisonValue >= requiredProductivity
+                ? 'ok'
+                : comparisonValue >= requiredProductivity * 0.8
+                  ? 'attention'
+                  : 'below_required';
+      const recommendation =
+        status === 'missing_planning'
+          ? 'Revisar metas semanais ou planejamento do servico.'
+          : status === 'missing_registered'
+            ? 'Cadastrar produtividade do servico ou da frente.'
+            : status === 'missing_real'
+              ? 'Sem dados reais suficientes; acompanhar lancamentos futuros.'
+              : status === 'ok'
+                ? 'Produtividade atende a necessidade atual.'
+                : status === 'attention'
+                  ? 'Monitorar produtividade e avaliar ajuste leve de equipe ou prazo.'
+                  : 'Aumentar equipe, revisar produtividade ou alongar prazo planejado.';
+
+      return {
+        service,
+        frontName: capacityEntry?.groupName ?? null,
+        registeredProductivity,
+        registeredLabel,
+        realProductivity,
+        requiredProductivity,
+        diffRegisteredPercent,
+        diffRealPercent,
+        status,
+        recommendation,
+      };
+    });
+  }, [actualProductions, allServices, capacityByService, productivities, weekById, weeklyTargets]);
+
+  const requiredFrontOptions = useMemo(
+    () => Array.from(new Set(requiredProductivityRows.map((row) => row.frontName).filter(Boolean) as string[])).sort(),
+    [requiredProductivityRows],
+  );
+
+  const filteredRequiredProductivityRows = useMemo(
+    () => requiredProductivityRows.filter((row) =>
+      (requiredProductivityFilter === 'all' || row.status === requiredProductivityFilter)
+      && (requiredProductivityFrontFilter === 'all' || row.frontName === requiredProductivityFrontFilter),
+    ),
+    [requiredProductivityFilter, requiredProductivityRows, requiredProductivityFrontFilter],
+  );
+
+  const requiredProductivitySummary = useMemo(() => ({
+    analyzed: requiredProductivityRows.filter((row) => row.requiredProductivity !== null).length,
+    ok: requiredProductivityRows.filter((row) => row.status === 'ok').length,
+    below: requiredProductivityRows.filter((row) => row.status === 'below_required' || row.status === 'attention').length,
+    missingRegistered: requiredProductivityRows.filter((row) => row.status === 'missing_registered').length,
+    missingReal: requiredProductivityRows.filter((row) => row.status === 'missing_real').length,
+  }), [requiredProductivityRows]);
+
   if (!currentProject) {
     return (
       <div className="flex items-center justify-center h-64 text-muted-foreground">
@@ -454,6 +784,7 @@ export function ServiceProductivityView() {
           <TabsTrigger value="produtividade">Produtividade por servico</TabsTrigger>
           <TabsTrigger value="frentes">Frentes compartilhadas</TabsTrigger>
           <TabsTrigger value="configplan">Config. planejamento fisico</TabsTrigger>
+          <TabsTrigger value="necessaria">Produtividade necessaria</TabsTrigger>
         </TabsList>
 
         <TabsContent value="produtividade" className="space-y-6">
@@ -797,6 +1128,152 @@ export function ServiceProductivityView() {
               scopeName: s.scopeName,
             }))}
           />
+        </TabsContent>
+
+        <TabsContent value="necessaria" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <TrendingUp className="h-5 w-5 text-primary" />
+                    Produtividade necessaria
+                  </CardTitle>
+                  <CardDescription>
+                    Compara produtividade necessaria, cadastrada e real sem alterar produtividade, producao, diario,
+                    medicao, planejamento ou equipes.
+                  </CardDescription>
+                </div>
+                <Badge variant="outline" className="w-fit gap-1">
+                  <Info className="h-3 w-3" />
+                  Somente leitura
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-5">
+                {[
+                  ['Servicos analisados', requiredProductivitySummary.analyzed],
+                  ['Servicos OK', requiredProductivitySummary.ok],
+                  ['Abaixo/atencao', requiredProductivitySummary.below],
+                  ['Sem produtividade', requiredProductivitySummary.missingRegistered],
+                  ['Sem dados reais', requiredProductivitySummary.missingReal],
+                ].map(([label, value]) => (
+                  <div key={String(label)} className="rounded-lg border bg-muted/30 p-3">
+                    <p className="text-xs text-muted-foreground">{label}</p>
+                    <p className="mt-1 text-xl font-semibold">{value}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+                Este diagnostico e apenas leitura. Ele nao altera produtividade, producao, diario, medicao,
+                planejamento, equipes, Gantt, Linha de Balanco, Semanal ou Previsao oficial.
+              </div>
+
+              <div className="flex flex-col gap-3 md:flex-row md:items-end">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground" htmlFor="required-productivity-status">
+                    Status
+                  </label>
+                  <select
+                    id="required-productivity-status"
+                    className="h-10 rounded-md border bg-background px-3 text-sm"
+                    value={requiredProductivityFilter}
+                    onChange={(event) => setRequiredProductivityFilter(event.target.value as 'all' | RequiredProductivityStatus)}
+                  >
+                    <option value="all">Todos</option>
+                    <option value="below_required">Abaixo do necessario</option>
+                    <option value="attention">Atencao</option>
+                    <option value="missing_registered">Sem produtividade</option>
+                    <option value="missing_real">Sem dados reais</option>
+                    <option value="missing_planning">Sem planejamento</option>
+                    <option value="ok">OK</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground" htmlFor="required-productivity-front">
+                    Frente
+                  </label>
+                  <select
+                    id="required-productivity-front"
+                    className="h-10 rounded-md border bg-background px-3 text-sm"
+                    value={requiredProductivityFrontFilter}
+                    onChange={(event) => setRequiredProductivityFrontFilter(event.target.value)}
+                  >
+                    <option value="all">Todas</option>
+                    {requiredFrontOptions.map((frontName) => (
+                      <option key={frontName} value={frontName}>{frontName}</option>
+                    ))}
+                  </select>
+                </div>
+                {requiredProductivityLoading && (
+                  <div className="pb-2 text-sm text-muted-foreground">Carregando fontes de produtividade real...</div>
+                )}
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[1080px] text-sm">
+                  <thead className="border-b text-left text-xs text-muted-foreground">
+                    <tr>
+                      <th className="p-2">Servico</th>
+                      <th className="p-2">Frente</th>
+                      <th className="p-2">Necessaria</th>
+                      <th className="p-2">Cadastrada</th>
+                      <th className="p-2">Real</th>
+                      <th className="p-2">Dif. cadastrada</th>
+                      <th className="p-2">Dif. real</th>
+                      <th className="p-2">Status</th>
+                      <th className="p-2">Recomendacao</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredRequiredProductivityRows.map((row) => (
+                      <tr key={row.service.scopeId} className="border-b last:border-0">
+                        <td className="p-2">
+                          <div className="font-medium">{row.service.scopeName}</div>
+                          <div className="text-xs text-muted-foreground">{row.service.macroName}</div>
+                        </td>
+                        <td className="p-2">{row.frontName ?? 'Sem frente'}</td>
+                        <td className="p-2">
+                          {row.requiredProductivity === null ? 'Sem planejamento suficiente' : `${formatNumber(row.requiredProductivity, 2)}/dia`}
+                        </td>
+                        <td className="p-2">{row.registeredLabel}</td>
+                        <td className="p-2">
+                          {row.realProductivity === null ? 'Sem dados reais' : `${formatNumber(row.realProductivity, 2)}/dia`}
+                        </td>
+                        <td className="p-2">
+                          {row.diffRegisteredPercent === null ? '-' : `${formatNumber(row.diffRegisteredPercent, 1)}%`}
+                        </td>
+                        <td className="p-2">
+                          {row.diffRealPercent === null ? '-' : `${formatNumber(row.diffRealPercent, 1)}%`}
+                        </td>
+                        <td className="p-2">
+                          <Badge variant={requiredStatusVariant(row.status)}>
+                            {REQUIRED_STATUS_LABELS[row.status]}
+                          </Badge>
+                        </td>
+                        <td className="p-2">{row.recommendation}</td>
+                      </tr>
+                    ))}
+                    {filteredRequiredProductivityRows.length === 0 && (
+                      <tr>
+                        <td className="p-6 text-center text-muted-foreground" colSpan={9}>
+                          Nenhum servico encontrado para os filtros selecionados.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {requiredProductivitySummary.analyzed === 0 && (
+                <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                  Sem planejamento suficiente para calcular produtividade necessaria. Revise metas semanais ou planejamento por periodo.
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
