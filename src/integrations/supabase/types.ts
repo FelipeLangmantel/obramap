@@ -9540,6 +9540,59 @@ export type Database = {
           },
         ]
       }
+      project_team_work_group_composition: {
+        Row: {
+          company_id: string
+          created_at: string
+          created_by: string | null
+          group_id: string
+          id: string
+          normalized_profession_name: string
+          profession_name: string
+          project_id: string
+          quantity: number
+          role: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          group_id: string
+          id?: string
+          normalized_profession_name: string
+          profession_name: string
+          project_id: string
+          quantity?: number
+          role: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          group_id?: string
+          id?: string
+          normalized_profession_name?: string
+          profession_name?: string
+          project_id?: string
+          quantity?: number
+          role?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_team_work_group_composition_group_fkey"
+            columns: ["group_id", "project_id", "company_id"]
+            isOneToOne: false
+            referencedRelation: "project_team_work_groups"
+            referencedColumns: ["id", "project_id", "company_id"]
+          },
+        ]
+      }
       project_team_work_group_services: {
         Row: {
           active: boolean
