@@ -599,9 +599,6 @@ export function MacroflowDialog({
                   Principal é o padrão inicial. Gantt e Linha também exibem todos ou um macrofluxo específico.
                 </p>
               </div>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onOpenChange(false)}>
-                <X className="h-4 w-4" />
-              </Button>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
