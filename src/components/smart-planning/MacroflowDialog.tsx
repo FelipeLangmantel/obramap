@@ -587,74 +587,80 @@ export function MacroflowDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[92vh] max-h-[92vh] w-[96vw] max-w-[96vw] flex-col overflow-hidden p-0">
-        <DialogHeader className="border-b bg-background/95 px-4 py-2.5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <DialogTitle className="flex items-center gap-2 text-lg">
-                <GitBranch className="h-5 w-5 text-primary" />
-                Macrofluxo do Planejamento
-              </DialogTitle>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                O Principal é a visualização padrão. Gantt e Linha também podem exibir todos ou um macrofluxo específico.
-              </p>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <div className="flex min-w-[280px] items-center gap-2">
-                  <div className="flex items-center gap-2">
-                    <Label className="text-xs">Macrofluxo</Label>
-                    {macroflow?.active && (
-                      <Badge className="gap-1 bg-amber-100 text-amber-800 hover:bg-amber-100">
-                        <Star className="h-3 w-3" />
-                        Principal
-                      </Badge>
-                    )}
-                  </div>
-                  <Select value={selectedMacroflowId || 'none'} onValueChange={(value) => value !== 'none' && selectMacroflow(value)}>
-                    <SelectTrigger className="h-9 min-w-[220px] bg-background text-left">
-                      <SelectValue placeholder="Selecione um macrofluxo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {macroflows.length === 0 ? (
-                        <SelectItem value="none" disabled>Nenhum macrofluxo salvo</SelectItem>
-                      ) : macroflows.map((item) => (
-                        <SelectItem key={item.id} value={item.id}>
-                          {item.name}{item.active ? ' - Principal' : ''}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {showRenameMacroflow ? (
-                  <div className="flex min-w-[260px] items-center gap-2">
-                    <Input
-                      value={renameDraft}
-                      onChange={(event) => setRenameDraft(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') void handleRenameMacroflow();
-                        if (event.key === 'Escape') setShowRenameMacroflow(false);
-                      }}
-                      placeholder="Nome do macrofluxo"
-                      className="h-9 bg-background"
-                      disabled={!macroflow || !canEdit}
-                    />
-                    <Button size="sm" disabled={!macroflow || !canEdit || renameDraft.trim() === macroflow.name} onClick={handleRenameMacroflow}>
-                      OK
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setShowRenameMacroflow(false)}>
-                      Cancelar
-                    </Button>
-                  </div>
-                ) : (
-                  <Button variant="outline" size="sm" disabled={!macroflow || !canEdit} onClick={() => setShowRenameMacroflow(true)}>
-                    Renomear
-                  </Button>
-                )}
-                <Button variant={macroflow?.active ? 'secondary' : 'outline'} size="sm" disabled={!macroflow || macroflow.active || !canEdit} onClick={handleActivateMacroflow}>
-                  <Star className="mr-1 h-3.5 w-3.5" />
-                  Tornar Principal
-                </Button>
+        <DialogHeader className="border-b bg-background/95 px-4 py-2">
+          <div className="grid gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0">
+                <DialogTitle className="flex items-center gap-2 text-lg">
+                  <GitBranch className="h-5 w-5 text-primary" />
+                  Macrofluxo do Planejamento
+                </DialogTitle>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Principal é o padrão inicial. Gantt e Linha também exibem todos ou um macrofluxo específico.
+                </p>
               </div>
-              {showCreateMacroflow ? (
-                <div className="mt-2 flex max-w-xl flex-wrap items-center gap-2 rounded-lg border bg-muted/30 p-2">
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onOpenChange(false)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Label className="text-xs">Macrofluxo</Label>
+              <Select value={selectedMacroflowId || 'none'} onValueChange={(value) => value !== 'none' && selectMacroflow(value)}>
+                <SelectTrigger className="h-8 w-[260px] bg-background text-left">
+                  <SelectValue placeholder="Selecione um macrofluxo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {macroflows.length === 0 ? (
+                    <SelectItem value="none" disabled>Nenhum macrofluxo salvo</SelectItem>
+                  ) : macroflows.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.name}{item.active ? ' - Principal' : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {macroflow?.active && (
+                <Badge className="h-8 gap-1 bg-amber-100 text-amber-800 hover:bg-amber-100">
+                  <Star className="h-3 w-3" />
+                  Principal
+                </Badge>
+              )}
+              <Button variant={macroflow?.active ? 'secondary' : 'outline'} size="sm" disabled={!macroflow || macroflow.active || !canEdit} onClick={handleActivateMacroflow}>
+                <Star className="mr-1 h-3.5 w-3.5" />
+                Tornar Principal
+              </Button>
+              {showRenameMacroflow ? (
+                <div className="flex min-w-[280px] flex-1 items-center gap-2">
+                  <Input
+                    value={renameDraft}
+                    onChange={(event) => setRenameDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') void handleRenameMacroflow();
+                      if (event.key === 'Escape') setShowRenameMacroflow(false);
+                    }}
+                    placeholder="Nome do macrofluxo"
+                    className="h-8 bg-background"
+                    disabled={!macroflow || !canEdit}
+                  />
+                  <Button size="sm" disabled={!macroflow || !canEdit || renameDraft.trim() === macroflow.name} onClick={handleRenameMacroflow}>
+                    OK
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setShowRenameMacroflow(false)}>
+                    Cancelar
+                  </Button>
+                </div>
+              ) : (
+                <Button variant="outline" size="sm" disabled={!macroflow || !canEdit} onClick={() => setShowRenameMacroflow(true)}>
+                  Renomear
+                </Button>
+              )}
+              <Button variant="outline" size="sm" disabled={!canEdit} onClick={() => setShowCreateMacroflow(true)}>
+                <Plus className="mr-1 h-3.5 w-3.5" />
+                Novo
+              </Button>
+              {showCreateMacroflow && (
+                <div className="flex min-w-[300px] flex-1 items-center gap-2 rounded-lg border bg-muted/30 px-2 py-1">
                   <Input
                     value={newMacroflowName}
                     onChange={(event) => setNewMacroflowName(event.target.value)}
@@ -663,7 +669,7 @@ export function MacroflowDialog({
                       if (event.key === 'Escape') setShowCreateMacroflow(false);
                     }}
                     placeholder="Novo macrofluxo"
-                    className="h-9 bg-background"
+                    className="h-8 bg-background"
                     disabled={!canEdit}
                   />
                   <Button size="sm" disabled={!canEdit} onClick={handleCreateMacroflow}>
@@ -673,59 +679,52 @@ export function MacroflowDialog({
                     Cancelar
                   </Button>
                 </div>
-              ) : null}
-              {!macroflow?.active && macroflow && (
-                <p className="mt-1 text-xs text-amber-700">
-                  Este macrofluxo está salvo, mas não é a visualização padrão. Clique em Tornar Principal para defini-lo como foco inicial.
-                </p>
-              )}
-              {macroflow?.active && (
-                <p className="mt-1 text-xs text-emerald-700">
-                  Este macrofluxo é a visualização padrão inicial.
-                </p>
-              )}
-              {macroflow && (
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  Apenas um macrofluxo pode ser Principal por vez. Os demais ficam salvos e podem ser visualizados no Gantt/Linha.
-                </p>
               )}
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="outline" className="h-8 px-2.5">
-                {includedCanvasPackages.length} pacotes
-              </Badge>
-              <Badge variant="outline" className="h-8 px-2.5">
-                {dependencies.length} ligações
-              </Badge>
-              <Button variant="outline" size="sm" disabled={!canEdit} onClick={() => setShowCreateMacroflow(true)}>
-                <Plus className="mr-1 h-3.5 w-3.5" />
-                Novo
-              </Button>
-              <Button variant="outline" size="sm" className="gap-2" onClick={autoOrganize}>
-                <RotateCcw className="h-4 w-4" />
-                Auto-organizar
-              </Button>
-              <Button variant="outline" size="sm" className="gap-2" onClick={centerFlow}>
-                <Focus className="h-4 w-4" />
-                Centralizar
-              </Button>
-              <Button variant="outline" size="sm" className="gap-2" onClick={fitView}>
-                <Maximize2 className="h-4 w-4" />
-                Ajustar
-              </Button>
-              <Button variant="outline" size="sm" className="gap-2" onClick={() => setSelection(null)}>
-                <X className="h-4 w-4" />
-                Limpar seleção
-              </Button>
-              <Button size="sm" className="gap-2" onClick={() => onOpenChange(false)}>
-                <Save className="h-4 w-4" />
-                Salvar e fechar
-              </Button>
+
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline" className="h-7 px-2.5">
+                  {includedCanvasPackages.length} pacotes
+                </Badge>
+                <Badge variant="outline" className="h-7 px-2.5">
+                  {dependencies.length} ligações
+                </Badge>
+                {macroflow && (
+                  <span className={cn('text-xs', macroflow.active ? 'text-emerald-700' : 'text-amber-700')}>
+                    {macroflow.active
+                      ? 'Visualização padrão inicial.'
+                      : 'Salvo, mas não é o padrão inicial.'}
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button variant="outline" size="sm" className="gap-2" onClick={autoOrganize}>
+                  <RotateCcw className="h-4 w-4" />
+                  Auto-organizar
+                </Button>
+                <Button variant="outline" size="sm" className="gap-2" onClick={centerFlow}>
+                  <Focus className="h-4 w-4" />
+                  Centralizar
+                </Button>
+                <Button variant="outline" size="sm" className="gap-2" onClick={fitView}>
+                  <Maximize2 className="h-4 w-4" />
+                  Ajustar
+                </Button>
+                <Button variant="outline" size="sm" className="gap-2" onClick={() => setSelection(null)}>
+                  <X className="h-4 w-4" />
+                  Limpar seleção
+                </Button>
+                <Button size="sm" className="gap-2" onClick={() => onOpenChange(false)}>
+                  <Save className="h-4 w-4" />
+                  Salvar e fechar
+                </Button>
+              </div>
             </div>
           </div>
         </DialogHeader>
 
-        <div className="grid min-h-0 flex-1 grid-cols-[320px_1fr_320px] bg-muted/20">
+        <div className="grid min-h-0 flex-1 grid-cols-[300px_1fr_300px] bg-muted/20">
           <aside className="min-h-0 border-r bg-background">
             <div className="border-b p-3">
               <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
@@ -812,51 +811,7 @@ export function MacroflowDialog({
               </ScrollArea>
             ) : (
               <div className="flex h-[calc(92vh-178px)] min-h-0 flex-col">
-                <div className="space-y-3 border-b p-3">
-                  <div className="relative">
-                    <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar pacote" className="h-9 pl-8" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Etapa do contrato</Label>
-                    <Select value={stageFilter} onValueChange={setStageFilter}>
-                      <SelectTrigger className="h-9">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todas as etapas</SelectItem>
-                        {stageFilterOptions.map((name) => (
-                          <SelectItem key={name} value={name}>{name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-[11px] text-muted-foreground">
-                      Filtro de contrato, não macrofluxo.
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-1">
-                    {[
-                      ['all', 'Todos'],
-                      ['work_group', 'Frentes'],
-                      ['service', 'Serviços'],
-                      ['missing', 'Sem prod.'],
-                    ].map(([value, label]) => (
-                      <Button
-                        key={value}
-                        variant={filter === value ? 'default' : 'outline'}
-                        size="sm"
-                        className="h-8"
-                        onClick={() => setFilter(value as PackageFilter)}
-                      >
-                        {label}
-                      </Button>
-                    ))}
-                  </div>
-                  {usedElsewhereCount > 0 && (
-                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
-                      {usedElsewhereCount} pacote(s) oculto(s) por já pertencerem a outro macrofluxo.
-                    </div>
-                  )}
+                <div className="space-y-2 border-b p-3">
                   <div className="grid grid-cols-2 gap-2">
                     <Button
                       type="button"
@@ -876,6 +831,64 @@ export function MacroflowDialog({
                       Todos visíveis
                     </Button>
                   </div>
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar pacote" className="h-9 pl-8" />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-full justify-start gap-2 px-1 text-xs text-muted-foreground"
+                    onClick={() => setShowAdvancedFilters((value) => !value)}
+                  >
+                    <SlidersHorizontal className="h-3.5 w-3.5" />
+                    Filtros avançados {showAdvancedFilters ? 'abertos' : 'fechados'}
+                  </Button>
+                  {showAdvancedFilters && (
+                    <div className="space-y-2 rounded-lg border bg-muted/30 p-2">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Etapa do contrato</Label>
+                        <Select value={stageFilter} onValueChange={setStageFilter}>
+                          <SelectTrigger className="h-8 bg-background">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">Todas as etapas</SelectItem>
+                            {stageFilterOptions.map((name) => (
+                              <SelectItem key={name} value={name}>{name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-[11px] text-muted-foreground">
+                          Filtro de contrato, não macrofluxo.
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1">
+                        {[
+                          ['all', 'Todos'],
+                          ['work_group', 'Frentes'],
+                          ['service', 'Serviços'],
+                          ['missing', 'Sem prod.'],
+                        ].map(([value, label]) => (
+                          <Button
+                            key={value}
+                            variant={filter === value ? 'default' : 'outline'}
+                            size="sm"
+                            className="h-7"
+                            onClick={() => setFilter(value as PackageFilter)}
+                          >
+                            {label}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {usedElsewhereCount > 0 && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                      {usedElsewhereCount} pacote(s) oculto(s) por já pertencerem a outro macrofluxo.
+                    </div>
+                  )}
                   <p className="text-[11px] text-muted-foreground">
                     {selectedAvailableCount} selecionado(s) de {availablePackages.length} disponível(is).
                   </p>
