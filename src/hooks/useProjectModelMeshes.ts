@@ -500,5 +500,20 @@ export function useProjectModelMeshes(
     await refresh();
   }, [canWrite, projectId, refresh]);
 
-  return { meshes, meshMap, loading, refresh, upsertMesh, bulkUpsertMeshes, countGlbMeshes, clearGlbMeshes, setIgnored, setVisible };
+  const showAllVisibleMeshes = useCallback(async () => {
+    if (!projectId) return [];
+    assertCanWriteProjectModelMeshes(canWrite);
+    const { data, error } = await supabase
+      .from("project_model_meshes" as any)
+      .update({ visible: true })
+      .eq("project_id", projectId)
+      .eq("visible", false)
+      .eq("ignored", false)
+      .select("*");
+    if (error) throw error;
+    const refreshed = await refresh();
+    return refreshed ?? ((data || []) as ProjectModelMesh[]);
+  }, [canWrite, projectId, refresh]);
+
+  return { meshes, meshMap, loading, refresh, upsertMesh, bulkUpsertMeshes, countGlbMeshes, clearGlbMeshes, setIgnored, setVisible, showAllVisibleMeshes };
 }

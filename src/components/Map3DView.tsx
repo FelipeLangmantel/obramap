@@ -3580,7 +3580,7 @@ export function Map3DView() {
     return realStats;
   }, [buildCurrentMeshMap, hiddenRealServiceKeys, hideLinkedInReview, isCompleteProductionLink, meshHooks.meshMap, reviewMode, traverseActiveModelMeshes]);
 
-  const reexibirTodasCamadas = useCallback(() => {
+  const reexibirTodasCamadas = useCallback(async () => {
     const beforeState = smartLinkPreviewStateRef.current;
     layerManager.setAutoMode(false);
     layerManager.showAllLayers();
@@ -3590,10 +3590,20 @@ export function Map3DView() {
     setSupplementalGlbParts((current) => current.map((part) => ({ ...part, visible: true })));
     clearAll3DSelection("layers show all");
     const resetAudit = restoreCompleteSceneVisibility("layers show all");
+    let persistedMeshCount = 0;
+    let refreshedMeshMap: Map<string, ProjectModelMesh> | undefined;
+    try {
+      const refreshedMeshes = await meshHooks.showAllVisibleMeshes();
+      persistedMeshCount = refreshedMeshes.filter((mesh) => mesh.visible).length;
+      refreshedMeshMap = new Map(refreshedMeshes.map((mesh) => [mesh.layer_key, mesh]));
+    } catch (error: any) {
+      console.error("[3D Reexibir Tudo] falha ao persistir visibilidade", error);
+      toast.error("Nao foi possivel salvar a visibilidade das camadas.");
+    }
     if (viewMode === "complete") {
       setCompleteVisualResetNonce((value) => value + 1);
     } else {
-      applyViewMode(viewMode, undefined, clearedRealServiceFilter);
+      applyViewMode(viewMode, refreshedMeshMap, clearedRealServiceFilter);
     }
     logMap3DPerf("3D Reexibir Tudo Debug", {
       viewMode,
@@ -3601,6 +3611,7 @@ export function Map3DView() {
       clearedIsolation: beforeState.isolatedCount > 0,
       restoredMaterials: smartLinkPreviewMaterialsRef.current.length,
       layersRestored: true,
+      persistedMeshCount,
       realServiceFilterCleared: hiddenRealServiceKeys.size > 0,
       invisibleBefore: resetAudit.invisibleBefore,
       invisibleAfter: resetAudit.invisibleAfter,
@@ -3608,7 +3619,7 @@ export function Map3DView() {
       reappliedViewMode: viewMode,
     });
     toast.success("Visualização 3D reexibida.");
-  }, [applyViewMode, clearAll3DSelection, hiddenRealServiceKeys.size, layerManager, restoreCompleteSceneVisibility, viewMode]);
+  }, [applyViewMode, clearAll3DSelection, hiddenRealServiceKeys.size, layerManager, meshHooks, restoreCompleteSceneVisibility, viewMode]);
 
   const updateHiddenRealServices = useCallback((next: Set<string>) => {
     setHiddenRealServiceKeys(next);
