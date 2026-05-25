@@ -3,7 +3,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { calculateHouseProgress } from "@/data/constructionData";
+import { calculateHouseProgress, House, Macro } from "@/data/constructionData";
+import { getProjectSnapshot, saveProjectSnapshot } from "@/offline/projectCache";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -76,7 +77,7 @@ function MiniOBJModel({ url, mtlUrl, onLoaded }: { url: string; mtlUrl?: string;
 // Auto-fit camera for mini scene
 function MiniAutoFit({ ready }: { ready: boolean }) {
   const { camera, scene } = useThree();
-  const controls = useThree((s) => s.controls) as any;
+  const controls = useThree((s) => s.controls) as { target?: THREE.Vector3; update?: () => void } | undefined;
   const doneRef = useRef(false);
 
   useEffect(() => {
@@ -85,7 +86,7 @@ function MiniAutoFit({ ready }: { ready: boolean }) {
     const tryFit = () => {
       const box = new THREE.Box3();
       let found = false;
-      scene.traverse((child: any) => {
+      scene.traverse((child: THREE.Object3D) => {
         if ((child as THREE.Mesh).isMesh || (child as THREE.LineSegments).isLineSegments) {
           box.expandByObject(child); found = true;
         }
@@ -223,8 +224,9 @@ interface ProjectSummary {
   name: string;
   location: string;
   totalHouses: number;
-  progress: number;
-  completedHouses: number;
+  progress: number | null;
+  completedHouses: number | null;
+  progressStatus: "loaded" | "loading" | "error" | "unavailable";
 }
 
 type LinkedPortfolioCoords = {
@@ -237,9 +239,75 @@ type LinkedPortfolioCoords = {
   obramap_project_id: string | null;
 };
 
+type DashboardProject = {
+  id: string;
+  name: string;
+  location?: string | null;
+  totalHouses?: number | null;
+  houses?: House[];
+  quadras?: unknown[];
+  macrosTemplate?: Macro[];
+  [key: string]: unknown;
+};
+
+type HouseRow = {
+  house_number: number;
+  quadra_id?: string | null;
+  area: number;
+  type: string;
+  constructor_name?: string | null;
+  expected_date?: string | null;
+  last_update?: string | null;
+  macros?: unknown;
+};
+
+const isHydrationDebugEnabled = () =>
+  typeof window !== "undefined" && window.localStorage.getItem("obramap:debug:hydration") === "1";
+
+const logDashboardProgress = (message: string, detail?: Record<string, unknown>) => {
+  if (!isHydrationDebugEnabled()) return;
+  console.info(`[Dashboard Progress] ${message}`, detail ?? {});
+};
+
+const mapHouseRow = (row: HouseRow): House => ({
+  id: row.house_number,
+  quadra: row.quadra_id || "",
+  area: row.area,
+  type: row.type,
+  constructorName: row.constructor_name || "",
+  expectedDate: row.expected_date || "",
+  lastUpdate: row.last_update ? new Date(row.last_update).toLocaleDateString("pt-BR") : "",
+  macros: Array.isArray(row.macros) ? row.macros as Macro[] : [],
+});
+
+const buildProjectSummary = (
+  project: DashboardProject,
+  houses: House[],
+  status: ProjectSummary["progressStatus"],
+): ProjectSummary => {
+  const totalHouses = Number(project.totalHouses) || houses.length || 0;
+  const template = project.macrosTemplate;
+  const progresses = houses.map((house) => calculateHouseProgress(house, template));
+  const hasProgressData = progresses.length > 0;
+
+  return {
+    id: project.id,
+    name: project.name,
+    location: project.location || "—",
+    totalHouses,
+    progress: hasProgressData
+      ? Math.round(progresses.reduce((a, b) => a + b, 0) / progresses.length)
+      : null,
+    completedHouses: hasProgressData
+      ? progresses.filter((progress) => progress >= 100).length
+      : null,
+    progressStatus: hasProgressData ? "loaded" : status,
+  };
+};
+
 export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (view: string) => void }) {
   const { profile, company, canAccessProject: authCanAccessProject } = useAuth();
-  const { projects, setCurrentProject } = useConstruction() as any;
+  const { projects, setCurrentProject } = useConstruction();
 
   const [projectSummaries, setProjectSummaries] = useState<ProjectSummary[]>([]);
   const [linkedPortfolioByProjectId, setLinkedPortfolioByProjectId] = useState<Map<string, LinkedPortfolioCoords>>(new Map());
@@ -250,7 +318,7 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
 
   // First accessible project ID for the 3D preview
   const accessibleProjects = useMemo(
-    () => projects.filter((p: any) => authCanAccessProject(p.id)),
+    () => projects.filter((project) => authCanAccessProject(project.id)),
     [projects, authCanAccessProject]
   );
   const firstProjectId = accessibleProjects.length > 0 ? accessibleProjects[0].id : null;
@@ -266,17 +334,19 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
 
   // Build project summaries from context
   useEffect(() => {
-    const summaries: ProjectSummary[] = accessibleProjects.map((project: any) => {
+    const summaries: ProjectSummary[] = accessibleProjects.map((project) => {
       const houses = project.houses || [];
       const totalHouses = project.totalHouses || houses.length;
       const template = project.macrosTemplate;
       
       // Use the same weighted calculation as the rest of the system
-      const progresses = houses.map((h: any) => calculateHouseProgress(h, template));
+      const progresses = houses.map((h) => calculateHouseProgress(h, template));
       const avgProgress = progresses.length > 0 
         ? Math.round(progresses.reduce((a: number, b: number) => a + b, 0) / progresses.length) 
-        : 0;
-      const completedCount = progresses.filter((p: number) => p >= 100).length;
+        : null;
+      const completedCount = progresses.length > 0
+        ? progresses.filter((p: number) => p >= 100).length
+        : null;
 
       return {
         id: project.id,
@@ -285,6 +355,7 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
         totalHouses,
         progress: avgProgress,
         completedHouses: completedCount,
+        progressStatus: progresses.length > 0 ? "loaded" : "loading",
       };
     });
 
@@ -293,9 +364,109 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
 
   useEffect(() => {
     let cancelled = false;
+    const projectsForDashboard = accessibleProjects as DashboardProject[];
+
+    const updateSummary = (projectId: string, summary: ProjectSummary) => {
+      if (cancelled) return;
+      setProjectSummaries((prev) =>
+        prev.map((item) => item.id === projectId ? summary : item)
+      );
+    };
+
+    const loadProgress = async (project: DashboardProject) => {
+      const contextHouses = Array.isArray(project.houses) ? project.houses : [];
+      if (contextHouses.length > 0) {
+        logDashboardProgress("context hit", {
+          projectId: project.id,
+          houses: contextHouses.length,
+          progress: buildProjectSummary(project, contextHouses, "loaded").progress,
+        });
+        return;
+      }
+
+      try {
+        const snapshot = await getProjectSnapshot(project.id);
+        const cachedHouses = Array.isArray(snapshot?.data?.houses)
+          ? snapshot.data.houses as House[]
+          : [];
+
+        if (cachedHouses.length > 0) {
+          const cachedSummary = buildProjectSummary(project, cachedHouses, "loaded");
+          logDashboardProgress("cache hit", {
+            projectId: project.id,
+            houses: cachedHouses.length,
+            progress: cachedSummary.progress,
+          });
+          updateSummary(project.id, cachedSummary);
+        } else {
+          logDashboardProgress("cache miss", { projectId: project.id });
+        }
+      } catch (error) {
+        logDashboardProgress("cache error", { projectId: project.id, error });
+      }
+
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        updateSummary(project.id, buildProjectSummary(project, [], "unavailable"));
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("houses")
+        .select("*")
+        .eq("project_id", project.id)
+        .order("house_number", { ascending: true });
+
+      if (cancelled) return;
+
+      if (error) {
+        console.error("[Dashboard Progress] failed to load houses", { projectId: project.id, error });
+        updateSummary(project.id, buildProjectSummary(project, [], "error"));
+        return;
+      }
+
+      const houses = (data || []).map(mapHouseRow);
+      const summary = buildProjectSummary(project, houses, houses.length > 0 ? "loaded" : "unavailable");
+      logDashboardProgress("houses loaded", {
+        projectId: project.id,
+        houses: houses.length,
+        progress: summary.progress,
+      });
+      updateSummary(project.id, summary);
+
+      try {
+        const snapshot = await getProjectSnapshot(project.id);
+        const snapshotData = snapshot?.data && typeof snapshot.data === "object"
+          ? snapshot.data
+          : project;
+        await saveProjectSnapshot(project.id, {
+          ...snapshotData,
+          ...project,
+          houses,
+          quadras: Array.isArray(snapshotData?.quadras)
+            ? snapshotData.quadras
+            : Array.isArray(project.quadras)
+              ? project.quadras
+              : [],
+        });
+      } catch (error) {
+        logDashboardProgress("cache save error", { projectId: project.id, error });
+      }
+    };
+
+    projectsForDashboard.forEach((project) => {
+      void loadProgress(project);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessibleProjects]);
+
+  useEffect(() => {
+    let cancelled = false;
 
     const fetchLinkedPortfolioCoords = async () => {
-      const projectIds = accessibleProjects.map((project: any) => project.id).filter(Boolean);
+      const projectIds = accessibleProjects.map((project) => project.id).filter(Boolean);
 
       if (projectIds.length === 0) {
         setLinkedPortfolioByProjectId(new Map());
@@ -336,7 +507,7 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
     const summaryByProjectId = new Map(projectSummaries.map((project) => [project.id, project]));
 
     return accessibleProjects
-      .map((project: any) => {
+      .map((project) => {
         const linkedPortfolio = linkedPortfolioByProjectId.get(project.id);
         const latitude = project.lat ?? linkedPortfolio?.latitude;
         const longitude = project.lng ?? linkedPortfolio?.longitude;
@@ -346,9 +517,24 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
       .filter(({ latitude, longitude }) => latitude != null && longitude != null)
       .map(({ project, linkedPortfolio, latitude, longitude }) => {
         const summary = summaryByProjectId.get(project.id);
-        const progress = summary?.progress ?? 0;
-        const health = progress >= 100 ? "green" : progress >= 50 ? "green" : progress > 0 ? "yellow" : "gray";
-        const status = progress >= 100 ? "concluida" : progress > 0 ? "em_andamento" : "nao_iniciada";
+        const progress = summary?.progress;
+        const numericProgress = progress ?? 0;
+        const health = progress === null || progress === undefined
+          ? "gray"
+          : numericProgress >= 100
+            ? "green"
+            : numericProgress >= 50
+              ? "green"
+              : numericProgress > 0
+                ? "yellow"
+                : "gray";
+        const status = progress === null || progress === undefined
+          ? "nao_iniciada"
+          : numericProgress >= 100
+            ? "concluida"
+            : numericProgress > 0
+              ? "em_andamento"
+              : "nao_iniciada";
         const locationParts = [
           project.municipio || linkedPortfolio?.municipio || project.location,
           project.estado || linkedPortfolio?.estado,
@@ -422,11 +608,16 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
     }).format(value);
   };
 
+  const loadedProjectSummaries = projectSummaries.filter((project) => project.progress !== null);
+  const loadingProgressCount = projectSummaries.filter((project) => project.progressStatus === "loading").length;
   const totalHousesAll = projectSummaries.reduce((s, p) => s + p.totalHouses, 0);
-  const totalCompletedAll = projectSummaries.reduce((s, p) => s + p.completedHouses, 0);
-  const overallProgress = projectSummaries.length > 0
-    ? Math.round(projectSummaries.reduce((s, p) => s + p.progress, 0) / projectSummaries.length)
-    : 0;
+  const totalCompletedAll = loadedProjectSummaries.reduce((s, p) => s + (p.completedHouses ?? 0), 0);
+  const overallProgress = loadedProjectSummaries.length > 0
+    ? Math.round(loadedProjectSummaries.reduce((s, p) => s + (p.progress ?? 0), 0) / loadedProjectSummaries.length)
+    : null;
+  const overallProgressLabel = overallProgress !== null
+    ? `${overallProgress}% progresso geral${loadingProgressCount > 0 ? ` · ${loadingProgressCount} atualizando` : ""}`
+    : "Atualizando progresso";
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -492,7 +683,8 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
               <div className="min-w-0">
                 <p className="text-xs text-muted-foreground font-medium">Unidades</p>
                 <p className="text-xl font-bold text-foreground">
-                  {totalCompletedAll}<span className="text-sm text-muted-foreground font-normal">/{totalHousesAll}</span>
+                  {loadedProjectSummaries.length > 0 ? totalCompletedAll : "..."}
+                  <span className="text-sm text-muted-foreground font-normal">/{totalHousesAll}</span>
                 </p>
               </div>
             </div>
@@ -541,7 +733,7 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
           </h2>
           {projectSummaries.length > 0 && (
             <Badge variant="secondary" className="text-xs">
-              {overallProgress}% progresso geral
+              {overallProgressLabel}
             </Badge>
           )}
         </div>
@@ -582,9 +774,17 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
                     <div>
                       <div className="flex items-center justify-between text-xs mb-1.5">
                         <span className="text-muted-foreground">Progresso geral</span>
-                        <span className="font-semibold text-foreground">{project.progress}%</span>
+                        <span className="font-semibold text-foreground">
+                          {project.progress !== null
+                            ? `${project.progress}%`
+                            : project.progressStatus === "loading"
+                              ? "Atualizando..."
+                              : project.progressStatus === "error"
+                                ? "Erro ao carregar"
+                                : "Indisponível"}
+                        </span>
                       </div>
-                      <Progress value={project.progress} className="h-2" />
+                      <Progress value={project.progress ?? 0} className="h-2" />
                     </div>
 
                     <div className="flex items-center justify-between text-xs pt-1">
@@ -594,7 +794,13 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
                       </div>
                       <div className="flex items-center gap-1.5">
                         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                        <span className="text-emerald-600 font-medium">{project.completedHouses} concluídas</span>
+                        <span className="text-emerald-600 font-medium">
+                          {project.completedHouses !== null
+                            ? `${project.completedHouses} concluídas`
+                            : project.progressStatus === "loading"
+                              ? "Atualizando"
+                              : "Indisponível"}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -690,11 +896,15 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Progresso médio</span>
-                <span className="font-semibold text-foreground">{overallProgress}%</span>
+                <span className="font-semibold text-foreground">
+                  {overallProgress !== null ? `${overallProgress}%` : "Atualizando"}
+                </span>
               </div>
               <div className="border-t border-border pt-2 flex items-center justify-between">
                 <span className="text-sm font-medium text-foreground">Unidades concluídas</span>
-                <span className="font-bold text-primary">{totalCompletedAll} de {totalHousesAll}</span>
+                <span className="font-bold text-primary">
+                  {loadedProjectSummaries.length > 0 ? totalCompletedAll : "..."} de {totalHousesAll}
+                </span>
               </div>
             </CardContent>
           </Card>
