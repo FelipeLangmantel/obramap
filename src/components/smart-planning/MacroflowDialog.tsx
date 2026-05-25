@@ -23,13 +23,13 @@ import {
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 
 import { GanttService } from './hooks/useStrategicGanttData';
@@ -52,6 +52,7 @@ interface MacroflowDialogProps {
 
 type NodePosition = { x: number; y: number };
 type PackageFilter = 'all' | 'work_group' | 'service' | 'missing';
+type PackagePanelTab = 'included' | 'add';
 type Selection =
   | { type: 'node'; id: string }
   | { type: 'edge'; id: string }
@@ -185,7 +186,6 @@ export function MacroflowDialog({
     selectMacroflow,
     renameMacroflow,
     activateMacroflow,
-    addPackageToMacroflow,
     removePackageFromMacroflow,
     setPackagesForMacroflow,
     addDependency,
@@ -209,7 +209,8 @@ export function MacroflowDialog({
   const [renameDraft, setRenameDraft] = useState('');
   const [showCreateMacroflow, setShowCreateMacroflow] = useState(false);
   const [showRenameMacroflow, setShowRenameMacroflow] = useState(false);
-  const [showPackageManager, setShowPackageManager] = useState(false);
+  const [packagePanelTab, setPackagePanelTab] = useState<PackagePanelTab>('included');
+  const [selectedPackageKeys, setSelectedPackageKeys] = useState<Set<string>>(() => new Set());
 
   const storageKey = projectId
     ? `obramap_macroflow_positions_${projectId}_${selectedMacroflowId || 'draft'}`
@@ -275,6 +276,7 @@ export function MacroflowDialog({
     () => filteredPackages.filter((pkg) => usedElsewherePackageIds.has(pkg.id)).length,
     [filteredPackages, usedElsewherePackageIds],
   );
+  const selectedAvailableCount = selectedPackageKeys.size;
 
   const visibleCanvasPackages = useMemo(() => {
     const allowed = new Set(filteredPackages.map((pkg) => pkg.id));
@@ -303,6 +305,14 @@ export function MacroflowDialog({
     setRelationDraft('FS');
     setLagDraft(0);
   }, [pendingConnection]);
+
+  useEffect(() => {
+    const availableIds = new Set(availablePackages.map((pkg) => pkg.id));
+    setSelectedPackageKeys((current) => {
+      const next = new Set(Array.from(current).filter((key) => availableIds.has(key)));
+      return next.size === current.size ? current : next;
+    });
+  }, [availablePackages]);
 
   useEffect(() => {
     if (!open) return;
@@ -471,9 +481,30 @@ export function MacroflowDialog({
     }
   };
 
-  const addPackage = async (packageKey: string) => {
-    const added = await addPackageToMacroflow(packageKey);
-    if (added) await onChanged?.();
+  const togglePackageSelection = (packageKey: string) => {
+    setSelectedPackageKeys((current) => {
+      const next = new Set(current);
+      if (next.has(packageKey)) {
+        next.delete(packageKey);
+      } else {
+        next.add(packageKey);
+      }
+      return next;
+    });
+  };
+
+  const addSelectedPackages = async () => {
+    if (!selectedPackageKeys.size) return;
+    const keys = Array.from(new Set([
+      ...includedPackages.map((item) => item.packageKey),
+      ...Array.from(selectedPackageKeys).filter((key) => !usedElsewherePackageIds.has(key)),
+    ]));
+    const saved = await setPackagesForMacroflow(keys);
+    if (saved) {
+      setSelectedPackageKeys(new Set());
+      setPackagePanelTab('included');
+      await onChanged?.();
+    }
   };
 
   const addVisiblePackages = async () => {
@@ -482,7 +513,11 @@ export function MacroflowDialog({
       ...availablePackages.map((item) => item.id),
     ]));
     const saved = await setPackagesForMacroflow(keys);
-    if (saved) await onChanged?.();
+    if (saved) {
+      setSelectedPackageKeys(new Set());
+      setPackagePanelTab('included');
+      await onChanged?.();
+    }
   };
 
   const removePackage = async (packageKey: string) => {
@@ -642,6 +677,16 @@ export function MacroflowDialog({
                   Este macrofluxo ainda não alimenta Gantt/Linha. Clique em Tornar Principal para usar.
                 </p>
               )}
+              {macroflow?.active && (
+                <p className="mt-1 text-xs text-emerald-700">
+                  Este macrofluxo alimenta Gantt, Linha, Dashboard e Previsão.
+                </p>
+              )}
+              {macroflow && (
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  Apenas um macrofluxo pode ser Principal por vez. Os demais ficam salvos para edição.
+                </p>
+              )}
             </div>
             <div className="flex flex-wrap gap-2">
               <Badge variant="outline" className="h-8 px-2.5">
@@ -650,10 +695,6 @@ export function MacroflowDialog({
               <Badge variant="outline" className="h-8 px-2.5">
                 {dependencies.length} ligações
               </Badge>
-              <Button variant="secondary" size="sm" onClick={() => setShowPackageManager(true)}>
-                <Layers3 className="mr-1 h-4 w-4" />
-                Gerenciar pacotes
-              </Button>
               <Button variant="outline" size="sm" disabled={!canEdit} onClick={() => setShowCreateMacroflow(true)}>
                 <Plus className="mr-1 h-3.5 w-3.5" />
                 Novo
@@ -682,132 +723,56 @@ export function MacroflowDialog({
           </div>
         </DialogHeader>
 
-        <Sheet open={showPackageManager} onOpenChange={setShowPackageManager}>
-          <SheetContent side="left" className="w-[420px] max-w-[92vw] overflow-hidden p-0 sm:max-w-[420px]">
-            <SheetHeader className="border-b p-4">
-              <SheetTitle>Gerenciar pacotes</SheetTitle>
-              <p className="text-sm text-muted-foreground">
-                Adicione ou remova serviços/frentes do macrofluxo selecionado.
-              </p>
-            </SheetHeader>
-            <div className="space-y-3 border-b p-4">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar pacote" className="pl-8" />
+        <div className="grid min-h-0 flex-1 grid-cols-[320px_1fr_320px] bg-muted/20">
+          <aside className="min-h-0 border-r bg-background">
+            <div className="border-b p-3">
+              <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={packagePanelTab === 'included' ? 'default' : 'ghost'}
+                  className="h-8"
+                  onClick={() => setPackagePanelTab('included')}
+                >
+                  No macrofluxo
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={packagePanelTab === 'add' ? 'default' : 'ghost'}
+                  className="h-8"
+                  onClick={() => setPackagePanelTab('add')}
+                >
+                  Adicionar
+                </Button>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Filtro por etapa do contrato</Label>
-                <Select value={stageFilter} onValueChange={setStageFilter}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas as etapas</SelectItem>
-                    {stageFilterOptions.map((name) => (
-                      <SelectItem key={name} value={name}>{name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-[11px] text-muted-foreground">
-                  Estas opções são filtros de contrato, não macrofluxos.
-                </p>
+              <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                <span>{includedCanvasPackages.length} pacote(s) incluído(s)</span>
+                <span>{availablePackages.length} disponível(is)</span>
               </div>
-              <div className="grid grid-cols-2 gap-1">
-                {[
-                  ['all', 'Todos'],
-                  ['work_group', 'Frentes'],
-                  ['service', 'Serviços'],
-                  ['missing', 'Sem prod.'],
-                ].map(([value, label]) => (
-                  <Button
-                    key={value}
-                    variant={filter === value ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setFilter(value as PackageFilter)}
-                  >
-                    {label}
-                  </Button>
-                ))}
-              </div>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                className="w-full"
-                disabled={!canEdit || availablePackages.length === 0}
-                onClick={addVisiblePackages}
-              >
-                Adicionar todos visíveis
-              </Button>
             </div>
-            <ScrollArea className="h-[calc(92vh-220px)] p-4">
-              <div className="space-y-5 pr-3">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">No macrofluxo</p>
-                    <Badge variant="outline">{includedCanvasPackages.length}</Badge>
-                  </div>
+
+            {packagePanelTab === 'included' ? (
+              <ScrollArea className="h-[calc(92vh-178px)]">
+                <div className="space-y-2 p-3">
                   {includedCanvasPackages.length === 0 && (
                     <div className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
-                      Macrofluxo vazio. Adicione pacotes disponíveis para montar o canvas.
+                      Macrofluxo vazio. Use a aba Adicionar para escolher serviços e frentes.
                     </div>
                   )}
                   {includedCanvasPackages.map((pkg) => (
-                    <button
+                    <div
                       key={pkg.id}
-                      type="button"
+                      role="button"
+                      tabIndex={0}
                       className={cn(
                         'w-full rounded-lg border bg-card p-3 text-left transition hover:border-primary/50 hover:bg-primary/5',
                         selection?.type === 'node' && selection.id === pkg.id && 'border-primary bg-primary/5'
                       )}
                       onClick={() => setSelection({ type: 'node', id: pkg.id })}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="line-clamp-2 text-sm font-medium">{getPackageLabel(pkg)}</p>
-                        <Badge variant={pkg.package_type === 'work_group' ? 'default' : 'outline'}>{packageTypeLabel(pkg.package_type)}</Badge>
-                      </div>
-                      <div className="mt-2 flex flex-wrap gap-1 text-xs text-muted-foreground">
-                        <span>{pkg.duration_days} dias</span>
-                        <span>-</span>
-                        <span>{formatNumber(pkg.productivity)} {pkg.productivity_unit}</span>
-                      </div>
-                      <div className="mt-2 flex justify-end">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 px-2 text-xs"
-                          disabled={!canEdit}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void removePackage(pkg.id);
-                          }}
-                        >
-                          Remover
-                        </Button>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-
-                <Separator />
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Disponíveis para adicionar</p>
-                    <Badge variant="outline">{availablePackages.length}</Badge>
-                  </div>
-                  {usedElsewhereCount > 0 && (
-                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
-                      {usedElsewhereCount} pacote(s) filtrado(s) já pertencem a outros macrofluxos.
-                    </div>
-                  )}
-                  {availablePackages.map((pkg) => (
-                    <button
-                      key={pkg.id}
-                      type="button"
-                      className="w-full rounded-lg border bg-card p-3 text-left transition hover:border-primary/50 hover:bg-primary/5"
-                      onClick={() => void addPackage(pkg.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') setSelection({ type: 'node', id: pkg.id });
+                      }}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <p className="line-clamp-2 text-sm font-medium">{getPackageLabel(pkg)}</p>
@@ -824,16 +789,152 @@ export function MacroflowDialog({
                           Sem produtividade
                         </Badge>
                       )}
-                      <div className="mt-2 text-xs font-medium text-primary">Adicionar ao macrofluxo</div>
-                    </button>
+                      <div className="mt-2 flex justify-end">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+                          disabled={!canEdit}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void removePackage(pkg.id);
+                          }}
+                        >
+                          Remover
+                        </Button>
+                      </div>
+                    </div>
                   ))}
                 </div>
+              </ScrollArea>
+            ) : (
+              <div className="flex h-[calc(92vh-178px)] min-h-0 flex-col">
+                <div className="space-y-3 border-b p-3">
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar pacote" className="h-9 pl-8" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Etapa do contrato</Label>
+                    <Select value={stageFilter} onValueChange={setStageFilter}>
+                      <SelectTrigger className="h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas as etapas</SelectItem>
+                        {stageFilterOptions.map((name) => (
+                          <SelectItem key={name} value={name}>{name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-muted-foreground">
+                      Filtro de contrato, não macrofluxo.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1">
+                    {[
+                      ['all', 'Todos'],
+                      ['work_group', 'Frentes'],
+                      ['service', 'Serviços'],
+                      ['missing', 'Sem prod.'],
+                    ].map(([value, label]) => (
+                      <Button
+                        key={value}
+                        variant={filter === value ? 'default' : 'outline'}
+                        size="sm"
+                        className="h-8"
+                        onClick={() => setFilter(value as PackageFilter)}
+                      >
+                        {label}
+                      </Button>
+                    ))}
+                  </div>
+                  {usedElsewhereCount > 0 && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                      {usedElsewhereCount} pacote(s) oculto(s) por já pertencerem a outro macrofluxo.
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={!canEdit || selectedAvailableCount === 0}
+                      onClick={addSelectedPackages}
+                    >
+                      Adicionar selecionados
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      disabled={!canEdit || availablePackages.length === 0}
+                      onClick={addVisiblePackages}
+                    >
+                      Todos visíveis
+                    </Button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    {selectedAvailableCount} selecionado(s) de {availablePackages.length} disponível(is).
+                  </p>
+                </div>
+                <ScrollArea className="min-h-0 flex-1">
+                  <div className="space-y-2 p-3">
+                    {availablePackages.length === 0 && (
+                      <div className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
+                        Nenhum pacote disponível com os filtros atuais.
+                      </div>
+                    )}
+                    {availablePackages.map((pkg) => {
+                      const checked = selectedPackageKeys.has(pkg.id);
+                      return (
+                        <div
+                          key={pkg.id}
+                          role="button"
+                          tabIndex={0}
+                          className={cn(
+                            'w-full rounded-lg border bg-card p-3 text-left transition hover:border-primary/50 hover:bg-primary/5',
+                            checked && 'border-primary bg-primary/5'
+                          )}
+                          onClick={() => togglePackageSelection(pkg.id)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') togglePackageSelection(pkg.id);
+                          }}
+                        >
+                          <div className="flex items-start gap-2">
+                            <Checkbox
+                              checked={checked}
+                              className="mt-0.5"
+                              onCheckedChange={() => togglePackageSelection(pkg.id)}
+                              onClick={(event) => event.stopPropagation()}
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start justify-between gap-2">
+                                <p className="line-clamp-2 text-sm font-medium">{getPackageLabel(pkg)}</p>
+                                <Badge variant={pkg.package_type === 'work_group' ? 'default' : 'outline'}>{packageTypeLabel(pkg.package_type)}</Badge>
+                              </div>
+                              <div className="mt-2 flex flex-wrap gap-1 text-xs text-muted-foreground">
+                                <span>{pkg.duration_days} dias</span>
+                                <span>-</span>
+                                <span>{formatNumber(pkg.productivity)} {pkg.productivity_unit}</span>
+                              </div>
+                              {!pkg.has_productivity && (
+                                <Badge variant="secondary" className="mt-2 gap-1 text-amber-700">
+                                  <AlertTriangle className="h-3 w-3" />
+                                  Sem produtividade
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
               </div>
-            </ScrollArea>
-          </SheetContent>
-        </Sheet>
+            )}
+          </aside>
 
-        <div className="grid min-h-0 flex-1 grid-cols-[1fr_320px] bg-muted/20">
           <main className="relative min-w-0 overflow-hidden">
             <div className="absolute left-4 top-4 z-20 flex items-center gap-2 rounded-full border bg-background/90 p-1 shadow-sm">
               <Button variant="ghost" size="icon" onClick={() => setZoom((current) => Math.min(current + 0.1, 1.8))}>
@@ -856,11 +957,11 @@ export function MacroflowDialog({
                 <Layers3 className="mx-auto mb-3 h-8 w-8 text-primary" />
                 <p className="text-sm font-semibold">Adicione pacotes para montar este macrofluxo.</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Escolha serviços ou frentes no gerenciador para iniciar o canvas.
+                  Adicione pacotes na lateral esquerda para iniciar o canvas.
                 </p>
-                <Button className="mt-4 gap-2" size="sm" onClick={() => setShowPackageManager(true)}>
+                <Button className="mt-4 gap-2" size="sm" onClick={() => setPackagePanelTab('add')}>
                   <Layers3 className="h-4 w-4" />
-                  Gerenciar pacotes
+                  Ir para Adicionar
                 </Button>
               </div>
             ) : !dependencies.length && (
