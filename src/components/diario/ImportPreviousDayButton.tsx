@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { CopyPlus, Loader2 } from "lucide-react";
 import {
@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { format, parseISO, subDays } from "date-fns";
+import { format, parseISO } from "date-fns";
 
 interface Props {
   projectId: string;
@@ -39,6 +39,43 @@ export function ImportPreviousDayButton({
 }: Props) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingSources, setLoadingSources] = useState(false);
+  const [availableEntries, setAvailableEntries] = useState<Array<{
+    id: string;
+    entry_date: string;
+    num_relatorio: number | null;
+  }>>([]);
+  const [selectedSourceId, setSelectedSourceId] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setLoadingSources(true);
+    (async () => {
+      const { data, error } = await supabase
+        .from("diary_entries")
+        .select("id, entry_date, num_relatorio")
+        .eq("project_id", projectId)
+        .lt("entry_date", currentEntryDate)
+        .order("entry_date", { ascending: false })
+        .limit(30);
+
+      if (cancelled) return;
+      if (error) {
+        console.error("[ImportDiarySources]", error);
+        toast.error("Nao foi possivel carregar diarios para importacao.");
+        setAvailableEntries([]);
+        setSelectedSourceId("");
+      } else {
+        const entries = data || [];
+        setAvailableEntries(entries);
+        setSelectedSourceId(entries[0]?.id || "");
+      }
+      setLoadingSources(false);
+    })();
+
+    return () => { cancelled = true; };
+  }, [open, projectId, currentEntryDate]);
 
   if (isLocked) return null;
 
@@ -50,15 +87,16 @@ export function ImportPreviousDayButton({
       if (!targetId) { toast.error("Não foi possível inicializar o diário do dia."); return; }
 
       // 2. Localiza o RDO anterior mais próximo (até 14 dias atrás)
-      const dateLimit = format(subDays(parseISO(currentEntryDate), 14), "yyyy-MM-dd");
+      if (!selectedSourceId) {
+        toast.info("Selecione um diario aberto para importar.");
+        return;
+      }
+
       const { data: prev, error: prevErr } = await supabase
         .from("diary_entries")
         .select("id, entry_date, equipe_presente, observacao_geral")
         .eq("project_id", projectId)
-        .lt("entry_date", currentEntryDate)
-        .gte("entry_date", dateLimit)
-        .order("entry_date", { ascending: false })
-        .limit(1)
+        .eq("id", selectedSourceId)
         .maybeSingle();
 
       if (prevErr) throw prevErr;
@@ -77,7 +115,8 @@ export function ImportPreviousDayButton({
           .eq("diary_entry_id", prev.id).is("deleted_at", null),
         supabase.from("diary_items")
           .select("macro_id, macro_name, macro_color, scope_id, scope_name")
-          .eq("diary_entry_id", prev.id),
+          .eq("diary_entry_id", prev.id)
+          .is("deleted_at", null),
       ]);
 
       // 4. Verifica seções já preenchidas no destino para evitar duplicar
@@ -89,7 +128,8 @@ export function ImportPreviousDayButton({
         supabase.from("diary_activities").select("id", { count: "exact", head: true })
           .eq("diary_entry_id", targetId).is("deleted_at", null),
         supabase.from("diary_items").select("id", { count: "exact", head: true })
-          .eq("diary_entry_id", targetId),
+          .eq("diary_entry_id", targetId)
+          .is("deleted_at", null),
       ]);
 
       const inserts: Promise<any>[] = [];
@@ -151,8 +191,8 @@ export function ImportPreviousDayButton({
       }
       await onImported();
     } catch (e: any) {
-      console.error("[ImportPreviousDay]", e);
-      toast.error("Erro ao importar dia anterior: " + (e.message || ""));
+      console.error("[ImportDiary]", e);
+      toast.error("Erro ao importar diario: " + (e.message || ""));
     } finally {
       setLoading(false);
       setOpen(false);
@@ -165,17 +205,17 @@ export function ImportPreviousDayButton({
         variant="outline"
         onClick={() => setOpen(true)}
         className="min-h-[40px]"
-        title="Pré-preenche mão de obra, equipamentos, atividades e serviços do dia anterior. Percentuais ficam zerados."
+        title="Pré-preenche mão de obra, equipamentos, atividades e serviços de outro diário. Percentuais ficam zerados."
       >
         <CopyPlus className="h-4 w-4 mr-2" />
-        <span className="hidden sm:inline">Importar dia anterior</span>
+        <span className="hidden sm:inline">Importar de outro diário</span>
         <span className="sm:hidden">Importar</span>
       </Button>
 
       <AlertDialog open={open} onOpenChange={setOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Importar dados do dia anterior?</AlertDialogTitle>
+            <AlertDialogTitle>Importar de outro diário</AlertDialogTitle>
             <AlertDialogDescription>
               O sistema vai copiar do último diário (até 14 dias atrás):
               <ul className="list-disc list-inside mt-2 space-y-0.5 text-sm">
@@ -190,9 +230,32 @@ export function ImportPreviousDayButton({
               </p>
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="space-y-2 py-2">
+            <label className="text-xs font-medium text-muted-foreground">Diário de origem</label>
+            <select
+              value={selectedSourceId}
+              onChange={(event) => setSelectedSourceId(event.target.value)}
+              disabled={loadingSources || availableEntries.length === 0}
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            >
+              {loadingSources && <option>Carregando diários...</option>}
+              {!loadingSources && availableEntries.length === 0 && (
+                <option value="">Nenhum diário anterior encontrado</option>
+              )}
+              {!loadingSources && availableEntries.map((entry) => (
+                <option key={entry.id} value={entry.id}>
+                  {format(parseISO(entry.entry_date), "dd/MM/yyyy")}
+                  {entry.num_relatorio ? ` - RDO ${entry.num_relatorio}` : ""}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Fotos e anexos não são importados. Serviços entram sem casas e sem percentuais para nova conferência.
+            </p>
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={loading}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleImport} disabled={loading}>
+            <AlertDialogAction onClick={handleImport} disabled={loading || loadingSources || !selectedSourceId}>
               {loading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Importar
             </AlertDialogAction>

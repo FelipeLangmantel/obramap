@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useState } from "react";
+import { useMemo, useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp } from "lucide-react";
 import {
@@ -8,6 +8,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { startOfWeek, endOfWeek, format, parseISO } from "date-fns";
 import { useContractWeights } from "@/hooks/useContractWeights";
+import type { Macro } from "@/data/constructionData";
 
 interface DiaryItem {
   id: string;
@@ -27,9 +28,10 @@ interface Props {
   projectId?: string | null;
   /** Data do RDO (YYYY-MM-DD) — usada para somar a semana corrente. */
   entryDate?: string;
+  macrosTemplate?: Macro[];
 }
 
-export function RdoProductionCharts({ items, totalCasas, projectId, entryDate }: Props) {
+export function RdoProductionCharts({ items, totalCasas, projectId, entryDate, macrosTemplate = [] }: Props) {
   const { unitValueByScope, contractTotalValue } = useContractWeights(projectId);
   const [weekItems, setWeekItems] = useState<DiaryItem[]>([]);
 
@@ -100,6 +102,43 @@ export function RdoProductionCharts({ items, totalCasas, projectId, entryDate }:
     };
   }, [items]);
 
+  const physicalWeightByScope = useMemo(() => {
+    const weightByScopedKey = new Map<string, number>();
+    const weightByScopeId = new Map<string, number>();
+    macrosTemplate.forEach((macro) => {
+      macro.scopes?.forEach((scope) => {
+        const weight = Number(scope.weight) || 0;
+        weightByScopedKey.set(`${macro.id}::${scope.id}`, weight);
+        weightByScopeId.set(scope.id, weight);
+      });
+    });
+    return { weightByScopedKey, weightByScopeId };
+  }, [macrosTemplate]);
+
+  const totalPhysicalWeight = useMemo(
+    () => macrosTemplate.reduce((sum, macro) =>
+      sum + (macro.scopes || []).reduce((scopeSum, scope) => scopeSum + (Number(scope.weight) || 0), 0), 0),
+    [macrosTemplate]
+  );
+
+  const computePhysicalPct = useCallback((list: DiaryItem[]) => {
+    if (!totalCasas || totalCasas <= 0 || totalPhysicalWeight <= 0) return null;
+    let weighted = 0;
+    for (const it of list) {
+      const weight = physicalWeightByScope.weightByScopedKey.get(`${it.macro_id}::${it.scope_id}`)
+        ?? (it.scope_id ? physicalWeightByScope.weightByScopeId.get(it.scope_id) : undefined)
+        ?? 0;
+      if (!weight) continue;
+      const casas = it.house_ids?.length || 0;
+      const pct = Math.min(100, Math.max(0, it.percentual_executado || 0)) / 100;
+      weighted += weight * casas * pct;
+    }
+    return (weighted / (totalPhysicalWeight * totalCasas)) * 100;
+  }, [physicalWeightByScope, totalCasas, totalPhysicalWeight]);
+
+  const pctFisicoHoje = useMemo(() => computePhysicalPct(items), [computePhysicalPct, items]);
+  const pctFisicoSemana = useMemo(() => computePhysicalPct(weekItems), [computePhysicalPct, weekItems]);
+
   // ─── % do contrato lançado HOJE e ACUMULADO NA SEMANA ───
   const { pctContratoHoje, pctContratoSemana, semPesoCount, totalLancHoje } = useMemo(() => {
     let semPeso = 0;
@@ -158,7 +197,7 @@ export function RdoProductionCharts({ items, totalCasas, projectId, entryDate }:
       </CardHeader>
       <CardContent className="space-y-4">
         {/* KPIs */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
           <div className="rounded-lg border p-3 bg-muted/30">
             <p className="text-[10px] uppercase text-muted-foreground">Lançamentos</p>
             <p className="text-2xl font-bold">{totalLancamentos}</p>
@@ -170,10 +209,28 @@ export function RdoProductionCharts({ items, totalCasas, projectId, entryDate }:
             </p>
           </div>
           <div
+            className="rounded-lg border p-3 bg-indigo-50 dark:bg-indigo-950/30 border-indigo-300/60"
+            title="Avanco fisico lancado hoje, calculado pelos pesos da EAP e casas executadas"
+          >
+            <p className="text-[10px] uppercase text-indigo-700 dark:text-indigo-300">% Físico (hoje)</p>
+            <p className="text-2xl font-bold text-indigo-700 dark:text-indigo-300 tabular-nums">
+              {fmtPct(pctFisicoHoje)}
+            </p>
+          </div>
+          <div
+            className="rounded-lg border p-3 bg-cyan-50 dark:bg-cyan-950/30 border-cyan-300/60"
+            title="Avanco fisico acumulado na semana, calculado pelos pesos da EAP e casas executadas"
+          >
+            <p className="text-[10px] uppercase text-cyan-700 dark:text-cyan-300">% Físico (semana)</p>
+            <p className="text-2xl font-bold text-cyan-700 dark:text-cyan-300 tabular-nums">
+              {fmtPct(pctFisicoSemana)}
+            </p>
+          </div>
+          <div
             className="rounded-lg border p-3 bg-blue-50 dark:bg-blue-950/30 border-blue-300/60"
             title="Soma do valor financeiro lançado hoje (peso PLE × casas × %) ÷ Valor total do contrato"
           >
-            <p className="text-[10px] uppercase text-blue-700 dark:text-blue-300">% Contrato (hoje)</p>
+            <p className="text-[10px] uppercase text-blue-700 dark:text-blue-300">% Financeiro (hoje)</p>
             <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 tabular-nums">
               {fmtPct(pctContratoHoje)}
             </p>
@@ -182,7 +239,7 @@ export function RdoProductionCharts({ items, totalCasas, projectId, entryDate }:
             className="rounded-lg border p-3 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300/60"
             title="Acumulado da semana (segunda a domingo) em % do contrato"
           >
-            <p className="text-[10px] uppercase text-emerald-700 dark:text-emerald-300">% Contrato (semana)</p>
+            <p className="text-[10px] uppercase text-emerald-700 dark:text-emerald-300">% Financeiro (semana)</p>
             <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300 tabular-nums">
               {fmtPct(pctContratoSemana)}
             </p>

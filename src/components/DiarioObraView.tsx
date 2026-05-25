@@ -16,7 +16,7 @@ import { format, startOfWeek, endOfWeek, parseISO, differenceInDays } from "date
 import { ptBR } from "date-fns/locale";
 import {
   Save, Trash2, ClipboardList, CheckCircle2, ChevronRight, Users,
-  Loader2, Camera, X, Printer, MapPin, Building2, Pencil,
+  Loader2, Camera, X, Printer, MapPin, Building2, Pencil, FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { geocodeMunicipio, fetchClimaHoje } from "@/lib/geocode";
@@ -184,7 +184,16 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   const [realtimeCount, setRealtimeCount] = useState(0);
 
   // Fotos do dia
-  const [fotos, setFotos] = useState<{ id: string; url: string; storage_path: string; legenda: string | null }[]>([]);
+  const [fotos, setFotos] = useState<Array<{
+    id: string;
+    url: string;
+    storage_path: string;
+    legenda: string | null;
+    diary_item_id: string | null;
+    scope_name?: string | null;
+    macro_name?: string | null;
+    house_number?: number | null;
+  }>>([]);
   // Fotos vinculadas a serviços específicos (para PDF jurídico)
   const [fotosPorServico, setFotosPorServico] = useState<Record<string, { url: string; legenda: string | null }[]>>({});
   const [uploadingFoto, setUploadingFoto] = useState(false);
@@ -442,11 +451,26 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   const loadFotos = async (eId: string) => {
     const { data: fotosData } = await supabase
       .from("diary_photos")
-      .select("id, storage_path, legenda, diary_item_id")
+      .select("id, storage_path, legenda, diary_item_id, house_number")
       .eq("diary_entry_id", eId)
       .order("created_at", { ascending: true });
     if (!fotosData || fotosData.length === 0) {
       setFotos([]); setFotosPorServico({}); return;
+    }
+    const itemIds = Array.from(new Set(fotosData.map((f: any) => f.diary_item_id).filter(Boolean)));
+    const itemInfoById = new Map<string, { macro_name: string | null; scope_name: string | null }>();
+    if (itemIds.length > 0) {
+      const { data: itemInfo } = await (supabase as any)
+        .from("diary_items")
+        .select("id, macro_name, scope_name")
+        .in("id", itemIds)
+        .is("deleted_at", null);
+      (itemInfo || []).forEach((item: any) => {
+        itemInfoById.set(item.id, {
+          macro_name: item.macro_name || null,
+          scope_name: item.scope_name || null,
+        });
+      });
     }
     const fotosComUrl = await Promise.all(
       fotosData.map(async (f) => {
@@ -454,18 +478,24 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
           .from("diary-photos") as any).createSignedUrl(f.storage_path, 60 * 60, {
             transform: { width: 900, resize: "contain", quality: 70 },
           });
+        const diaryItemId = (f as any).diary_item_id as string | null;
+        const itemInfo = diaryItemId ? itemInfoById.get(diaryItemId) : null;
         return {
           id: f.id, storage_path: f.storage_path, legenda: f.legenda,
           url: signed?.signedUrl || "",
-          diary_item_id: (f as any).diary_item_id as string | null,
+          diary_item_id: diaryItemId,
+          house_number: (f as any).house_number ?? null,
+          macro_name: itemInfo?.macro_name ?? null,
+          scope_name: itemInfo?.scope_name ?? null,
         };
       })
     );
-    // Avulsas (sem item vinculado) ficam na galeria geral
-    setFotos(fotosComUrl.filter(f => !f.diary_item_id).map(({ diary_item_id, ...rest }) => rest));
+    // A galeria geral consolida fotos avulsas e fotos vinculadas a serviços.
+    const fotosVisiveis = fotosComUrl.filter(f => !f.diary_item_id || itemInfoById.has(f.diary_item_id));
+    setFotos(fotosVisiveis);
     // Por serviço — agrupa para uso no PDF
     const byService: Record<string, { url: string; legenda: string | null }[]> = {};
-    fotosComUrl.forEach(f => {
+    fotosVisiveis.forEach(f => {
       if (!f.diary_item_id) return;
       if (!byService[f.diary_item_id]) byService[f.diary_item_id] = [];
       byService[f.diary_item_id].push({ url: f.url, legenda: f.legenda });
@@ -596,6 +626,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       .from("diary_items")
       .select("id, macro_id, macro_name, macro_color, scope_id, scope_name, house_ids, houses_count, percentual_executado, observacao, production_id, contractor_contract_id")
       .eq("diary_entry_id", eId)
+      .is("deleted_at", null)
       .order("created_at", { ascending: true });
     setDiaryItems((data || []).map((d: any) => ({
       id: d.id, macro_id: d.macro_id, macro_name: d.macro_name, macro_color: d.macro_color,
@@ -845,6 +876,14 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
     }
   }, [entryId, requireEdit, currentProject?.id, user?.id, company?.id, profile?.display_name, user?.email, entryDate, equipePres, obsGeral, buildClimaPayload]);
 
+  const handleOpenDiary = useCallback(async () => {
+    const ensuredEntryId = await ensureEntryExists();
+    if (ensuredEntryId) {
+      toast.success("Diário aberto. A numeração foi definida automaticamente.");
+      await loadEntry();
+    }
+  }, [ensureEntryExists]);
+
   const openDialogWithEntry = useCallback(async (openDialog: () => void) => {
     const ensuredEntryId = await ensureEntryExists();
     if (ensuredEntryId) openDialog();
@@ -1017,6 +1056,10 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
 
   const handleRegister = async () => {
     if (!requireEdit()) return;
+    if (!entryId) {
+      toast.error("Abra o diário deste dia antes de registrar serviços.");
+      return;
+    }
     if (!entryId || !selectedMacro || !selectedScope || selectedHouses.length === 0 || !currentProject?.id) {
       toast.error("Salve o cabeçalho e selecione etapa, serviço e casas.");
       return;
@@ -1139,12 +1182,74 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       setDeleteRequestItem(item);
       return;
     }
-    // Admin/coordenador: hard-delete imediato com revert atômico
+    // Admin/coordenador: soft-delete imediato com reversao de progresso.
     try {
+      const nowIso = new Date().toISOString();
+      const deletionReason = "Excluido pelo Diario de Obras";
       if (item.production_id) {
-        await supabase.from("productions").delete().eq("id", item.production_id);
+        const { error: productionDeleteError } = await (supabase as any)
+          .from("productions")
+          .update({
+            deleted_at: nowIso,
+            deleted_by: user?.id || null,
+            deleted_reason: deletionReason,
+          })
+          .eq("id", item.production_id)
+          .is("deleted_at", null);
+        if (productionDeleteError) throw productionDeleteError;
       }
-      await supabase.from("diary_items").delete().eq("id", item.id);
+
+      const entryDateObj = parseISO(entryDate);
+      const weekStart = format(startOfWeek(entryDateObj, { weekStartsOn: 1 }), "yyyy-MM-dd");
+      const weekEnd = format(endOfWeek(entryDateObj, { weekStartsOn: 1 }), "yyyy-MM-dd");
+      const sameHouseSet = (left: number[] = [], right: number[] = []) => {
+        if (left.length !== right.length) return false;
+        const rightSet = new Set(right.map(Number));
+        return left.every(houseId => rightSet.has(Number(houseId)));
+      };
+
+      const { data: weeklyCandidates, error: weeklyCandidatesError } = await (supabase as any)
+        .from("weekly_productions")
+        .select("id, house_ids")
+        .eq("project_id", currentProject.id)
+        .eq("macro_id", item.macro_id)
+        .eq("scope_id", item.scope_id)
+        .eq("week_start", weekStart)
+        .eq("week_end", weekEnd)
+        .is("deleted_at", null);
+      if (weeklyCandidatesError) throw weeklyCandidatesError;
+
+      const weeklyIdsToDelete = (weeklyCandidates || [])
+        .filter((candidate: any) => sameHouseSet((candidate.house_ids || []).map(Number), item.house_ids.map(Number)))
+        .map((candidate: any) => candidate.id);
+
+      if (weeklyIdsToDelete.length > 0) {
+        const { error: weeklyDeleteError } = await (supabase as any)
+          .from("weekly_productions")
+          .update({
+            deleted_at: nowIso,
+            deleted_by: user?.id || null,
+            deleted_reason: deletionReason,
+          })
+          .in("id", weeklyIdsToDelete);
+        if (weeklyDeleteError) throw weeklyDeleteError;
+      } else {
+        console.warn("[DiarioObra] Nenhuma weekly_production correspondente encontrada para exclusao", {
+          projectId: currentProject.id,
+          macroId: item.macro_id,
+          scopeId: item.scope_id,
+          weekStart,
+          weekEnd,
+          houseIds: item.house_ids,
+        });
+      }
+
+      const { error: diaryDeleteError } = await (supabase as any)
+        .from("diary_items")
+        .update({ deleted_at: nowIso, deleted_by: user?.id || null })
+        .eq("id", item.id)
+        .is("deleted_at", null);
+      if (diaryDeleteError) throw diaryDeleteError;
       const revertMap: Record<number, number> = {};
       for (const houseId of item.house_ids) {
         const house = houses.find(h => h.id === houseId);
@@ -1159,7 +1264,10 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       queryClient.invalidateQueries({ queryKey: ["weekly_productions"] });
       queryClient.invalidateQueries({ queryKey: ["houses"] });
       toast.success("Item removido e progresso revertido.");
-      if (entryId) loadItems(entryId);
+      if (entryId) {
+        loadItems(entryId);
+        loadFotos(entryId);
+      }
     } catch (err: any) {
       toast.error("Erro ao remover: " + (err.message || ""));
     }
@@ -1457,7 +1565,13 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
             )}
           </div>
           <div className="flex gap-2 shrink-0 self-start flex-wrap w-full xl:w-auto">
-            {!editingDisabled && currentProject?.id && company?.id && (
+            {!entryId && !editingDisabled && (
+              <Button onClick={handleOpenDiary} className="min-h-[40px]">
+                <FileText className="h-4 w-4 mr-2" />
+                Abrir Diário
+              </Button>
+            )}
+            {entryId && !editingDisabled && currentProject?.id && company?.id && (
               <ImportPreviousDayButton
                 projectId={currentProject.id}
                 companyId={company.id}
@@ -1473,7 +1587,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                 ensureEntryExists={ensureEntryExists}
               />
             )}
-            {!editingDisabled && (
+            {entryId && !editingDisabled && (
               <Button onClick={handleSaveHeader} disabled={savingHeader} className="min-h-[40px]">
                 {savingHeader ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
                 Salvar
@@ -1624,6 +1738,25 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {!entryId && (
+                    <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-4 space-y-3">
+                      <div>
+                        <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                          Diário ainda não aberto
+                        </p>
+                        <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                          Abra o diário deste dia antes de registrar serviços. A numeração será gerada automaticamente e ficará vinculada a esta data.
+                        </p>
+                      </div>
+                      <Button onClick={handleOpenDiary} className="min-h-[40px]">
+                        <FileText className="h-4 w-4 mr-2" />
+                        Abrir Diário
+                      </Button>
+                    </div>
+                  )}
+
+                  {entryId && (
+                  <>
                   <div>
                     <label className="text-xs font-medium text-muted-foreground mb-2 block">1. Selecionar Etapa</label>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2 min-w-0">
@@ -1778,10 +1911,18 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                       )}
                       <Textarea value={obsItem} onChange={e => setObsItem(e.target.value)}
                         placeholder="Observação do serviço (opcional)..." className="min-h-[50px]" />
+                      <Button onClick={handleRegister} disabled={registering || !selectedMacro || !selectedScope}
+                        className="w-full min-h-[48px] text-base font-semibold">
+                        {registering ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-5 w-5 mr-2" />}
+                        Registrar Serviço
+                      </Button>
                     </div>
                   )}
 
                   {/* Lista de itens já lançados hoje */}
+                  </>
+                  )}
+
                   {diaryItems.length > 0 && (
                     <div className="pt-3 border-t">
                       <div className="flex items-center gap-2 mb-2">
@@ -1808,6 +1949,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                                 houseIds={item.house_ids}
                                 entryDate={entryDate}
                                 disabled={editingDisabled}
+                                onChanged={() => loadFotos(entryId)}
                               />
                             )}
                             {entryId && company?.id && (
@@ -1868,7 +2010,13 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
 
           {/* GRÁFICOS DE PRODUÇÃO DO DIA */}
           {entryId && (
-            <RdoProductionCharts items={diaryItems} totalCasas={houses.length} projectId={currentProject?.id} entryDate={entryDate} />
+            <RdoProductionCharts
+              items={diaryItems}
+              totalCasas={houses.length}
+              projectId={currentProject?.id}
+              entryDate={entryDate}
+              macrosTemplate={currentProject?.macrosTemplate || []}
+            />
           )}
 
           {/* OCORRÊNCIAS */}
@@ -2033,17 +2181,6 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
           <RdoSidebar counts={counts} active={activeSection} onNavigate={navigateTo} />
         </aside>
       </div>
-
-      {/* Botão Registrar fixo em mobile */}
-      {entryId && selectedHouses.length > 0 && !editingDisabled && (
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t z-50 md:static md:border-0 md:p-0 md:bg-transparent md:mt-4">
-          <Button onClick={handleRegister} disabled={registering || !selectedMacro || !selectedScope}
-            className="w-full min-h-[48px] text-base font-semibold">
-            {registering ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-5 w-5 mr-2" />}
-            Registrar Serviço
-          </Button>
-        </div>
-      )}
 
       {/* Foto ampliada */}
       {fotoAmpliada && (
