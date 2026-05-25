@@ -14,6 +14,7 @@ import {
   RotateCcw,
   Save,
   Search,
+  SlidersHorizontal,
   Star,
   Trash2,
   X,
@@ -211,6 +212,7 @@ export function MacroflowDialog({
   const [showRenameMacroflow, setShowRenameMacroflow] = useState(false);
   const [packagePanelTab, setPackagePanelTab] = useState<PackagePanelTab>('included');
   const [selectedPackageKeys, setSelectedPackageKeys] = useState<Set<string>>(() => new Set());
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
   const storageKey = projectId
     ? `obramap_macroflow_positions_${projectId}_${selectedMacroflowId || 'draft'}`
@@ -593,7 +595,7 @@ export function MacroflowDialog({
                 Macrofluxo do Planejamento
               </DialogTitle>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                O macrofluxo Principal alimenta Gantt, Linha de Balanço, Dashboard e Previsão.
+                O Principal é a visualização padrão. Gantt e Linha também podem exibir todos ou um macrofluxo específico.
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <div className="flex min-w-[280px] items-center gap-2">
@@ -674,17 +676,17 @@ export function MacroflowDialog({
               ) : null}
               {!macroflow?.active && macroflow && (
                 <p className="mt-1 text-xs text-amber-700">
-                  Este macrofluxo ainda não alimenta Gantt/Linha. Clique em Tornar Principal para usar.
+                  Este macrofluxo está salvo, mas não é a visualização padrão. Clique em Tornar Principal para defini-lo como foco inicial.
                 </p>
               )}
               {macroflow?.active && (
                 <p className="mt-1 text-xs text-emerald-700">
-                  Este macrofluxo alimenta Gantt, Linha, Dashboard e Previsão.
+                  Este macrofluxo é a visualização padrão inicial.
                 </p>
               )}
               {macroflow && (
                 <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  Apenas um macrofluxo pode ser Principal por vez. Os demais ficam salvos para edição.
+                  Apenas um macrofluxo pode ser Principal por vez. Os demais ficam salvos e podem ser visualizados no Gantt/Linha.
                 </p>
               )}
             </div>

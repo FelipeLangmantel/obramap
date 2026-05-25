@@ -199,6 +199,9 @@ export function SmartPlanningView({ onOpenProductivity }: SmartPlanningViewProps
     projectStartDate: strategicStartDate,
     hasConfiguredMacroflow,
     activeMacroflowSummary,
+    macroflowViews,
+    defaultMacroflowViewId,
+    incompleteMacroflowsCount,
     updateServiceProductivity,
     updatePredecessor,
     loadData: reloadStrategicGanttData,
@@ -650,6 +653,9 @@ export function SmartPlanningView({ onOpenProductivity }: SmartPlanningViewProps
             onMacroflowChanged={reloadStrategicGanttData}
             hasConfiguredMacroflow={hasConfiguredMacroflow}
             activeMacroflowSummary={activeMacroflowSummary}
+            macroflowViews={macroflowViews}
+            defaultMacroflowViewId={defaultMacroflowViewId}
+            incompleteMacroflowsCount={incompleteMacroflowsCount}
           />
         </TabsContent>
 
@@ -662,6 +668,9 @@ export function SmartPlanningView({ onOpenProductivity }: SmartPlanningViewProps
             onMacroflowChanged={reloadStrategicGanttData}
             hasConfiguredMacroflow={hasConfiguredMacroflow}
             activeMacroflowSummary={activeMacroflowSummary}
+            macroflowViews={macroflowViews}
+            defaultMacroflowViewId={defaultMacroflowViewId}
+            incompleteMacroflowsCount={incompleteMacroflowsCount}
           />
         </TabsContent>
 

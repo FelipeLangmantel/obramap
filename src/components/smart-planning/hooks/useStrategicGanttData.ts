@@ -36,6 +36,9 @@ export type CapacityStatus = 'ok' | 'attention' | 'insufficient' | 'missing_prod
 export interface GanttService {
   id: string; // macro_id + scope_id
   package_type?: 'service' | 'work_group';
+  macroflow_id?: string | null;
+  macroflow_name?: string | null;
+  macroflow_active?: boolean;
   group_id?: string | null;
   internal_services?: {
     id: string;
@@ -76,13 +79,36 @@ export interface GanttService {
 interface ActiveMacroflowPackage {
   packageKey: string;
   packageType: 'service' | 'work_group';
+  macroflowId?: string;
+  macroflowName?: string;
+  macroflowActive?: boolean;
 }
 
 export interface ActiveMacroflowSummary {
   id: string;
   name: string;
+  active?: boolean;
+  configured?: boolean;
   packagesCount: number;
   dependenciesCount: number;
+}
+
+interface LoadedMacroflowData {
+  summary: ActiveMacroflowSummary;
+  dependencies: PlanningMacroflowDependency[];
+  packages: ActiveMacroflowPackage[];
+}
+
+export interface MacroflowGanttView {
+  id: string;
+  label: string;
+  services: GanttService[];
+  summary: ActiveMacroflowSummary | null;
+  packagesCount: number;
+  dependenciesCount: number;
+  incompleteCount?: number;
+  isAll?: boolean;
+  isPrincipal?: boolean;
 }
 
 const getServiceKey = (macroId: string | null | undefined, scopeId: string | null | undefined) =>
@@ -116,6 +142,14 @@ const getCapacityStatus = (
   return 'insufficient';
 };
 
+const isMacroflowConfigured = (packages: ActiveMacroflowPackage[], dependencies: PlanningMacroflowDependency[]) => {
+  if (packages.length < 2 || !dependencies.length) return false;
+  const packageIds = new Set(packages.map((item) => item.packageKey));
+  return dependencies.some((dependency) =>
+    packageIds.has(dependency.predecessorKey) && packageIds.has(dependency.successorKey)
+  );
+};
+
 export function useStrategicGanttData(projectId: string | undefined) {
   const { company, canEdit } = useAuth();
   const capacityModel = usePlanningCapacityModel(projectId);
@@ -126,6 +160,10 @@ export function useStrategicGanttData(projectId: string | undefined) {
   const [stages, setStages] = useState<any[]>([]);
   const [macroflowDependencies, setMacroflowDependencies] = useState<PlanningMacroflowDependency[]>([]);
   const [macroflowPackages, setMacroflowPackages] = useState<ActiveMacroflowPackage[]>([]);
+  const [macroflowData, setMacroflowData] = useState<LoadedMacroflowData[]>([]);
+  const [macroflowViews, setMacroflowViews] = useState<MacroflowGanttView[]>([]);
+  const [defaultMacroflowViewId, setDefaultMacroflowViewId] = useState<string>('all');
+  const [incompleteMacroflowsCount, setIncompleteMacroflowsCount] = useState(0);
   const [activeMacroflowSummary, setActiveMacroflowSummary] = useState<ActiveMacroflowSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [projectStartDate, setProjectStartDate] = useState<string>('');
@@ -263,90 +301,113 @@ export function useStrategicGanttData(projectId: string | undefined) {
       // Planning stages
       setStages(stagesRes.data || []);
 
-      let loadedMacroflowDependencies: PlanningMacroflowDependency[] = [];
-      let loadedMacroflowPackages: ActiveMacroflowPackage[] = [];
-      let loadedMacroflowSummary: ActiveMacroflowSummary | null = null;
+      let loadedMacroflowData: LoadedMacroflowData[] = [];
       const { data: macroflowRows, error: macroflowError } = await supabase
-        .from('planning_macroflows' as any)
+        .from('planning_macroflows')
         .select('*')
         .eq('project_id', projectId)
         .eq('company_id', company.id)
-        .eq('active', true)
-        .order('created_at', { ascending: true })
-        .limit(1);
+        .order('active', { ascending: false })
+        .order('created_at', { ascending: true });
 
-      if (!macroflowError && macroflowRows?.[0]) {
-        loadedMacroflowSummary = {
-          id: String((macroflowRows[0] as any).id),
-          name: String((macroflowRows[0] as any).name || 'Macrofluxo principal'),
-          packagesCount: 0,
-          dependenciesCount: 0,
-        };
-        const { data: dependencyRows, error: dependencyError } = await supabase
-          .from('planning_macroflow_dependencies' as any)
-          .select('*')
-          .eq('macroflow_id', (macroflowRows[0] as any).id)
-          .order('created_at', { ascending: true });
+      if (!macroflowError && macroflowRows?.length) {
+        loadedMacroflowData = await Promise.all(macroflowRows.map(async (row) => {
+          const macroflowId = String(row.id);
+          const macroflowName = String(row.name || 'Macrofluxo sem nome');
+          const macroflowActive = Boolean(row.active);
 
-        if (!dependencyError) {
-          loadedMacroflowDependencies = (dependencyRows ?? []).map((row: any) => ({
-            id: String(row.id),
-            macroflowId: String(row.macroflow_id),
-            projectId: String(row.project_id),
-            companyId: String(row.company_id),
-            predecessorType: row.predecessor_type === 'work_group' ? 'work_group' : 'service',
-            predecessorKey: String(row.predecessor_key),
-            predecessorLabel: String(row.predecessor_label ?? 'Pacote sem nome'),
-            successorType: row.successor_type === 'work_group' ? 'work_group' : 'service',
-            successorKey: String(row.successor_key),
-            successorLabel: String(row.successor_label ?? 'Pacote sem nome'),
-            relationType: row.relation_type === 'SS' ? 'SS' : 'FS',
-            lagDays: Number(row.lag_days) || 0,
-          }));
-        }
+          const { data: dependencyRows, error: dependencyError } = await supabase
+            .from('planning_macroflow_dependencies')
+            .select('*')
+            .eq('macroflow_id', macroflowId)
+            .order('created_at', { ascending: true });
 
-        const { data: packageRows, error: packageError } = await supabase
-          .from('planning_macroflow_packages' as any)
-          .select('*')
-          .eq('macroflow_id', (macroflowRows[0] as any).id)
-          .order('sort_order', { ascending: true })
-          .order('created_at', { ascending: true });
+          const dependencies: PlanningMacroflowDependency[] = dependencyError
+            ? []
+            : (dependencyRows ?? []).map((dependencyRow) => ({
+                id: String(dependencyRow.id),
+                macroflowId: String(dependencyRow.macroflow_id),
+                projectId: String(dependencyRow.project_id),
+                companyId: String(dependencyRow.company_id),
+                predecessorType: dependencyRow.predecessor_type === 'work_group' ? 'work_group' : 'service',
+                predecessorKey: String(dependencyRow.predecessor_key),
+                predecessorLabel: String(dependencyRow.predecessor_label ?? 'Pacote sem nome'),
+                successorType: dependencyRow.successor_type === 'work_group' ? 'work_group' : 'service',
+                successorKey: String(dependencyRow.successor_key),
+                successorLabel: String(dependencyRow.successor_label ?? 'Pacote sem nome'),
+                relationType: dependencyRow.relation_type === 'SS' ? 'SS' : 'FS',
+                lagDays: Number(dependencyRow.lag_days) || 0,
+              }));
 
-        if (!packageError && packageRows?.length) {
-          loadedMacroflowPackages = packageRows.map((row: any) => ({
-            packageKey: String(row.package_key),
-            packageType: row.package_type === 'work_group' ? 'work_group' : 'service',
-          }));
-        } else if (!packageError && loadedMacroflowDependencies.length > 0) {
-          const inferred = new Map<string, ActiveMacroflowPackage>();
-          loadedMacroflowDependencies.forEach((dependency) => {
-            inferred.set(dependency.predecessorKey, {
-              packageKey: dependency.predecessorKey,
-              packageType: dependency.predecessorType,
+          const { data: packageRows, error: packageError } = await supabase
+            .from('planning_macroflow_packages')
+            .select('*')
+            .eq('macroflow_id', macroflowId)
+            .order('sort_order', { ascending: true })
+            .order('created_at', { ascending: true });
+
+          let packagesForMacroflow: ActiveMacroflowPackage[] = [];
+          if (!packageError && packageRows?.length) {
+            packagesForMacroflow = packageRows.map((packageRow) => ({
+              packageKey: String(packageRow.package_key),
+              packageType: packageRow.package_type === 'work_group' ? 'work_group' : 'service',
+              macroflowId,
+              macroflowName,
+              macroflowActive,
+            }));
+          } else if (!packageError && dependencies.length > 0) {
+            const inferred = new Map<string, ActiveMacroflowPackage>();
+            dependencies.forEach((dependency) => {
+              inferred.set(dependency.predecessorKey, {
+                packageKey: dependency.predecessorKey,
+                packageType: dependency.predecessorType,
+                macroflowId,
+                macroflowName,
+                macroflowActive,
+              });
+              inferred.set(dependency.successorKey, {
+                packageKey: dependency.successorKey,
+                packageType: dependency.successorType,
+                macroflowId,
+                macroflowName,
+                macroflowActive,
+              });
             });
-            inferred.set(dependency.successorKey, {
-              packageKey: dependency.successorKey,
-              packageType: dependency.successorType,
-            });
-          });
-          loadedMacroflowPackages = Array.from(inferred.values());
-        }
+            packagesForMacroflow = Array.from(inferred.values());
+          }
+
+          const configured = isMacroflowConfigured(packagesForMacroflow, dependencies);
+          return {
+            summary: {
+              id: macroflowId,
+              name: macroflowName,
+              active: macroflowActive,
+              configured,
+              packagesCount: packagesForMacroflow.length,
+              dependenciesCount: dependencies.length,
+            },
+            dependencies,
+            packages: packagesForMacroflow,
+          };
+        }));
       }
-      if (loadedMacroflowSummary) {
-        loadedMacroflowSummary = {
-          ...loadedMacroflowSummary,
-          packagesCount: loadedMacroflowPackages.length,
-          dependenciesCount: loadedMacroflowDependencies.length,
-        };
-      }
-      setMacroflowDependencies(loadedMacroflowDependencies);
-      setMacroflowPackages(loadedMacroflowPackages);
-      setActiveMacroflowSummary(loadedMacroflowSummary);
+
+      setMacroflowData(loadedMacroflowData);
+      const configuredMacroflows = loadedMacroflowData.filter((item) => item.summary.configured);
+      const defaultMacroflow = configuredMacroflows.length > 1
+        ? null
+        : configuredMacroflows[0] ?? loadedMacroflowData.find((item) => item.summary.active) ?? null;
+      const defaultDependencies = defaultMacroflow?.dependencies ?? configuredMacroflows.flatMap((item) => item.dependencies);
+      const defaultPackages = defaultMacroflow?.packages ?? configuredMacroflows.flatMap((item) => item.packages);
+      setMacroflowDependencies(defaultDependencies);
+      setMacroflowPackages(defaultPackages);
+      setActiveMacroflowSummary(loadedMacroflowData.find((item) => item.summary.active)?.summary ?? null);
+      setIncompleteMacroflowsCount(loadedMacroflowData.filter((item) => !item.summary.configured).length);
 
       // Build inicial. Um efeito abaixo reconcilia com usePlanningCapacityModel
       // para agrupar frentes compartilhadas quando o adapter terminar de carregar.
       const allGantt = buildGanttServices(uniqueServices, prods, stagesRes.data || [], startDate, []);
-      const gantt = buildGanttServices(uniqueServices, prods, stagesRes.data || [], startDate, [], loadedMacroflowDependencies, loadedMacroflowPackages);
+      const gantt = buildGanttServices(uniqueServices, prods, stagesRes.data || [], startDate, [], defaultDependencies, defaultPackages);
       setAllGanttServices(allGantt);
       setGanttServices(gantt);
     } catch (error) {
@@ -595,6 +656,7 @@ export function useStrategicGanttData(projectId: string | undefined) {
     }
 
     const includedKeys = new Set(includedPackages.map((item) => item.packageKey));
+    const macroflowByPackageKey = new Map(includedPackages.map((item) => [item.packageKey, item]));
     const hasConfiguredPackageList = includedKeys.size >= 2;
     const validIncludedDependencies = dependencies.filter((dependency) =>
       includedKeys.has(dependency.predecessorKey) && includedKeys.has(dependency.successorKey)
@@ -602,7 +664,17 @@ export function useStrategicGanttData(projectId: string | undefined) {
 
     if (hasConfiguredPackageList && validIncludedDependencies.length > 0) {
       return applyMacroflowSchedule(
-        result.filter((item) => includedKeys.has(item.id)),
+        result
+          .filter((item) => includedKeys.has(item.id))
+          .map((item) => {
+            const macroflowPackage = macroflowByPackageKey.get(item.id);
+            return {
+              ...item,
+              macroflow_id: macroflowPackage?.macroflowId ?? null,
+              macroflow_name: macroflowPackage?.macroflowName ?? null,
+              macroflow_active: macroflowPackage?.macroflowActive ?? false,
+            };
+          }),
         validIncludedDependencies,
         startDateStr,
       );
@@ -692,25 +764,100 @@ export function useStrategicGanttData(projectId: string | undefined) {
 
   useEffect(() => {
     if (!projectStartDate) return;
-    setAllGanttServices(buildGanttServices(
+    const nextAllGantt = buildGanttServices(
       services,
       productivities,
       stages,
       projectStartDate,
       capacityModel.serviceCapacityMap,
-    ));
-    setGanttServices(buildGanttServices(
-      services,
-      productivities,
-      stages,
-      projectStartDate,
-      capacityModel.serviceCapacityMap,
-      macroflowDependencies,
-      macroflowPackages,
-    ));
+    );
+    setAllGanttServices(nextAllGantt);
+
+    const configuredMacroflows = macroflowData.filter((item) => item.summary.configured);
+    const principalMacroflow = configuredMacroflows.find((item) => item.summary.active) ?? null;
+    const nextViews: MacroflowGanttView[] = [];
+
+    if (configuredMacroflows.length > 0) {
+      const allPackages = configuredMacroflows.flatMap((item) => item.packages);
+      const allDependencies = configuredMacroflows.flatMap((item) => item.dependencies);
+      const allServices = buildGanttServices(
+        services,
+        productivities,
+        stages,
+        projectStartDate,
+        capacityModel.serviceCapacityMap,
+        allDependencies,
+        allPackages,
+      );
+
+      nextViews.push({
+        id: 'all',
+        label: 'Todos os macrofluxos',
+        services: allServices,
+        summary: null,
+        packagesCount: allPackages.length,
+        dependenciesCount: allDependencies.length,
+        incompleteCount: incompleteMacroflowsCount,
+        isAll: true,
+      });
+
+      if (principalMacroflow) {
+        nextViews.push({
+          id: 'principal',
+          label: `Principal: ${principalMacroflow.summary.name}`,
+          services: buildGanttServices(
+            services,
+            productivities,
+            stages,
+            projectStartDate,
+            capacityModel.serviceCapacityMap,
+            principalMacroflow.dependencies,
+            principalMacroflow.packages,
+          ),
+          summary: principalMacroflow.summary,
+          packagesCount: principalMacroflow.packages.length,
+          dependenciesCount: principalMacroflow.dependencies.length,
+          isPrincipal: true,
+        });
+      }
+
+      configuredMacroflows.forEach((item) => {
+        nextViews.push({
+          id: item.summary.id,
+          label: item.summary.name,
+          services: buildGanttServices(
+            services,
+            productivities,
+            stages,
+            projectStartDate,
+            capacityModel.serviceCapacityMap,
+            item.dependencies,
+            item.packages,
+          ),
+          summary: item.summary,
+          packagesCount: item.packages.length,
+          dependenciesCount: item.dependencies.length,
+          isPrincipal: Boolean(item.summary.active),
+        });
+      });
+    }
+
+    setMacroflowViews(nextViews);
+    const nextDefaultViewId = configuredMacroflows.length > 1
+      ? 'all'
+      : configuredMacroflows[0]?.summary.id || 'all';
+    setDefaultMacroflowViewId(nextDefaultViewId);
+    const defaultView = nextViews.find((view) => view.id === nextDefaultViewId) ?? nextViews[0] ?? null;
+    setGanttServices(defaultView?.services ?? []);
+    setMacroflowDependencies(defaultView?.id === 'all'
+      ? configuredMacroflows.flatMap((item) => item.dependencies)
+      : configuredMacroflows.find((item) => item.summary.id === defaultView?.summary?.id)?.dependencies ?? macroflowDependencies);
+    setMacroflowPackages(defaultView?.id === 'all'
+      ? configuredMacroflows.flatMap((item) => item.packages)
+      : configuredMacroflows.find((item) => item.summary.id === defaultView?.summary?.id)?.packages ?? macroflowPackages);
   // buildGanttServices is pure and reads only the dependencies passed above.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [capacityModel.serviceCapacityMap, macroflowDependencies, macroflowPackages, productivities, projectStartDate, services, stages]);
+  }, [capacityModel.serviceCapacityMap, incompleteMacroflowsCount, macroflowData, productivities, projectStartDate, services, stages]);
 
   // Update productivity for a service
   const updateServiceProductivity = useCallback(async (
@@ -827,12 +974,8 @@ export function useStrategicGanttData(projectId: string | undefined) {
   }, [ganttServices]);
 
   const hasConfiguredMacroflow = useMemo(() => {
-    if (macroflowPackages.length < 2 || !macroflowDependencies.length) return false;
-    const packageIds = new Set(macroflowPackages.map((item) => item.packageKey));
-    return macroflowDependencies.some((dependency) =>
-      packageIds.has(dependency.predecessorKey) && packageIds.has(dependency.successorKey)
-    );
-  }, [macroflowDependencies, macroflowPackages]);
+    return macroflowData.some((item) => item.summary.configured);
+  }, [macroflowData]);
 
   return {
     services,
@@ -845,6 +988,9 @@ export function useStrategicGanttData(projectId: string | undefined) {
     projectedEndDate,
     hasConfiguredMacroflow,
     activeMacroflowSummary,
+    macroflowViews,
+    defaultMacroflowViewId,
+    incompleteMacroflowsCount,
     loadData,
     updateServiceProductivity,
     updatePredecessor,

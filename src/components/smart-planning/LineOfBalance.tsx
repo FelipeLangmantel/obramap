@@ -27,7 +27,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 
-import { ActiveMacroflowSummary, GanttService } from './hooks/useStrategicGanttData';
+import { ActiveMacroflowSummary, GanttService, MacroflowGanttView } from './hooks/useStrategicGanttData';
 import { usePlanningCapacityModel } from './hooks/usePlanningCapacityModel';
 import { MacroflowDialog } from './MacroflowDialog';
 
@@ -39,6 +39,9 @@ interface LineOfBalanceProps {
   onMacroflowChanged?: () => Promise<void> | void;
   hasConfiguredMacroflow?: boolean;
   activeMacroflowSummary?: ActiveMacroflowSummary | null;
+  macroflowViews?: MacroflowGanttView[];
+  defaultMacroflowViewId?: string;
+  incompleteMacroflowsCount?: number;
 }
 type FlowScale = 'day' | 'week' | 'month';
 
@@ -144,43 +147,6 @@ const monthDiff = (from: Date, to: Date) =>
 
 const formatShortDate = (date: Date) => format(date, 'dd/MM/yyyy', { locale: ptBR });
 
-const getMacroflowPresets = (services: GanttService[]) => {
-  const match = (patterns: string[]) => {
-    const found = services.filter((svc) => {
-      const text = normalize(`${svc.macro_name} ${svc.scope_name} ${svc.name}`);
-      return patterns.some((pattern) => text.includes(pattern));
-    });
-    return found.length ? found : services;
-  };
-
-  return [
-    {
-      id: 'housing',
-      label: 'Unidades Habitacionais',
-      description: 'Casas, apartamentos ou unidades repetitivas',
-      services,
-    },
-    {
-      id: 'initial',
-      label: 'Servicos Iniciais',
-      description: 'Preparacao, canteiro e mobilizacao',
-      services: match(['topografia', 'limpeza', 'canteiro', 'mobilizacao', 'locacao']),
-    },
-    {
-      id: 'water-sewer',
-      label: 'Redes Agua e Esgoto',
-      description: 'Redes, caixas, ligacoes e testes',
-      services: match(['agua', 'esgoto', 'rede', 'caixa', 'ligacao', 'teste']),
-    },
-    {
-      id: 'infrastructure',
-      label: 'Infraestrutura',
-      description: 'Ruas, drenagem, pavimentacao e urbanizacao',
-      services: match(['infra', 'rua', 'drenagem', 'paviment', 'urbanizacao', 'terraplenagem']),
-    },
-  ];
-};
-
 const buildTimelineColumns = (
   scale: FlowScale,
   startDate: Date,
@@ -268,12 +234,23 @@ const getDaysFromPixels = (pixels: number, columns: TimelineColumn[], scale: Flo
   return Math.round(pixels / width);
 };
 
-export function LineOfBalance({ projectId, ganttServices, macroflowPackages, projectStartDate, onMacroflowChanged, hasConfiguredMacroflow = false, activeMacroflowSummary }: LineOfBalanceProps) {
+export function LineOfBalance({
+  projectId,
+  ganttServices,
+  macroflowPackages,
+  projectStartDate,
+  onMacroflowChanged,
+  hasConfiguredMacroflow = false,
+  activeMacroflowSummary,
+  macroflowViews = [],
+  defaultMacroflowViewId = 'all',
+  incompleteMacroflowsCount = 0,
+}: LineOfBalanceProps) {
   const { canEdit } = useAuth();
   const { currentProject } = useConstruction();
   const capacityModel = usePlanningCapacityModel(projectId);
   const [showMacroflowDialog, setShowMacroflowDialog] = useState(false);
-  const [selectedMacroflowId, setSelectedMacroflowId] = useState('housing');
+  const [selectedMacroflowViewId, setSelectedMacroflowViewId] = useState(defaultMacroflowViewId);
   const [scale, setScale] = useState<FlowScale>('week');
   const [zoom, setZoom] = useState(1);
   const [simulationMode, setSimulationMode] = useState(false);
@@ -286,9 +263,27 @@ export function LineOfBalance({ projectId, ganttServices, macroflowPackages, pro
   const headerScrollRef = useRef<HTMLDivElement>(null);
   const leftPanelRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    if (!macroflowViews.length) {
+      setSelectedMacroflowViewId(defaultMacroflowViewId);
+      return;
+    }
+    setSelectedMacroflowViewId((current) =>
+      macroflowViews.some((view) => view.id === current)
+        ? current
+        : defaultMacroflowViewId || macroflowViews[0].id
+    );
+  }, [defaultMacroflowViewId, macroflowViews]);
+
+  const selectedMacroflowView = useMemo(
+    () => macroflowViews.find((view) => view.id === selectedMacroflowViewId) ?? macroflowViews[0] ?? null,
+    [macroflowViews, selectedMacroflowViewId],
+  );
+  const displayedGanttServices = selectedMacroflowView?.services ?? ganttServices;
+
   const sortedServices = useMemo(() => {
-    return [...ganttServices].sort((a, b) => a.sequence_order - b.sequence_order);
-  }, [ganttServices]);
+    return [...displayedGanttServices].sort((a, b) => a.sequence_order - b.sequence_order);
+  }, [displayedGanttServices]);
 
   const lineSettingsByKey = useMemo(() => {
     const exact = new Map<string, boolean>();
@@ -328,14 +323,12 @@ export function LineOfBalance({ projectId, ganttServices, macroflowPackages, pro
   const visibleLineCount = sortedServices.length - hiddenLineServiceIds.size;
   const hiddenLineCount = hiddenLineServiceIds.size;
 
-  const macroflows = useMemo(() => getMacroflowPresets(servicesForLine), [servicesForLine]);
-  const selectedMacroflow = macroflows.find((flow) => flow.id === selectedMacroflowId) || macroflows[0];
-  const flowServices = selectedMacroflow?.services || servicesForLine;
+  const flowServices = servicesForLine;
   const maxUnits = useMemo(() => {
-    const fromServices = ganttServices.length ? Math.max(...ganttServices.map((s) => s.total_houses)) : 0;
+    const fromServices = displayedGanttServices.length ? Math.max(...displayedGanttServices.map((s) => s.total_houses)) : 0;
     const fromProject = currentProject?.houses?.length || currentProject?.totalHouses || 0;
     return Math.max(fromServices, fromProject);
-  }, [currentProject?.houses?.length, currentProject?.totalHouses, ganttServices]);
+  }, [currentProject?.houses?.length, currentProject?.totalHouses, displayedGanttServices]);
 
   const unitGroups = useMemo<UnitGroup[]>(() => {
     const houses = currentProject?.houses || [];
@@ -599,7 +592,7 @@ export function LineOfBalance({ projectId, ganttServices, macroflowPackages, pro
     toast.success('Pacote atualizado na simulacao local');
   };
 
-  if (ganttServices.length === 0 || !projectStartDate) {
+  if (displayedGanttServices.length === 0 || !projectStartDate) {
     return (
       <div className="rounded-2xl bg-slate-50 p-6 dark:bg-transparent">
         <Card className="rounded-2xl border-slate-200 shadow-sm dark:border-border">
@@ -681,22 +674,27 @@ export function LineOfBalance({ projectId, ganttServices, macroflowPackages, pro
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <Badge variant="outline" className="bg-white dark:bg-card">
-              Macrofluxo: {activeMacroflowSummary?.name || 'Principal'} - Principal
+              Macrofluxo: {selectedMacroflowView?.label || activeMacroflowSummary?.name || 'Principal'}
             </Badge>
             <span className="text-xs text-muted-foreground">
-              A Linha usa os pacotes e dependências do macrofluxo Principal.
+              A Linha pode exibir todos os macrofluxos configurados ou um macrofluxo específico.
             </span>
+            {incompleteMacroflowsCount > 0 && (
+              <Badge variant="secondary" className="bg-amber-50 text-amber-800">
+                {incompleteMacroflowsCount} incompleto(s) oculto(s)
+              </Badge>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Select value={selectedMacroflowId} onValueChange={setSelectedMacroflowId}>
+          <Select value={selectedMacroflowView?.id || selectedMacroflowViewId} onValueChange={setSelectedMacroflowViewId}>
             <SelectTrigger className="h-9 w-[245px] rounded-lg bg-white text-xs dark:bg-card">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {macroflows.map((flow) => (
-                <SelectItem key={flow.id} value={flow.id}>
-                  {flow.label}
+              {macroflowViews.map((view) => (
+                <SelectItem key={view.id} value={view.id}>
+                  {view.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -741,7 +739,7 @@ export function LineOfBalance({ projectId, ganttServices, macroflowPackages, pro
 
       <div className="grid gap-3 grid-cols-2 md:grid-cols-4 xl:grid-cols-7">
         {[
-          { label: 'Macrofluxo', value: selectedMacroflow?.label || '-', sub: `${flowServices.length} servicos`, accent: 'text-slate-900 dark:text-foreground' },
+          { label: 'Macrofluxo', value: selectedMacroflowView?.label || '-', sub: `${flowServices.length} servicos`, accent: 'text-slate-900 dark:text-foreground' },
           { label: 'Unidades', value: maxUnits, sub: `${unitGroups.length} grupos`, accent: 'text-slate-900 dark:text-foreground' },
           { label: 'Pacotes', value: totalActivities, sub: 'servico x unidade', accent: 'text-slate-900 dark:text-foreground' },
           { label: 'Concluidas', value: totalExecuted, sub: '', accent: 'text-emerald-600' },
@@ -789,7 +787,7 @@ export function LineOfBalance({ projectId, ganttServices, macroflowPackages, pro
         <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-white p-3 dark:bg-card">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline" className="h-8 rounded-full px-3">
-              {selectedMacroflow?.description}
+              {selectedMacroflowView?.isAll ? 'Todos os macrofluxos configurados' : selectedMacroflowView?.summary?.name || 'Macrofluxo selecionado'}
             </Badge>
             <Button variant="outline" size="sm" className="h-8 gap-2" onClick={() => setShowMacroflowDialog(true)}>
               <Settings2 className="h-4 w-4" />
@@ -831,7 +829,7 @@ export function LineOfBalance({ projectId, ganttServices, macroflowPackages, pro
             <div className="shrink-0 border-r bg-white dark:bg-card" style={{ width: LEFT_PANEL_WIDTH }}>
               <div className="flex flex-col justify-end border-b bg-muted/40 px-3 pb-2" style={{ height: HEADER_HEIGHT }}>
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Macrofluxo</span>
-                <span className="truncate text-sm font-semibold">{selectedMacroflow?.label}</span>
+                <span className="truncate text-sm font-semibold">{selectedMacroflowView?.label}</span>
                 <span className="text-[10px] text-muted-foreground">Unidades / pacotes</span>
               </div>
               <div ref={leftPanelRef} className="overflow-hidden" style={{ height: Math.min(chartHeight, 720 - HEADER_HEIGHT) }}>
@@ -946,7 +944,7 @@ export function LineOfBalance({ projectId, ganttServices, macroflowPackages, pro
                           backgroundColor: pkg.color,
                           opacity: pkg.isHiddenFromLine ? 0.55 : pkg.isExecuted ? 1 : 0.78,
                         }}
-                        title={`${pkg.service.name}\n${pkg.unit.label}\n${formatShortDate(pkg.start)} - ${formatShortDate(pkg.end)}\n${pkg.durationDays} dias - ${pkg.teams} equipe(s)`}
+                        title={`${pkg.service.name}\n${pkg.service.macroflow_name ? `Macrofluxo: ${pkg.service.macroflow_name}\n` : ''}${pkg.unit.label}\n${formatShortDate(pkg.start)} - ${formatShortDate(pkg.end)}\n${pkg.durationDays} dias - ${pkg.teams} equipe(s)`}
                         onPointerDown={(event) => {
                           if ((event.target as HTMLElement).dataset.resizeHandle === 'true') return;
                           event.currentTarget.setPointerCapture(event.pointerId);

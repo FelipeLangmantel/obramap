@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   format,
@@ -52,7 +52,7 @@ import {
   ZoomOut,
   MoveHorizontal,
 } from 'lucide-react';
-import type { ActiveMacroflowSummary, GanttService } from './hooks/useStrategicGanttData';
+import type { ActiveMacroflowSummary, GanttService, MacroflowGanttView } from './hooks/useStrategicGanttData';
 import { usePlanningCapacityModel } from './hooks/usePlanningCapacityModel';
 import { MacroflowDialog } from './MacroflowDialog';
 
@@ -72,6 +72,9 @@ interface StrategicGanttChartProps {
   onMacroflowChanged?: () => Promise<void> | void;
   hasConfiguredMacroflow?: boolean;
   activeMacroflowSummary?: ActiveMacroflowSummary | null;
+  macroflowViews?: MacroflowGanttView[];
+  defaultMacroflowViewId?: string;
+  incompleteMacroflowsCount?: number;
 }
 
 const getServiceStatus = (svc: GanttService) => {
@@ -149,6 +152,9 @@ export function StrategicGanttChart({
   onMacroflowChanged,
   hasConfiguredMacroflow = false,
   activeMacroflowSummary,
+  macroflowViews = [],
+  defaultMacroflowViewId = 'all',
+  incompleteMacroflowsCount = 0,
 }: StrategicGanttChartProps) {
   const { canEdit } = useAuth();
   const capacityModel = usePlanningCapacityModel(projectId);
@@ -176,6 +182,25 @@ export function StrategicGanttChart({
   const [searchTerm, setSearchTerm] = useState('');
   const [showHiddenServices, setShowHiddenServices] = useState(false);
   const [showMacroflowDialog, setShowMacroflowDialog] = useState(false);
+  const [selectedMacroflowViewId, setSelectedMacroflowViewId] = useState(defaultMacroflowViewId);
+
+  useEffect(() => {
+    if (!macroflowViews.length) {
+      setSelectedMacroflowViewId(defaultMacroflowViewId);
+      return;
+    }
+    setSelectedMacroflowViewId((current) =>
+      macroflowViews.some((view) => view.id === current)
+        ? current
+        : defaultMacroflowViewId || macroflowViews[0].id
+    );
+  }, [defaultMacroflowViewId, macroflowViews]);
+
+  const selectedMacroflowView = useMemo(
+    () => macroflowViews.find((view) => view.id === selectedMacroflowViewId) ?? macroflowViews[0] ?? null,
+    [macroflowViews, selectedMacroflowViewId],
+  );
+  const displayedServices = selectedMacroflowView?.services ?? services;
 
   const zoom = zoomByScale[ganttScale];
   const dayWidth = ganttScale === 'day' ? zoom : ganttScale === 'week' ? zoom / 7 : zoom / 30;
@@ -204,18 +229,18 @@ export function StrategicGanttChart({
 
   const hiddenServiceIds = useMemo(() => {
     const hidden = new Set<string>();
-    services.forEach((svc) => {
+    displayedServices.forEach((svc) => {
       if (!getIncludeInGantt(svc)) hidden.add(svc.id);
     });
     return hidden;
-  }, [getIncludeInGantt, services]);
+  }, [displayedServices, getIncludeInGantt]);
 
   const servicesForGantt = useMemo(
-    () => (showHiddenServices ? services : services.filter((svc) => !hiddenServiceIds.has(svc.id))),
-    [hiddenServiceIds, services, showHiddenServices]
+    () => (showHiddenServices ? displayedServices : displayedServices.filter((svc) => !hiddenServiceIds.has(svc.id))),
+    [displayedServices, hiddenServiceIds, showHiddenServices]
   );
 
-  const visibleGanttCount = services.length - hiddenServiceIds.size;
+  const visibleGanttCount = displayedServices.length - hiddenServiceIds.size;
   const hiddenGanttCount = hiddenServiceIds.size;
 
   const stageOptions = useMemo(() => {
@@ -394,7 +419,7 @@ export function StrategicGanttChart({
     setEditingService(null);
   };
 
-  if (services.length === 0) {
+  if (displayedServices.length === 0) {
     return (
       <div className="bg-slate-50 dark:bg-transparent rounded-2xl p-6">
         <Card className="rounded-2xl border-slate-200 dark:border-border shadow-sm">
@@ -439,7 +464,7 @@ export function StrategicGanttChart({
           open={showMacroflowDialog}
           onOpenChange={setShowMacroflowDialog}
           projectId={projectId}
-          packages={macroflowPackages ?? services}
+          packages={macroflowPackages ?? displayedServices}
           canEdit={canEdit}
           onChanged={onMacroflowChanged}
         />
@@ -461,14 +486,31 @@ export function StrategicGanttChart({
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Badge variant="outline" className="bg-white dark:bg-card">
-                Macrofluxo: {activeMacroflowSummary?.name || 'Principal'} - Principal
+                Macrofluxo: {selectedMacroflowView?.label || activeMacroflowSummary?.name || 'Principal'}
               </Badge>
               <span className="text-xs text-muted-foreground">
-                O Gantt usa os pacotes e dependências do macrofluxo Principal.
+                O Gantt pode exibir todos os macrofluxos configurados ou um macrofluxo específico.
               </span>
+              {incompleteMacroflowsCount > 0 && (
+                <Badge variant="secondary" className="bg-amber-50 text-amber-800">
+                  {incompleteMacroflowsCount} incompleto(s) oculto(s)
+                </Badge>
+              )}
             </div>
           </div>
           <div className="flex gap-1.5 flex-wrap">
+            <Select value={selectedMacroflowView?.id || selectedMacroflowViewId} onValueChange={setSelectedMacroflowViewId}>
+              <SelectTrigger className="h-8 w-[260px] rounded-full bg-white text-xs dark:bg-card">
+                <SelectValue placeholder="Visualização do macrofluxo" />
+              </SelectTrigger>
+              <SelectContent>
+                {macroflowViews.map((view) => (
+                  <SelectItem key={view.id} value={view.id}>
+                    {view.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button
               variant="outline"
               size="sm"
@@ -494,7 +536,7 @@ export function StrategicGanttChart({
         {/* KPI cards */}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
           {[
-            { label: 'Serviços exibidos', value: `${filteredServices.length}/${services.length}`, accent: 'text-slate-900 dark:text-foreground' },
+            { label: 'Serviços exibidos', value: `${filteredServices.length}/${displayedServices.length}`, accent: 'text-slate-900 dark:text-foreground' },
             {
               label: 'Planejado médio',
               value: filteredServices.length
@@ -516,7 +558,7 @@ export function StrategicGanttChart({
             },
             {
               label: 'Ocultos no Gantt',
-              value: `${hiddenGanttCount} de ${services.length}`,
+              value: `${hiddenGanttCount} de ${displayedServices.length}`,
               accent: 'text-slate-600',
             },
             {
@@ -550,7 +592,7 @@ export function StrategicGanttChart({
                 </span>
                 <span className="text-muted-foreground">|</span>
                 <span className="font-medium text-slate-600 dark:text-muted-foreground">
-                  {services.length} total
+                  {displayedServices.length} total
                 </span>
               </div>
               <p className="text-xs text-muted-foreground">
@@ -729,7 +771,7 @@ export function StrategicGanttChart({
                 const variance = svc.completion_percent - plannedPercent;
                 const delayDays = status === 'delayed' ? differenceInDays(new Date(), svc.planned_end) : 0;
                 const predecessor = svc.depends_on
-                  ? services.find((s) => s.stage_id === svc.depends_on)
+                  ? displayedServices.find((s) => s.stage_id === svc.depends_on)
                   : null;
                 const capacityConfig = CAPACITY_CONFIG[svc.capacity_status];
                 const isHiddenFromGantt = hiddenServiceIds.has(svc.id);
@@ -756,6 +798,11 @@ export function StrategicGanttChart({
                           {svc.package_type === 'work_group' && (
                             <Badge variant="secondary" className="h-5 text-[10px]">
                               Frente
+                            </Badge>
+                          )}
+                          {svc.macroflow_name && (
+                            <Badge variant="outline" className="h-5 max-w-[150px] truncate text-[10px]">
+                              {svc.macroflow_name}
                             </Badge>
                           )}
                           <Badge variant="outline" className="h-5 text-[10px]">
@@ -856,7 +903,7 @@ export function StrategicGanttChart({
 
                       {/* Dependency arrow (simplified) */}
                       {svc.depends_on && (() => {
-                        const pred = services.find((s) => s.stage_id === svc.depends_on);
+                        const pred = displayedServices.find((s) => s.stage_id === svc.depends_on);
                         if (!pred) return null;
                         const predEnd = differenceInDays(pred.planned_end, minDate) * dayWidth;
                         const svcStart = pos.left;
@@ -1070,7 +1117,7 @@ export function StrategicGanttChart({
         open={showMacroflowDialog}
         onOpenChange={setShowMacroflowDialog}
         projectId={projectId}
-        packages={macroflowPackages ?? services}
+        packages={macroflowPackages ?? displayedServices}
         canEdit={canEdit}
         onChanged={onMacroflowChanged}
       />
