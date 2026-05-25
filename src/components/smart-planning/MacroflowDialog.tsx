@@ -211,18 +211,6 @@ export function MacroflowDialog({
     : null;
 
   useEffect(() => {
-    if (!open) return;
-    const layout = createAutoLayout(includedCanvasPackages, dependencies);
-    const saved = storageKey ? localStorage.getItem(storageKey) : null;
-    const parsed = saved ? JSON.parse(saved) as Record<string, NodePosition> : {};
-    const merged = Object.fromEntries(includedCanvasPackages.map((pkg) => [pkg.id, parsed[pkg.id] || layout[pkg.id] || { x: 120, y: 120 }]));
-    setPositions(merged);
-    setSelection(null);
-    setPendingConnection(null);
-    setConnectingFrom(null);
-  }, [dependencies, includedCanvasPackages, open, storageKey]);
-
-  useEffect(() => {
     if (!storageKey || !open || !Object.keys(positions).length) return;
     localStorage.setItem(storageKey, JSON.stringify(positions));
   }, [open, positions, storageKey]);
@@ -243,6 +231,18 @@ export function MacroflowDialog({
       .filter((pkg): pkg is GanttService => Boolean(pkg)),
     [includedPackages, packageMap],
   );
+
+  useEffect(() => {
+    if (!open) return;
+    const layout = createAutoLayout(includedCanvasPackages, dependencies);
+    const saved = storageKey ? localStorage.getItem(storageKey) : null;
+    const parsed = saved ? JSON.parse(saved) as Record<string, NodePosition> : {};
+    const merged = Object.fromEntries(includedCanvasPackages.map((pkg) => [pkg.id, parsed[pkg.id] || layout[pkg.id] || { x: 120, y: 120 }]));
+    setPositions(merged);
+    setSelection(null);
+    setPendingConnection(null);
+    setConnectingFrom(null);
+  }, [dependencies, includedCanvasPackages, open, storageKey]);
 
   const filteredPackages = useMemo(() => {
     const term = normalizeText(search);

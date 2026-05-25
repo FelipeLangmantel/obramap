@@ -270,7 +270,7 @@ export function useStrategicGanttData(projectId: string | undefined) {
         const { data: dependencyRows, error: dependencyError } = await supabase
           .from('planning_macroflow_dependencies' as any)
           .select('*')
-          .eq('macroflow_id', macroflowRows[0].id)
+          .eq('macroflow_id', (macroflowRows[0] as any).id)
           .order('created_at', { ascending: true });
 
         if (!dependencyError) {
@@ -293,7 +293,7 @@ export function useStrategicGanttData(projectId: string | undefined) {
         const { data: packageRows, error: packageError } = await supabase
           .from('planning_macroflow_packages' as any)
           .select('*')
-          .eq('macroflow_id', macroflowRows[0].id)
+          .eq('macroflow_id', (macroflowRows[0] as any).id)
           .order('sort_order', { ascending: true })
           .order('created_at', { ascending: true });
 

@@ -7201,6 +7201,176 @@ export type Database = {
         }
         Relationships: []
       }
+      planning_macroflow_dependencies: {
+        Row: {
+          company_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          lag_days: number
+          macroflow_id: string
+          predecessor_key: string
+          predecessor_label: string
+          predecessor_type: string
+          project_id: string
+          relation_type: string
+          successor_key: string
+          successor_label: string
+          successor_type: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lag_days?: number
+          macroflow_id: string
+          predecessor_key: string
+          predecessor_label: string
+          predecessor_type: string
+          project_id: string
+          relation_type?: string
+          successor_key: string
+          successor_label: string
+          successor_type: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lag_days?: number
+          macroflow_id?: string
+          predecessor_key?: string
+          predecessor_label?: string
+          predecessor_type?: string
+          project_id?: string
+          relation_type?: string
+          successor_key?: string
+          successor_label?: string
+          successor_type?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planning_macroflow_dependencies_macroflow_id_fkey"
+            columns: ["macroflow_id"]
+            isOneToOne: false
+            referencedRelation: "planning_macroflows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planning_macroflow_dependencies_macroflow_project_fkey"
+            columns: ["macroflow_id", "project_id", "company_id"]
+            isOneToOne: false
+            referencedRelation: "planning_macroflows"
+            referencedColumns: ["id", "project_id", "company_id"]
+          },
+        ]
+      }
+      planning_macroflow_packages: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          macroflow_id: string
+          package_key: string
+          package_label: string | null
+          package_type: string
+          project_id: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          macroflow_id: string
+          package_key: string
+          package_label?: string | null
+          package_type: string
+          project_id: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          macroflow_id?: string
+          package_key?: string
+          package_label?: string | null
+          package_type?: string
+          project_id?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planning_macroflow_packages_macroflow_id_fkey"
+            columns: ["macroflow_id"]
+            isOneToOne: false
+            referencedRelation: "planning_macroflows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planning_macroflow_packages_macroflow_project_fkey"
+            columns: ["macroflow_id", "project_id", "company_id"]
+            isOneToOne: false
+            referencedRelation: "planning_macroflows"
+            referencedColumns: ["id", "project_id", "company_id"]
+          },
+        ]
+      }
+      planning_macroflows: {
+        Row: {
+          active: boolean
+          company_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          project_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          active?: boolean
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          project_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          active?: boolean
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          project_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planning_macroflows_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       planning_periods: {
         Row: {
           closed_at: string | null
