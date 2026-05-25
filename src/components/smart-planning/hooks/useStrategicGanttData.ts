@@ -116,6 +116,32 @@ const getServiceKey = (macroId: string | null | undefined, scopeId: string | nul
 
 const getLegacyServiceId = (macroId: string, scopeId: string) => `${macroId}_${scopeId}`;
 
+const getWorkGroupId = (groupId: string) => `work_group_${groupId}`;
+
+const getPackageKeyAliases = (item: GanttService) => {
+  const aliases = new Set<string>([item.id, getServiceKey(item.macro_id, item.scope_id)]);
+
+  if (item.package_type === 'work_group' && item.group_id) {
+    aliases.add(getWorkGroupId(item.group_id));
+    aliases.add(getServiceKey(`work_group:${item.group_id}`, item.group_id));
+    aliases.add(getServiceKey('work_group', item.group_id));
+  } else {
+    aliases.add(getLegacyServiceId(item.macro_id, item.scope_id));
+  }
+
+  return aliases;
+};
+
+const createPackageKeyResolver = (items: GanttService[]) => {
+  const resolver = new Map<string, string>();
+  items.forEach((item) => {
+    getPackageKeyAliases(item).forEach((alias) => resolver.set(alias, item.id));
+  });
+  return resolver;
+};
+
+const resolvePackageKey = (key: string, resolver: Map<string, string>) => resolver.get(key) ?? key;
+
 const normalizeDailyProductivity = (
   value: number,
   unit: string | undefined,
@@ -655,10 +681,20 @@ export function useStrategicGanttData(projectId: string | undefined) {
       });
     }
 
-    const includedKeys = new Set(includedPackages.map((item) => item.packageKey));
-    const macroflowByPackageKey = new Map(includedPackages.map((item) => [item.packageKey, item]));
+    const packageKeyResolver = createPackageKeyResolver(result);
+    const normalizedIncludedPackages = includedPackages.map((item) => ({
+      ...item,
+      packageKey: resolvePackageKey(item.packageKey, packageKeyResolver),
+    }));
+    const normalizedDependencies = dependencies.map((dependency) => ({
+      ...dependency,
+      predecessorKey: resolvePackageKey(dependency.predecessorKey, packageKeyResolver),
+      successorKey: resolvePackageKey(dependency.successorKey, packageKeyResolver),
+    }));
+    const includedKeys = new Set(normalizedIncludedPackages.map((item) => item.packageKey));
+    const macroflowByPackageKey = new Map(normalizedIncludedPackages.map((item) => [item.packageKey, item]));
     const hasConfiguredPackageList = includedKeys.size >= 2;
-    const validIncludedDependencies = dependencies.filter((dependency) =>
+    const validIncludedDependencies = normalizedDependencies.filter((dependency) =>
       includedKeys.has(dependency.predecessorKey) && includedKeys.has(dependency.successorKey)
     );
 

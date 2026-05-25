@@ -133,6 +133,112 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
 
   const needsWeightAdjustment = weightAnalysis.overallTotalWeight !== 100;
 
+  const escapeCsvValue = (value: string | number | null | undefined) => {
+    const text = value === null || value === undefined ? "" : String(value);
+    return `"${text.replace(/"/g, '""')}"`;
+  };
+
+  const formatPercentValue = (value: number | null | undefined) => {
+    const safeValue = Number(value);
+    if (!Number.isFinite(safeValue)) return "";
+    return `${safeValue.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%`;
+  };
+
+  const getExportFileName = () => {
+    const date = new Date().toISOString().slice(0, 10);
+    const projectName = currentProject.name
+      ?.normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80);
+
+    return `EAP_ObraMap_${projectName || "Projeto"}_${date}.csv`;
+  };
+
+  const handleExportEap = () => {
+    try {
+      if (!macrosTemplate.length) {
+        toast.warning("Nenhuma etapa ou serviço encontrado para exportar.");
+        return;
+      }
+
+      const headers = [
+        "Código EAP",
+        "Tipo",
+        "Etapa",
+        "Serviço",
+        "Peso da Etapa (%)",
+        "Peso do Serviço (%)",
+        "Ordem da Etapa",
+        "Ordem do Serviço",
+        "ID Macro",
+        "ID Serviço/Escopo",
+        "Observações",
+      ];
+      const macroWeightById = new Map(weightAnalysis.macroWeights.map((item) => [item.id, item.totalWeight]));
+      const rows: Array<Array<string | number>> = [];
+
+      macrosTemplate.forEach((macro, macroIndex) => {
+        const macroOrder = macroIndex + 1;
+        const macroCode = String(macroOrder);
+        const macroWeight = macroWeightById.get(macro.id) ?? 0;
+
+        rows.push([
+          macroCode,
+          "Etapa",
+          macro.name,
+          "",
+          formatPercentValue(macroWeight),
+          "",
+          macroOrder,
+          "",
+          macro.id,
+          "",
+          macro.scopes.length ? "" : "Etapa sem serviços",
+        ]);
+
+        macro.scopes.forEach((scope, scopeIndex) => {
+          const unit = scopeUnits[scope.id];
+          const unitText = unit?.unit_symbol || unit?.unit_label
+            ? `Unidade: ${[unit?.unit_label, unit?.unit_symbol].filter(Boolean).join(" / ")}`
+            : "";
+
+          rows.push([
+            `${macroCode}.${scopeIndex + 1}`,
+            "Serviço",
+            macro.name,
+            scope.name,
+            formatPercentValue(macroWeight),
+            formatPercentValue(scope.weight),
+            macroOrder,
+            scopeIndex + 1,
+            macro.id,
+            scope.id,
+            unitText,
+          ]);
+        });
+      });
+
+      const csv = [headers, ...rows]
+        .map((row) => row.map(escapeCsvValue).join(";"))
+        .join("\n");
+      const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = getExportFileName();
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success("EAP exportada com sucesso.");
+    } catch (error) {
+      console.error("Erro ao exportar EAP:", error);
+      toast.error("Não foi possível exportar a EAP.");
+    }
+  };
+
   const suggestWeightDistribution = () => {
     // Count total scopes across all macros
     const totalScopes = macrosTemplate.reduce((sum, macro) => sum + macro.scopes.length, 0);
@@ -620,6 +726,15 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
                 </p>
               )}
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportEap}
+              className="text-xs"
+            >
+              <Download className="w-3 h-3 mr-1" />
+              Exportar Excel (CSV)
+            </Button>
             {canEdit && (
               <Button 
                 variant="outline"

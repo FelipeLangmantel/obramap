@@ -105,6 +105,27 @@ const formatNumber = (value: number | null | undefined, digits = 1) => {
 
 const getPackageLabel = (pkg: GanttService) => pkg.scope_name || pkg.name || 'Pacote sem nome';
 
+const getServiceKey = (macroId: string | null | undefined, scopeId: string | null | undefined) =>
+  `${macroId || 'sem_macro'}::${scopeId || 'sem_servico'}`;
+
+const getLegacyServiceId = (macroId: string, scopeId: string) => `${macroId}_${scopeId}`;
+
+const getWorkGroupId = (groupId: string) => `work_group_${groupId}`;
+
+const getPackageKeyAliases = (pkg: GanttService) => {
+  const aliases = new Set<string>([pkg.id, getServiceKey(pkg.macro_id, pkg.scope_id)]);
+
+  if (pkg.package_type === 'work_group' && pkg.group_id) {
+    aliases.add(getWorkGroupId(pkg.group_id));
+    aliases.add(getServiceKey(`work_group:${pkg.group_id}`, pkg.group_id));
+    aliases.add(getServiceKey('work_group', pkg.group_id));
+  } else {
+    aliases.add(getLegacyServiceId(pkg.macro_id, pkg.scope_id));
+  }
+
+  return aliases;
+};
+
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
 const createGridLayout = (items: GanttService[]) => {
@@ -173,7 +194,13 @@ export function MacroflowDialog({
     hasProductivity: pkg.has_productivity,
   })), [packages]);
 
-  const packageMap = useMemo(() => new Map(packages.map((pkg) => [pkg.id, pkg])), [packages]);
+  const packageMap = useMemo(() => {
+    const map = new Map<string, GanttService>();
+    packages.forEach((pkg) => {
+      getPackageKeyAliases(pkg).forEach((alias) => map.set(alias, pkg));
+    });
+    return map;
+  }, [packages]);
   const {
     macroflows,
     macroflow,
@@ -233,22 +260,41 @@ export function MacroflowDialog({
     return names.sort((a, b) => a.localeCompare(b, 'pt-BR'));
   }, [packages]);
 
-  const includedPackageIds = useMemo(() => new Set(includedPackages.map((item) => item.packageKey)), [includedPackages]);
+  const includedPackageIds = useMemo(() => {
+    const ids = new Set<string>();
+    includedPackages.forEach((item) => {
+      ids.add(item.packageKey);
+      const pkg = packageMap.get(item.packageKey);
+      if (pkg) ids.add(pkg.id);
+    });
+    return ids;
+  }, [includedPackages, packageMap]);
   const usedElsewherePackageIds = useMemo(() => new Set(
     Object.entries(packageUsageByKey)
       .filter(([, usage]) => usage.macroflowId !== selectedMacroflowId)
-      .map(([packageKey]) => packageKey)
-  ), [packageUsageByKey, selectedMacroflowId]);
+      .flatMap(([packageKey]) => {
+        const pkg = packageMap.get(packageKey);
+        return pkg ? [packageKey, pkg.id] : [packageKey];
+      })
+  ), [packageMap, packageUsageByKey, selectedMacroflowId]);
   const includedCanvasPackages = useMemo(
     () => includedPackages
       .map((item) => packageMap.get(item.packageKey))
       .filter((pkg): pkg is GanttService => Boolean(pkg)),
     [includedPackages, packageMap],
   );
+  const canvasDependencies = useMemo(
+    () => dependencies.map((dependency) => ({
+      ...dependency,
+      predecessorKey: packageMap.get(dependency.predecessorKey)?.id ?? dependency.predecessorKey,
+      successorKey: packageMap.get(dependency.successorKey)?.id ?? dependency.successorKey,
+    })),
+    [dependencies, packageMap],
+  );
 
   useEffect(() => {
     if (!open) return;
-    const layout = createAutoLayout(includedCanvasPackages, dependencies);
+    const layout = createAutoLayout(includedCanvasPackages, canvasDependencies);
     const saved = storageKey ? localStorage.getItem(storageKey) : null;
     const parsed = saved ? JSON.parse(saved) as Record<string, NodePosition> : {};
     const merged = Object.fromEntries(includedCanvasPackages.map((pkg) => [pkg.id, parsed[pkg.id] || layout[pkg.id] || { x: 120, y: 120 }]));
@@ -256,7 +302,7 @@ export function MacroflowDialog({
     setSelection(null);
     setPendingConnection(null);
     setConnectingFrom(null);
-  }, [dependencies, includedCanvasPackages, open, storageKey]);
+  }, [canvasDependencies, includedCanvasPackages, open, storageKey]);
 
   const filteredPackages = useMemo(() => {
     const term = normalizeText(search);
@@ -287,8 +333,8 @@ export function MacroflowDialog({
 
   const visiblePackageIds = useMemo(() => new Set(visibleCanvasPackages.map((pkg) => pkg.id)), [visibleCanvasPackages]);
   const visibleDependencies = useMemo(
-    () => dependencies.filter((dependency) => visiblePackageIds.has(dependency.predecessorKey) && visiblePackageIds.has(dependency.successorKey)),
-    [dependencies, visiblePackageIds],
+    () => canvasDependencies.filter((dependency) => visiblePackageIds.has(dependency.predecessorKey) && visiblePackageIds.has(dependency.successorKey)),
+    [canvasDependencies, visiblePackageIds],
   );
 
   const selectedNode = selection?.type === 'node' ? packageMap.get(selection.id) || null : null;
@@ -578,10 +624,10 @@ export function MacroflowDialog({
   };
 
   const predecessors = selectedNode
-    ? dependencies.filter((dependency) => dependency.successorKey === selectedNode.id)
+    ? canvasDependencies.filter((dependency) => dependency.successorKey === selectedNode.id)
     : [];
   const successors = selectedNode
-    ? dependencies.filter((dependency) => dependency.predecessorKey === selectedNode.id)
+    ? canvasDependencies.filter((dependency) => dependency.predecessorKey === selectedNode.id)
     : [];
 
   return (
