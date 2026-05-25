@@ -66,7 +66,7 @@ type GlbMeshInventoryInput = {
 };
 
 import { MAP3D_STORAGE_BUCKET, createMap3DSignedUrlFromPath, resolveMap3DSignedUrl } from "@/lib/map3dStorage";
-import { endMap3DPerf, startMap3DPerf } from "@/lib/map3dPerf";
+import { endMap3DPerf, logMap3DPerf, startMap3DPerf } from "@/lib/map3dPerf";
 const MAP3D_ZOOM_SENSITIVITY_KEY = "obramap:map3d:zoom-sensitivity";
 const MAP3D_WALK_HELP_HIDDEN_KEY = "obramap:map3d:walk-help-hidden";
 
@@ -840,7 +840,7 @@ function AutoFitCamera({
     }
     
     onCameraChange?.([camera.position.x, camera.position.y, camera.position.z], [center.x, center.y, center.z]);
-    console.log('[3D] Camera fit: dist=', dist, 'center=', center.toArray(), 'size=', size.toArray());
+    logMap3DPerf("camera.fit", { dist, center: center.toArray(), size: size.toArray() });
     return true;
   }, [camera, scene, controls, onCameraChange]);
 
@@ -1209,6 +1209,8 @@ export function Map3DView() {
   const navigate = useNavigate();
   const { profile, user, canEdit, canAccessManagement } = useAuth();
   const projectId = currentProject?.id;
+  const activeProjectIdRef = useRef<string | null>(projectId ?? null);
+  activeProjectIdRef.current = projectId ?? null;
   const companyId = (currentProject as any)?.company_id || profile?.company_id || null;
   const canUseMap3D = useCallback((action: Parameters<typeof canUseMap3DAction>[1]) => (
     canUseMap3DAction(profile, action, canAccessManagement)
@@ -1335,6 +1337,7 @@ export function Map3DView() {
   interface SyncResult { total: number; visible: number; hidden: number; unlinked: number; syncedAt: Date; }
   const [lastSyncResult, setLastSyncResult] = useState<SyncResult | null>(null);
   const syncDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resetForProjectRef = useRef<string | null>(projectId ?? null);
 
   // Cena ref para aplicar visibilidade fora do JSX
   const [sceneObj, setSceneObj] = useState<THREE.Object3D | null>(null);
@@ -1460,6 +1463,70 @@ export function Map3DView() {
   const supplementalGlbPartsRef = useRef<SupplementalGlbPart[]>([]);
   const supplementalGlbScenesRef = useRef<Map<string, THREE.Object3D>>(new Map());
   const supplementalInventoriedPartIdsRef = useRef<Set<string>>(new Set());
+  const supplementalFitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const nextProjectId = projectId ?? null;
+    if (resetForProjectRef.current === nextProjectId) return;
+    resetForProjectRef.current = nextProjectId;
+    logMap3DPerf("project.changed.reset3dState", { projectId: nextProjectId });
+
+    if (syncDebounceRef.current) clearTimeout(syncDebounceRef.current);
+    if (supplementalFitTimerRef.current) clearTimeout(supplementalFitTimerRef.current);
+    map3dLoadPerfRef.current = null;
+    supplementalGlbPartsRef.current = [];
+    supplementalGlbScenesRef.current.clear();
+    supplementalInventoriedPartIdsRef.current.clear();
+
+    setModelData(null);
+    setSupplementalGlbParts([]);
+    setMarkers([]);
+    setSelectedMarker(null);
+    setPendingPos(null);
+    setPendingTgt(null);
+    setSavedPos(null);
+    setSavedTgt(null);
+    setOrbitFocusPoint(null);
+    setSceneReady(false);
+    setSceneObj(null);
+    setAssignMode(false);
+    setReviewMode(false);
+    setPickedMesh(null);
+    setSelectedMeshKey(null);
+    setMultiSelectedMeshKeys(new Set());
+    setReviewLinksMode(false);
+    setReviewLinksFilter("all");
+    setReviewLinkHoverTooltip(null);
+    setHideLinkedInReview(false);
+    setIsolatedKeys(null);
+    setMeshReviewOverrides(new Map());
+    setContextBulkAction(null);
+    setContextPreview(null);
+    setQuickContextPanelOpen(false);
+    setPendingGlbImport(null);
+    setGlbLinkScope("preserve");
+    setTrustedGlbLinkKeys(new Set());
+    setSmartLinkOpen(false);
+    setSmartLinkBase(null);
+    setSmartLinkBaseKey(null);
+    setSmartLinkCandidates([]);
+    setSmartLinkSelectedKeys(new Set());
+    setSmartLinkPreviewEnabled(false);
+    setSmartLinkPreviewBarOpen(false);
+    setSmartLinkPreviewMode(null);
+    setSmartLinkFocusedCandidateKey(null);
+    setSmartLinkHoverTooltip(null);
+    setSmartLinkApplying(false);
+    setViewMode("complete");
+    setHiddenRealServiceKeys(new Set());
+    setRealServiceFilterOpen(false);
+    setLastSyncResult(null);
+    setIsSyncing(false);
+    setWalkInspection(null);
+    setWalkHistoryOpen(false);
+    setWalkHistoryHouseNumber(null);
+    setWalkStartPickMode(false);
+  }, [projectId]);
 
   useEffect(() => {
     supplementalGlbPartsRef.current = supplementalGlbParts;
@@ -1528,6 +1595,7 @@ export function Map3DView() {
       supplementalGlbPartsRef.current = [];
       supplementalGlbScenesRef.current.clear();
       supplementalInventoriedPartIdsRef.current.clear();
+      if (supplementalFitTimerRef.current) clearTimeout(supplementalFitTimerRef.current);
     };
   }, []);
 
@@ -1565,15 +1633,20 @@ export function Map3DView() {
       clearSupplementalGlbPartsFromState();
       return;
     }
-    const perf = startMap3DPerf("project_model_parts.load", { projectId });
+    const requestedProjectId = projectId;
+    const perf = startMap3DPerf("project_model_parts.load", { projectId: requestedProjectId });
     const { data, error } = await supabase
       .from("project_model_parts" as any)
       .select("id, name, file_name, storage_path, public_url, part_order, is_active")
-      .eq("project_id", projectId)
+      .eq("project_id", requestedProjectId)
       .eq("is_active", true)
       .order("part_order", { ascending: true })
       .order("created_at", { ascending: true });
     endMap3DPerf(perf, { ok: !error, rows: Array.isArray(data) ? data.length : 0 });
+    if (activeProjectIdRef.current !== requestedProjectId) {
+      logMap3DPerf("project_model_parts.load.staleIgnored", { requestedProjectId, activeProjectId: activeProjectIdRef.current });
+      return;
+    }
 
     if (error) {
       console.error("[GLB Parts] load error", error);
@@ -1583,6 +1656,10 @@ export function Map3DView() {
 
     const resolvedParts = (await Promise.all(((data || []) as any[]).map(toSupplementalGlbPart)))
       .filter((part): part is SupplementalGlbPart => Boolean(part));
+    if (activeProjectIdRef.current !== requestedProjectId) {
+      logMap3DPerf("project_model_parts.sign.staleIgnored", { requestedProjectId, activeProjectId: activeProjectIdRef.current });
+      return;
+    }
     setSupplementalGlbParts((current) => {
       current
         .filter((part) => !part.persisted)
@@ -1814,7 +1891,17 @@ export function Map3DView() {
 
   const handleSupplementalSceneReady = useCallback((part: SupplementalGlbPart, scene: THREE.Object3D) => {
     supplementalGlbScenesRef.current.set(part.id, scene);
-  }, []);
+    if (sceneReady && cameraMode === "orbit") {
+      if (supplementalFitTimerRef.current) clearTimeout(supplementalFitTimerRef.current);
+      supplementalFitTimerRef.current = setTimeout(() => {
+        logMap3DPerf("camera.fitAfterSupplementalParts", {
+          loadedParts: supplementalGlbScenesRef.current.size,
+          totalParts: supplementalGlbPartsRef.current.filter((item) => item.visible).length,
+        });
+        setFitTrigger((value) => value + 1);
+      }, 150);
+    }
+  }, [cameraMode, sceneReady]);
 
   const handleSupplementalInventoryReady = useCallback((part: SupplementalGlbPart, meshes: GlbMeshInventoryInput[]) => {
     if (!part.persisted || meshes.length === 0) return;
@@ -2870,7 +2957,7 @@ export function Map3DView() {
 
   const showSmartLinkCandidatesOnMap = useCallback(() => {
     const beforeState = smartLinkPreviewStateRef.current;
-    console.log("[GLB Smart Dialog State]", {
+    logMap3DPerf("GLB Smart Dialog State", {
       action: "minimize-dialog",
       reason: "show candidates on map",
       dialogOpenBefore: beforeState.dialogOpen,
@@ -2892,7 +2979,7 @@ export function Map3DView() {
 
   const isolateSmartLinkCandidates = useCallback(() => {
     const beforeState = smartLinkPreviewStateRef.current;
-    console.log("[GLB Smart Dialog State]", {
+    logMap3DPerf("GLB Smart Dialog State", {
       action: "minimize-dialog",
       reason: "isolate all candidates",
       dialogOpenBefore: beforeState.dialogOpen,
@@ -2907,7 +2994,7 @@ export function Map3DView() {
   const clearSmartLinkPreviewVisual = useCallback((reason = "visual cleanup") => {
     const beforeState = smartLinkPreviewStateRef.current;
     const restoredMaterials = smartLinkPreviewMaterialsRef.current.length;
-    console.log("[GLB Smart Preview State]", {
+    logMap3DPerf("GLB Smart Preview State", {
       action: "visual-clear-start",
       reason,
       loadingBefore: beforeState.isLoading,
@@ -2927,7 +3014,7 @@ export function Map3DView() {
     clearSmartLinkPreviewHighlight(reason);
     clearMeshSelection(`smartlink visual cleanup: ${reason}`);
     setIsLoading(false);
-    console.log("[GLB Smart Preview State]", {
+    logMap3DPerf("GLB Smart Preview State", {
       action: "visual-clear-end",
       reason,
       loadingBefore: beforeState.isLoading,
@@ -2944,7 +3031,7 @@ export function Map3DView() {
 
   const clearSmartLinkPreview = useCallback((reason = "user/action") => {
     const beforeState = smartLinkPreviewStateRef.current;
-    console.log("[GLB Smart Dialog State]", {
+    logMap3DPerf("GLB Smart Dialog State", {
       action: "close-flow-start",
       reason,
       dialogOpenBefore: beforeState.dialogOpen,
@@ -2953,7 +3040,7 @@ export function Map3DView() {
       cleanupCalled: true,
       caller: "clearSmartLinkPreview",
     });
-    console.log("[GLB Smart Preview State]", {
+    logMap3DPerf("GLB Smart Preview State", {
       action: "clear-start",
       reason,
       loadingBefore: beforeState.isLoading,
@@ -2975,7 +3062,7 @@ export function Map3DView() {
     setSmartLinkHoverTooltip(null);
     setSmartLinkIsolationFilter("all");
     clearSmartLinkPreviewVisual(reason);
-    console.log("[GLB Smart Preview State]", {
+    logMap3DPerf("GLB Smart Preview State", {
       action: "clear-end",
       reason,
       loadingBefore: beforeState.isLoading,
@@ -2988,7 +3075,7 @@ export function Map3DView() {
       isPreviewBarOpen: false,
       applyingAfter: false,
     });
-    console.log("[GLB Smart Dialog State]", {
+    logMap3DPerf("GLB Smart Dialog State", {
       action: "close-flow-end",
       reason,
       dialogOpenBefore: beforeState.dialogOpen,
@@ -3012,7 +3099,7 @@ export function Map3DView() {
   const returnToSmartLinkList = useCallback(() => {
     if (!smartLinkBase || smartLinkCandidates.length === 0) return;
     const beforeState = smartLinkPreviewStateRef.current;
-    console.log("[GLB Smart Dialog State]", {
+    logMap3DPerf("GLB Smart Dialog State", {
       action: "open-dialog",
       reason: "return to list",
       dialogOpenBefore: beforeState.dialogOpen,
@@ -3029,7 +3116,7 @@ export function Map3DView() {
 
   const handleSmartLinkOpenChange = useCallback((open: boolean) => {
     const beforeState = smartLinkPreviewStateRef.current;
-    console.log("[GLB Smart Dialog State]", {
+    logMap3DPerf("GLB Smart Dialog State", {
       action: open ? "open-dialog" : "request-close-dialog",
       reason: open ? "dialog open change" : "dialog closed",
       dialogOpenBefore: beforeState.dialogOpen,
@@ -3056,7 +3143,7 @@ export function Map3DView() {
   useEffect(() => {
     const currentModelUrl = modelData?.url ?? null;
     if (smartLinkModelUrlRef.current && smartLinkModelUrlRef.current !== currentModelUrl) {
-      console.log("[GLB Smart Preview] clear requested", { reason: "model changed" });
+      logMap3DPerf("GLB Smart Preview clear requested", { reason: "model changed" });
       clearSmartLinkPreview("model changed");
     }
     smartLinkModelUrlRef.current = currentModelUrl;
@@ -3287,7 +3374,7 @@ export function Map3DView() {
       });
     });
 
-    console.log("[3D Reexibir Tudo Audit]", audit);
+    logMap3DPerf("3D Reexibir Tudo Audit", audit);
     return audit;
   }, [sceneObj, supplementalGlbParts, viewMode]);
 
@@ -3449,8 +3536,8 @@ export function Map3DView() {
           break;
         case "real": {
           if (isContextProjectModelMesh(saved)) {
-            mesh.visible = saved.visible;
-            if (saved.visible) realStats.contextVisible++;
+            mesh.visible = true;
+            realStats.contextVisible++;
             if (realStats.contextExamples.length < 8) {
               realStats.contextExamples.push({
                 layer_key: saved.layer_key,
@@ -3463,10 +3550,12 @@ export function Map3DView() {
           const hasLink = isCompleteProductionLink(saved);
           const serviceKey = getRealServiceFilterKey(saved);
           const hiddenByServiceFilter = !!serviceKey && hiddenServices.has(serviceKey);
-          mesh.visible = hasLink && !!saved.production_visible && !hiddenByServiceFilter;
+          const hasExecutedProgress = Number(saved.progress_percent ?? 0) > 0;
+          const visibleByProduction = !!saved.production_visible || hasExecutedProgress;
+          mesh.visible = hasLink && visibleByProduction && !hiddenByServiceFilter;
           if (!hasLink) realStats.unlinkedHidden++;
-          else if (saved.production_visible && hiddenByServiceFilter) realStats.serviceFilteredHidden++;
-          else if (saved.production_visible) realStats.linkedVisible++;
+          else if (visibleByProduction && hiddenByServiceFilter) realStats.serviceFilteredHidden++;
+          else if (visibleByProduction) realStats.linkedVisible++;
           else realStats.linkedHidden++;
           break;
         }
@@ -3477,9 +3566,9 @@ export function Map3DView() {
     }, { includeHiddenParts: true });
     if (visitedMeshes === 0) return realStats;
     if (mode === "real") {
-      console.log("[GLB Real Context]", realStats);
+      logMap3DPerf("GLB Real Context", realStats);
       if (import.meta.env.DEV) {
-        console.log("[GLB Import Safety] real mode applied", {
+        logMap3DPerf("GLB Import Safety real mode applied", {
           visibleInReal: realStats.linkedVisible + realStats.contextVisible,
           hiddenWithoutLink: realStats.unlinkedHidden,
           linkedHidden: realStats.linkedHidden,
@@ -3506,7 +3595,7 @@ export function Map3DView() {
     } else {
       applyViewMode(viewMode, undefined, clearedRealServiceFilter);
     }
-    console.log("[3D Reexibir Tudo Debug]", {
+    logMap3DPerf("3D Reexibir Tudo Debug", {
       viewMode,
       clearedPreview: beforeState.previewEnabled,
       clearedIsolation: beforeState.isolatedCount > 0,
@@ -3970,14 +4059,19 @@ export function Map3DView() {
   const handleSync3DReal = useCallback(async (options?: { silent?: boolean }) => {
     if (!canSync3DReal) { toast.error("Você precisa ter permissão de edição para sincronizar o 3D Real."); return; }
     if (!projectId) return;
+    const requestedProjectId = projectId;
     setIsSyncing(true);
     clearMeshSelection("3D Real sync started");
     try {
       const meshMapBeforeRefresh = buildCurrentMeshMap(meshHooks.meshMap);
       const refreshedAtSync = await meshHooks.refresh();
+      if (activeProjectIdRef.current !== requestedProjectId) {
+        logMap3DPerf("3dReal.sync.staleAfterMeshRefresh", { requestedProjectId, activeProjectId: activeProjectIdRef.current });
+        return;
+      }
       const refreshedMeshMap = buildCurrentMeshMap(new Map((refreshedAtSync || []).map((mesh) => [mesh.layer_key, mesh])));
       const sourceMeshMap = refreshedAtSync ? refreshedMeshMap : meshMapBeforeRefresh;
-      console.log("[GLB MeshMap Consistency] sync source", {
+      logMap3DPerf("GLB MeshMap Consistency sync source", {
         projectId,
         beforeCount: meshMapBeforeRefresh.size,
         refreshedCount: refreshedAtSync?.length ?? null,
@@ -4005,8 +4099,12 @@ export function Map3DView() {
       const { data: housesData, error: housesError } = await supabase
         .from("houses")
         .select("house_number, macros")
-        .eq("project_id", projectId)
+        .eq("project_id", requestedProjectId)
         .order("house_number", { ascending: true });
+      if (activeProjectIdRef.current !== requestedProjectId) {
+        logMap3DPerf("3dReal.sync.staleAfterHouses", { requestedProjectId, activeProjectId: activeProjectIdRef.current });
+        return;
+      }
       if (housesError) {
         console.error("[GLB Real Sync] houses load error", housesError);
       } else if (housesData?.length) {
@@ -4035,8 +4133,12 @@ export function Map3DView() {
       const { data: weeklyProductionRows, error: weeklyProductionError } = await supabase
         .from("weekly_productions")
         .select("macro_id, scope_id, house_ids")
-        .eq("project_id", projectId)
+        .eq("project_id", requestedProjectId)
         .is("deleted_at", null);
+      if (activeProjectIdRef.current !== requestedProjectId) {
+        logMap3DPerf("3dReal.sync.staleAfterWeeklyProductions", { requestedProjectId, activeProjectId: activeProjectIdRef.current });
+        return;
+      }
 
       if (weeklyProductionError) {
         console.error("[GLB Real Sync] weekly productions load error", weeklyProductionError);
@@ -4109,7 +4211,7 @@ export function Map3DView() {
           missing_fields: missingFields,
         };
       });
-      console.log("[GLB Real Sync Check] start", {
+      logMap3DPerf("GLB Real Sync Check start", {
         projectId,
         meshMapTotal: allMeshes.length,
         linkedCompleteTotal: linkedCount,
@@ -4177,7 +4279,7 @@ export function Map3DView() {
         const currentProgress = Number(mesh.progress_percent ?? 0);
         if (mesh.production_visible !== pv || currentProgress !== progress) {
           updates.push({
-            project_id: projectId,
+            project_id: requestedProjectId,
             layer_key: mesh.layer_key,
             production_visible: pv,
             progress_percent: progress,
@@ -4190,6 +4292,10 @@ export function Map3DView() {
       const syncErrors: any[] = [];
       let updatesSent = 0;
       for (let index = 0; index < updates.length; index += batchSize) {
+        if (activeProjectIdRef.current !== requestedProjectId) {
+          logMap3DPerf("3dReal.sync.staleBeforeUpsert", { requestedProjectId, activeProjectId: activeProjectIdRef.current });
+          return;
+        }
         const batch = updates.slice(index, index + batchSize);
         const { error } = await supabase
           .from("project_model_meshes" as any)
@@ -4197,7 +4303,7 @@ export function Map3DView() {
         updatesSent += batch.length;
         if (error) syncErrors.push(error);
       }
-      console.log("[GLB Real Sync Optimized]", {
+      logMap3DPerf("GLB Real Sync Optimized", {
         projectId,
         totalMeshMap: allMeshes.length,
         totalContext: contextCount,
@@ -4232,6 +4338,10 @@ export function Map3DView() {
       }
 
       const refreshedMeshes = await meshHooks.refresh();
+      if (activeProjectIdRef.current !== requestedProjectId) {
+        logMap3DPerf("3dReal.sync.staleAfterFinalRefresh", { requestedProjectId, activeProjectId: activeProjectIdRef.current });
+        return;
+      }
       let contextApplied = contextCount;
       let unlinkedApplied = unlinkedCount;
       if (viewMode === "real") {
@@ -4260,7 +4370,9 @@ export function Map3DView() {
     } catch (err) {
       console.error("[Sync3D]", err);
       toast.error("Erro ao sincronizar");
-    } finally { setIsSyncing(false); }
+    } finally {
+      if (activeProjectIdRef.current === requestedProjectId) setIsSyncing(false);
+    }
   }, [buildCurrentMeshMap, canSync3DReal, projectId, meshHooks, currentProject, applyViewMode, viewMode, meshReviewOverrides, sanitizeGlbMeshForCurrentModel, isCompleteProductionLink, collectActiveModelLayerKeys, clearMeshSelection]);
 
   // Auto-sync após realtime, debounced (somente se já sincronizou ao menos 1x)
@@ -4478,12 +4590,17 @@ export function Map3DView() {
 
   const loadSaved3DMap = useCallback(async () => {
     if (!projectId) return;
+    const requestedProjectId = projectId;
     setIsLoading(true);
-    const perf = startMap3DPerf("map_layouts.loadSaved3DMap", { projectId });
+    const perf = startMap3DPerf("map_layouts.loadSaved3DMap", { projectId: requestedProjectId });
     try {
       const { data, error } = await supabase.from('map_layouts')
         .select('model_3d_url, model_3d_type, model_mtl_url, house_markers_3d, camera_position, camera_target')
-        .eq('project_id', projectId).maybeSingle();
+        .eq('project_id', requestedProjectId).maybeSingle();
+      if (activeProjectIdRef.current !== requestedProjectId) {
+        endMap3DPerf(perf, { ok: false, stage: "stale-map-layout", requestedProjectId, activeProjectId: activeProjectIdRef.current });
+        return;
+      }
       if (error) {
         endMap3DPerf(perf, { ok: false, stage: "map_layouts" });
         console.error('[3D] Load error:', error);
@@ -4494,13 +4611,18 @@ export function Map3DView() {
           setGlbLinkScope("preserve");
           setTrustedGlbLinkKeys(new Set());
           map3dLoadPerfRef.current = startMap3DPerf("map3d.totalUntilModelVisible", {
-            projectId,
+            projectId: requestedProjectId,
             type: data.model_3d_type,
           });
           const [signedModel, signedMtl] = await Promise.all([
             resolveMap3DSignedUrl(data.model_3d_url),
             resolveMap3DSignedUrl(data.model_mtl_url),
           ]);
+          if (activeProjectIdRef.current !== requestedProjectId) {
+            endMap3DPerf(map3dLoadPerfRef.current, { stage: "stale-signed-url", requestedProjectId, activeProjectId: activeProjectIdRef.current });
+            map3dLoadPerfRef.current = null;
+            return;
+          }
           if (signedModel) {
             setModelData({ url: signedModel, type: data.model_3d_type as "gltf" | "obj", mtlUrl: signedMtl || undefined });
           } else {
@@ -4524,7 +4646,9 @@ export function Map3DView() {
       endMap3DPerf(perf, { ok: false, stage: "exception" });
       console.error('[3D] Load error:', err);
     }
-    finally { setIsLoading(false); }
+    finally {
+      if (activeProjectIdRef.current === requestedProjectId) setIsLoading(false);
+    }
   }, [projectId]);
 
   useEffect(() => { loadSaved3DMap(); }, [loadSaved3DMap]);

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { endMap3DPerf, startMap3DPerf } from "@/lib/map3dPerf";
+import { endMap3DPerf, logMap3DPerf, startMap3DPerf } from "@/lib/map3dPerf";
 
 export interface ProjectModelMesh {
   id: string;
@@ -76,11 +76,28 @@ export function useProjectModelMeshes(
   const [loading, setLoading] = useState(false);
   const loadedFor = useRef<string | null>(null);
   const debugLayerKeyRef = useRef<string | null>(null);
+  const projectIdRef = useRef<string | undefined>(projectId);
+  const refreshSeqRef = useRef(0);
+
+  useEffect(() => {
+    if (projectIdRef.current === projectId) return;
+    projectIdRef.current = projectId;
+    loadedFor.current = null;
+    refreshSeqRef.current += 1;
+    setMeshes([]);
+    setLoading(false);
+  }, [projectId]);
 
   const refresh = useCallback(async () => {
-    if (!projectId) return;
+    if (!projectId) {
+      setMeshes([]);
+      setLoading(false);
+      return;
+    }
+    const requestProjectId = projectId;
+    const requestSeq = ++refreshSeqRef.current;
     setLoading(true);
-    const perf = startMap3DPerf("project_model_meshes.refresh", { projectId });
+    const perf = startMap3DPerf("project_model_meshes.refresh", { projectId: requestProjectId });
     const allRows: ProjectModelMesh[] = [];
     let page = 0;
     let pagesLoaded = 0;
@@ -101,18 +118,27 @@ export function useProjectModelMeshes(
         return;
       }
 
+      if (projectIdRef.current !== requestProjectId || refreshSeqRef.current !== requestSeq) {
+        endMap3DPerf(perf, { ok: false, stage: "stale", page, requestedProjectId: requestProjectId, activeProjectId: projectIdRef.current });
+        return;
+      }
+
       const rows = (data || []) as unknown as ProjectModelMesh[];
       allRows.push(...rows);
       pagesLoaded++;
       if (rows.length < PROJECT_MODEL_MESHES_PAGE_SIZE) break;
       page++;
     }
+    if (projectIdRef.current !== requestProjectId || refreshSeqRef.current !== requestSeq) {
+      endMap3DPerf(perf, { ok: false, stage: "stale-complete", requestedProjectId: requestProjectId, activeProjectId: projectIdRef.current });
+      return;
+    }
     setLoading(false);
     setMeshes(allRows);
-    loadedFor.current = projectId;
+    loadedFor.current = requestProjectId;
     endMap3DPerf(perf, { ok: true, totalLoaded: allRows.length, pagesLoaded });
-    console.log("[GLB MeshMap Refresh]", {
-      projectId,
+    logMap3DPerf("GLB MeshMap Refresh", {
+      projectId: requestProjectId,
       totalLoaded: allRows.length,
       pagesLoaded,
       hasGeom300: allRows.some((mesh) => mesh.layer_key === "glb:Geom3D_300:0"),

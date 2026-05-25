@@ -1,8 +1,10 @@
 import { supabase } from "@/integrations/supabase/client";
-import { endMap3DPerf, startMap3DPerf } from "@/lib/map3dPerf";
+import { endMap3DPerf, logMap3DPerf, startMap3DPerf } from "@/lib/map3dPerf";
 
 export const MAP3D_STORAGE_BUCKET = "3d-models";
 export const MAP3D_SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
+
+const missingStoragePaths = new Set<string>();
 
 export function normalizeMap3DStoragePath(path: string | null | undefined): string | null {
   if (!path) return null;
@@ -39,13 +41,31 @@ export async function createMap3DSignedUrlFromPath(
 ): Promise<string | null> {
   const normalizedPath = normalizeMap3DStoragePath(path);
   if (!normalizedPath) return null;
+  if (missingStoragePaths.has(normalizedPath)) {
+    logMap3DPerf("storage.createSignedUrl.skipMissing", { path: normalizedPath });
+    return null;
+  }
   const perf = startMap3DPerf("storage.createSignedUrl", { path: normalizedPath });
   const { data, error } = await supabase.storage
     .from(MAP3D_STORAGE_BUCKET)
     .createSignedUrl(normalizedPath, MAP3D_SIGNED_URL_TTL_SECONDS);
   endMap3DPerf(perf, { ok: !error && !!data?.signedUrl });
   if (error || !data?.signedUrl) {
-    console.error("[3D] Failed to sign URL for", normalizedPath, error);
+    const message = error instanceof Error ? error.message : String(error ?? "");
+    const details = typeof error === "object" && error !== null ? error as Record<string, unknown> : {};
+    const isMissingObject = message.toLowerCase().includes("object not found")
+      || String(details.error ?? "").toLowerCase().includes("not found")
+      || details.statusCode === "404"
+      || details.statusCode === 404;
+    if (isMissingObject) {
+      missingStoragePaths.add(normalizedPath);
+      console.warn("[3D] Arquivo do modelo nao encontrado no Storage; ignorando nas proximas tentativas desta sessao.", {
+        path: normalizedPath,
+        error,
+      });
+    } else {
+      console.error("[3D] Failed to sign URL for", normalizedPath, error);
+    }
     return null;
   }
   return data.signedUrl;

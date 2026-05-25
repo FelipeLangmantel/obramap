@@ -23,3 +23,8 @@ export function endMap3DPerf(mark: Map3DPerfMark | null, detail?: Record<string,
     ...(detail ?? {}),
   });
 }
+
+export function logMap3DPerf(label: string, detail?: Record<string, unknown>) {
+  if (!isMap3DPerfEnabled()) return;
+  console.info(`[Map3D Perf] ${label}`, detail ?? {});
+}

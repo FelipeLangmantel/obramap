@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { endMap3DPerf, startMap3DPerf } from "@/lib/map3dPerf";
 
@@ -20,6 +20,17 @@ export function useMeshHouseAssignments(projectId: string | undefined) {
   const [assignments, setAssignments] = useState<MeshHouseAssignment[]>([]);
   const [assignmentMap, setAssignmentMap] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(false);
+  const projectIdRef = useRef<string | undefined>(projectId);
+  const refreshSeqRef = useRef(0);
+
+  useEffect(() => {
+    if (projectIdRef.current === projectId) return;
+    projectIdRef.current = projectId;
+    refreshSeqRef.current += 1;
+    setAssignments([]);
+    setAssignmentMap(new Map());
+    setLoading(false);
+  }, [projectId]);
 
   const refresh = useCallback(async () => {
     if (!projectId) {
@@ -27,13 +38,18 @@ export function useMeshHouseAssignments(projectId: string | undefined) {
       setAssignmentMap(new Map());
       return;
     }
+    const requestProjectId = projectId;
+    const requestSeq = ++refreshSeqRef.current;
     setLoading(true);
-    const perf = startMap3DPerf("map_mesh_house_assignments.refresh", { projectId });
+    const perf = startMap3DPerf("map_mesh_house_assignments.refresh", { projectId: requestProjectId });
     const { data, error } = await supabase
       .from("map_mesh_house_assignments" as any)
       .select("*")
-      .eq("project_id", projectId);
+      .eq("project_id", requestProjectId);
     endMap3DPerf(perf, { ok: !error, rows: Array.isArray(data) ? data.length : 0 });
+    if (projectIdRef.current !== requestProjectId || refreshSeqRef.current !== requestSeq) {
+      return;
+    }
     if (!error && data) {
       const list = data as unknown as MeshHouseAssignment[];
       setAssignments(list);
