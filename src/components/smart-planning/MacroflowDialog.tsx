@@ -64,7 +64,7 @@ const GRID_Y = 180;
 const CANVAS_WIDTH = 3600;
 const CANVAS_HEIGHT = 2200;
 
-const packageTypeLabel = (type: string) => (type === 'work_group' ? 'Frente' : 'ServiÃ§o');
+const packageTypeLabel = (type: string) => (type === 'work_group' ? 'Frente' : 'Serviço');
 
 const relationLabel = (relation: MacroflowRelationType) =>
   relation === 'SS' ? 'Inicia para iniciar (SS)' : 'Termina para iniciar (FS)';
@@ -80,7 +80,7 @@ const describeDependency = (dependency: {
   relationType: MacroflowRelationType;
   lagDays: number;
 }) => {
-  const relation = dependency.relationType === 'SS' ? 'comeÃ§a junto ao inÃ­cio' : 'comeÃ§a depois do tÃ©rmino';
+  const relation = dependency.relationType === 'SS' ? 'começa junto ao início' : 'começa depois do término';
   return `${dependency.successorLabel} ${relation} de ${dependency.predecessorLabel}, ${describeLag(dependency.lagDays)}.`;
 };
 
@@ -177,6 +177,7 @@ export function MacroflowDialog({
     selectedMacroflowId,
     dependencies,
     includedPackages,
+    packageUsageByKey,
     loading,
     hasCycle,
     createMacroflow,
@@ -225,6 +226,11 @@ export function MacroflowDialog({
   }, [packages]);
 
   const includedPackageIds = useMemo(() => new Set(includedPackages.map((item) => item.packageKey)), [includedPackages]);
+  const usedElsewherePackageIds = useMemo(() => new Set(
+    Object.entries(packageUsageByKey)
+      .filter(([, usage]) => usage.macroflowId !== selectedMacroflowId)
+      .map(([packageKey]) => packageKey)
+  ), [packageUsageByKey, selectedMacroflowId]);
   const includedCanvasPackages = useMemo(
     () => includedPackages
       .map((item) => packageMap.get(item.packageKey))
@@ -257,8 +263,12 @@ export function MacroflowDialog({
   }, [filter, packages, search, stageFilter]);
 
   const availablePackages = useMemo(
-    () => filteredPackages.filter((pkg) => !includedPackageIds.has(pkg.id)),
-    [filteredPackages, includedPackageIds],
+    () => filteredPackages.filter((pkg) => !includedPackageIds.has(pkg.id) && !usedElsewherePackageIds.has(pkg.id)),
+    [filteredPackages, includedPackageIds, usedElsewherePackageIds],
+  );
+  const usedElsewhereCount = useMemo(
+    () => filteredPackages.filter((pkg) => usedElsewherePackageIds.has(pkg.id)).length,
+    [filteredPackages, usedElsewherePackageIds],
   );
 
   const visibleCanvasPackages = useMemo(() => {
@@ -448,7 +458,7 @@ export function MacroflowDialog({
 
   const removeSelectedEdge = async () => {
     if (!selectedEdge) return;
-    if (!window.confirm('Remover esta ligaÃ§Ã£o do macrofluxo?')) return;
+    if (!window.confirm('Remover esta ligação do macrofluxo?')) return;
     const removed = await removeDependency(selectedEdge.id);
     if (removed) {
       setSelection(null);
@@ -539,13 +549,24 @@ export function MacroflowDialog({
                 Macrofluxo do Planejamento
               </DialogTitle>
               <p className="mt-1 text-sm text-muted-foreground">
-                Organize predecessoras entre frentes e serviÃ§os. Afeta apenas planejamento visual, Gantt, Linha e Dashboard.
+                Organize predecessoras entre frentes e serviços. Afeta apenas planejamento visual, Gantt, Linha e Dashboard.
               </p>
-              <div className="mt-3 flex flex-wrap items-end gap-2">
-                <div className="min-w-[220px] space-y-1">
-                  <Label className="text-xs">Macrofluxo real</Label>
+              <p className="mt-1 text-xs text-muted-foreground">
+                O macrofluxo Principal alimenta Gantt, Linha de Balanço, Dashboard e Previsão.
+              </p>
+              <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(280px,360px)_minmax(260px,1fr)_auto]">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs">Macrofluxo selecionado</Label>
+                    {macroflow?.active && (
+                      <Badge className="gap-1 bg-amber-100 text-amber-800 hover:bg-amber-100">
+                        <Star className="h-3 w-3" />
+                        Principal
+                      </Badge>
+                    )}
+                  </div>
                   <Select value={selectedMacroflowId || 'none'} onValueChange={(value) => value !== 'none' && selectMacroflow(value)}>
-                    <SelectTrigger className="h-9 bg-background">
+                    <SelectTrigger className="h-11 bg-background text-left">
                       <SelectValue placeholder="Selecione um macrofluxo" />
                     </SelectTrigger>
                     <SelectContent>
@@ -553,31 +574,35 @@ export function MacroflowDialog({
                         <SelectItem value="none" disabled>Nenhum macrofluxo salvo</SelectItem>
                       ) : macroflows.map((item) => (
                         <SelectItem key={item.id} value={item.id}>
-                          {item.name}{item.active ? ' - principal' : ''}
+                          {item.name}{item.active ? ' - Principal' : ''}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="min-w-[220px] space-y-1">
-                  <Label className="text-xs">Nome</Label>
-                  <Input
-                    value={renameDraft}
-                    onChange={(event) => setRenameDraft(event.target.value)}
-                    placeholder="Nome do macrofluxo"
-                    className="h-9 bg-background"
-                    disabled={!macroflow || !canEdit}
-                  />
+                <div className="space-y-1">
+                  <Label className="text-xs">Renomear macrofluxo selecionado</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={renameDraft}
+                      onChange={(event) => setRenameDraft(event.target.value)}
+                      placeholder="Nome do macrofluxo"
+                      className="h-11 bg-background"
+                      disabled={!macroflow || !canEdit}
+                    />
+                    <Button variant="outline" className="h-11" disabled={!macroflow || !canEdit || renameDraft.trim() === macroflow.name} onClick={handleRenameMacroflow}>
+                      Renomear
+                    </Button>
+                  </div>
                 </div>
-                <Button variant="outline" size="sm" disabled={!macroflow || !canEdit || renameDraft.trim() === macroflow.name} onClick={handleRenameMacroflow}>
-                  Renomear
-                </Button>
-                <Button variant={macroflow?.active ? 'secondary' : 'outline'} size="sm" disabled={!macroflow || macroflow.active || !canEdit} onClick={handleActivateMacroflow}>
+                <Button variant={macroflow?.active ? 'secondary' : 'outline'} className="h-11 self-end" disabled={!macroflow || macroflow.active || !canEdit} onClick={handleActivateMacroflow}>
                   <Star className="mr-1 h-3.5 w-3.5" />
-                  Principal
+                  Tornar Principal
                 </Button>
-                <div className="min-w-[220px] space-y-1">
-                  <Label className="text-xs">Criar macrofluxo</Label>
+              </div>
+              <div className="mt-3 flex flex-wrap items-end gap-2 rounded-lg border bg-muted/30 p-3">
+                <div className="min-w-[260px] flex-1 space-y-1">
+                  <Label className="text-xs">Criar novo macrofluxo</Label>
                   <Input
                     value={newMacroflowName}
                     onChange={(event) => setNewMacroflowName(event.target.value)}
@@ -610,7 +635,7 @@ export function MacroflowDialog({
               </Button>
               <Button variant="outline" size="sm" className="gap-2" onClick={() => setSelection(null)}>
                 <X className="h-4 w-4" />
-                Limpar seleÃ§Ã£o
+                Limpar seleção
               </Button>
               <Button size="sm" className="gap-2" onClick={() => onOpenChange(false)}>
                 <Save className="h-4 w-4" />
@@ -625,7 +650,7 @@ export function MacroflowDialog({
             <div className="space-y-3 border-b p-4">
               <div>
                 <p className="text-sm font-semibold">Pacotes do macrofluxo</p>
-                <p className="text-xs text-muted-foreground">Adicione servicos/frentes ao macrofluxo real antes de conectar.</p>
+                <p className="text-xs text-muted-foreground">Adicione serviços/frentes ao macrofluxo real antes de conectar.</p>
               </div>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -645,14 +670,14 @@ export function MacroflowDialog({
                   </SelectContent>
                 </Select>
                 <p className="text-[11px] text-muted-foreground">
-                  Estas opcoes sao grupos/etapas dos servicos, nao macrofluxos salvos.
+                  Estas opções são grupos/etapas dos serviços, não macrofluxos salvos.
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-1">
                 {[
                   ['all', 'Todos'],
                   ['work_group', 'Frentes'],
-                  ['service', 'Servicos'],
+                  ['service', 'Serviços'],
                   ['missing', 'Sem prod.'],
                 ].map(([value, label]) => (
                   <Button
@@ -673,7 +698,7 @@ export function MacroflowDialog({
                 disabled={!canEdit || availablePackages.length === 0}
                 onClick={addVisiblePackages}
               >
-                Adicionar todos visiveis
+                Adicionar todos visíveis
               </Button>
             </div>
             <ScrollArea className="h-[calc(92vh-250px)] p-4">
@@ -685,7 +710,7 @@ export function MacroflowDialog({
                   </div>
                   {includedCanvasPackages.length === 0 && (
                     <div className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
-                      Macrofluxo vazio. Adicione pacotes disponiveis para montar o canvas.
+                      Macrofluxo vazio. Adicione pacotes disponíveis para montar o canvas.
                     </div>
                   )}
                   {includedCanvasPackages.map((pkg) => (
@@ -730,9 +755,14 @@ export function MacroflowDialog({
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Disponiveis para adicionar</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Disponíveis para adicionar</p>
                     <Badge variant="outline">{availablePackages.length}</Badge>
                   </div>
+                  {usedElsewhereCount > 0 && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                      {usedElsewhereCount} pacote(s) filtrado(s) já pertencem a outros macrofluxos.
+                    </div>
+                  )}
                   {availablePackages.map((pkg) => (
                     <button
                       key={pkg.id}
@@ -785,7 +815,7 @@ export function MacroflowDialog({
               </div>
             ) : !dependencies.length && (
               <div className="pointer-events-none absolute bottom-5 left-1/2 z-20 -translate-x-1/2 rounded-full border bg-background/90 px-4 py-2 text-sm text-muted-foreground shadow-sm">
-                Arraste uma conexÃ£o entre dois pacotes para criar a primeira predecessora.
+                Arraste uma conexão entre dois pacotes para criar a primeira predecessora.
               </div>
             )}
 
@@ -884,7 +914,7 @@ export function MacroflowDialog({
                       </div>
                       <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                         <div className="rounded-md bg-muted/60 p-2">
-                          <p className="text-muted-foreground">DuraÃ§Ã£o</p>
+                          <p className="text-muted-foreground">Duração</p>
                           <p className="font-semibold">{pkg.duration_days} dias</p>
                         </div>
                         <div className="rounded-md bg-muted/60 p-2">
@@ -917,14 +947,14 @@ export function MacroflowDialog({
           <aside className="min-h-0 border-l bg-background">
             <div className="border-b p-4">
               <p className="text-sm font-semibold">Propriedades</p>
-              <p className="text-xs text-muted-foreground">Selecione um nÃ³ ou ligaÃ§Ã£o para editar.</p>
+              <p className="text-xs text-muted-foreground">Selecione um nó ou ligação para editar.</p>
             </div>
             <ScrollArea className="h-[calc(92vh-154px)]">
               <div className="space-y-4 p-4">
                 {selection?.type === 'pending' && pendingConnection && (
                   <div className="space-y-4 rounded-lg border bg-primary/5 p-4">
                     <div>
-                      <p className="text-sm font-semibold">Nova ligaÃ§Ã£o</p>
+                      <p className="text-sm font-semibold">Nova ligação</p>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {packageMap.get(pendingConnection.successorKey) ? getPackageLabel(packageMap.get(pendingConnection.successorKey)!) : 'Sucessor'} depois de {packageMap.get(pendingConnection.predecessorKey) ? getPackageLabel(packageMap.get(pendingConnection.predecessorKey)!) : 'predecessor'}.
                       </p>
@@ -938,7 +968,7 @@ export function MacroflowDialog({
                     />
                     <div className="flex gap-2">
                       <Button size="sm" className="flex-1" disabled={!canEdit || loading} onClick={savePendingConnection}>
-                        Salvar ligaÃ§Ã£o
+                        Salvar ligação
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => { setPendingConnection(null); setSelection(null); }}>
                         Cancelar
@@ -950,7 +980,7 @@ export function MacroflowDialog({
                 {selectedEdge && (
                   <div className="space-y-4 rounded-lg border p-4">
                     <div>
-                      <p className="text-sm font-semibold">LigaÃ§Ã£o selecionada</p>
+                      <p className="text-sm font-semibold">Ligação selecionada</p>
                       <p className="mt-1 text-xs text-muted-foreground">{describeDependency(selectedEdge)}</p>
                     </div>
                     <RelationEditor
@@ -986,14 +1016,14 @@ export function MacroflowDialog({
                       </div>
                       <Separator className="my-3" />
                       <div className="space-y-2 text-sm">
-                        <InfoRow label="DuraÃ§Ã£o" value={`${selectedNode.duration_days} dias`} />
+                        <InfoRow label="Duração" value={`${selectedNode.duration_days} dias`} />
                         <InfoRow label="Produtividade" value={`${formatNumber(selectedNode.productivity)} ${selectedNode.productivity_unit}`} />
                         <InfoRow label="Demanda" value={`${formatNumber(selectedNode.remaining_houses, 0)} unidades`} />
                         <InfoRow label="Equipes" value={`${selectedNode.teams}`} />
                       </div>
                       {!selectedNode.has_productivity && (
                         <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-200">
-                          Pacote sem produtividade. O cronograma pode ficar preliminar atÃ© configurar Produtividade e Equipes.
+                          Pacote sem produtividade. O cronograma pode ficar preliminar até configurar Produtividade e Equipes.
                         </div>
                       )}
                       <Button
@@ -1016,14 +1046,18 @@ export function MacroflowDialog({
                 {!selection && (
                   <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
                     <Layers3 className="mx-auto mb-3 h-8 w-8 opacity-50" />
-                    Clique em um pacote ou ligaÃ§Ã£o. Para criar predecessora, arraste o conector de um nÃ³ atÃ© outro.
+                    Clique em um pacote ou ligação. Para criar predecessora, arraste o conector de um nó até outro.
                   </div>
                 )}
 
                 <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
                   <p className="font-medium text-foreground">Resumo</p>
-                  <p className="mt-1">{includedCanvasPackages.length} pacote(s) incluidos, {dependencies.length} ligacao(oes).</p>
-                  <p className="mt-1">Macrofluxo ativo: {macroflow?.name || 'serÃ¡ criado ao salvar a primeira ligaÃ§Ã£o'}.</p>
+                  <p className="mt-1">{includedCanvasPackages.length} pacote(s) incluídos, {dependencies.length} ligação(ões).</p>
+                  <p className="mt-1">Macrofluxo selecionado: {macroflow?.name || 'será criado ao salvar a primeira ligação'}.</p>
+                  <p className="mt-1">Status: {macroflow?.active ? 'Principal' : 'não principal'}.</p>
+                  {usedElsewhereCount > 0 && (
+                    <p className="mt-1">{usedElsewhereCount} pacote(s) ocultos por já pertencerem a outro macrofluxo.</p>
+                  )}
                 </div>
               </div>
             </ScrollArea>
@@ -1050,7 +1084,7 @@ function RelationEditor({
   return (
     <div className="grid gap-3">
       <div className="space-y-1.5">
-        <Label>Tipo de relaÃ§Ã£o</Label>
+        <Label>Tipo de relação</Label>
         <Select value={relationDraft} onValueChange={(value) => setRelationDraft(value as MacroflowRelationType)} disabled={disabled}>
           <SelectTrigger>
             <SelectValue />
@@ -1090,7 +1124,7 @@ function DependencyList({ title, items, empty }: { title: string; items: Plannin
           {items.map((item) => (
             <div key={item.id} className="rounded-md bg-muted/50 p-2 text-xs">
               <p className="font-medium">{describeDependency(item)}</p>
-              <p className="mt-1 text-muted-foreground">{relationLabel(item.relationType)} â€¢ {describeLag(item.lagDays)}</p>
+              <p className="mt-1 text-muted-foreground">{relationLabel(item.relationType)} - {describeLag(item.lagDays)}</p>
             </div>
           ))}
         </div>
