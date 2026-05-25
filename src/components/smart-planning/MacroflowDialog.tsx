@@ -206,6 +206,8 @@ export function MacroflowDialog({
   const [lagDraft, setLagDraft] = useState(0);
   const [newMacroflowName, setNewMacroflowName] = useState('');
   const [renameDraft, setRenameDraft] = useState('');
+  const [showCreateMacroflow, setShowCreateMacroflow] = useState(false);
+  const [showRenameMacroflow, setShowRenameMacroflow] = useState(false);
 
   const storageKey = projectId
     ? `obramap_macroflow_positions_${projectId}_${selectedMacroflowId || 'draft'}`
@@ -218,6 +220,7 @@ export function MacroflowDialog({
 
   useEffect(() => {
     setRenameDraft(macroflow?.name || '');
+    setShowRenameMacroflow(false);
   }, [macroflow?.name]);
 
   const stageFilterOptions = useMemo(() => {
@@ -497,13 +500,17 @@ export function MacroflowDialog({
     const created = await createMacroflow(newMacroflowName || 'Novo macrofluxo');
     if (created) {
       setNewMacroflowName('');
+      setShowCreateMacroflow(false);
       await onChanged?.();
     }
   };
 
   const handleRenameMacroflow = async () => {
     const saved = await renameMacroflow(renameDraft);
-    if (saved) await onChanged?.();
+    if (saved) {
+      setShowRenameMacroflow(false);
+      await onChanged?.();
+    }
   };
 
   const handleActivateMacroflow = async () => {
@@ -541,23 +548,20 @@ export function MacroflowDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[92vh] max-h-[92vh] w-[96vw] max-w-[96vw] flex-col overflow-hidden p-0">
-        <DialogHeader className="border-b bg-background/95 px-5 py-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <DialogHeader className="border-b bg-background/95 px-4 py-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <DialogTitle className="flex items-center gap-2 text-xl">
+              <DialogTitle className="flex items-center gap-2 text-lg">
                 <GitBranch className="h-5 w-5 text-primary" />
                 Macrofluxo do Planejamento
               </DialogTitle>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Organize predecessoras entre frentes e serviços. Afeta apenas planejamento visual, Gantt, Linha e Dashboard.
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-0.5 text-xs text-muted-foreground">
                 O macrofluxo Principal alimenta Gantt, Linha de Balanço, Dashboard e Previsão.
               </p>
-              <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(280px,360px)_minmax(260px,1fr)_auto]">
-                <div className="space-y-1">
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <div className="flex min-w-[280px] items-center gap-2">
                   <div className="flex items-center gap-2">
-                    <Label className="text-xs">Macrofluxo selecionado</Label>
+                    <Label className="text-xs">Macrofluxo</Label>
                     {macroflow?.active && (
                       <Badge className="gap-1 bg-amber-100 text-amber-800 hover:bg-amber-100">
                         <Star className="h-3 w-3" />
@@ -566,7 +570,7 @@ export function MacroflowDialog({
                     )}
                   </div>
                   <Select value={selectedMacroflowId || 'none'} onValueChange={(value) => value !== 'none' && selectMacroflow(value)}>
-                    <SelectTrigger className="h-11 bg-background text-left">
+                    <SelectTrigger className="h-9 min-w-[220px] bg-background text-left">
                       <SelectValue placeholder="Selecione um macrofluxo" />
                     </SelectTrigger>
                     <SelectContent>
@@ -580,47 +584,63 @@ export function MacroflowDialog({
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Renomear macrofluxo selecionado</Label>
-                  <div className="flex gap-2">
+                {showRenameMacroflow ? (
+                  <div className="flex min-w-[260px] items-center gap-2">
                     <Input
                       value={renameDraft}
                       onChange={(event) => setRenameDraft(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') void handleRenameMacroflow();
+                        if (event.key === 'Escape') setShowRenameMacroflow(false);
+                      }}
                       placeholder="Nome do macrofluxo"
-                      className="h-11 bg-background"
+                      className="h-9 bg-background"
                       disabled={!macroflow || !canEdit}
                     />
-                    <Button variant="outline" className="h-11" disabled={!macroflow || !canEdit || renameDraft.trim() === macroflow.name} onClick={handleRenameMacroflow}>
-                      Renomear
+                    <Button size="sm" disabled={!macroflow || !canEdit || renameDraft.trim() === macroflow.name} onClick={handleRenameMacroflow}>
+                      OK
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setShowRenameMacroflow(false)}>
+                      Cancelar
                     </Button>
                   </div>
-                </div>
-                <Button variant={macroflow?.active ? 'secondary' : 'outline'} className="h-11 self-end" disabled={!macroflow || macroflow.active || !canEdit} onClick={handleActivateMacroflow}>
+                ) : (
+                  <Button variant="outline" size="sm" disabled={!macroflow || !canEdit} onClick={() => setShowRenameMacroflow(true)}>
+                    Renomear
+                  </Button>
+                )}
+                <Button variant={macroflow?.active ? 'secondary' : 'outline'} size="sm" disabled={!macroflow || macroflow.active || !canEdit} onClick={handleActivateMacroflow}>
                   <Star className="mr-1 h-3.5 w-3.5" />
                   Tornar Principal
                 </Button>
               </div>
-              <div className="mt-3 flex flex-wrap items-end gap-2 rounded-lg border bg-muted/30 p-3">
-                <div className="min-w-[260px] flex-1 space-y-1">
-                  <Label className="text-xs">Criar novo macrofluxo</Label>
+              {showCreateMacroflow ? (
+                <div className="mt-2 flex max-w-xl flex-wrap items-center gap-2 rounded-lg border bg-muted/30 p-2">
                   <Input
                     value={newMacroflowName}
                     onChange={(event) => setNewMacroflowName(event.target.value)}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter') void handleCreateMacroflow();
+                      if (event.key === 'Escape') setShowCreateMacroflow(false);
                     }}
-                    placeholder="Ex.: Unidades Habitacionais"
+                    placeholder="Novo macrofluxo"
                     className="h-9 bg-background"
                     disabled={!canEdit}
                   />
+                  <Button size="sm" disabled={!canEdit} onClick={handleCreateMacroflow}>
+                    Criar
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setShowCreateMacroflow(false)}>
+                    Cancelar
+                  </Button>
                 </div>
-                <Button size="sm" disabled={!canEdit} onClick={handleCreateMacroflow}>
-                  <Plus className="mr-1 h-3.5 w-3.5" />
-                  Criar
-                </Button>
-              </div>
+              ) : null}
             </div>
             <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" disabled={!canEdit} onClick={() => setShowCreateMacroflow(true)}>
+                <Plus className="mr-1 h-3.5 w-3.5" />
+                Novo
+              </Button>
               <Button variant="outline" size="sm" className="gap-2" onClick={autoOrganize}>
                 <RotateCcw className="h-4 w-4" />
                 Auto-organizar
@@ -647,10 +667,10 @@ export function MacroflowDialog({
 
         <div className="grid min-h-0 flex-1 grid-cols-[280px_1fr_320px] bg-muted/20">
           <aside className="min-h-0 border-r bg-background">
-            <div className="space-y-3 border-b p-4">
+            <div className="space-y-2 border-b p-3">
               <div>
-                <p className="text-sm font-semibold">Pacotes do macrofluxo</p>
-                <p className="text-xs text-muted-foreground">Adicione serviços/frentes ao macrofluxo real antes de conectar.</p>
+                <p className="text-sm font-semibold">Pacotes</p>
+                <p className="text-[11px] text-muted-foreground">Adicione serviços/frentes e conecte no canvas.</p>
               </div>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -701,7 +721,7 @@ export function MacroflowDialog({
                 Adicionar todos visíveis
               </Button>
             </div>
-            <ScrollArea className="h-[calc(92vh-250px)] p-4">
+            <ScrollArea className="h-[calc(92vh-210px)] p-3">
               <div className="space-y-5 pr-3">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-2">
