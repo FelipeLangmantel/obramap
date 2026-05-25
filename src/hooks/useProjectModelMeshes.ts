@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { endMap3DPerf, startMap3DPerf } from "@/lib/map3dPerf";
 
 export interface ProjectModelMesh {
   id: string;
@@ -26,6 +27,8 @@ export interface BulkMeshInput {
   material_name: string;
   detected_house_number: number | null;
 }
+
+type ExistingMeshInventoryRow = Pick<ProjectModelMesh, "id" | "layer_key" | "mesh_name" | "material_name" | "detected_house_number">;
 
 export const GLB_CONTEXT_MESH_MARKER = "__obramap_context__";
 
@@ -77,6 +80,7 @@ export function useProjectModelMeshes(
   const refresh = useCallback(async () => {
     if (!projectId) return;
     setLoading(true);
+    const perf = startMap3DPerf("project_model_meshes.refresh", { projectId });
     const allRows: ProjectModelMesh[] = [];
     let page = 0;
     let pagesLoaded = 0;
@@ -92,6 +96,7 @@ export function useProjectModelMeshes(
 
       if (error) {
         setLoading(false);
+        endMap3DPerf(perf, { ok: false, page });
         console.error("[useProjectModelMeshes] load error", error);
         return;
       }
@@ -105,6 +110,7 @@ export function useProjectModelMeshes(
     setLoading(false);
     setMeshes(allRows);
     loadedFor.current = projectId;
+    endMap3DPerf(perf, { ok: true, totalLoaded: allRows.length, pagesLoaded });
     console.log("[GLB MeshMap Refresh]", {
       projectId,
       totalLoaded: allRows.length,
@@ -290,17 +296,24 @@ export function useProjectModelMeshes(
         return;
       }
 
-      const existing = new Map<string, ProjectModelMesh>();
+      const perf = startMap3DPerf("project_model_meshes.bulkInventory", {
+        projectId,
+        incoming: incoming.length,
+      });
+      const existing = new Map<string, ExistingMeshInventoryRow>();
+      const existingPerf = startMap3DPerf("project_model_meshes.bulkInventory.fetchExisting", { projectId });
       // usa o estado mais recente sincronicamente refazendo o fetch
       const { data, error: existingError } = await supabase
         .from("project_model_meshes" as any)
-        .select("id, layer_key")
+        .select("id, layer_key, mesh_name, material_name, detected_house_number")
         .eq("project_id", projectId);
+      endMap3DPerf(existingPerf, { ok: !existingError, rows: Array.isArray(data) ? data.length : 0 });
       if (existingError) {
+        endMap3DPerf(perf, { ok: false, stage: "fetchExisting" });
         console.error("[useProjectModelMeshes] bulk existing fetch error", existingError);
         return;
       }
-      ((data || []) as any[]).forEach((r) => existing.set(r.layer_key, r));
+      ((data || []) as ExistingMeshInventoryRow[]).forEach((r) => existing.set(r.layer_key, r));
 
       const toInsert: any[] = [];
       const toUpdate: { id: string; layer_key: string; mesh_name: string; material_name: string; detected_house_number: number | null }[] = [];
@@ -308,13 +321,18 @@ export function useProjectModelMeshes(
       for (const m of incoming) {
         const ex = existing.get(m.layer_key);
         if (ex) {
-          toUpdate.push({
-            id: (ex as any).id,
-            layer_key: m.layer_key,
-            mesh_name: m.mesh_name,
-            material_name: m.material_name,
-            detected_house_number: m.detected_house_number,
-          });
+          const hasInventoryChange = (ex.mesh_name ?? "") !== (m.mesh_name ?? "")
+            || (ex.material_name ?? "") !== (m.material_name ?? "")
+            || (ex.detected_house_number ?? null) !== (m.detected_house_number ?? null);
+          if (hasInventoryChange) {
+            toUpdate.push({
+              id: ex.id,
+              layer_key: m.layer_key,
+              mesh_name: m.mesh_name,
+              material_name: m.material_name,
+              detected_house_number: m.detected_house_number,
+            });
+          }
         } else {
           toInsert.push({
             project_id: projectId,
@@ -352,13 +370,16 @@ export function useProjectModelMeshes(
       }
 
       if (toInsert.length > 0) {
+        const insertPerf = startMap3DPerf("project_model_meshes.bulkInventory.insert", { rows: toInsert.length });
         const { error } = await supabase
           .from("project_model_meshes" as any)
           .upsert(toInsert, { onConflict: "project_id,layer_key" });
+        endMap3DPerf(insertPerf, { ok: !error });
         if (error) console.error("[useProjectModelMeshes] bulk insert error", error);
       }
       // Updates em lote — paralelos
       if (toUpdate.length > 0) {
+        const updatePerf = startMap3DPerf("project_model_meshes.bulkInventory.updateChanged", { rows: toUpdate.length });
         const results = await Promise.all(
           toUpdate.map((u) =>
             supabase
@@ -377,8 +398,19 @@ export function useProjectModelMeshes(
         if (updateErrors.length > 0) {
           console.error("[useProjectModelMeshes] bulk update errors", updateErrors);
         }
+        endMap3DPerf(updatePerf, { ok: updateErrors.length === 0, errors: updateErrors.length });
       }
-      await refresh();
+      if (toInsert.length > 0 || toUpdate.length > 0) {
+        await refresh();
+      }
+      endMap3DPerf(perf, {
+        ok: true,
+        incoming: incoming.length,
+        existing: existing.size,
+        toInsert: toInsert.length,
+        toUpdate: toUpdate.length,
+        skippedUnchanged: incoming.length - toInsert.length - toUpdate.length,
+      });
     },
     [canWrite, projectId, refresh],
   );

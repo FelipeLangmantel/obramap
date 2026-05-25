@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { endMap3DPerf, startMap3DPerf } from "@/lib/map3dPerf";
 
 export const MAP3D_STORAGE_BUCKET = "3d-models";
 export const MAP3D_SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
@@ -38,9 +39,11 @@ export async function createMap3DSignedUrlFromPath(
 ): Promise<string | null> {
   const normalizedPath = normalizeMap3DStoragePath(path);
   if (!normalizedPath) return null;
+  const perf = startMap3DPerf("storage.createSignedUrl", { path: normalizedPath });
   const { data, error } = await supabase.storage
     .from(MAP3D_STORAGE_BUCKET)
     .createSignedUrl(normalizedPath, MAP3D_SIGNED_URL_TTL_SECONDS);
+  endMap3DPerf(perf, { ok: !error && !!data?.signedUrl });
   if (error || !data?.signedUrl) {
     console.error("[3D] Failed to sign URL for", normalizedPath, error);
     return null;

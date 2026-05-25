@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import * as THREE from "three";
 import { supabase } from "@/integrations/supabase/client";
+import { endMap3DPerf, startMap3DPerf } from "@/lib/map3dPerf";
 import { parseHouseNumberFromMesh, stripHousePrefix } from "./parseHouseFromMeshName";
 
 export interface ModelLayer {
@@ -39,6 +40,7 @@ export function useModelLayers(
   const [autoMode, setAutoMode] = useState(false);
 
   const extractLayers = useCallback((scene: THREE.Object3D) => {
+    const perf = startMap3DPerf("map3d.layers.extract");
     setSceneRef(scene);
     const layerMap = new Map<string, number>();
 
@@ -70,6 +72,7 @@ export function useModelLayers(
         };
       });
     });
+    endMap3DPerf(perf, { layers: layerMap.size });
   }, [meshAssignmentMap]);
 
   /**
@@ -91,10 +94,12 @@ export function useModelLayers(
 
   const loadLinks = useCallback(async () => {
     if (!projectId) return;
+    const perf = startMap3DPerf("map_layer_stage_links.load", { projectId });
     const { data, error } = await supabase
       .from("map_layer_stage_links" as any)
       .select("*")
       .eq("project_id", projectId);
+    endMap3DPerf(perf, { ok: !error, rows: Array.isArray(data) ? data.length : 0 });
     if (!error && data) {
       const parsed = data as unknown as LayerStageLink[];
       setLinks(parsed);

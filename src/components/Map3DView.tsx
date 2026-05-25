@@ -66,6 +66,7 @@ type GlbMeshInventoryInput = {
 };
 
 import { MAP3D_STORAGE_BUCKET, createMap3DSignedUrlFromPath, resolveMap3DSignedUrl } from "@/lib/map3dStorage";
+import { endMap3DPerf, startMap3DPerf } from "@/lib/map3dPerf";
 const MAP3D_ZOOM_SENSITIVITY_KEY = "obramap:map3d:zoom-sensitivity";
 const MAP3D_WALK_HELP_HIDDEN_KEY = "obramap:map3d:walk-help-hidden";
 
@@ -1232,6 +1233,7 @@ export function Map3DView() {
   const canDelete3D = canDelete3DAssets(profile) || canResetMap || canManageGlbParts;
   
   const [modelData, setModelData] = useState<ModelData | null>(null);
+  const map3dLoadPerfRef = useRef<ReturnType<typeof startMap3DPerf> | null>(null);
   const [supplementalGlbParts, setSupplementalGlbParts] = useState<SupplementalGlbPart[]>([]);
   const [markers, setMarkers] = useState<HouseMarker[]>([]);
   const [selectedMarker, setSelectedMarker] = useState<HouseMarker | null>(null);
@@ -1563,6 +1565,7 @@ export function Map3DView() {
       clearSupplementalGlbPartsFromState();
       return;
     }
+    const perf = startMap3DPerf("project_model_parts.load", { projectId });
     const { data, error } = await supabase
       .from("project_model_parts" as any)
       .select("id, name, file_name, storage_path, public_url, part_order, is_active")
@@ -1570,6 +1573,7 @@ export function Map3DView() {
       .eq("is_active", true)
       .order("part_order", { ascending: true })
       .order("created_at", { ascending: true });
+    endMap3DPerf(perf, { ok: !error, rows: Array.isArray(data) ? data.length : 0 });
 
     if (error) {
       console.error("[GLB Parts] load error", error);
@@ -1969,18 +1973,26 @@ export function Map3DView() {
 
   const handleModelLoaded = useCallback(() => {
     console.log('[3D] Model geometry loaded in scene');
+    endMap3DPerf(map3dLoadPerfRef.current, { stage: "model-visible", type: modelData?.type ?? null });
     setSceneReady(true);
-  }, []);
+  }, [modelData?.type]);
 
   // Inventário automático: extrai todas as meshes para o banco.
   const handleSceneReady = useCallback(async (scene: THREE.Object3D) => {
+    const scenePerf = startMap3DPerf("map3d.sceneReady", { projectId, modelType: modelData?.type ?? null });
     setSceneObj(scene);
+    const layerPerf = startMap3DPerf("map3d.sceneReady.extractLayers");
     layerManager.extractLayers(scene);
+    endMap3DPerf(layerPerf);
     console.log('[3D] Layers extracted from model');
 
-    if (!projectId) return;
+    if (!projectId) {
+      endMap3DPerf(scenePerf, { skipped: "missing-project" });
+      return;
+    }
     const meshesToUpsert: { layer_key: string; mesh_name: string; material_name: string; detected_house_number: number | null }[] = [];
     const nameCounts = new Map<string, number>();
+    const traversePerf = startMap3DPerf("map3d.sceneReady.traverseMeshes");
     scene.traverse((child) => {
       if (!(child as THREE.Mesh).isMesh) return;
       const mesh = child as THREE.Mesh;
@@ -1999,6 +2011,7 @@ export function Map3DView() {
         detected_house_number: parseHouseNumberFromMesh(mesh.name || ""),
       });
     });
+    endMap3DPerf(traversePerf, { meshes: meshesToUpsert.length });
     if (import.meta.env.DEV) {
       const watchedKeys = meshesToUpsert.filter((mesh) =>
         mesh.layer_key.includes("Geom3D_302") || mesh.layer_key.includes("Geom3D_303"),
@@ -2024,7 +2037,8 @@ export function Map3DView() {
     if (meshesToUpsert.length > 0) {
       void meshHooks.bulkUpsertMeshes(meshesToUpsert);
     }
-  }, [layerManager.extractLayers, projectId, meshHooks.bulkUpsertMeshes]);
+    endMap3DPerf(scenePerf, { meshes: meshesToUpsert.length });
+  }, [layerManager.extractLayers, projectId, modelData?.type, meshHooks.bulkUpsertMeshes]);
 
   // ====================================================
   // Modo "Revisar Modelo": clique destaca a mesh
@@ -4465,21 +4479,33 @@ export function Map3DView() {
   const loadSaved3DMap = useCallback(async () => {
     if (!projectId) return;
     setIsLoading(true);
+    const perf = startMap3DPerf("map_layouts.loadSaved3DMap", { projectId });
     try {
       const { data, error } = await supabase.from('map_layouts')
         .select('model_3d_url, model_3d_type, model_mtl_url, house_markers_3d, camera_position, camera_target')
         .eq('project_id', projectId).maybeSingle();
-      if (error) { console.error('[3D] Load error:', error); return; }
+      if (error) {
+        endMap3DPerf(perf, { ok: false, stage: "map_layouts" });
+        console.error('[3D] Load error:', error);
+        return;
+      }
       if (data) {
         if (data.model_3d_url && data.model_3d_type) {
           setGlbLinkScope("preserve");
           setTrustedGlbLinkKeys(new Set());
+          map3dLoadPerfRef.current = startMap3DPerf("map3d.totalUntilModelVisible", {
+            projectId,
+            type: data.model_3d_type,
+          });
           const [signedModel, signedMtl] = await Promise.all([
             resolveMap3DSignedUrl(data.model_3d_url),
             resolveMap3DSignedUrl(data.model_mtl_url),
           ]);
           if (signedModel) {
             setModelData({ url: signedModel, type: data.model_3d_type as "gltf" | "obj", mtlUrl: signedMtl || undefined });
+          } else {
+            endMap3DPerf(map3dLoadPerfRef.current, { stage: "signed-url-missing", type: data.model_3d_type });
+            map3dLoadPerfRef.current = null;
           }
         }
         if (data.house_markers_3d && Array.isArray(data.house_markers_3d) && data.house_markers_3d.length > 0)
@@ -4489,7 +4515,15 @@ export function Map3DView() {
         if (data.camera_target && Array.isArray(data.camera_target))
           setSavedTgt(data.camera_target as [number, number, number]);
       }
-    } catch (err) { console.error('[3D] Load error:', err); }
+      endMap3DPerf(perf, {
+        ok: true,
+        hasModel: Boolean(data?.model_3d_url),
+        markerCount: Array.isArray(data?.house_markers_3d) ? data.house_markers_3d.length : 0,
+      });
+    } catch (err) {
+      endMap3DPerf(perf, { ok: false, stage: "exception" });
+      console.error('[3D] Load error:', err);
+    }
     finally { setIsLoading(false); }
   }, [projectId]);
 

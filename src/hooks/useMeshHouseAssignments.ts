@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { endMap3DPerf, startMap3DPerf } from "@/lib/map3dPerf";
 
 export interface MeshHouseAssignment {
   id: string;
@@ -27,10 +28,12 @@ export function useMeshHouseAssignments(projectId: string | undefined) {
       return;
     }
     setLoading(true);
+    const perf = startMap3DPerf("map_mesh_house_assignments.refresh", { projectId });
     const { data, error } = await supabase
       .from("map_mesh_house_assignments" as any)
       .select("*")
       .eq("project_id", projectId);
+    endMap3DPerf(perf, { ok: !error, rows: Array.isArray(data) ? data.length : 0 });
     if (!error && data) {
       const list = data as unknown as MeshHouseAssignment[];
       setAssignments(list);
