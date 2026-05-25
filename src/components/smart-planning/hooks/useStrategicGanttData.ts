@@ -270,7 +270,7 @@ export function useStrategicGanttData(projectId: string | undefined) {
         const { data: dependencyRows, error: dependencyError } = await supabase
           .from('planning_macroflow_dependencies' as any)
           .select('*')
-          .eq('macroflow_id', macroflowRows[0].id)
+          .eq('macroflow_id', (macroflowRows[0] as any).id)
           .order('created_at', { ascending: true });
 
         if (!dependencyError) {
