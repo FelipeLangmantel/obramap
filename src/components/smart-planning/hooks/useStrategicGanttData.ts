@@ -78,6 +78,13 @@ interface ActiveMacroflowPackage {
   packageType: 'service' | 'work_group';
 }
 
+export interface ActiveMacroflowSummary {
+  id: string;
+  name: string;
+  packagesCount: number;
+  dependenciesCount: number;
+}
+
 const getServiceKey = (macroId: string | null | undefined, scopeId: string | null | undefined) =>
   `${macroId || 'sem_macro'}::${scopeId || 'sem_servico'}`;
 
@@ -119,6 +126,7 @@ export function useStrategicGanttData(projectId: string | undefined) {
   const [stages, setStages] = useState<any[]>([]);
   const [macroflowDependencies, setMacroflowDependencies] = useState<PlanningMacroflowDependency[]>([]);
   const [macroflowPackages, setMacroflowPackages] = useState<ActiveMacroflowPackage[]>([]);
+  const [activeMacroflowSummary, setActiveMacroflowSummary] = useState<ActiveMacroflowSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [projectStartDate, setProjectStartDate] = useState<string>('');
   const [totalHouses, setTotalHouses] = useState(0);
@@ -257,6 +265,7 @@ export function useStrategicGanttData(projectId: string | undefined) {
 
       let loadedMacroflowDependencies: PlanningMacroflowDependency[] = [];
       let loadedMacroflowPackages: ActiveMacroflowPackage[] = [];
+      let loadedMacroflowSummary: ActiveMacroflowSummary | null = null;
       const { data: macroflowRows, error: macroflowError } = await supabase
         .from('planning_macroflows' as any)
         .select('*')
@@ -267,6 +276,12 @@ export function useStrategicGanttData(projectId: string | undefined) {
         .limit(1);
 
       if (!macroflowError && macroflowRows?.[0]) {
+        loadedMacroflowSummary = {
+          id: String((macroflowRows[0] as any).id),
+          name: String((macroflowRows[0] as any).name || 'Macrofluxo principal'),
+          packagesCount: 0,
+          dependenciesCount: 0,
+        };
         const { data: dependencyRows, error: dependencyError } = await supabase
           .from('planning_macroflow_dependencies' as any)
           .select('*')
@@ -317,8 +332,16 @@ export function useStrategicGanttData(projectId: string | undefined) {
           loadedMacroflowPackages = Array.from(inferred.values());
         }
       }
+      if (loadedMacroflowSummary) {
+        loadedMacroflowSummary = {
+          ...loadedMacroflowSummary,
+          packagesCount: loadedMacroflowPackages.length,
+          dependenciesCount: loadedMacroflowDependencies.length,
+        };
+      }
       setMacroflowDependencies(loadedMacroflowDependencies);
       setMacroflowPackages(loadedMacroflowPackages);
+      setActiveMacroflowSummary(loadedMacroflowSummary);
 
       // Build inicial. Um efeito abaixo reconcilia com usePlanningCapacityModel
       // para agrupar frentes compartilhadas quando o adapter terminar de carregar.
@@ -821,6 +844,7 @@ export function useStrategicGanttData(projectId: string | undefined) {
     projectStartDate,
     projectedEndDate,
     hasConfiguredMacroflow,
+    activeMacroflowSummary,
     loadData,
     updateServiceProductivity,
     updatePredecessor,

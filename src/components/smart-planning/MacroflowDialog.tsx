@@ -29,6 +29,7 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 
 import { GanttService } from './hooks/useStrategicGanttData';
@@ -208,6 +209,7 @@ export function MacroflowDialog({
   const [renameDraft, setRenameDraft] = useState('');
   const [showCreateMacroflow, setShowCreateMacroflow] = useState(false);
   const [showRenameMacroflow, setShowRenameMacroflow] = useState(false);
+  const [showPackageManager, setShowPackageManager] = useState(false);
 
   const storageKey = projectId
     ? `obramap_macroflow_positions_${projectId}_${selectedMacroflowId || 'draft'}`
@@ -635,8 +637,23 @@ export function MacroflowDialog({
                   </Button>
                 </div>
               ) : null}
+              {!macroflow?.active && macroflow && (
+                <p className="mt-1 text-xs text-amber-700">
+                  Este macrofluxo ainda não alimenta Gantt/Linha. Clique em Tornar Principal para usar.
+                </p>
+              )}
             </div>
             <div className="flex flex-wrap gap-2">
+              <Badge variant="outline" className="h-8 px-2.5">
+                {includedCanvasPackages.length} pacotes
+              </Badge>
+              <Badge variant="outline" className="h-8 px-2.5">
+                {dependencies.length} ligações
+              </Badge>
+              <Button variant="secondary" size="sm" onClick={() => setShowPackageManager(true)}>
+                <Layers3 className="mr-1 h-4 w-4" />
+                Gerenciar pacotes
+              </Button>
               <Button variant="outline" size="sm" disabled={!canEdit} onClick={() => setShowCreateMacroflow(true)}>
                 <Plus className="mr-1 h-3.5 w-3.5" />
                 Novo
@@ -665,13 +682,15 @@ export function MacroflowDialog({
           </div>
         </DialogHeader>
 
-        <div className="grid min-h-0 flex-1 grid-cols-[280px_1fr_320px] bg-muted/20">
-          <aside className="min-h-0 border-r bg-background">
-            <div className="space-y-2 border-b p-3">
-              <div>
-                <p className="text-sm font-semibold">Pacotes</p>
-                <p className="text-[11px] text-muted-foreground">Adicione serviços/frentes e conecte no canvas.</p>
-              </div>
+        <Sheet open={showPackageManager} onOpenChange={setShowPackageManager}>
+          <SheetContent side="left" className="w-[420px] max-w-[92vw] overflow-hidden p-0 sm:max-w-[420px]">
+            <SheetHeader className="border-b p-4">
+              <SheetTitle>Gerenciar pacotes</SheetTitle>
+              <p className="text-sm text-muted-foreground">
+                Adicione ou remova serviços/frentes do macrofluxo selecionado.
+              </p>
+            </SheetHeader>
+            <div className="space-y-3 border-b p-4">
               <div className="relative">
                 <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar pacote" className="pl-8" />
@@ -690,7 +709,7 @@ export function MacroflowDialog({
                   </SelectContent>
                 </Select>
                 <p className="text-[11px] text-muted-foreground">
-                  Estas opções são grupos/etapas dos serviços, não macrofluxos salvos.
+                  Estas opções são filtros de contrato, não macrofluxos.
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-1">
@@ -721,7 +740,7 @@ export function MacroflowDialog({
                 Adicionar todos visíveis
               </Button>
             </div>
-            <ScrollArea className="h-[calc(92vh-210px)] p-3">
+            <ScrollArea className="h-[calc(92vh-220px)] p-4">
               <div className="space-y-5 pr-3">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-2">
@@ -811,7 +830,10 @@ export function MacroflowDialog({
                 </div>
               </div>
             </ScrollArea>
-          </aside>
+          </SheetContent>
+        </Sheet>
+
+        <div className="grid min-h-0 flex-1 grid-cols-[1fr_320px] bg-muted/20">
           <main className="relative min-w-0 overflow-hidden">
             <div className="absolute left-4 top-4 z-20 flex items-center gap-2 rounded-full border bg-background/90 p-1 shadow-sm">
               <Button variant="ghost" size="icon" onClick={() => setZoom((current) => Math.min(current + 0.1, 1.8))}>
@@ -830,8 +852,16 @@ export function MacroflowDialog({
             )}
 
             {includedCanvasPackages.length === 0 ? (
-              <div className="pointer-events-none absolute bottom-5 left-1/2 z-20 -translate-x-1/2 rounded-full border bg-background/90 px-4 py-2 text-sm text-muted-foreground shadow-sm">
-                Adicione pacotes ao macrofluxo para iniciar o canvas.
+              <div className="absolute left-1/2 top-1/2 z-20 w-[360px] -translate-x-1/2 -translate-y-1/2 rounded-xl border bg-background/95 p-5 text-center shadow-lg">
+                <Layers3 className="mx-auto mb-3 h-8 w-8 text-primary" />
+                <p className="text-sm font-semibold">Adicione pacotes para montar este macrofluxo.</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Escolha serviços ou frentes no gerenciador para iniciar o canvas.
+                </p>
+                <Button className="mt-4 gap-2" size="sm" onClick={() => setShowPackageManager(true)}>
+                  <Layers3 className="h-4 w-4" />
+                  Gerenciar pacotes
+                </Button>
               </div>
             ) : !dependencies.length && (
               <div className="pointer-events-none absolute bottom-5 left-1/2 z-20 -translate-x-1/2 rounded-full border bg-background/90 px-4 py-2 text-sm text-muted-foreground shadow-sm">

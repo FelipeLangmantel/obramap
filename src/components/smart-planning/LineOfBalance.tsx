@@ -8,7 +8,6 @@ import {
   FlaskConical,
   Link2,
   MousePointer2,
-  Pencil,
   Plus,
   RotateCcw,
   Settings2,
@@ -28,7 +27,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 
-import { GanttService } from './hooks/useStrategicGanttData';
+import { ActiveMacroflowSummary, GanttService } from './hooks/useStrategicGanttData';
 import { usePlanningCapacityModel } from './hooks/usePlanningCapacityModel';
 import { MacroflowDialog } from './MacroflowDialog';
 
@@ -39,6 +38,7 @@ interface LineOfBalanceProps {
   projectStartDate: string;
   onMacroflowChanged?: () => Promise<void> | void;
   hasConfiguredMacroflow?: boolean;
+  activeMacroflowSummary?: ActiveMacroflowSummary | null;
 }
 type FlowScale = 'day' | 'week' | 'month';
 
@@ -268,7 +268,7 @@ const getDaysFromPixels = (pixels: number, columns: TimelineColumn[], scale: Flo
   return Math.round(pixels / width);
 };
 
-export function LineOfBalance({ projectId, ganttServices, macroflowPackages, projectStartDate, onMacroflowChanged, hasConfiguredMacroflow = false }: LineOfBalanceProps) {
+export function LineOfBalance({ projectId, ganttServices, macroflowPackages, projectStartDate, onMacroflowChanged, hasConfiguredMacroflow = false, activeMacroflowSummary }: LineOfBalanceProps) {
   const { canEdit } = useAuth();
   const { currentProject } = useConstruction();
   const capacityModel = usePlanningCapacityModel(projectId);
@@ -679,6 +679,14 @@ export function LineOfBalance({ projectId, ganttServices, macroflowPackages, pro
           <p className="mt-0.5 text-xs text-slate-500 dark:text-muted-foreground">
             Linha de Balanco ordenada pelo macrofluxo persistente. Alteracoes de simulacao continuam locais.
           </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="bg-white dark:bg-card">
+              Macrofluxo: {activeMacroflowSummary?.name || 'Principal'} - Principal
+            </Badge>
+            <span className="text-xs text-muted-foreground">
+              A Linha usa os pacotes e dependências do macrofluxo Principal.
+            </span>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Select value={selectedMacroflowId} onValueChange={setSelectedMacroflowId}>
@@ -701,17 +709,7 @@ export function LineOfBalance({ projectId, ganttServices, macroflowPackages, pro
             disabled={!canEdit}
           >
             <Plus className="h-4 w-4" />
-            Criar Macrofluxo
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-9 gap-2"
-            onClick={() => setShowMacroflowDialog(true)}
-            disabled={!canEdit}
-          >
-            <Pencil className="h-4 w-4" />
-            Editar
+            Editar Macrofluxo
           </Button>
           <Button
             variant={simulationMode ? 'default' : 'outline'}

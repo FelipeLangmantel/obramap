@@ -52,7 +52,7 @@ import {
   ZoomOut,
   MoveHorizontal,
 } from 'lucide-react';
-import type { GanttService } from './hooks/useStrategicGanttData';
+import type { ActiveMacroflowSummary, GanttService } from './hooks/useStrategicGanttData';
 import { usePlanningCapacityModel } from './hooks/usePlanningCapacityModel';
 import { MacroflowDialog } from './MacroflowDialog';
 
@@ -71,6 +71,7 @@ interface StrategicGanttChartProps {
   onUpdatePredecessor: (serviceId: string, predecessorStageId: string | null) => void;
   onMacroflowChanged?: () => Promise<void> | void;
   hasConfiguredMacroflow?: boolean;
+  activeMacroflowSummary?: ActiveMacroflowSummary | null;
 }
 
 const getServiceStatus = (svc: GanttService) => {
@@ -147,6 +148,7 @@ export function StrategicGanttChart({
   onUpdateProductivity,
   onMacroflowChanged,
   hasConfiguredMacroflow = false,
+  activeMacroflowSummary,
 }: StrategicGanttChartProps) {
   const { canEdit } = useAuth();
   const capacityModel = usePlanningCapacityModel(projectId);
@@ -457,6 +459,14 @@ export function StrategicGanttChart({
             <p className="text-xs text-slate-500 dark:text-muted-foreground mt-0.5">
               Visão estratégica de etapas, serviços e capacidade
             </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="bg-white dark:bg-card">
+                Macrofluxo: {activeMacroflowSummary?.name || 'Principal'} - Principal
+              </Badge>
+              <span className="text-xs text-muted-foreground">
+                O Gantt usa os pacotes e dependências do macrofluxo Principal.
+              </span>
+            </div>
           </div>
           <div className="flex gap-1.5 flex-wrap">
             <Button
@@ -467,7 +477,7 @@ export function StrategicGanttChart({
               disabled={!canEdit}
             >
               <Plus className="h-4 w-4" />
-              Criar Macrofluxo
+              Editar Macrofluxo
             </Button>
             {Object.entries(STATUS_CONFIG).map(([key, config]) => (
               <div
