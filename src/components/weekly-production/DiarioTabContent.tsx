@@ -181,7 +181,9 @@ export default function DiarioTabContent({ onOpenDiary }: DiarioTabContentProps 
           supabase
             .from("diary_items")
             .select("id, diary_entry_id, macro_id, macro_name, scope_id, scope_name, house_ids, percentual_executado, production_id")
-            .in("diary_entry_id", ids),
+            .in("diary_entry_id", ids)
+            .is("deleted_at", null)
+            .or("review_status.is.null,review_status.neq.rejeitado"),
           supabase
             .from("diary_item_corrections")
             .select("id, tipo, macro_name, scope_name, house_ids_anterior, house_ids_posterior, percentual_anterior, percentual_posterior, justificativa, corrigido_por_nome, created_at")
@@ -275,7 +277,9 @@ export default function DiarioTabContent({ onOpenDiary }: DiarioTabContentProps 
       const { data: freshRaw } = await supabase
         .from("diary_items")
         .select("id, scope_id, house_ids")
-        .in("diary_entry_id", entries.map(e => e.id));
+        .in("diary_entry_id", entries.map(e => e.id))
+        .is("deleted_at", null)
+        .or("review_status.is.null,review_status.neq.rejeitado");
       const freshItems = (freshRaw || []).map(d => ({
         ...d,
         house_ids: (d.house_ids as number[]) || [],
