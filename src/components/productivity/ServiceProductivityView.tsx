@@ -17,8 +17,10 @@ import {
   Layers,
   ShieldAlert,
   Info,
+  Copy,
 } from 'lucide-react';
 import { ServiceProductivityDialog } from './ServiceProductivityDialog';
+import { CopyProductivityDialog } from './CopyProductivityDialog';
 import { TeamWorkGroupsPanel } from './TeamWorkGroupsPanel';
 import { ServicePlanningSettingsPanel } from './ServicePlanningSettingsPanel';
 import { ProductivityExecutiveSummary } from './ProductivityExecutiveSummary';
@@ -525,8 +527,8 @@ const formatSharedCapacity = (services: ServiceCapacityInsight[]) => {
 };
 
 export function ServiceProductivityView() {
-  const { currentProject } = useConstruction();
-  const { productivities, isLoading, saveProductivity } = useServiceProductivity(currentProject?.id);
+  const { currentProject, projects } = useConstruction();
+  const { productivities, saveProductivity, loadProductivities } = useServiceProductivity(currentProject?.id);
   const { groups: workGroups, groupServices, groupComposition } = useTeamWorkGroups(currentProject?.id);
   const capacityModel = usePlanningCapacityModel(currentProject?.id);
   const serviceCapacityMap = capacityModel.serviceCapacityMap;
@@ -536,6 +538,7 @@ export function ServiceProductivityView() {
   const [requiredProductivityFilter, setRequiredProductivityFilter] = useState<'all' | RequiredProductivityStatus>('all');
   const [requiredProductivityFrontFilter, setRequiredProductivityFrontFilter] = useState('all');
   const [recommendedActionFilter, setRecommendedActionFilter] = useState<'all' | 'high' | RecommendedProductivityActionType>('all');
+  const [copyDialogOpen, setCopyDialogOpen] = useState(false);
   const [weeklyTargets, setWeeklyTargets] = useState<WeeklyTargetReadRow[]>([]);
   const [weeklyWeeks, setWeeklyWeeks] = useState<WeeklyPlanWeekReadRow[]>([]);
   const [actualProductions, setActualProductions] = useState<ActualProductionReadRow[]>([]);
@@ -1035,14 +1038,26 @@ export function ServiceProductivityView() {
   return (
     <div className="space-y-6 p-4 md:p-6">
       {/* Header */}
-      <div>
-        <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
-          <Users className="h-6 w-6 text-primary" />
-          Produtividade e Equipes
-        </h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Defina produtividade e dimensionamento de equipes por serviço ou por frente compartilhada
-        </p>
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
+            <Users className="h-6 w-6 text-primary" />
+            Produtividade e Equipes
+          </h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Defina produtividade e dimensionamento de equipes por serviço ou por frente compartilhada
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          className="w-fit gap-2"
+          onClick={() => setCopyDialogOpen(true)}
+          disabled={projects.filter((project) => project.id !== currentProject.id).length === 0}
+        >
+          <Copy className="h-4 w-4" />
+          Copiar de outra obra
+        </Button>
       </div>
 
       <ProductivityExecutiveSummary
@@ -1431,6 +1446,17 @@ export function ServiceProductivityView() {
           existingProductivity={findProductivityForService(selectedService, productivities)}
           onClose={() => setSelectedService(null)}
           onSave={saveProductivity}
+        />
+      )}
+
+      {copyDialogOpen && (
+        <CopyProductivityDialog
+          open={copyDialogOpen}
+          currentProject={currentProject}
+          projects={projects}
+          destinationProductivities={productivities}
+          onClose={() => setCopyDialogOpen(false)}
+          onCopied={loadProductivities}
         />
       )}
         </TabsContent>
