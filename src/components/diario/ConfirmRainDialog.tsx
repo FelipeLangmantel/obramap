@@ -14,6 +14,7 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   lat: number | null;
   lng: number | null;
+  entryDate: string;
   currentMm: number | null;
   onConfirm: (mm: number) => Promise<void> | void;
 }
@@ -27,28 +28,39 @@ interface Props {
  * residente substitua pelo medido no canteiro (pluviômetro físico).
  */
 export function ConfirmRainDialog({
-  open, onOpenChange, lat, lng, currentMm, onConfirm,
+  open, onOpenChange, lat, lng, entryDate, currentMm, onConfirm,
 }: Props) {
   const [apiMm, setApiMm] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [chosen, setChosen] = useState<number>(currentMm ?? 0);
   const [submitting, setSubmitting] = useState(false);
+  const [unavailableReason, setUnavailableReason] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
     setChosen(currentMm ?? 0);
-    if (lat == null || lng == null) return;
+    setApiMm(null);
+    setUnavailableReason(null);
+    if (lat == null || lng == null) {
+      setUnavailableReason("Coordenadas da obra não configuradas.");
+      return;
+    }
     setLoading(true);
-    fetchClimaHoje(lat, lng)
+    fetchClimaHoje(lat, lng, entryDate)
       .then(c => {
         if (c) {
           setApiMm(Number(c.mm_chuva ?? 0));
           // Se o usuário ainda não preencheu manualmente, pré-seleciona API
           if (currentMm == null) setChosen(Number(c.mm_chuva ?? 0));
+        } else {
+          setUnavailableReason("Não foi possível consultar o Open-Meteo agora. Informe manualmente o índice.");
         }
       })
+      .catch(() => {
+        setUnavailableReason("Não foi possível consultar o Open-Meteo agora. Informe manualmente o índice.");
+      })
       .finally(() => setLoading(false));
-  }, [open, lat, lng, currentMm]);
+  }, [open, lat, lng, entryDate, currentMm]);
 
   const handleConfirm = async () => {
     setSubmitting(true);
@@ -84,6 +96,9 @@ export function ConfirmRainDialog({
                   apiMm == null ? "indisponível" : `${apiMm.toFixed(1)} mm`}
               </span>
             </div>
+            {unavailableReason && !loading && (
+              <p className="mt-2 text-xs text-muted-foreground">{unavailableReason}</p>
+            )}
           </div>
 
           <div className="space-y-1.5">

@@ -11,12 +11,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { format, startOfWeek, endOfWeek, parseISO, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   Save, Trash2, ClipboardList, CheckCircle2, ChevronRight, Users,
-  Loader2, Camera, X, Printer, MapPin, Building2, Pencil, FileText,
+  Loader2, Camera, X, Printer, MapPin, Building2, Pencil, FileText, AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { geocodeMunicipio, fetchClimaHoje } from "@/lib/geocode";
@@ -168,6 +172,15 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   }>({ location: null, contractor: null, engenheiroResidente: null, startDate: null, endDate: null, lat: null, lng: null });
 
   const [confirmRainOpen, setConfirmRainOpen] = useState(false);
+  const [approvalWarningsOpen, setApprovalWarningsOpen] = useState(false);
+  const [approvalMissingPhotoWarnings, setApprovalMissingPhotoWarnings] = useState<Array<{
+    house: number;
+    macroName: string;
+    scopeName: string;
+  }>>([]);
+  const [cancelEmptyOpen, setCancelEmptyOpen] = useState(false);
+  const [cancelBlockedOpen, setCancelBlockedOpen] = useState(false);
+  const [cancelingEmptyDiary, setCancelingEmptyDiary] = useState(false);
 
   // Service steps (produção física existente)
   const [selectedMacro, setSelectedMacro] = useState<{ id: string; name: string; color: string } | null>(null);
@@ -354,18 +367,27 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
         const semFoto = diaryItems.flatMap(i => {
           const linked = photosByItem.get(i.id) || new Set<number | null>();
           if (linked.has(null)) return [];
-          return (i.house_ids || []).filter(h => !linked.has(h)).map(h => ({ item: i, house: h }));
+          return (i.house_ids || [])
+            .filter(h => !linked.has(h))
+            .map(h => ({
+              house: h,
+              macroName: i.macro_name,
+              scopeName: i.scope_name,
+            }));
         });
         if (semFoto.length > 0) {
-          const lista = semFoto.map(({ item, house }) => `• Casa ${String(house).padStart(2, "0")} — ${item.macro_name} · ${item.scope_name}`).join("\n");
-          const ok = window.confirm(
-            `${semFoto.length} casa(s) com serviço sem foto vinculada:\n\n${lista}\n\nDeseja enviar mesmo assim?`
-          );
-          if (!ok) return;
+          setApprovalMissingPhotoWarnings(semFoto);
+          setApprovalWarningsOpen(true);
+          return;
         }
       }
     } catch {/* não bloqueia envio se a verificação falhar */}
     // Abre confirmação de pluviometria — engenharia exige fechamento desse índice
+    setConfirmRainOpen(true);
+  };
+
+  const handleContinueApprovalWithWarnings = () => {
+    setApprovalWarningsOpen(false);
     setConfirmRainOpen(true);
   };
 
@@ -561,7 +583,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
         }
       }
       if (!coords) return;
-      const climaAuto = await fetchClimaHoje(coords.lat, coords.lng);
+      const climaAuto = await fetchClimaHoje(coords.lat, coords.lng, entryDate);
       if (climaAuto) {
         const turno = legacyToTurno(climaAuto.codigo);
         setClimaState(prev => ({
@@ -956,19 +978,35 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
     if (!entryId) return;
     if (!requireEdit()) return;
     if (statusAprovacao !== "preenchendo" || entryStatus === "finalizado") {
-      toast.error("Este diário não pode mais ter a abertura cancelada.");
+      setCancelBlockedOpen(true);
       return;
     }
 
     try {
       const hasPersistedData = await checkDiaryHasPersistedData(entryId);
       if (hasPersistedData || obsGeral.trim()) {
-        toast.error("Este diário já possui dados lançados. Exclua os dados antes ou mantenha o diário aberto.");
+        setCancelBlockedOpen(true);
         return;
       }
 
-      const confirmed = window.confirm("Cancelar a abertura deste diário vazio? O número poderá ser reutilizado conforme a regra atual do banco.");
-      if (!confirmed) return;
+      setCancelEmptyOpen(true);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "";
+      toast.error("Não foi possível verificar o diário: " + message);
+    }
+  }, [entryId, requireEdit, statusAprovacao, entryStatus, checkDiaryHasPersistedData, obsGeral]);
+
+  const confirmCancelEmptyDiary = useCallback(async () => {
+    if (!entryId) return;
+    if (!requireEdit()) return;
+    setCancelingEmptyDiary(true);
+    try {
+      const hasPersistedData = await checkDiaryHasPersistedData(entryId);
+      if (hasPersistedData || obsGeral.trim()) {
+        setCancelEmptyOpen(false);
+        setCancelBlockedOpen(true);
+        return;
+      }
 
       const { error } = await supabase.from("diary_entries").delete().eq("id", entryId);
       if (error) throw error;
@@ -986,12 +1024,15 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       setEntryMeta({});
       await rdo.reload(null);
       await dWorkers.reload(null);
+      setCancelEmptyOpen(false);
       toast.success("Abertura do diário cancelada.");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "";
       toast.error("Não foi possível cancelar a abertura: " + message);
+    } finally {
+      setCancelingEmptyDiary(false);
     }
-  }, [entryId, requireEdit, statusAprovacao, entryStatus, checkDiaryHasPersistedData, obsGeral, rdo, dWorkers]);
+  }, [entryId, requireEdit, checkDiaryHasPersistedData, obsGeral, rdo, dWorkers]);
 
   const openDialogWithEntry = useCallback(async (openDialog: () => void) => {
     if (!entryId) {
@@ -2358,6 +2399,81 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
         </DialogContent>
       </Dialog>
 
+      <AlertDialog open={approvalWarningsOpen} onOpenChange={setApprovalWarningsOpen}>
+        <AlertDialogContent className="max-w-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-600" />
+              Confirmar envio para aprovação
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              O diário possui alguns alertas antes do envio. Revise os itens abaixo antes de continuar.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="max-h-72 overflow-y-auto rounded-md border bg-muted/30 p-3">
+            <ul className="space-y-2 text-sm">
+              {approvalMissingPhotoWarnings.map((warning, index) => (
+                <li
+                  key={`${warning.house}-${warning.macroName}-${warning.scopeName}-${index}`}
+                  className="flex gap-2"
+                >
+                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+                  <span>
+                    Casa {String(warning.house).padStart(2, "0")} — {warning.macroName} · {warning.scopeName}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Mesmo com estes avisos, deseja enviar o diário para aprovação?
+          </p>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleContinueApprovalWithWarnings}>
+              Enviar mesmo assim
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={cancelEmptyOpen} onOpenChange={setCancelEmptyOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar abertura do diário?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Este diário ainda não possui dados lançados. Ao cancelar, ele voltará para o estado de diário não aberto.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelingEmptyDiary}>Manter diário</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmCancelEmptyDiary}
+              disabled={cancelingEmptyDiary}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {cancelingEmptyDiary && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Cancelar abertura
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={cancelBlockedOpen} onOpenChange={setCancelBlockedOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Este diário já possui dados lançados</AlertDialogTitle>
+            <AlertDialogDescription>
+              Exclua os dados antes ou mantenha o diário aberto. Diários enviados, finalizados ou com informações
+              vinculadas não podem ter a abertura cancelada.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setCancelBlockedOpen(false)}>Entendi</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Print dialog */}
       <PrintDiarioDialog open={printOpen} onOpenChange={setPrintOpen} buildData={buildPrintData} />
       <ConfirmRainDialog
@@ -2365,6 +2481,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
         onOpenChange={setConfirmRainOpen}
         lat={projectInfo.lat}
         lng={projectInfo.lng}
+        entryDate={entryDate}
         currentMm={climaState.mmChuva}
         onConfirm={handleConfirmRainAndSend}
       />

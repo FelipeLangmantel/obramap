@@ -21,14 +21,33 @@ export async function geocodeMunicipio(municipio: string, estado: string = "RS")
   }
 }
 
-export async function fetchClimaHoje(lat: number, lng: number): Promise<{
+const toLocalDateKey = (date = new Date()) => {
+  const offsetMs = date.getTimezoneOffset() * 60 * 1000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 10);
+};
+
+export async function fetchClimaHoje(lat: number, lng: number, dateKey?: string): Promise<{
   codigo: "sol" | "nublado" | "chuva_fraca" | "chuva_forte" | "vento";
   mm_chuva: number;
   temperatura: number;
 } | null> {
   try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&daily=precipitation_sum,temperature_2m_max,windspeed_10m_max&timezone=America%2FSao_Paulo&forecast_days=1`;
+    const targetDate = dateKey || toLocalDateKey();
+    const today = toLocalDateKey();
+    const baseUrl = targetDate < today
+      ? "https://archive-api.open-meteo.com/v1/archive"
+      : "https://api.open-meteo.com/v1/forecast";
+    const params = new URLSearchParams({
+      latitude: String(lat),
+      longitude: String(lng),
+      daily: "precipitation_sum,temperature_2m_max,windspeed_10m_max",
+      timezone: "America/Sao_Paulo",
+      start_date: targetDate,
+      end_date: targetDate,
+    });
+    const url = `${baseUrl}?${params.toString()}`;
     const res = await fetch(url);
+    if (!res.ok) return null;
     const data = await res.json();
     const chuva = data?.daily?.precipitation_sum?.[0] ?? 0;
     const temp  = data?.daily?.temperature_2m_max?.[0] ?? 20;
