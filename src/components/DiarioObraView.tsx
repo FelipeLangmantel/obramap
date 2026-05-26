@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -2375,6 +2375,10 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       {fotoAmpliada && (
         <Dialog open={!!fotoAmpliada} onOpenChange={() => setFotoAmpliada(null)}>
           <DialogContent className="max-w-3xl p-2">
+            <DialogHeader className="sr-only">
+              <DialogTitle>Foto ampliada</DialogTitle>
+              <DialogDescription>Visualização ampliada da foto anexada ao diário.</DialogDescription>
+            </DialogHeader>
             <img src={fotoAmpliada.url} alt={fotoAmpliada.legenda || "Foto do diário"} className="w-full rounded-lg" />
             {fotoAmpliada.legenda && (
               <p className="text-sm text-center text-muted-foreground mt-2">{fotoAmpliada.legenda}</p>
@@ -2387,6 +2391,9 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Adicionar foto</DialogTitle>
+            <DialogDescription>
+              Escolha se deseja tirar uma nova foto ou selecionar uma imagem da galeria.
+            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-2">
             <Button type="button" onClick={() => handlePickPhotoSource("camera")} disabled={uploadingFoto} className="h-11 justify-start">

@@ -336,7 +336,8 @@ export default function DiarioTabContent({ onOpenDiary }: DiarioTabContentProps 
       .update({ status: "finalizado", status_aprovacao: "aprovado" } as any)
       .eq("id", entry.id);
     if (error) {
-      toast.error("Erro ao aprovar diário: " + error.message);
+      console.error("[DiarioTabContent] Erro técnico ao aprovar diário:", error);
+      toast.error("Não foi possível aprovar o diário. Verifique os dados e tente novamente.");
       return;
     }
     toast.success("Diário aprovado.");
