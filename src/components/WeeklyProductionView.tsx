@@ -561,6 +561,14 @@ export function WeeklyProductionView() {
   useEffect(() => {
     if (!currentProject?.id) return;
     let channel: ReturnType<typeof supabase.channel> | null = null;
+    let reloadTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const scheduleReloadProductions = () => {
+      if (reloadTimer) clearTimeout(reloadTimer);
+      reloadTimer = setTimeout(() => {
+        void reloadProductions();
+      }, 500);
+    };
 
     const subscribe = () => {
       channel = supabase
@@ -568,11 +576,11 @@ export function WeeklyProductionView() {
         .on('postgres_changes', {
           event: '*', schema: 'public', table: 'productions',
           filter: `project_id=eq.${currentProject.id}`,
-        }, () => { void reloadProductions(); })
+        }, scheduleReloadProductions)
         .on('postgres_changes', {
           event: '*', schema: 'public', table: 'weekly_productions',
           filter: `project_id=eq.${currentProject.id}`,
-        }, () => { void reloadProductions(); })
+        }, scheduleReloadProductions)
         .subscribe();
     };
 
@@ -591,6 +599,7 @@ export function WeeklyProductionView() {
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibility);
+      if (reloadTimer) clearTimeout(reloadTimer);
       if (channel) supabase.removeChannel(channel);
     };
   }, [currentProject?.id]);
@@ -724,7 +733,7 @@ export function WeeklyProductionView() {
         }
 
         // 2. Also save to legacy weekly_productions for backward compatibility
-        const { error } = await supabase
+        const { data: insertedWeeklyProduction, error } = await supabase
           .from('weekly_productions')
           .insert({
             project_id: currentProject.id,
@@ -740,9 +749,17 @@ export function WeeklyProductionView() {
             is_initial_database: isInitialDatabase,
             created_by_user_id: profile?.user_id || null,
             created_by_name: profile?.display_name || null,
-          });
+          })
+          .select('*')
+          .maybeSingle();
 
         if (error) throw error;
+        if (insertedWeeklyProduction) {
+          setProductions(prev => [
+            insertedWeeklyProduction as WeeklyProduction,
+            ...prev.filter(prod => prod.id !== insertedWeeklyProduction.id),
+          ]);
+        }
         } catch (insertError) {
           if (createdProductionId) {
             await supabase
@@ -763,12 +780,7 @@ export function WeeklyProductionView() {
           : `Produção registrada: ${scope.name} em ${selectedHouses.length} casas. Mapa atualizado!`;
         toast.success(message);
 
-        await reloadProductions();
-        await refreshHousesFromDB();
         queryClient.invalidateQueries({ queryKey: ["houses"] });
-        window.dispatchEvent(new CustomEvent("obramap:progress-recomputed", {
-          detail: { projectId: currentProject.id },
-        }));
 
         // C2: Deviation tracking after save
         if (selectedReleasedService && !isInitialDatabase) {

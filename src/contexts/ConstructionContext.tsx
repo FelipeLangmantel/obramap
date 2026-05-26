@@ -550,8 +550,10 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
   // ✅ 4.5 REALTIME: Auto-refresh houses when production/banco inicial changes
   useEffect(() => {
     if (!currentProjectId) return;
+    let reloadTimer: ReturnType<typeof setTimeout> | null = null;
 
     const reloadHouses = async () => {
+      reloadTimer = null;
       const { data: housesData } = await supabase
         .from("houses")
         .select("*")
@@ -576,14 +578,22 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       }
     };
 
+    const scheduleReloadHouses = () => {
+      if (reloadTimer) clearTimeout(reloadTimer);
+      reloadTimer = setTimeout(() => {
+        void reloadHouses();
+      }, 750);
+    };
+
     const channel = supabase
       .channel(`houses-realtime-${currentProjectId}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'houses', filter: `project_id=eq.${currentProjectId}` }, () => {
-        reloadHouses();
+        scheduleReloadHouses();
       })
       .subscribe();
 
     return () => {
+      if (reloadTimer) clearTimeout(reloadTimer);
       supabase.removeChannel(channel);
     };
   }, [currentProjectId]);
