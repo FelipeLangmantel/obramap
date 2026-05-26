@@ -136,6 +136,24 @@ function fmtDate(iso: string | null) {
   try { return format(parseISO(iso), "dd/MM/yyyy", { locale: ptBR }); } catch { return iso; }
 }
 
+function dedupeUrls(urls: string[]) {
+  return Array.from(new Set(urls.filter(Boolean)));
+}
+
+function getServicePhotoUrlSet(data: DiarioPDFData) {
+  return new Set(
+    (data.photosByService || [])
+      .flatMap((group) => group.photos)
+      .map((photo) => photo.url)
+      .filter(Boolean)
+  );
+}
+
+function getGeneralPhotoUrlsForPrint(data: DiarioPDFData) {
+  const servicePhotoUrls = getServicePhotoUrlSet(data);
+  return dedupeUrls(data.photoUrls).filter((url) => !servicePhotoUrls.has(url));
+}
+
 /**
  * Renderiza a seção "Registro Fotográfico por Serviço".
  * Agrupa fotos por serviço executado, com contexto (etapa, casas, percentual).
@@ -415,12 +433,13 @@ async function renderOrgaoPublico(
   }
 
   // ─── Fotos avulsas ───────────────────────────────────────────────
-  if (config.showPhotos && data.photoUrls.length > 0) {
+  const generalPhotoUrls = getGeneralPhotoUrlsForPrint(data);
+  if (config.showPhotos && generalPhotoUrls.length > 0) {
     if (y > pageH - 60) { doc.addPage(); y = margin; }
     doc.setFont("times", "bold");
     doc.setFontSize(10);
     doc.setTextColor(20);
-    doc.text(`REGISTRO FOTOGRÁFICO (${data.photoUrls.length})`, margin, y);
+    doc.text(`REGISTRO FOTOGRÁFICO (${generalPhotoUrls.length})`, margin, y);
     y += 4;
 
     const cols = 3;
@@ -428,7 +447,7 @@ async function renderOrgaoPublico(
     const cellW = (pageW - margin * 2 - gap * (cols - 1)) / cols;
     const cellH = cellW * 0.75;
     let col = 0;
-    for (const url of data.photoUrls) {
+    for (const url of generalPhotoUrls) {
       if (y + cellH > pageH - 20) { doc.addPage(); y = margin; }
       const dataUrl = await loadImageAsDataUrl(url);
       if (dataUrl) {
@@ -661,18 +680,19 @@ async function renderCorporativoModerno(
     y = await renderPhotosByService(doc, data, y, { font: "helvetica", titleColor: [15, 23, 42] });
   }
 
-  if (config.showPhotos && data.photoUrls.length > 0) {
+  const generalPhotoUrls = getGeneralPhotoUrlsForPrint(data);
+  if (config.showPhotos && generalPhotoUrls.length > 0) {
     if (y > pageH - 60) { doc.addPage(); y = margin; }
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
     doc.setTextColor(15, 23, 42);
-    doc.text(`Fotos (${data.photoUrls.length})`, margin, y);
+    doc.text(`Fotos (${generalPhotoUrls.length})`, margin, y);
     y += 4;
     const cols = 3, gap = 3;
     const cellW = (pageW - margin * 2 - gap * (cols - 1)) / cols;
     const cellH = cellW * 0.75;
     let col = 0;
-    for (const url of data.photoUrls) {
+    for (const url of generalPhotoUrls) {
       if (y + cellH > pageH - 20) { doc.addPage(); y = margin; }
       const dataUrl = await loadImageAsDataUrl(url);
       if (dataUrl) {

@@ -6,7 +6,7 @@ import {
   PieChart, Pie, Cell, Legend,
 } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
-import { startOfWeek, endOfWeek, format, parseISO } from "date-fns";
+import { startOfWeek, format, parseISO } from "date-fns";
 import { useContractWeights } from "@/hooks/useContractWeights";
 import type { Macro } from "@/data/constructionData";
 
@@ -35,7 +35,7 @@ export function RdoProductionCharts({ items, totalCasas, projectId, entryDate, m
   const { unitValueByScope, contractTotalValue } = useContractWeights(projectId);
   const [weekItems, setWeekItems] = useState<DiaryItem[]>([]);
 
-  // Carrega lançamentos da semana (segunda → domingo) para o acumulado semanal
+  // Carrega lançamentos acumulados da semana: segunda-feira até a data do RDO.
   useEffect(() => {
     if (!projectId || !entryDate) {
       setWeekItems([]);
@@ -45,7 +45,7 @@ export function RdoProductionCharts({ items, totalCasas, projectId, entryDate, m
     (async () => {
       const ref = parseISO(entryDate);
       const wkStart = format(startOfWeek(ref, { weekStartsOn: 1 }), "yyyy-MM-dd");
-      const wkEnd = format(endOfWeek(ref, { weekStartsOn: 1 }), "yyyy-MM-dd");
+      const wkEnd = format(ref, "yyyy-MM-dd");
       // Busca diary_entries dessa semana e seus diary_items
       const { data: entries } = await (supabase as any)
         .from("diary_entries")
@@ -61,7 +61,8 @@ export function RdoProductionCharts({ items, totalCasas, projectId, entryDate, m
       const { data: di } = await (supabase as any)
         .from("diary_items")
         .select("id, macro_id, macro_name, macro_color, scope_id, scope_name, house_ids, percentual_executado")
-        .in("diary_entry_id", ids);
+        .in("diary_entry_id", ids)
+        .is("deleted_at", null);
       if (!cancelled) {
         setWeekItems((di || []).map((d: any) => ({
           ...d,
@@ -212,16 +213,16 @@ export function RdoProductionCharts({ items, totalCasas, projectId, entryDate, m
             className="rounded-lg border p-3 bg-indigo-50 dark:bg-indigo-950/30 border-indigo-300/60"
             title="Avanco fisico lancado hoje, calculado pelos pesos da EAP e casas executadas"
           >
-            <p className="text-[10px] uppercase text-indigo-700 dark:text-indigo-300">% Físico (hoje)</p>
+            <p className="text-[10px] uppercase text-indigo-700 dark:text-indigo-300">% Físico EAP (hoje)</p>
             <p className="text-2xl font-bold text-indigo-700 dark:text-indigo-300 tabular-nums">
               {fmtPct(pctFisicoHoje)}
             </p>
           </div>
           <div
             className="rounded-lg border p-3 bg-cyan-50 dark:bg-cyan-950/30 border-cyan-300/60"
-            title="Avanco fisico acumulado na semana, calculado pelos pesos da EAP e casas executadas"
+            title="Avanco fisico acumulado de segunda-feira ate a data do RDO, calculado pelos pesos da EAP e casas executadas"
           >
-            <p className="text-[10px] uppercase text-cyan-700 dark:text-cyan-300">% Físico (semana)</p>
+            <p className="text-[10px] uppercase text-cyan-700 dark:text-cyan-300">% Físico EAP (semana)</p>
             <p className="text-2xl font-bold text-cyan-700 dark:text-cyan-300 tabular-nums">
               {fmtPct(pctFisicoSemana)}
             </p>
@@ -230,16 +231,16 @@ export function RdoProductionCharts({ items, totalCasas, projectId, entryDate, m
             className="rounded-lg border p-3 bg-blue-50 dark:bg-blue-950/30 border-blue-300/60"
             title="Soma do valor financeiro lançado hoje (peso PLE × casas × %) ÷ Valor total do contrato"
           >
-            <p className="text-[10px] uppercase text-blue-700 dark:text-blue-300">% Financeiro (hoje)</p>
+            <p className="text-[10px] uppercase text-blue-700 dark:text-blue-300">% Financeiro PLE (hoje)</p>
             <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 tabular-nums">
               {fmtPct(pctContratoHoje)}
             </p>
           </div>
           <div
             className="rounded-lg border p-3 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300/60"
-            title="Acumulado da semana (segunda a domingo) em % do contrato"
+            title="Acumulado de segunda-feira ate a data do RDO em % do contrato"
           >
-            <p className="text-[10px] uppercase text-emerald-700 dark:text-emerald-300">% Financeiro (semana)</p>
+            <p className="text-[10px] uppercase text-emerald-700 dark:text-emerald-300">% Financeiro PLE (semana)</p>
             <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300 tabular-nums">
               {fmtPct(pctContratoSemana)}
             </p>

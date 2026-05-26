@@ -262,6 +262,44 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   const isLocked = entryStatus === "finalizado" || statusAprovacao === "aprovado";
   const canEditLockedDiary = isAdmin;
   const editingDisabled = !canEdit || (isLocked && !canEditLockedDiary);
+  const isDiaryOpen = Boolean(entryId);
+  const diaryFormDisabled = !isDiaryOpen || editingDisabled;
+
+  const hasLoadedDiaryData = useMemo(() => (
+    diaryItems.length > 0 ||
+    rdo.labor.length > 0 ||
+    rdo.equipment.length > 0 ||
+    rdo.activities.length > 0 ||
+    rdo.occurrences.length > 0 ||
+    rdo.checklist.length > 0 ||
+    rdo.comments.length > 0 ||
+    rdo.videos.length > 0 ||
+    rdo.attachments.length > 0 ||
+    dWorkers.workers.length > 0 ||
+    fotos.length > 0 ||
+    obsGeral.trim().length > 0
+  ), [
+    diaryItems.length,
+    rdo.labor.length,
+    rdo.equipment.length,
+    rdo.activities.length,
+    rdo.occurrences.length,
+    rdo.checklist.length,
+    rdo.comments.length,
+    rdo.videos.length,
+    rdo.attachments.length,
+    dWorkers.workers.length,
+    fotos.length,
+    obsGeral,
+  ]);
+
+  const canCancelEmptyDiary = Boolean(
+    entryId &&
+    !editingDisabled &&
+    statusAprovacao === "preenchendo" &&
+    entryStatus !== "finalizado" &&
+    !hasLoadedDiaryData
+  );
 
   // Verifica se há solicitação de edição pendente para este RDO
   useEffect(() => {
@@ -644,7 +682,12 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       e.target.value = "";
       return;
     }
-    const resolvedEntryId = entryId || await ensureEntryExists();
+    if (!entryId) {
+      toast.error("Abra o diário deste dia antes de adicionar fotos.");
+      e.target.value = "";
+      return;
+    }
+    const resolvedEntryId = entryId;
     if (!resolvedEntryId || !e.target.files?.length || !company?.id) return;
     setUploadingFoto(true);
     try {
@@ -884,16 +927,87 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
     }
   }, [ensureEntryExists]);
 
+  const checkDiaryHasPersistedData = useCallback(async (eId: string) => {
+    const activeCounts = await Promise.all([
+      supabase.from("diary_items").select("id", { count: "exact", head: true }).eq("diary_entry_id", eId).is("deleted_at", null),
+      supabase.from("diary_labor").select("id", { count: "exact", head: true }).eq("diary_entry_id", eId).is("deleted_at", null),
+      supabase.from("diary_equipment").select("id", { count: "exact", head: true }).eq("diary_entry_id", eId).is("deleted_at", null),
+      supabase.from("diary_activities").select("id", { count: "exact", head: true }).eq("diary_entry_id", eId).is("deleted_at", null),
+      supabase.from("diary_occurrences").select("id", { count: "exact", head: true }).eq("diary_entry_id", eId).is("deleted_at", null),
+      supabase.from("diary_checklist").select("id", { count: "exact", head: true }).eq("diary_entry_id", eId).is("deleted_at", null),
+      supabase.from("diary_comments").select("id", { count: "exact", head: true }).eq("diary_entry_id", eId).is("deleted_at", null),
+    ]);
+
+    const otherCounts = await Promise.all([
+      supabase.from("diary_photos").select("id", { count: "exact", head: true }).eq("diary_entry_id", eId),
+      supabase.from("diary_attachments").select("id", { count: "exact", head: true }).eq("diary_entry_id", eId),
+      supabase.from("diary_signatures").select("id", { count: "exact", head: true }).eq("diary_entry_id", eId),
+      supabase.from("diary_workers").select("id", { count: "exact", head: true }).eq("diary_entry_id", eId),
+    ]);
+
+    const results = [...activeCounts, ...otherCounts];
+    const failed = results.find((result) => result.error);
+    if (failed) throw failed.error;
+
+    return results.some((result) => (result.count || 0) > 0);
+  }, []);
+
+  const handleCancelEmptyDiary = useCallback(async () => {
+    if (!entryId) return;
+    if (!requireEdit()) return;
+    if (statusAprovacao !== "preenchendo" || entryStatus === "finalizado") {
+      toast.error("Este diário não pode mais ter a abertura cancelada.");
+      return;
+    }
+
+    try {
+      const hasPersistedData = await checkDiaryHasPersistedData(entryId);
+      if (hasPersistedData || obsGeral.trim()) {
+        toast.error("Este diário já possui dados lançados. Exclua os dados antes ou mantenha o diário aberto.");
+        return;
+      }
+
+      const confirmed = window.confirm("Cancelar a abertura deste diário vazio? O número poderá ser reutilizado conforme a regra atual do banco.");
+      if (!confirmed) return;
+
+      const { error } = await supabase.from("diary_entries").delete().eq("id", entryId);
+      if (error) throw error;
+
+      setEntryId(null);
+      setNumRelatorio(null);
+      setEntryStatus("rascunho");
+      setStatusAprovacao("preenchendo");
+      setObsGeral("");
+      setEquipePres(0);
+      setFotos([]);
+      setFotosPorServico({});
+      setDiaryItems([]);
+      setCorrecoesDoDia([]);
+      setEntryMeta({});
+      await rdo.reload(null);
+      await dWorkers.reload(null);
+      toast.success("Abertura do diário cancelada.");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "";
+      toast.error("Não foi possível cancelar a abertura: " + message);
+    }
+  }, [entryId, requireEdit, statusAprovacao, entryStatus, checkDiaryHasPersistedData, obsGeral, rdo, dWorkers]);
+
   const openDialogWithEntry = useCallback(async (openDialog: () => void) => {
-    const ensuredEntryId = await ensureEntryExists();
-    if (ensuredEntryId) openDialog();
-  }, [ensureEntryExists]);
+    if (!entryId) {
+      toast.error("Abra o diário deste dia antes de preencher esta seção.");
+      return;
+    }
+    openDialog();
+  }, [entryId]);
 
   const handleOpenFotoPicker = useCallback(async () => {
-    const ensuredEntryId = entryId || await ensureEntryExists();
-    if (!ensuredEntryId) return;
+    if (!entryId) {
+      toast.error("Abra o diário deste dia antes de adicionar fotos.");
+      return;
+    }
     setPhotoSourceOpen(true);
-  }, [entryId, ensureEntryExists]);
+  }, [entryId]);
 
   const handlePickPhotoSource = useCallback((source: "camera" | "gallery") => {
     setPhotoSourceOpen(false);
@@ -917,7 +1031,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
     try {
       const climaPayload = buildClimaPayload();
 
-      let savedEntryId = entryId;
+      const savedEntryId = entryId;
       if (entryId) {
         await supabase.from("diary_entries").update({
           equipe_presente: equipePres,
@@ -925,8 +1039,8 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
           ...climaPayload,
         }).eq("id", entryId);
       } else {
-        savedEntryId = await ensureEntryExists();
-        if (!savedEntryId) throw new Error("Não foi possível criar o relatório.");
+        toast.error("Abra o diário deste dia antes de salvar o relatório.");
+        return;
       }
       // Registrar log de edição
       if (savedEntryId) {
@@ -1372,8 +1486,11 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       .select("id", { count: "exact", head: true })
       .eq("project_id", currentProject.id).lte("entry_date", entryDate);
     const reportNumber = numRelatorio || count || null;
-    const photoUrls: string[] = [];
-    for (const f of fotos) { if (f.url) photoUrls.push(f.url); }
+    const photoUrls = Array.from(new Set(
+      fotos
+        .filter((f) => !f.diary_item_id && f.url)
+        .map((f) => f.url)
+    ));
     const projectLocation = projData?.location ||
       (projData?.municipio ? `${projData.municipio}${projData.estado ? "/" + projData.estado : ""}` : null);
 
@@ -1431,7 +1548,11 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
           macro_color: it.macro_color,
           house_ids: it.house_ids,
           percentual_executado: it.percentual_executado,
-          photos: fotosPorServico[it.id],
+          photos: Array.from(new Map(
+            fotosPorServico[it.id]
+              .filter((foto) => foto.url)
+              .map((foto) => [foto.url, foto])
+          ).values()),
         })),
     };
   }, [entryId, currentProject, company, profile, user, entryDate, climaState, equipePres, obsGeral, diaryItems, correcoesDoDia, fotos, fotosPorServico, numRelatorio, legalConfig]);
@@ -1571,6 +1692,12 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                 Abrir Diário
               </Button>
             )}
+            {canCancelEmptyDiary && (
+              <Button variant="outline" onClick={handleCancelEmptyDiary} className="min-h-[40px]">
+                <X className="h-4 w-4 mr-2" />
+                Cancelar abertura
+              </Button>
+            )}
             {entryId && !editingDisabled && currentProject?.id && company?.id && (
               <ImportPreviousDayButton
                 projectId={currentProject.id}
@@ -1642,6 +1769,27 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
             />
           )}
 
+          {!isDiaryOpen && (
+            <Card className="border-amber-300 bg-amber-50 dark:bg-amber-950/20">
+              <CardContent className="py-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="font-medium text-amber-900 dark:text-amber-100">Diário ainda não aberto</p>
+                    <p className="text-sm text-amber-800 dark:text-amber-200">
+                      Abra o diário deste dia para preencher clima, mão de obra, equipamentos, produção, ocorrências, checklist, comentários, fotos, vídeos e anexos.
+                    </p>
+                  </div>
+                  {!editingDisabled && (
+                    <Button onClick={handleOpenDiary} className="shrink-0">
+                      <FileText className="h-4 w-4 mr-2" />
+                      Abrir Diário
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* DETALHES */}
           <section id="detalhes" className="scroll-mt-4">
             <Card>
@@ -1670,7 +1818,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Observação geral</label>
                   <Textarea value={obsGeral} onChange={e => setObsGeral(e.target.value)}
-                    placeholder="Observações do dia..." className="mt-1 min-h-[60px]" disabled={editingDisabled} />
+                    placeholder="Observações do dia..." className="mt-1 min-h-[60px]" disabled={diaryFormDisabled} />
                 </div>
               </CardContent>
             </Card>
@@ -1686,7 +1834,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
             <RdoClimaSection
               value={climaState}
               onChange={(v) => { setClimaState(v); setClimaAutoPreenchido(false); }}
-              disabled={editingDisabled}
+              disabled={diaryFormDisabled}
             />
           </section>
 
@@ -1694,7 +1842,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
           <RdoLaborSection
             items={rdo.labor}
             onAdd={() => openDialogWithEntry(() => setAddLaborOpen(true))}
-            disabled={editingDisabled}
+            disabled={diaryFormDisabled}
             onChanged={() => entryId && rdo.reload(entryId)}
           />
 
@@ -1706,7 +1854,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
               entryId={entryId}
               companyId={company.id}
               projectId={currentProject.id}
-              disabled={editingDisabled}
+              disabled={diaryFormDisabled}
               onChanged={() => dWorkers.reload(entryId)}
             />
           )}
@@ -1715,7 +1863,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
           <RdoEquipmentSection
             items={rdo.equipment}
             onAdd={() => openDialogWithEntry(() => setAddEquipOpen(true))}
-            disabled={editingDisabled}
+            disabled={diaryFormDisabled}
             onChanged={() => entryId && rdo.reload(entryId)}
           />
 
@@ -1723,7 +1871,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
           <RdoActivitiesSection
             items={rdo.activities}
             onAdd={() => openDialogWithEntry(() => setAddActivityOpen(true))}
-            disabled={editingDisabled}
+            disabled={diaryFormDisabled}
             onChanged={() => entryId && rdo.reload(entryId)}
           />
 
@@ -2023,7 +2171,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
           <RdoOccurrencesSection
             items={rdo.occurrences}
             onAdd={() => openDialogWithEntry(() => setAddOccurOpen(true))}
-            disabled={editingDisabled}
+            disabled={diaryFormDisabled}
             onChanged={() => entryId && rdo.reload(entryId)}
           />
 
@@ -2031,7 +2179,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
           <RdoChecklistSection
             items={rdo.checklist}
             onAdd={() => openDialogWithEntry(() => setAddChecklistOpen(true))}
-            disabled={editingDisabled}
+            disabled={diaryFormDisabled}
             onChanged={() => entryId && rdo.reload(entryId)}
           />
 
@@ -2039,7 +2187,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
           <RdoCommentsSection
             items={rdo.comments}
             onAdd={() => openDialogWithEntry(() => setAddCommentOpen(true))}
-            disabled={editingDisabled}
+            disabled={diaryFormDisabled}
             currentUserId={user?.id || null}
             onChanged={() => entryId && rdo.reload(entryId)}
           />
@@ -2049,8 +2197,8 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
             id="fotos"
             title="Fotos"
             count={fotos.length}
-            onAdd={!editingDisabled && fotos.length < 10 ? handleOpenFotoPicker : undefined}
-            disabled={uploadingFoto}
+            onAdd={!diaryFormDisabled && fotos.length < 10 ? handleOpenFotoPicker : undefined}
+            disabled={diaryFormDisabled || uploadingFoto}
             alwaysShowChildren
           >
             <input
@@ -2060,7 +2208,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
               multiple
               className="hidden"
               onChange={(e) => handleUploadFotos(e, "gallery")}
-              disabled={uploadingFoto}
+              disabled={diaryFormDisabled || uploadingFoto}
             />
               <input
                 ref={inlineCameraInputRef}
@@ -2069,7 +2217,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                 capture="environment"
                 className="hidden"
                 onChange={(e) => handleUploadFotos(e, "camera")}
-                disabled={uploadingFoto}
+                disabled={diaryFormDisabled || uploadingFoto}
               />
             <div className="space-y-3">
               {fotos.length > 0 && (
@@ -2081,7 +2229,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                         <img src={foto.url} alt={foto.legenda || "Foto do diário"}
                           className="w-20 h-20 object-cover rounded-lg border" />
                       </button>
-                      {!editingDisabled && (
+                      {!diaryFormDisabled && (
                         <button type="button" onClick={() => handleRemoverFoto(foto.id, foto.storage_path)}
                           className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full w-5 h-5 text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow">
                           <X className="h-3 w-3" />
@@ -2109,9 +2257,9 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
             videos={rdo.videos}
             entryId={entryId}
             companyId={company?.id || null}
-            disabled={editingDisabled}
+            disabled={diaryFormDisabled}
             onChanged={() => entryId && rdo.loadAttachments(entryId)}
-            onRequestCreateEntry={ensureEntryExists}
+            onRequestCreateEntry={isDiaryOpen ? ensureEntryExists : undefined}
           />
 
           {/* ANEXOS */}
@@ -2119,9 +2267,9 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
             attachments={rdo.attachments}
             entryId={entryId}
             companyId={company?.id || null}
-            disabled={editingDisabled}
+            disabled={diaryFormDisabled}
             onChanged={() => entryId && rdo.loadAttachments(entryId)}
-            onRequestCreateEntry={ensureEntryExists}
+            onRequestCreateEntry={isDiaryOpen ? ensureEntryExists : undefined}
           />
 
           {/* APROVAÇÃO E ASSINATURAS */}
@@ -2137,7 +2285,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
             canApprove={isAdmin}
             signerId={user?.id || null}
             signerName={profile?.display_name || user?.email || null}
-            isLocked={editingDisabled}
+            isLocked={diaryFormDisabled}
           />
 
           {/* FOOTER: navegação + log + visualizações */}
