@@ -139,6 +139,18 @@ export function RdoProductionCharts({ items, totalCasas, projectId, entryDate, m
 
   const pctFisicoHoje = useMemo(() => computePhysicalPct(items), [computePhysicalPct, items]);
   const pctFisicoSemana = useMemo(() => computePhysicalPct(weekItems), [computePhysicalPct, weekItems]);
+  const hasEapConfigured = totalCasas > 0 && totalPhysicalWeight > 0;
+  const hasPleConfigured = contractTotalValue > 0 && Array.from(unitValueByScope.values()).some((value) => value > 0);
+
+  const semPesoEapCount = useMemo(() => {
+    if (!hasEapConfigured) return 0;
+    return items.filter((it) => {
+      const weight = physicalWeightByScope.weightByScopedKey.get(`${it.macro_id}::${it.scope_id}`)
+        ?? (it.scope_id ? physicalWeightByScope.weightByScopeId.get(it.scope_id) : undefined)
+        ?? 0;
+      return !weight;
+    }).length;
+  }, [hasEapConfigured, items, physicalWeightByScope]);
 
   // ─── % do contrato lançado HOJE e ACUMULADO NA SEMANA ───
   const { pctContratoHoje, pctContratoSemana, semPesoCount, totalLancHoje } = useMemo(() => {
@@ -168,7 +180,11 @@ export function RdoProductionCharts({ items, totalCasas, projectId, entryDate, m
   const fmtPct = (v: number | null) =>
     v == null ? "—" : v < 0.01 ? "<0,01%" : `${v.toFixed(2)}%`;
 
-  const semContrato = !contractTotalValue || contractTotalValue <= 0;
+  const activeProgressMode: "ple" | "eap" | "none" = hasPleConfigured
+    ? "ple"
+    : hasEapConfigured
+      ? "eap"
+      : "none";
 
   if (items.length === 0) {
     return (
@@ -198,7 +214,7 @@ export function RdoProductionCharts({ items, totalCasas, projectId, entryDate, m
       </CardHeader>
       <CardContent className="space-y-4">
         {/* KPIs */}
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
           <div className="rounded-lg border p-3 bg-muted/30">
             <p className="text-[10px] uppercase text-muted-foreground">Lançamentos</p>
             <p className="text-2xl font-bold">{totalLancamentos}</p>
@@ -209,51 +225,67 @@ export function RdoProductionCharts({ items, totalCasas, projectId, entryDate, m
               {totalCasasAtendidas}<span className="text-sm text-muted-foreground">/{totalCasas}</span>
             </p>
           </div>
-          <div
-            className="rounded-lg border p-3 bg-indigo-50 dark:bg-indigo-950/30 border-indigo-300/60"
-            title="Avanco fisico lancado hoje, calculado pelos pesos da EAP e casas executadas"
-          >
-            <p className="text-[10px] uppercase text-indigo-700 dark:text-indigo-300">% Físico EAP (hoje)</p>
-            <p className="text-2xl font-bold text-indigo-700 dark:text-indigo-300 tabular-nums">
-              {fmtPct(pctFisicoHoje)}
-            </p>
-          </div>
-          <div
-            className="rounded-lg border p-3 bg-cyan-50 dark:bg-cyan-950/30 border-cyan-300/60"
-            title="Avanco fisico acumulado de segunda-feira ate a data do RDO, calculado pelos pesos da EAP e casas executadas"
-          >
-            <p className="text-[10px] uppercase text-cyan-700 dark:text-cyan-300">% Físico EAP (semana)</p>
-            <p className="text-2xl font-bold text-cyan-700 dark:text-cyan-300 tabular-nums">
-              {fmtPct(pctFisicoSemana)}
-            </p>
-          </div>
-          <div
-            className="rounded-lg border p-3 bg-blue-50 dark:bg-blue-950/30 border-blue-300/60"
-            title="Soma do valor financeiro lançado hoje (peso PLE × casas × %) ÷ Valor total do contrato"
-          >
-            <p className="text-[10px] uppercase text-blue-700 dark:text-blue-300">% Financeiro PLE (hoje)</p>
-            <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 tabular-nums">
-              {fmtPct(pctContratoHoje)}
-            </p>
-          </div>
-          <div
-            className="rounded-lg border p-3 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300/60"
-            title="Acumulado de segunda-feira ate a data do RDO em % do contrato"
-          >
-            <p className="text-[10px] uppercase text-emerald-700 dark:text-emerald-300">% Financeiro PLE (semana)</p>
-            <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300 tabular-nums">
-              {fmtPct(pctContratoSemana)}
-            </p>
-          </div>
+          {activeProgressMode === "eap" && (
+            <>
+              <div
+                className="rounded-lg border p-3 bg-indigo-50 dark:bg-indigo-950/30 border-indigo-300/60"
+                title="Avanco lancado hoje, calculado pelos pesos da EAP e casas executadas"
+              >
+                <p className="text-[10px] uppercase text-indigo-700 dark:text-indigo-300">% EAP (Hoje)</p>
+                <p className="text-2xl font-bold text-indigo-700 dark:text-indigo-300 tabular-nums">
+                  {fmtPct(pctFisicoHoje)}
+                </p>
+              </div>
+              <div
+                className="rounded-lg border p-3 bg-cyan-50 dark:bg-cyan-950/30 border-cyan-300/60"
+                title="Avanco EAP acumulado de segunda-feira ate a data do RDO"
+              >
+                <p className="text-[10px] uppercase text-cyan-700 dark:text-cyan-300">% EAP (Semana)</p>
+                <p className="text-2xl font-bold text-cyan-700 dark:text-cyan-300 tabular-nums">
+                  {fmtPct(pctFisicoSemana)}
+                </p>
+              </div>
+            </>
+          )}
+          {activeProgressMode === "ple" && (
+            <>
+              <div
+                className="rounded-lg border p-3 bg-blue-50 dark:bg-blue-950/30 border-blue-300/60"
+                title="Avanco calculado pelo PLE/Contrato lancado hoje"
+              >
+                <p className="text-[10px] uppercase text-blue-700 dark:text-blue-300">% PLE (Hoje)</p>
+                <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 tabular-nums">
+                  {fmtPct(pctContratoHoje)}
+                </p>
+              </div>
+              <div
+                className="rounded-lg border p-3 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300/60"
+                title="Avanco PLE acumulado de segunda-feira ate a data do RDO"
+              >
+                <p className="text-[10px] uppercase text-emerald-700 dark:text-emerald-300">% PLE (Semana)</p>
+                <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300 tabular-nums">
+                  {fmtPct(pctContratoSemana)}
+                </p>
+              </div>
+            </>
+          )}
         </div>
 
-        {(semContrato || (semPesoCount > 0 && totalLancHoje > 0)) && (
+        {activeProgressMode === "ple" && semPesoCount > 0 && totalLancHoje > 0 && (
           <div className="rounded-md border border-amber-300/60 bg-amber-50 dark:bg-amber-950/20 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-200">
-            {semContrato ? (
-              <>⚠️ Valor total do contrato não definido. Preencha em <strong>Contrato da Obra</strong> para habilitar o % do contrato.</>
-            ) : (
-              <>⚠️ {semPesoCount} de {totalLancHoje} serviço(s) lançado(s) hoje sem valor unitário no contrato (PLE) — não entram no cálculo. Ajuste em <strong>Contrato da Obra</strong>.</>
-            )}
+            {semPesoCount} de {totalLancHoje} serviço(s) lançado(s) hoje sem valor unitário no contrato (PLE) — não entram no cálculo. Ajuste em <strong>Contrato da Obra</strong>.
+          </div>
+        )}
+
+        {activeProgressMode === "eap" && semPesoEapCount > 0 && (
+          <div className="rounded-md border border-amber-300/60 bg-amber-50 dark:bg-amber-950/20 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-200">
+            {semPesoEapCount} serviço(s) lançado(s) hoje sem peso na EAP — não entram no cálculo. Ajuste em <strong>Gerenciar Etapas e Serviços</strong>.
+          </div>
+        )}
+
+        {activeProgressMode === "none" && (
+          <div className="rounded-md border border-amber-300/60 bg-amber-50 dark:bg-amber-950/20 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-200">
+            Configure PLE/Contrato ou EAP para calcular o percentual de avanço.
           </div>
         )}
 
