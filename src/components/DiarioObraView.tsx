@@ -71,7 +71,7 @@ import {
   createDiaryItemAware,
 } from "@/offline/diaryAdapter";
 import { OfflineBanner } from "@/components/offline/OfflineStatusBadge";
-import { recomputeProjectProgress, subscribeSync } from "@/offline/sync";
+import { subscribeSync } from "@/offline/sync";
 import { compressImageSafe } from "@/lib/compressImage";
 
 // Compressão segura via createImageBitmap (evita estouro de memória em mobile)
@@ -835,36 +835,24 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
     };
   }, [currentProject?.id, user?.id, entryId, refreshHousesFromDB]);
 
-  // Reconciliação online: quando o navegador volta a ficar online e/ou
-  // quando o sync worker termina, recalcula o progresso de macros do
-  // projeto atual no servidor (cobre lançamentos feitos offline).
+  // Contencao: nao chamar recompute_house_progress_from_diary automaticamente.
+  // A RPC antiga recalcula houses.macros apenas por diary_items e pode apagar
+  // visualmente producao legitima vinda de weekly_productions/productions.
   useEffect(() => {
     if (!currentProject?.id) return;
-    const projectId = currentProject.id;
-
-    const triggerRecompute = async () => {
-      if (!navigator.onLine) return;
-      const res = await recomputeProjectProgress(projectId);
-      if (res.ok) {
-        await refreshHousesFromDB();
-        queryClient.invalidateQueries({ queryKey: ["houses"] });
-      }
+    // 1) Quando volta online, apenas recarrega o estado consolidado atual.
+    const onOnline = () => {
+      void refreshHousesFromDB();
+      queryClient.invalidateQueries({ queryKey: ["houses"] });
     };
-
-    // 1) Recalcula quando o navegador volta online
-    const onOnline = () => { void triggerRecompute(); };
     window.addEventListener("online", onOnline);
 
-    // 2) Recalcula quando o sync worker termina (já recompõe internamente,
-    // mas garantimos que a UI atual também sincronize)
+    // 2) Quando o sync worker termina, apenas sincroniza a UI com o banco.
     const unsub = subscribeSync((ev) => {
       if (ev.type === "done" && ev.synced > 0) {
         void refreshHousesFromDB();
       }
     });
-
-    // 3) Disparo inicial se já está online (catch-up de sessões anteriores)
-    if (navigator.onLine) void triggerRecompute();
 
     return () => {
       window.removeEventListener("online", onOnline);

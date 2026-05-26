@@ -277,31 +277,10 @@ export async function runSync(): Promise<void> {
       }
     }
 
-    // ─── Reconciliação: recalcula progresso das macros no servidor para
-    // todas as casas afetadas pelos lançamentos sincronizados.
-    // Isto repõe o que foi pulado quando o usuário lançou offline.
+    // Contencao: nao recalcular houses.macros pela RPC antiga.
+    // Ela usa apenas diary_items e pode apagar progresso legitimo registrado
+    // em weekly_productions/productions. A consolidacao correta vira em fase posterior.
     const recomputed: string[] = [];
-    for (const [projectId, houseSet] of affectedByProject.entries()) {
-      try {
-        const houseNumbers = Array.from(houseSet);
-        const { error: rpcErr } = await supabase.rpc(
-          "recompute_house_progress_from_diary" as any,
-          { p_project_id: projectId, p_house_numbers: houseNumbers }
-        );
-        if (!rpcErr) {
-          recomputed.push(projectId);
-          if (typeof window !== "undefined") {
-            window.dispatchEvent(new CustomEvent("obramap:progress-recomputed", {
-              detail: { projectId, houseNumbers }
-            }));
-          }
-        } else {
-          console.warn("[sync] recompute progress failed:", rpcErr.message);
-        }
-      } catch (e) {
-        console.warn("[sync] recompute progress threw:", e);
-      }
-    }
 
     await logDeviceSync({
       pending: await countPending(),
@@ -317,29 +296,14 @@ export async function runSync(): Promise<void> {
 }
 
 // ───────────────────────────── Recálculo sob demanda
-// Útil para o DiarioObraView chamar manualmente quando volta a ficar online,
-// ou após "Forçar sincronização" na página de fila.
+// Contencao temporaria: nao chamar recompute_house_progress_from_diary.
 export async function recomputeProjectProgress(
   projectId: string,
   houseNumbers?: number[]
 ): Promise<{ ok: boolean; error?: string }> {
-  if (!navigator.onLine) return { ok: false, error: "offline" };
-  try {
-    const { error } = await supabase.rpc(
-      "recompute_house_progress_from_diary" as any,
-      { p_project_id: projectId, p_house_numbers: houseNumbers ?? null }
-    );
-    if (error) return { ok: false, error: error.message };
-    // Notifica a UI (ConstructionContext escuta este evento)
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("obramap:progress-recomputed", {
-        detail: { projectId, houseNumbers }
-      }));
-    }
-    return { ok: true };
-  } catch (e: any) {
-    return { ok: false, error: e?.message || String(e) };
-  }
+  void projectId;
+  void houseNumbers;
+  return { ok: false, error: "recompute_disabled_for_safety" };
 }
 
 // ───────────────────────────── Bootstrap (instalado uma vez no App)
