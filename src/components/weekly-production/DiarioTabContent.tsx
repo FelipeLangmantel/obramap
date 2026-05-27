@@ -93,7 +93,7 @@ interface DiarioTabContentProps {
 export default function DiarioTabContent({ onOpenDiary }: DiarioTabContentProps = {}) {
   const { currentProject, updateBatchScopeProgress } = useConstruction();
   const houses = currentProject?.houses || [];
-  const { user, profile, isCompanyAdmin, isSystemAdmin } = useAuth();
+  const { user, profile, isCompanyAdmin, isSystemAdmin, isEditor, isViewer } = useAuth();
   const queryClient = useQueryClient();
   const { canApprove } = useCoordenadorAccess(currentProject?.id || null);
   const podeCorrigir = isCompanyAdmin || isSystemAdmin || canApprove;
@@ -131,6 +131,11 @@ export default function DiarioTabContent({ onOpenDiary }: DiarioTabContentProps 
   const [loading, setLoading] = useState(false);
   const [closing, setClosing] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [reopenEntry, setReopenEntry] = useState<EntryRow | null>(null);
+  const [reopening, setReopening] = useState(false);
+  const [requestReopenEntry, setRequestReopenEntry] = useState<EntryRow | null>(null);
+  const [requestingReopen, setRequestingReopen] = useState(false);
+  const [reopenJustificativa, setReopenJustificativa] = useState("");
 
   // Correção state
   const [correcaoItem, setCorrecaoItem] = useState<ConsolidadoRow | null>(null);
@@ -348,6 +353,66 @@ export default function DiarioTabContent({ onOpenDiary }: DiarioTabContentProps 
     await loadData();
   };
 
+  const handleReopenEntry = async () => {
+    if (!reopenEntry || !podeFecharSemana) return;
+    setReopening(true);
+    const { error } = await supabase
+      .from("diary_entries")
+      .update({ status: "rascunho", status_aprovacao: "preenchendo" } as any)
+      .eq("id", reopenEntry.id);
+
+    if (error) {
+      console.error("[DiarioTabContent] Erro tecnico ao reabrir diario:", error);
+      toast.error("Nao foi possivel reabrir o diario. Verifique sua permissao e tente novamente.");
+      setReopening(false);
+      return;
+    }
+
+    toast.success("Diario reaberto para preenchimento. Nenhuma producao foi apagada.");
+    setReopening(false);
+    setReopenEntry(null);
+    await loadData();
+  };
+
+  const handleRequestReopenEntry = async () => {
+    if (!requestReopenEntry || !currentProject?.id || !profile?.company_id || !user?.id || !reopenJustificativa.trim()) return;
+    setRequestingReopen(true);
+
+    const { error } = await supabase.from("diary_edit_requests" as any).insert({
+      diary_entry_id: requestReopenEntry.id,
+      project_id: currentProject.id,
+      company_id: profile.company_id,
+      requested_by: user.id,
+      requested_by_name: profile?.display_name || user?.email || "Usuario",
+      justificativa: reopenJustificativa.trim(),
+      status: "pendente",
+    });
+
+    if (error) {
+      console.error("[DiarioTabContent] Erro tecnico ao solicitar reabertura:", error);
+      toast.error("Nao foi possivel enviar a solicitacao de reabertura.");
+      setRequestingReopen(false);
+      return;
+    }
+
+    const { error: entryError } = await (supabase as any)
+      .from("diary_entries")
+      .update({ status_aprovacao: "solicitando_edicao" })
+      .eq("id", requestReopenEntry.id);
+
+    if (entryError) {
+      console.error("[DiarioTabContent] Erro tecnico ao sinalizar solicitacao de reabertura:", entryError);
+      toast.warning("Solicitacao enviada, mas nao foi possivel atualizar o status visual do diario.");
+    } else {
+      toast.success("Solicitacao de reabertura enviada ao administrador.");
+    }
+
+    setRequestingReopen(false);
+    setRequestReopenEntry(null);
+    setReopenJustificativa("");
+    await loadData();
+  };
+
   const shiftWeek = (delta: number) => {
     const newRef = new Date(weekRef);
     newRef.setDate(newRef.getDate() + delta * 7);
@@ -535,10 +600,15 @@ export default function DiarioTabContent({ onOpenDiary }: DiarioTabContentProps 
                     <TableHead className="text-center">Equipe</TableHead>
                     <TableHead className="text-center">Itens</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Acoes</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {entries.map(e => (
+                  {entries.map(e => {
+                    const isEditRequested = e.status_aprovacao === "solicitando_edicao";
+                    const isApproved = !isEditRequested && (e.status === "finalizado" || e.status_aprovacao === "aprovado");
+                    const canRequestReopen = isApproved && !podeFecharSemana && isEditor && !isViewer;
+                    return (
                     <TableRow
                       key={e.id}
                       className={onOpenDiary ? "cursor-pointer" : undefined}
@@ -552,7 +622,7 @@ export default function DiarioTabContent({ onOpenDiary }: DiarioTabContentProps 
                       <TableCell className="text-center">{e.equipe_presente || 0}</TableCell>
                       <TableCell className="text-center">{itemsByEntry.get(e.id) || 0}</TableCell>
                       <TableCell>
-                        {e.status === "finalizado" ? (
+                        {isApproved ? (
                           <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300">
                             ✅ Aprovado
                           </Badge>
@@ -577,8 +647,31 @@ export default function DiarioTabContent({ onOpenDiary }: DiarioTabContentProps 
                           </Badge>
                         )}
                       </TableCell>
+                      <TableCell className="text-right">
+                        {isApproved && podeFecharSemana && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={(ev) => { ev.stopPropagation(); setReopenEntry(e); }}
+                          >
+                            Reabrir diario
+                          </Button>
+                        )}
+                        {canRequestReopen && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={(ev) => { ev.stopPropagation(); setRequestReopenEntry(e); }}
+                          >
+                            Solicitar reversao
+                          </Button>
+                        )}
+                      </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
@@ -738,6 +831,69 @@ export default function DiarioTabContent({ onOpenDiary }: DiarioTabContentProps 
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Dialogs de reabertura de diario aprovado */}
+      <AlertDialog open={!!reopenEntry} onOpenChange={(open) => { if (!open && !reopening) setReopenEntry(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reabrir diario aprovado?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Este diario voltara para preenchimento e podera ser editado novamente. Nenhuma producao sera apagada.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={reopening}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleReopenEntry} disabled={reopening}>
+              {reopening && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Reabrir diario
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog
+        open={!!requestReopenEntry}
+        onOpenChange={(open) => {
+          if (!open && !requestingReopen) {
+            setRequestReopenEntry(null);
+            setReopenJustificativa("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Solicitar reversao da aprovacao</DialogTitle>
+            <DialogDescription>
+              Envie uma justificativa para que um administrador ou coordenador avalie a reabertura deste diario.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label className="text-xs">Justificativa *</Label>
+            <Textarea
+              value={reopenJustificativa}
+              onChange={(e) => setReopenJustificativa(e.target.value)}
+              placeholder="Descreva por que este diario precisa ser reaberto..."
+              rows={4}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={requestingReopen}
+              onClick={() => {
+                setRequestReopenEntry(null);
+                setReopenJustificativa("");
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleRequestReopenEntry} disabled={requestingReopen || !reopenJustificativa.trim()}>
+              {requestingReopen && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Enviar solicitacao
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog de seleção de item (quando há múltiplos lançamentos) */}
       <Dialog open={selecionarItemOpen} onOpenChange={setSelecionarItemOpen}>
