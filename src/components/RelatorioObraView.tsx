@@ -15,6 +15,7 @@ import { FileText, Loader2, CalendarDays, Users, ClipboardCheck, Hammer, AlertTr
 import { toast } from "sonner";
 
 type Periodo = "semanal" | "quinzenal" | "mensal" | "personalizado";
+type PhotoReportType = "simples" | "gerencial";
 
 const PERIODO_DAYS: Record<Exclude<Periodo, "personalizado">, number> = { semanal: 7, quinzenal: 15, mensal: 30 };
 
@@ -77,6 +78,7 @@ export default function RelatorioObraView() {
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportingPhotos, setExportingPhotos] = useState(false);
+  const [photoReportType, setPhotoReportType] = useState<PhotoReportType>("simples");
 
   const [entries, setEntries] = useState<DiaryEntryRow[]>([]);
   const [items, setItems] = useState<DiaryItemRow[]>([]);
@@ -239,6 +241,7 @@ export default function RelatorioObraView() {
   const photosByServicePeriod = useMemo(() => {
     const itemMap = new Map(items.map(item => [item.id, item]));
     const entryMap = new Map(entries.map(entry => [entry.id, entry]));
+    const seenPhotos = new Set<string>();
     const map = new Map<string, {
       diary_item_id: string;
       entry_date: string;
@@ -254,6 +257,10 @@ export default function RelatorioObraView() {
 
     for (const photo of photos) {
       if (!photo.diary_item_id) continue;
+      const photoKey = photo.id || photo.storage_path;
+      if (seenPhotos.has(photoKey)) continue;
+      seenPhotos.add(photoKey);
+
       const item = itemMap.get(photo.diary_item_id);
       const entry = entryMap.get(photo.diary_entry_id);
       if (!item || !entry) continue;
@@ -280,8 +287,81 @@ export default function RelatorioObraView() {
   }, [entries, items, photos]);
 
   const generalPhotosPeriod = useMemo(() => {
-    return photos.filter(photo => !photo.diary_item_id);
+    const seenPhotos = new Set<string>();
+    const linkedPhotoKeys = new Set(
+      photos
+        .filter(photo => photo.diary_item_id)
+        .map(photo => photo.id || photo.storage_path)
+    );
+    return photos.filter(photo => {
+      if (photo.diary_item_id) return false;
+      const photoKey = photo.id || photo.storage_path;
+      if (linkedPhotoKeys.has(photoKey)) return false;
+      if (seenPhotos.has(photoKey)) return false;
+      seenPhotos.add(photoKey);
+      return true;
+    });
   }, [photos]);
+
+  const eapPhysicalSummary = useMemo(() => {
+    const linkedPhotoCountByItem = new Map<string, number>();
+    photosByServicePeriod.forEach(group => {
+      linkedPhotoCountByItem.set(group.diary_item_id, group.photos.length);
+    });
+
+    const map = new Map<string, {
+      macroName: string;
+      scopeIds: Set<string>;
+      houses: Set<number>;
+      percentages: number[];
+      linkedPhotos: number;
+      hasIncompleteData: boolean;
+    }>();
+
+    items.forEach(item => {
+      const macroKey = item.macro_id || item.macro_name || "sem-etapa";
+      const macroName = item.macro_name?.trim() || "Etapa nao informada";
+      if (!map.has(macroKey)) {
+        map.set(macroKey, {
+          macroName,
+          scopeIds: new Set<string>(),
+          houses: new Set<number>(),
+          percentages: [],
+          linkedPhotos: 0,
+          hasIncompleteData: false,
+        });
+      }
+
+      const group = map.get(macroKey)!;
+      const scopeKey = item.scope_id || item.scope_name;
+      if (scopeKey) group.scopeIds.add(scopeKey);
+      else group.hasIncompleteData = true;
+
+      item.house_ids.forEach(house => group.houses.add(house));
+
+      if (Number.isFinite(item.percentual_executado)) {
+        group.percentages.push(item.percentual_executado);
+      } else {
+        group.hasIncompleteData = true;
+      }
+
+      group.linkedPhotos += linkedPhotoCountByItem.get(item.id) || 0;
+      if (!item.macro_name || !item.scope_name) group.hasIncompleteData = true;
+    });
+
+    return Array.from(map.values())
+      .map(group => ({
+        macroName: group.macroName,
+        servicesCount: group.scopeIds.size,
+        housesCount: group.houses.size,
+        avgPercent: group.percentages.length > 0
+          ? Math.round(group.percentages.reduce((sum, value) => sum + value, 0) / group.percentages.length)
+          : null,
+        linkedPhotos: group.linkedPhotos,
+        hasIncompleteData: group.hasIncompleteData,
+      }))
+      .sort((a, b) => a.macroName.localeCompare(b.macroName));
+  }, [items, photosByServicePeriod]);
 
   const photoKpis = useMemo(() => {
     const linkedPhotos = photos.filter(photo => photo.diary_item_id).length;
@@ -374,13 +454,8 @@ export default function RelatorioObraView() {
     }
   };
 
-  const handleGeneratePhotoPDF = async () => {
+  const handleGeneratePhotoPDF = async (reportType: PhotoReportType = photoReportType) => {
     if (!currentProject) return;
-    if (photos.length === 0) {
-      toast.info("Não há fotos no período selecionado.");
-      return;
-    }
-
     setExportingPhotos(true);
     try {
       const { jsPDF } = await import("jspdf");
@@ -397,6 +472,7 @@ export default function RelatorioObraView() {
         (currentProject as any).address ||
         (currentProject as any).endereco ||
         "";
+      const isManagerial = reportType === "gerencial";
       const allHouseNumbers = new Set<number>();
 
       photosByServicePeriod.forEach(group => {
@@ -430,6 +506,51 @@ export default function RelatorioObraView() {
         const lines = doc.splitTextToSize(text, maxW);
         doc.text(lines, x, y);
         return y + lines.length * lineH;
+      };
+
+      const drawSimpleTable = (
+        startY: number,
+        headers: string[],
+        rows: Array<Array<string | number>>,
+        columnWidths: number[],
+      ) => {
+        let tableY = startY;
+        const rowH = 8;
+
+        tableY = ensurePage(tableY, rowH * 2);
+        doc.setFillColor(37, 99, 235);
+        doc.setDrawColor(37, 99, 235);
+        doc.rect(margin, tableY - 5, contentW, rowH, "FD");
+        doc.setTextColor(255);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+
+        let x = margin + 2;
+        headers.forEach((header, index) => {
+          doc.text(header, x, tableY);
+          x += columnWidths[index];
+        });
+        tableY += rowH;
+
+        doc.setTextColor(30);
+        doc.setFont("helvetica", "normal");
+        rows.forEach((row, rowIndex) => {
+          tableY = ensurePage(tableY, rowH + 2);
+          if (rowIndex % 2 === 0) {
+            doc.setFillColor(248, 250, 252);
+            doc.rect(margin, tableY - 5, contentW, rowH, "F");
+          }
+
+          let cellX = margin + 2;
+          row.forEach((cell, index) => {
+            const text = doc.splitTextToSize(String(cell), columnWidths[index] - 3);
+            doc.text(text.slice(0, 2), cellX, tableY);
+            cellX += columnWidths[index];
+          });
+          tableY += rowH;
+        });
+
+        return tableY + 4;
       };
 
       const renderPhotoCell = async (
@@ -489,6 +610,8 @@ export default function RelatorioObraView() {
       doc.text(`Período: ${periodText}`, margin, y);
       y += 7;
       doc.text(`Emissão: ${issuedAt}`, margin, y);
+      y += 7;
+      doc.text(`Tipo: ${isManagerial ? "Gerencial" : "Simples"}`, margin, y);
       y += 12;
 
       doc.setFont("helvetica", "bold");
@@ -515,6 +638,77 @@ export default function RelatorioObraView() {
       });
 
       y += 8;
+
+      if (photos.length === 0) {
+        y = ensurePage(y, 24);
+        doc.setFillColor(255, 251, 235);
+        doc.setDrawColor(245, 158, 11);
+        doc.rect(margin, y - 5, contentW, 18, "FD");
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        doc.setTextColor(120, 53, 15);
+        y = addWrappedText(
+          "Nenhuma foto foi encontrada no periodo selecionado. O relatorio foi emitido para registrar a ausencia de fotos neste intervalo.",
+          margin + 3,
+          y + 2,
+          contentW - 6,
+          5,
+        );
+        doc.setTextColor(30);
+        y += 8;
+      }
+
+      if (isManagerial) {
+        y = ensurePage(y, 34);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(12);
+        doc.text("Resumo fisico por EAP/etapa", margin, y);
+        y += 8;
+
+        if (eapPhysicalSummary.length === 0) {
+          doc.setFillColor(241, 245, 249);
+          doc.setDrawColor(203, 213, 225);
+          doc.rect(margin, y - 5, contentW, 18, "FD");
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(9);
+          y = addWrappedText(
+            "Nao ha servicos vinculados suficientes no periodo para calcular o resumo fisico por EAP. O registro fotografico segue disponivel abaixo.",
+            margin + 3,
+            y + 2,
+            contentW - 6,
+            5,
+          );
+          y += 8;
+        } else {
+          const rows = eapPhysicalSummary.map(row => [
+            row.macroName,
+            row.servicesCount,
+            row.housesCount,
+            row.avgPercent == null ? "N/D" : `${row.avgPercent}%`,
+            row.linkedPhotos,
+          ]);
+          y = drawSimpleTable(y, ["Etapa/EAP", "Serv.", "Casas", "% medio", "Fotos"], rows, [72, 22, 24, 30, 22]);
+
+          if (eapPhysicalSummary.some(row => row.hasIncompleteData)) {
+            y = ensurePage(y, 16);
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(8);
+            doc.setTextColor(100);
+            y = addWrappedText(
+              "Observacao: alguns lancamentos nao possuem etapa, servico ou percentual completo; estes itens foram mantidos no relatorio com os dados disponiveis.",
+              margin,
+              y,
+              contentW,
+              4,
+            );
+            doc.setTextColor(30);
+            y += 4;
+          }
+        }
+
+        y += 6;
+      }
+
       doc.setFont("helvetica", "bold");
       doc.setFontSize(12);
       doc.text("Registro fotográfico por serviço", margin, y);
@@ -641,7 +835,8 @@ export default function RelatorioObraView() {
       }
 
       const safeName = currentProject.name.replace(/[^\w\-]+/g, "_");
-      doc.save(`relatorio-fotografico-${safeName}-${dataInicio}-${dataFim}.pdf`);
+      const typeSuffix = isManagerial ? "gerencial" : "simples";
+      doc.save(`relatorio-fotografico-${typeSuffix}-${safeName}-${dataInicio}-${dataFim}.pdf`);
       toast.success("Relatório fotográfico gerado!");
     } catch (err: any) {
       toast.error("Erro ao gerar relatório fotográfico: " + (err.message || ""));
@@ -831,7 +1026,19 @@ export default function RelatorioObraView() {
               {exporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileText className="h-4 w-4 mr-2" />}
               Gerar PDF
             </Button>
-            <Button onClick={handleGeneratePhotoPDF} disabled={exportingPhotos || loading} variant="outline">
+            <div className="min-w-[160px]">
+              <label className="text-xs font-medium text-muted-foreground">Tipo fotografico</label>
+              <Select value={photoReportType} onValueChange={(value) => setPhotoReportType(value as PhotoReportType)}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="simples">Simples</SelectItem>
+                  <SelectItem value="gerencial">Gerencial</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button onClick={() => handleGeneratePhotoPDF()} disabled={exportingPhotos || loading} variant="outline">
               {exportingPhotos ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Camera className="h-4 w-4 mr-2" />}
               Gerar Relatório Fotográfico
             </Button>
