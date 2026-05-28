@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 export interface SystemNotification {
   id: string;
   company_id: string;
-  obra_id: string;
+  obra_id: string | null;
   tipo: string;
   titulo: string;
   mensagem: string;
@@ -19,38 +19,93 @@ export interface SystemNotification {
   obra_nome?: string;
 }
 
+type NotificationAccess = {
+  adminLike: boolean;
+  allowedObraIds: string[] | null;
+};
+
 export function useNotifications(modulo?: string) {
-  const { company, user } = useAuth();
+  const { company, user, isCompanyAdmin, isSystemAdmin, permissions } = useAuth();
   const [count, setCount] = useState(0);
   const [notifications, setNotifications] = useState<SystemNotification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
 
+  const loadNotificationAccess = useCallback(async (): Promise<NotificationAccess | null> => {
+    if (!company?.id || !user?.id) return null;
+
+    if (isCompanyAdmin || isSystemAdmin) {
+      return { adminLike: true, allowedObraIds: null };
+    }
+
+    const allowedProjectIds = permissions?.allowed_project_ids;
+    if (!permissions || !allowedProjectIds || allowedProjectIds.length === 0) {
+      return { adminLike: false, allowedObraIds: [] };
+    }
+
+    const { data, error } = await supabase
+      .from("obras_portfolio")
+      .select("id")
+      .eq("company_id", company.id)
+      .in("obramap_project_id", allowedProjectIds);
+
+    if (error) {
+      console.error("Error loading accessible works for notifications:", error);
+      return { adminLike: false, allowedObraIds: [] };
+    }
+
+    return {
+      adminLike: false,
+      allowedObraIds: (data || []).map((obra) => obra.id),
+    };
+  }, [company?.id, user?.id, isCompanyAdmin, isSystemAdmin, permissions]);
+
+  const applyNotificationAccessFilter = useCallback((query: any, access: NotificationAccess) => {
+    if (access.adminLike) return query;
+
+    if (access.allowedObraIds === null) {
+      return query.or(`user_id.eq.${user!.id},user_id.is.null`);
+    }
+
+    const allowedBroadcasts = ["and(user_id.is.null,obra_id.is.null)"];
+    if (access.allowedObraIds.length > 0) {
+      allowedBroadcasts.push(`and(user_id.is.null,obra_id.in.(${access.allowedObraIds.join(",")}))`);
+    }
+
+    return query.or([`user_id.eq.${user!.id}`, ...allowedBroadcasts].join(","));
+  }, [user?.id]);
+
   const loadCount = useCallback(async () => {
     if (!company?.id || !user?.id) return;
+    const access = await loadNotificationAccess();
+    if (!access) return;
+
     let q = supabase.from("system_notifications")
       .select("id", { count: "exact", head: true })
       .eq("company_id", company.id)
-      .or(`user_id.is.null,user_id.eq.${user.id}`)
       .eq("lida", false)
       .eq("resolvida", false);
+    q = applyNotificationAccessFilter(q, access);
     if (modulo) q = q.eq("modulo", modulo);
     const { count: c } = await q;
     setCount(c || 0);
-  }, [company?.id, user?.id, modulo]);
+  }, [company?.id, user?.id, modulo, loadNotificationAccess, applyNotificationAccessFilter]);
 
   const loadNotifications = useCallback(async () => {
     if (!company?.id || !user?.id) return;
+    const access = await loadNotificationAccess();
+    if (!access) return;
+
     // Use direct query to join obra name
     let q = supabase
       .from("system_notifications")
-      .select("*, obras_portfolio!system_notifications_obra_id_fkey(nome)")
+      .select("*, obras_portfolio!system_notifications_obra_id_fkey(nome, obramap_project_id)")
       .eq("company_id", company.id)
-      .or(`user_id.is.null,user_id.eq.${user.id}`)
       .eq("resolvida", false)
       .not("tipo", "like", "%documento%")
       .order("lida", { ascending: true })
       .order("created_at", { ascending: false })
       .limit(30);
+    q = applyNotificationAccessFilter(q, access);
     if (modulo) q = q.eq("modulo", modulo);
 
     const { data } = await q;
@@ -70,7 +125,7 @@ export function useNotifications(modulo?: string) {
       obra_nome: n.obras_portfolio?.nome || "",
     }));
     setNotifications(mapped);
-  }, [company?.id, user?.id, modulo]);
+  }, [company?.id, user?.id, modulo, loadNotificationAccess, applyNotificationAccessFilter]);
 
   useEffect(() => {
     loadCount();
@@ -79,7 +134,7 @@ export function useNotifications(modulo?: string) {
       .channel(`notif-${company.id}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "system_notifications" },
+        { event: "*", schema: "public", table: "system_notifications", filter: `company_id=eq.${company.id}` },
         () => {
           loadCount();
           if (isOpen) loadNotifications();
@@ -113,17 +168,20 @@ export function useNotifications(modulo?: string) {
 
   const markAllAsRead = useCallback(async () => {
     if (!company?.id || !user?.id) return;
+    const access = await loadNotificationAccess();
+    if (!access) return;
+
     let q = supabase
       .from("system_notifications")
       .update({ lida: true, lida_em: new Date().toISOString() } as any)
       .eq("company_id", company.id)
-      .or(`user_id.is.null,user_id.eq.${user.id}`)
       .eq("lida", false);
+    q = applyNotificationAccessFilter(q, access);
     if (modulo) q = (q as any).eq("modulo", modulo);
     await q;
     loadCount();
     loadNotifications();
-  }, [company?.id, user?.id, modulo, loadCount, loadNotifications]);
+  }, [company?.id, user?.id, modulo, loadCount, loadNotifications, loadNotificationAccess, applyNotificationAccessFilter]);
 
   return {
     count,
