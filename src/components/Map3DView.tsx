@@ -1293,6 +1293,8 @@ export function Map3DView() {
   const [contextPreview, setContextPreview] = useState<GlbContextPreview | null>(null);
   const [quickContextPanelOpen, setQuickContextPanelOpen] = useState(false);
   const [pendingGlbImport, setPendingGlbImport] = useState<{ file: File; existingGlbRecords: number } | null>(null);
+  const gltfImportInFlightRef = useRef(false);
+  const [isGltfImporting, setIsGltfImporting] = useState(false);
   const [glbLinkScope, setGlbLinkScope] = useState<"preserve" | "fresh">("preserve");
   const [trustedGlbLinkKeys, setTrustedGlbLinkKeys] = useState<Set<string>>(new Set());
   const [smartLinkOpen, setSmartLinkOpen] = useState(false);
@@ -4740,6 +4742,13 @@ export function Map3DView() {
     mode: "preserve" | "new",
     existingGlbRecords = 0,
   ) => {
+    if (gltfImportInFlightRef.current) {
+      return;
+    }
+    gltfImportInFlightRef.current = true;
+    setIsGltfImporting(true);
+    setPendingGlbImport(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
     setIsLoading(true);
     setSceneReady(false);
     clearSmartLinkPreview("new GLB import");
@@ -4779,6 +4788,8 @@ export function Map3DView() {
       );
     } finally {
       setPendingGlbImport(null);
+      gltfImportInFlightRef.current = false;
+      setIsGltfImporting(false);
       setIsLoading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
@@ -4788,6 +4799,10 @@ export function Map3DView() {
     const input = e.currentTarget;
     const file = input.files?.[0];
     input.value = "";
+    if (gltfImportInFlightRef.current) {
+      toast.info("Importacao 3D em andamento. Aguarde concluir para selecionar outro arquivo.");
+      return;
+    }
     if (!canImportMainModel) {
       toast.error("Sem permissão para importar modelo 3D.");
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -5936,12 +5951,12 @@ export function Map3DView() {
       />
 
       <AlertDialog open={!!pendingGlbImport} onOpenChange={(open) => {
-        if (!open) {
+        if (!open && !isGltfImporting) {
           setPendingGlbImport(null);
           if (fileInputRef.current) fileInputRef.current.value = '';
         }
       }}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <AlertDialogHeader>
             <AlertDialogTitle>Importar novo modelo GLB?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -5949,8 +5964,10 @@ export function Map3DView() {
               Escolha se deseja reaproveitar vínculos existentes ou iniciar o inventário GLB limpo para este novo arquivo.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="sm:flex-col sm:items-stretch lg:flex-row lg:items-center">
+          <AlertDialogFooter className="flex-col items-stretch gap-2 sm:flex-col sm:space-x-0 md:flex-row md:flex-wrap md:items-center md:justify-end">
             <AlertDialogCancel
+              className="mt-0"
+              disabled={isGltfImporting}
               onClick={() => {
                 setPendingGlbImport(null);
                 if (fileInputRef.current) fileInputRef.current.value = '';
@@ -5961,16 +5978,30 @@ export function Map3DView() {
             <Button
               type="button"
               variant="outline"
-              disabled={isLoading || !pendingGlbImport}
-              onClick={() => pendingGlbImport && void importGltfFile(pendingGlbImport.file, "preserve", pendingGlbImport.existingGlbRecords)}
+              className="h-auto min-h-10 whitespace-normal text-left"
+              disabled={isLoading || isGltfImporting || !pendingGlbImport}
+              onClick={() => {
+                if (!pendingGlbImport || gltfImportInFlightRef.current) return;
+                const nextImport = pendingGlbImport;
+                setPendingGlbImport(null);
+                if (fileInputRef.current) fileInputRef.current.value = '';
+                void importGltfFile(nextImport.file, "preserve", nextImport.existingGlbRecords);
+              }}
             >
-              Atualizar modelo atual e preservar vínculos
+              Atualizar e preservar vínculos
             </Button>
             <AlertDialogAction
-              disabled={isLoading || !pendingGlbImport}
-              onClick={() => pendingGlbImport && void importGltfFile(pendingGlbImport.file, "new", pendingGlbImport.existingGlbRecords)}
+              className="h-auto min-h-10 whitespace-normal text-left"
+              disabled={isLoading || isGltfImporting || !pendingGlbImport}
+              onClick={() => {
+                if (!pendingGlbImport || gltfImportInFlightRef.current) return;
+                const nextImport = pendingGlbImport;
+                setPendingGlbImport(null);
+                if (fileInputRef.current) fileInputRef.current.value = '';
+                void importGltfFile(nextImport.file, "new", nextImport.existingGlbRecords);
+              }}
             >
-              Importar como novo modelo e limpar vínculos GLB anteriores
+              Novo modelo e limpar vínculos GLB
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
