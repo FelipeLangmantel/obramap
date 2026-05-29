@@ -79,6 +79,9 @@ interface WeeklyProduction {
   is_initial_database: boolean;
   created_by_user_id: string | null;
   created_by_name: string | null;
+  source_origin?: "initial" | "weekly" | "diary";
+  source_percentual?: number | null;
+  percentual_executado?: number | null;
 }
 
 interface PlannedPeriod {
@@ -99,6 +102,57 @@ const FILTER_STORAGE_KEY = "obramap_production_filters";
 const TAB_STORAGE_KEY = "obramap_production_tab";
 const INITIAL_DB_STORAGE_KEY = "obramap_initial_database_mode";
 
+const productionOriginStyles = {
+  initial: {
+    shortLabel: "Inicial",
+    fullLabel: "Banco Inicial",
+    cardClass: "border-amber-500/50 bg-amber-500/5 hover:bg-amber-500/10",
+    badgeClass: "border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+    chipClass: "border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  },
+  weekly: {
+    shortLabel: "Semanal",
+    fullLabel: "Produção Semanal",
+    cardClass: "border-blue-500/45 bg-blue-500/5 hover:bg-blue-500/10",
+    badgeClass: "border-blue-500/60 bg-blue-500/10 text-blue-700 dark:text-blue-300",
+    chipClass: "border-blue-500/50 bg-blue-500/10 text-blue-700 dark:text-blue-300",
+  },
+  diary: {
+    shortLabel: "Diário",
+    fullLabel: "Diário de Obras",
+    cardClass: "border-teal-500/45 bg-teal-500/5 hover:bg-teal-500/10",
+    badgeClass: "border-teal-500/60 bg-teal-500/10 text-teal-700 dark:text-teal-300",
+    chipClass: "border-teal-500/50 bg-teal-500/10 text-teal-700 dark:text-teal-300",
+  },
+} as const;
+
+function getProductionOrigin(prod: WeeklyProduction) {
+  if (prod.source_origin) return prod.source_origin;
+  return prod.is_initial_database ? "initial" : "weekly";
+}
+
+function productionDiaryMatchKey(
+  macroId: string,
+  scopeId: string,
+  weekStart: string,
+  weekEnd: string,
+  houseIds: number[] = [],
+) {
+  return [
+    macroId,
+    scopeId,
+    weekStart,
+    weekEnd,
+    houseIds.map(Number).sort((a, b) => a - b).join(","),
+  ].join("|");
+}
+
+function getProductionHousePercent(prod: WeeklyProduction) {
+  const rawPercent = prod.percentual_executado ?? prod.source_percentual ?? 100;
+  const numericPercent = Number(rawPercent);
+  return Number.isFinite(numericPercent) ? Math.max(0, Math.min(100, numericPercent)) : 100;
+}
+
 function ProductionRecordItem({ prod, canEdit, podeExcluir, onEdit, onDelete, showFullDetails = false }: {
   prod: WeeklyProduction;
   canEdit: boolean;
@@ -107,9 +161,17 @@ function ProductionRecordItem({ prod, canEdit, podeExcluir, onEdit, onDelete, sh
   onDelete: () => void;
   showFullDetails?: boolean;
 }) {
+  const origin = getProductionOrigin(prod);
+  const originStyle = productionOriginStyles[origin];
+  const visibleHouses = showFullDetails ? prod.house_ids : prod.house_ids.slice(0, 6);
+
   return (
     <div 
-      className={`flex items-start gap-3 p-2.5 rounded-lg border hover:bg-accent/30 transition-colors ${canEdit ? 'cursor-pointer' : ''} ${prod.is_initial_database ? 'border-amber-500/30 bg-amber-500/5' : ''}`}
+      className={cn(
+        "flex items-start gap-3 rounded-lg border p-3 transition-colors",
+        canEdit ? "cursor-pointer" : "",
+        originStyle.cardClass,
+      )}
       onClick={() => { if (canEdit) onEdit(); }}
     >
       <div 
@@ -117,7 +179,12 @@ function ProductionRecordItem({ prod, canEdit, podeExcluir, onEdit, onDelete, sh
         style={{ backgroundColor: prod.macro_color }}
       />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{prod.scope_name}</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm font-semibold truncate">{prod.scope_name}</p>
+          <Badge variant="outline" className={cn("text-[10px]", originStyle.badgeClass)}>
+            {originStyle.shortLabel}
+          </Badge>
+        </div>
         <p className="text-xs text-muted-foreground">
           <span className="uppercase">{prod.macro_name}</span> • {format(parseISO(prod.week_start), "dd/MM", { locale: ptBR })} - {format(parseISO(prod.week_end), "dd/MM", { locale: ptBR })}
         </p>
@@ -126,6 +193,24 @@ function ProductionRecordItem({ prod, canEdit, podeExcluir, onEdit, onDelete, sh
             Casas: {prod.house_ids.join(", ")}
           </p>
         )}
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {visibleHouses.map((houseId) => (
+            <span
+              key={houseId}
+              className={cn(
+                "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium",
+                originStyle.chipClass,
+              )}
+            >
+              {String(houseId).padStart(2, "0")} • {getProductionHousePercent(prod)}%
+            </span>
+          ))}
+          {!showFullDetails && prod.house_ids.length > visibleHouses.length && (
+            <span className="inline-flex items-center rounded-full border border-muted-foreground/30 bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+              +{prod.house_ids.length - visibleHouses.length}
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground">
           <span className="flex items-center gap-1">
             <Clock className="h-3 w-3" />
@@ -145,6 +230,11 @@ function ProductionRecordItem({ prod, canEdit, podeExcluir, onEdit, onDelete, sh
             <Badge variant="secondary" className="text-xs">{prod.houses_count} casas</Badge>
             {prod.is_initial_database && (
               <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-500/50">Inicial</Badge>
+            )}
+            {!prod.is_initial_database && (
+              <Badge variant="outline" className={cn("text-[10px]", originStyle.badgeClass)}>
+                {originStyle.shortLabel}
+              </Badge>
             )}
           </div>
           {!showFullDetails && (
@@ -277,6 +367,59 @@ export function WeeklyProductionView() {
 
   const macros = currentProject?.macrosTemplate || [];
   const houses = currentProject?.houses || [];
+
+  const loadDiaryProductionMatches = useCallback(async () => {
+    if (!currentProject?.id) return new Map<string, number>();
+    const { data, error } = await (supabase as any)
+      .from("diary_items")
+      .select(`
+        macro_id,
+        scope_id,
+        house_ids,
+        percentual_executado,
+        diary_entries!inner(project_id, data_relatorio)
+      `)
+      .eq("diary_entries.project_id", currentProject.id)
+      .is("deleted_at", null)
+      .or("review_status.is.null,review_status.neq.rejeitado");
+    if (error) {
+      console.warn("[WeeklyProductionView] diary origin lookup failed", error);
+      return new Map<string, number>();
+    }
+
+    const matches = new Map<string, number>();
+    for (const item of data || []) {
+      const entryDate = item.diary_entries?.data_relatorio;
+      if (!entryDate) continue;
+      const parsedDate = parseISO(entryDate);
+      const weekStart = format(startOfWeek(parsedDate, { weekStartsOn: 1 }), "yyyy-MM-dd");
+      const weekEnd = format(endOfWeek(parsedDate, { weekStartsOn: 1 }), "yyyy-MM-dd");
+      const key = productionDiaryMatchKey(
+        item.macro_id,
+        item.scope_id,
+        weekStart,
+        weekEnd,
+        (item.house_ids || []).map(Number),
+      );
+      matches.set(key, Number(item.percentual_executado ?? 100));
+    }
+    return matches;
+  }, [currentProject?.id]);
+
+  const applyProductionOrigins = useCallback((rows: WeeklyProduction[], diaryMatches: Map<string, number>) => {
+    return rows.map((row) => {
+      if (row.is_initial_database) {
+        return { ...row, source_origin: "initial" as const, source_percentual: row.percentual_executado ?? 100 };
+      }
+      const key = productionDiaryMatchKey(row.macro_id, row.scope_id, row.week_start, row.week_end, row.house_ids || []);
+      const diaryPercent = diaryMatches.get(key);
+      if (diaryPercent !== undefined) {
+        return { ...row, source_origin: "diary" as const, source_percentual: diaryPercent };
+      }
+      return { ...row, source_origin: "weekly" as const, source_percentual: row.percentual_executado ?? 100 };
+    });
+  }, []);
+
   useEffect(() => {
     const savedPeriod = localStorage.getItem(`${FILTER_STORAGE_KEY}_period`);
     if (savedPeriod) {
@@ -487,10 +630,12 @@ export function WeeklyProductionView() {
           .order('week_start', { ascending: true })
       ]);
 
+      const diaryMatches = await loadDiaryProductionMatches();
+
       if (productionsResult.error) {
         console.error('Error loading productions:', productionsResult.error);
       } else {
-        setProductions(productionsResult.data || []);
+        setProductions(applyProductionOrigins((productionsResult.data || []) as WeeklyProduction[], diaryMatches));
       }
 
       if (plannedResult.error) {
@@ -503,7 +648,7 @@ export function WeeklyProductionView() {
     };
 
     loadData();
-  }, [currentProject]);
+  }, [currentProject, applyProductionOrigins, loadDiaryProductionMatches]);
 
   // When new measurement/service is selected, auto-fill form
   useEffect(() => {
@@ -553,7 +698,8 @@ export function WeeklyProductionView() {
       .is('deleted_at', null)
       .order('week_start', { ascending: false });
     
-    setProductions(newData || []);
+    const diaryMatches = await loadDiaryProductionMatches();
+    setProductions(applyProductionOrigins((newData || []) as WeeklyProduction[], diaryMatches));
   };
 
   // Realtime: novos lançamentos do Diário recarregam a lista
@@ -755,8 +901,13 @@ export function WeeklyProductionView() {
 
         if (error) throw error;
         if (insertedWeeklyProduction) {
+          const sourceOrigin = isInitialDatabase ? "initial" : "weekly";
           setProductions(prev => [
-            insertedWeeklyProduction as WeeklyProduction,
+            {
+              ...(insertedWeeklyProduction as WeeklyProduction),
+              source_origin: sourceOrigin,
+              source_percentual: customPercentMode ? massPercentage : 100,
+            },
             ...prev.filter(prod => prod.id !== insertedWeeklyProduction.id),
           ]);
         }

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,6 +47,9 @@ interface WeeklyProduction {
   unit_label?: string | null;
   unit_symbol?: string | null;
   quantity?: number | null;
+  source_origin?: "initial" | "weekly" | "diary";
+  source_percentual?: number | null;
+  percentual_executado?: number | null;
 }
 
 interface EditProductionDialogProps {
@@ -66,12 +70,35 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [quantity, setQuantity] = useState<number | "">("");
+  const [blockedHouseMap, setBlockedHouseMap] = useState<Map<number, string>>(new Map());
 
   // Percentage editing
   const [editPercentageMode, setEditPercentageMode] = useState(false);
   const [housePercentages, setHousePercentages] = useState<Record<number, number>>({});
 
   const houses = currentProject?.houses || [];
+
+  const origin = production?.source_origin ?? (production?.is_initial_database ? "initial" : "weekly");
+  const originStyle = {
+    initial: {
+      label: "Banco de Atividades Iniciais",
+      badge: "border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+      panel: "border-amber-500/40 bg-amber-500/5",
+      chip: "border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+    },
+    weekly: {
+      label: "Produção Semanal",
+      badge: "border-blue-500/60 bg-blue-500/10 text-blue-700 dark:text-blue-300",
+      panel: "border-blue-500/40 bg-blue-500/5",
+      chip: "border-blue-500/50 bg-blue-500/10 text-blue-700 dark:text-blue-300",
+    },
+    diary: {
+      label: "Diário de Obras",
+      badge: "border-teal-500/60 bg-teal-500/10 text-teal-700 dark:text-teal-300",
+      panel: "border-teal-500/40 bg-teal-500/5",
+      chip: "border-teal-500/50 bg-teal-500/10 text-teal-700 dark:text-teal-300",
+    },
+  }[origin];
 
   // Resolve unidade efetiva: serviço → obra → fallback "un"
   const effectiveUnit = {
@@ -130,8 +157,49 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
     }
   }, [production, houses]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const loadBlockedHouses = async () => {
+      if (!production || !currentProject?.id || !open) {
+        setBlockedHouseMap(new Map());
+        return;
+      }
+      const { data, error } = await supabase
+        .from("weekly_productions")
+        .select("id, house_ids")
+        .eq("project_id", currentProject.id)
+        .eq("macro_id", production.macro_id)
+        .eq("scope_id", production.scope_id)
+        .neq("id", production.id)
+        .is("deleted_at", null);
+      if (cancelled) return;
+      if (error) {
+        console.error("[EditProductionDialog] duplicate lookup failed", error);
+        setBlockedHouseMap(new Map());
+        return;
+      }
+      const blocked = new Map<number, string>();
+      for (const row of data || []) {
+        for (const houseId of ((row.house_ids || []) as number[]).map(Number)) {
+          if (!production.house_ids.includes(houseId)) {
+            blocked.set(houseId, row.id);
+          }
+        }
+      }
+      setBlockedHouseMap(blocked);
+    };
+    void loadBlockedHouses();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentProject?.id, open, production]);
+
   // Toggle house selection
   const toggleHouse = (houseId: number) => {
+    if (blockedHouseMap.has(houseId) && !production?.house_ids.includes(houseId)) {
+      toast.error(`Casa ${houseId} já possui lançamento para este serviço.`);
+      return;
+    }
     setSelectedHouses(prev => 
       prev.includes(houseId) 
         ? prev.filter(id => id !== houseId)
@@ -187,6 +255,29 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
 
     if (selectedHouses.length === 0) {
       toast.error("Selecione pelo menos uma casa");
+      return;
+    }
+
+    const { data: duplicateRows, error: duplicateError } = await supabase
+      .from("weekly_productions")
+      .select("id, house_ids")
+      .eq("project_id", currentProject.id)
+      .eq("macro_id", production.macro_id)
+      .eq("scope_id", production.scope_id)
+      .neq("id", production.id)
+      .is("deleted_at", null);
+    if (duplicateError) {
+      console.error("[EditProductionDialog] duplicate validation failed", duplicateError);
+      toast.error("Não foi possível validar duplicidade antes de salvar.");
+      return;
+    }
+    const originalHouseSet = new Set(production.house_ids.map(Number));
+    const duplicatedHouse = selectedHouses.find((houseId) =>
+      !originalHouseSet.has(houseId)
+      && (duplicateRows || []).some((row) => ((row.house_ids || []) as number[]).map(Number).includes(houseId)),
+    );
+    if (duplicatedHouse !== undefined) {
+      toast.error(`Não é possível salvar: a casa ${duplicatedHouse} já possui lançamento para este serviço.`);
       return;
     }
 
@@ -397,13 +488,16 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
 
           <div className="space-y-4 overflow-y-auto flex-1">
             {/* Production Info */}
-            <div className="p-3 bg-secondary/30 rounded-lg space-y-2">
-              <div className="flex items-center gap-2">
+            <div className={cn("rounded-lg border p-3 space-y-2", originStyle.panel)}>
+              <div className="flex flex-wrap items-center gap-2">
                 <div 
                   className="w-3 h-3 rounded-full" 
                   style={{ backgroundColor: production.macro_color }}
                 />
                 <span className="font-medium text-sm uppercase">{production.macro_name}</span>
+                <Badge variant="outline" className={cn("ml-auto text-xs", originStyle.badge)}>
+                  {originStyle.label}
+                </Badge>
               </div>
               <p className="text-sm text-muted-foreground">{production.scope_name}</p>
             </div>
@@ -508,6 +602,21 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
                   </Badge>
                 )}
               </div>
+              {selectedHouses.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {selectedHouses.map((houseId) => (
+                    <span
+                      key={houseId}
+                      className={cn(
+                        "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium",
+                        originStyle.chip,
+                      )}
+                    >
+                      Casa {String(houseId).padStart(2, "0")} • {housePercentages[houseId] ?? getHouseProgress(houseId)}%
+                    </span>
+                  ))}
+                </div>
+              )}
               
               {/* Edit Percentage Mode Toggle */}
               <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg">
@@ -528,6 +637,7 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
                     const wasOriginal = production.house_ids.includes(house.id);
                     const isAdded = isSelected && !wasOriginal;
                     const isRemoved = !isSelected && wasOriginal;
+                    const isBlockedByOtherRecord = blockedHouseMap.has(house.id) && !wasOriginal;
                     const currentProgress = getHouseProgress(house.id);
                     const editedPercentage = housePercentages[house.id];
                     const hasPercentageChange = editPercentageMode && isSelected && editedPercentage !== undefined && editedPercentage !== currentProgress;
@@ -536,9 +646,12 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
                       <button
                         key={house.id}
                         onClick={() => toggleHouse(house.id)}
+                        disabled={isBlockedByOtherRecord}
                         className={`
                           relative w-9 h-9 rounded-lg border-2 flex flex-col items-center justify-center text-xs font-medium transition-all
-                          ${isSelected 
+                          ${isBlockedByOtherRecord
+                            ? 'bg-muted border-muted-foreground/30 text-muted-foreground opacity-60 cursor-not-allowed'
+                            : isSelected
                             ? isAdded
                               ? 'bg-green-100 border-green-500 text-green-700'
                               : hasPercentageChange
@@ -549,9 +662,12 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
                               : 'bg-background border-border text-foreground hover:border-primary/50'
                           }
                         `}
-                        title={isSelected ? `Casa ${house.id}: ${editedPercentage ?? currentProgress}%` : `Casa ${house.id} — ${currentProgress}%`}
+                        title={isBlockedByOtherRecord ? "Casa já lançada para este serviço." : isSelected ? `Casa ${house.id}: ${editedPercentage ?? currentProgress}%` : `Casa ${house.id} — ${currentProgress}%`}
                       >
                         <span className="text-[10px]">{house.id}</span>
+                        {isBlockedByOtherRecord && (
+                          <span className="text-[7px] leading-none">bloq.</span>
+                        )}
                         {isSelected && editPercentageMode && (
                           <span className="text-[7px] leading-none">{editedPercentage ?? currentProgress}%</span>
                         )}
