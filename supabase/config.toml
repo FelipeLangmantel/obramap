@@ -38,3 +38,6 @@ verify_jwt = false
 
 [functions.notify-system-notification]
 verify_jwt = false
+
+[functions.copy-3d-asset]
+verify_jwt = false
