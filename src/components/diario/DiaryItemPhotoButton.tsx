@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -54,7 +54,9 @@ export function DiaryItemPhotoButton({
   const [fotos, setFotos] = useState<FotoServico[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [caption, setCaption] = useState("");
+  const [selectedPhoto, setSelectedPhoto] = useState<FotoServico | null>(null);
+  const [captionDraft, setCaptionDraft] = useState("");
+  const [savingCaption, setSavingCaption] = useState(false);
   const [selectedHouse, setSelectedHouse] = useState<string>(
     houseIds.length === 1 ? String(houseIds[0]) : "all"
   );
@@ -121,7 +123,7 @@ export function DiaryItemPhotoButton({
           diary_entry_id: diaryEntryId,
           diary_item_id: diaryItemId,
           storage_path: path,
-          legenda: caption.trim() || null,
+          legenda: null,
           house_number: houseNum,
         } as any);
         if (dbErr) {
@@ -131,7 +133,6 @@ export function DiaryItemPhotoButton({
         uploaded++;
       }
       const houseLabel = houseNum != null ? `casa ${String(houseNum).padStart(2, "0")}` : "todas as casas";
-      setCaption("");
       toast.success(`${uploaded} foto(s) anexada(s) à ${houseLabel}.`);
       await loadFotos();
       await refreshCount();
@@ -178,6 +179,27 @@ export function DiaryItemPhotoButton({
     }
   };
 
+  const handleSaveCaption = async () => {
+    if (!selectedPhoto) return;
+    setSavingCaption(true);
+    try {
+      const legenda = captionDraft.trim() || null;
+      const { error } = await supabase
+        .from("diary_photos")
+        .update({ legenda } as any)
+        .eq("id", selectedPhoto.id);
+      if (error) throw error;
+      setSelectedPhoto({ ...selectedPhoto, legenda });
+      setFotos(prev => prev.map(f => f.id === selectedPhoto.id ? { ...f, legenda } : f));
+      onChanged?.();
+      toast.success("Legenda salva.");
+    } catch (err: any) {
+      toast.error("Erro ao salvar legenda: " + (err.message || ""));
+    } finally {
+      setSavingCaption(false);
+    }
+  };
+
   const sortedHouses = [...houseIds].sort((a, b) => a - b);
 
   return (
@@ -202,6 +224,9 @@ export function DiaryItemPhotoButton({
               <ImageIcon className="h-5 w-5" />
               Fotos do serviço
             </DialogTitle>
+            <DialogDescription>
+              Envie, visualize e organize fotos vinculadas ao lançamento do serviço.
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3">
@@ -228,17 +253,6 @@ export function DiaryItemPhotoButton({
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="flex-1">
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                  Legenda opcional:
-                </label>
-                <Input
-                  value={caption}
-                  onChange={(e) => setCaption(e.target.value)}
-                  placeholder="Ex.: Casa 12, etapa de fundação..."
-                  disabled={uploading || disabled}
-                />
               </div>
               <div className="flex gap-2">
                 <Button
@@ -298,7 +312,16 @@ export function DiaryItemPhotoButton({
                       f.house_number != null && "ring-1 ring-primary/40"
                     )}
                   >
-                    <img src={f.url} alt={f.legenda || "Foto do serviço"} className="w-full h-32 object-cover" />
+                    <button
+                      type="button"
+                      className="block w-full"
+                      onClick={() => {
+                        setSelectedPhoto(f);
+                        setCaptionDraft(f.legenda || "");
+                      }}
+                    >
+                      <img src={f.url} alt={f.legenda || "Foto do serviço"} className="w-full h-32 object-cover" />
+                    </button>
                     {f.legenda && (
                       <div className="px-2 py-1 text-[11px] text-muted-foreground bg-background border-t">
                         {f.legenda}
@@ -347,6 +370,41 @@ export function DiaryItemPhotoButton({
               </div>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!selectedPhoto} onOpenChange={(nextOpen) => {
+        if (!nextOpen) setSelectedPhoto(null);
+      }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Foto do serviço</DialogTitle>
+            <DialogDescription>Visualize a foto e edite a legenda opcional.</DialogDescription>
+          </DialogHeader>
+          {selectedPhoto && (
+            <div className="space-y-3">
+              <img src={selectedPhoto.url} alt={selectedPhoto.legenda || "Foto do serviço"} className="max-h-[60vh] w-full rounded-lg object-contain" />
+              {!disabled ? (
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-muted-foreground">Legenda opcional</label>
+                  <Textarea
+                    value={captionDraft}
+                    onChange={(e) => setCaptionDraft(e.target.value)}
+                    placeholder="Escreva uma legenda para esta foto..."
+                    className="min-h-[70px]"
+                  />
+                  <div className="flex justify-end">
+                    <Button type="button" size="sm" onClick={handleSaveCaption} disabled={savingCaption}>
+                      {savingCaption && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                      Salvar legenda
+                    </Button>
+                  </div>
+                </div>
+              ) : selectedPhoto.legenda ? (
+                <p className="text-sm text-center text-muted-foreground">{selectedPhoto.legenda}</p>
+              ) : null}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </>

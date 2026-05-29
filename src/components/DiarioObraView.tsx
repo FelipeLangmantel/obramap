@@ -147,6 +147,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   const [equipePres, setEquipePres] = useState(0);
   const [obsGeral, setObsGeral] = useState("");
   const [entryId, setEntryId] = useState<string | null>(null);
+  const [loadingEntry, setLoadingEntry] = useState(true);
   const [entryStatus, setEntryStatus] = useState<string>("rascunho");
   const [statusAprovacao, setStatusAprovacao] = useState<StatusAprovacao>("preenchendo");
   const [numRelatorio, setNumRelatorio] = useState<number | null>(null);
@@ -211,19 +212,28 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   // Fotos vinculadas a serviços específicos (para PDF jurídico)
   const [fotosPorServico, setFotosPorServico] = useState<Record<string, { url: string; legenda: string | null }[]>>({});
   const [uploadingFoto, setUploadingFoto] = useState(false);
-  const [fotoLegenda, setFotoLegenda] = useState("");
   const [fotoAmpliada, setFotoAmpliada] = useState<{ id: string; url: string; legenda: string | null } | null>(null);
+  const [fotoLegendaDraft, setFotoLegendaDraft] = useState("");
+  const [savingFotoLegenda, setSavingFotoLegenda] = useState(false);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const inlineCameraInputRef = useRef<HTMLInputElement>(null);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autosaveHydratedRef = useRef(false);
   const autosaveSavingRef = useRef(false);
+  const loadEntryRequestRef = useRef(0);
   const [photoSourceOpen, setPhotoSourceOpen] = useState(false);
 
   // RDO data
   const rdo = useRdoData(entryId);
   const dWorkers = useDiaryWorkers(entryId);
   const [contractorContracts, setContractorContracts] = useState<Array<{ id: string; contractor_name: string; status: string; is_internal?: boolean }>>([]);
+  const weekdayLabel = useMemo(() => {
+    try {
+      return format(parseISO(entryDate), "EEEE", { locale: ptBR });
+    } catch {
+      return "";
+    }
+  }, [entryDate]);
 
   useEffect(() => {
     if (!currentProject?.id) { setContractorContracts([]); return; }
@@ -510,6 +520,8 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   // Load existing entry for selected date
   useEffect(() => {
     if (!currentProject?.id || !user?.id) return;
+    setLoadingEntry(true);
+    autosaveHydratedRef.current = false;
     loadEntry();
   }, [currentProject?.id, user?.id, entryDate]);
 
@@ -615,12 +627,17 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
 
   const loadEntry = async () => {
     if (!currentProject?.id || !user?.id) return;
+    const requestId = ++loadEntryRequestRef.current;
+    setLoadingEntry(true);
+    autosaveHydratedRef.current = false;
     const { data } = await supabase
       .from("diary_entries")
       .select("id, clima, equipe_presente, observacao_geral, status, num_relatorio, mm_chuva, noite_ativa, clima_manha, clima_tarde, clima_noite, condicao_manha, condicao_tarde, condicao_noite, status_aprovacao, created_at, updated_at, engineer_name")
       .eq("project_id", currentProject.id)
       .eq("entry_date", entryDate)
       .maybeSingle();
+
+    if (requestId !== loadEntryRequestRef.current) return;
 
     if (data) {
       setEntryId(data.id);
@@ -646,6 +663,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       });
       setClimaAutoPreenchido(false);
       autosaveHydratedRef.current = true;
+      setLoadingEntry(false);
       const { data: correcoes } = await supabase
         .from("diary_item_corrections")
         .select("tipo, macro_name, scope_name, house_ids_anterior, house_ids_posterior, percentual_anterior, percentual_posterior, justificativa, corrigido_por_nome, created_at")
@@ -683,6 +701,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       setFotos([]);
       setClimaAutoPreenchido(false);
       autosaveHydratedRef.current = true;
+      setLoadingEntry(false);
       tryAutoFillClima(null);
     }
   };
@@ -737,7 +756,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
         const { error: dbError } = await supabase.from("diary_photos").insert({
           diary_entry_id: resolvedEntryId,
           storage_path: path,
-          legenda: fotoLegenda.trim() || null,
+          legenda: null,
         });
         if (dbError) {
           await supabase.storage.from("diary-photos").remove([path]);
@@ -746,7 +765,6 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
         uploaded++;
       }
       await loadFotos(resolvedEntryId);
-      setFotoLegenda("");
       toast.success(`${uploaded} foto(s) enviada(s).`);
     } catch (err: any) {
       toast.error("Erro ao enviar foto: " + (err.message || ""));
@@ -765,6 +783,26 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       toast.success("Foto removida.");
     } catch {
       toast.error("Erro ao remover foto.");
+    }
+  };
+
+  const handleSalvarLegendaFoto = async () => {
+    if (!fotoAmpliada || !entryId || !requireEdit()) return;
+    setSavingFotoLegenda(true);
+    try {
+      const legenda = fotoLegendaDraft.trim() || null;
+      const { error } = await supabase
+        .from("diary_photos")
+        .update({ legenda } as any)
+        .eq("id", fotoAmpliada.id);
+      if (error) throw error;
+      setFotoAmpliada({ ...fotoAmpliada, legenda });
+      await loadFotos(entryId);
+      toast.success("Legenda salva.");
+    } catch (err: any) {
+      toast.error("Erro ao salvar legenda: " + (err.message || ""));
+    } finally {
+      setSavingFotoLegenda(false);
     }
   };
 
@@ -1789,7 +1827,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
             )}
           </div>
           <div className="flex gap-2 shrink-0 self-start flex-wrap w-full xl:w-auto">
-            {!entryId && !editingDisabled && (
+            {!loadingEntry && !entryId && !editingDisabled && (
               <Button onClick={handleOpenDiary} className="min-h-[40px]">
                 <FileText className="h-4 w-4 mr-2" />
                 Abrir Diário
@@ -1818,18 +1856,18 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
               />
             )}
             {entryId && !editingDisabled && (
-              <Button onClick={handleSaveHeader} disabled={savingHeader} className="min-h-[40px]">
+              <Button onClick={handleSaveHeader} disabled={savingHeader} variant="ghost" size="sm" className="h-8 text-xs">
                 {savingHeader ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                Salvar
+                Salvar agora
               </Button>
             )}
             {entryId && !editingDisabled && (
-              <div className="flex min-h-[40px] items-center rounded-md border bg-muted/30 px-3 text-xs text-muted-foreground">
+              <span className="flex h-8 items-center px-1 text-[11px] text-muted-foreground">
                 {autosaveStatus === "saving" && "Salvando..."}
-                {autosaveStatus === "saved" && "Salvo automaticamente"}
+                {autosaveStatus === "saved" && "Salvo"}
                 {autosaveStatus === "error" && <span className="text-destructive">Erro ao salvar</span>}
-                {autosaveStatus === "idle" && "Autosave ativo"}
-              </div>
+                {autosaveStatus === "idle" && ""}
+              </span>
             )}
             {entryId && !editingDisabled && statusAprovacao === "preenchendo" && (
               <Button
@@ -1880,7 +1918,18 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
             />
           )}
 
-          {!isDiaryOpen && (
+          {loadingEntry && (
+            <Card className="border-muted bg-muted/20">
+              <CardContent className="py-4">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Carregando diário...
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {!loadingEntry && !isDiaryOpen && (
             <Card className="border-amber-300 bg-amber-50 dark:bg-amber-950/20">
               <CardContent className="py-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1915,9 +1964,11 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                     <label className="text-xs font-medium text-muted-foreground">Data</label>
                     <Input type="date" value={entryDate} onChange={e => setEntryDate(e.target.value)}
                       className="mt-1" disabled={editingDisabled} />
-                    <p className="mt-1 text-xs capitalize text-muted-foreground">
-                      {format(parseISO(entryDate), "EEEE", { locale: ptBR })}
-                    </p>
+                    {weekdayLabel && (
+                      <p className="mt-1 text-xs capitalize text-muted-foreground">
+                        {weekdayLabel}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="text-xs font-medium text-muted-foreground">Equipe presente</label>
@@ -2334,22 +2385,14 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                 disabled={diaryFormDisabled || uploadingFoto}
               />
             <div className="space-y-3">
-              {!diaryFormDisabled && (
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-muted-foreground">Legenda opcional para novas fotos</label>
-                  <Input
-                    value={fotoLegenda}
-                    onChange={(e) => setFotoLegenda(e.target.value)}
-                    placeholder="Ex.: Frente da casa 12, execução de fundação..."
-                    disabled={uploadingFoto}
-                  />
-                </div>
-              )}
               {fotos.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {fotos.map(foto => (
                     <div key={foto.id} className="relative group w-24">
-                      <button type="button" onClick={() => setFotoAmpliada(foto)}
+                      <button type="button" onClick={() => {
+                        setFotoAmpliada(foto);
+                        setFotoLegendaDraft(foto.legenda || "");
+                      }}
                         className="block focus:outline-none focus:ring-2 focus:ring-ring rounded-lg">
                         <img src={foto.url} alt={foto.legenda || "Foto do diário"}
                           className="w-20 h-20 object-cover rounded-lg border" />
@@ -2460,16 +2503,34 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
 
       {/* Foto ampliada */}
       {fotoAmpliada && (
-        <Dialog open={!!fotoAmpliada} onOpenChange={() => setFotoAmpliada(null)}>
+        <Dialog open={!!fotoAmpliada} onOpenChange={(open) => {
+          if (!open) setFotoAmpliada(null);
+        }}>
           <DialogContent className="max-w-3xl p-2">
             <DialogHeader className="sr-only">
               <DialogTitle>Foto ampliada</DialogTitle>
               <DialogDescription>Visualização ampliada da foto anexada ao diário.</DialogDescription>
             </DialogHeader>
             <img src={fotoAmpliada.url} alt={fotoAmpliada.legenda || "Foto do diário"} className="w-full rounded-lg" />
-            {fotoAmpliada.legenda && (
-              <p className="text-sm text-center text-muted-foreground mt-2">{fotoAmpliada.legenda}</p>
-            )}
+            {!diaryFormDisabled ? (
+              <div className="space-y-2 px-2 pb-2">
+                <label className="text-xs font-medium text-muted-foreground">Legenda opcional</label>
+                <Textarea
+                  value={fotoLegendaDraft}
+                  onChange={(e) => setFotoLegendaDraft(e.target.value)}
+                  placeholder="Escreva uma legenda para esta foto..."
+                  className="min-h-[70px]"
+                />
+                <div className="flex justify-end">
+                  <Button type="button" size="sm" onClick={handleSalvarLegendaFoto} disabled={savingFotoLegenda}>
+                    {savingFotoLegenda && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                    Salvar legenda
+                  </Button>
+                </div>
+              </div>
+            ) : fotoAmpliada.legenda ? (
+              <p className="px-2 pb-2 text-sm text-center text-muted-foreground">{fotoAmpliada.legenda}</p>
+            ) : null}
           </DialogContent>
         </Dialog>
       )}

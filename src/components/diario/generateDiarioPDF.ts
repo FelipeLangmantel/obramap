@@ -263,9 +263,11 @@ async function renderPhotosByService(
     const cols = 3, gap = 3;
     const cellW = (pageW - margin * 2 - gap * (cols - 1)) / cols;
     const cellH = cellW * 0.75;
+    const photoBlockH = cellH + 10;
+    if (y + photoBlockH > pageH - 20) { doc.addPage(); y = margin; }
     let col = 0;
     for (const photo of group.photos) {
-      if (y + cellH > pageH - 20) { doc.addPage(); y = margin; }
+      if (y + photoBlockH > pageH - 20) { doc.addPage(); y = margin; }
       const dataUrl = await loadImageAsDataUrl(photo.url);
       const x = margin + col * (cellW + gap);
       if (dataUrl) {
@@ -280,12 +282,12 @@ async function renderPhotosByService(
         doc.setFont(opts.font, "normal");
         doc.setFontSize(6);
         doc.setTextColor(80);
-        doc.text(doc.splitTextToSize(photo.legenda, cellW), x, y + cellH + 3);
+        doc.text(doc.splitTextToSize(photo.legenda, cellW).slice(0, 2), x, y + cellH + 3);
       }
       col++;
-      if (col >= cols) { col = 0; y += cellH + gap; }
+      if (col >= cols) { col = 0; y += photoBlockH + gap; }
     }
-    if (col !== 0) { y += cellH + gap; col = 0; }
+    if (col !== 0) { y += photoBlockH + gap; col = 0; }
     y += 2;
   }
   return y;
@@ -506,9 +508,10 @@ async function renderOrgaoPublico(
     const gap = 3;
     const cellW = (pageW - margin * 2 - gap * (cols - 1)) / cols;
     const cellH = cellW * 0.75;
+    const photoBlockH = cellH + 10;
     let col = 0;
     for (const photo of generalPhotos) {
-      if (y + cellH > pageH - 20) { doc.addPage(); y = margin; }
+      if (y + photoBlockH > pageH - 20) { doc.addPage(); y = margin; }
       const dataUrl = await loadImageAsDataUrl(photo.url);
       const x = margin + col * (cellW + gap);
       if (dataUrl) {
@@ -522,12 +525,12 @@ async function renderOrgaoPublico(
         doc.setFont("times", "normal");
         doc.setFontSize(6);
         doc.setTextColor(80);
-        doc.text(doc.splitTextToSize(photo.legenda, cellW), x, y + cellH + 3);
+        doc.text(doc.splitTextToSize(photo.legenda, cellW).slice(0, 2), x, y + cellH + 3);
       }
       col++;
-      if (col >= cols) { col = 0; y += cellH + gap; }
+      if (col >= cols) { col = 0; y += photoBlockH + gap; }
     }
-    if (col !== 0) y += cellH + gap;
+    if (col !== 0) y += photoBlockH + gap;
   }
 
   y = await renderVideoLinks(doc, data, y, {
@@ -764,9 +767,10 @@ async function renderCorporativoModerno(
     const cols = 3, gap = 3;
     const cellW = (pageW - margin * 2 - gap * (cols - 1)) / cols;
     const cellH = cellW * 0.75;
+    const photoBlockH = cellH + 10;
     let col = 0;
     for (const photo of generalPhotos) {
-      if (y + cellH > pageH - 20) { doc.addPage(); y = margin; }
+      if (y + photoBlockH > pageH - 20) { doc.addPage(); y = margin; }
       const dataUrl = await loadImageAsDataUrl(photo.url);
       const x = margin + col * (cellW + gap);
       if (dataUrl) {
@@ -778,12 +782,12 @@ async function renderCorporativoModerno(
         doc.setFont("helvetica", "normal");
         doc.setFontSize(6);
         doc.setTextColor(100, 116, 139);
-        doc.text(doc.splitTextToSize(photo.legenda, cellW), x, y + cellH + 3);
+        doc.text(doc.splitTextToSize(photo.legenda, cellW).slice(0, 2), x, y + cellH + 3);
       }
       col++;
-      if (col >= cols) { col = 0; y += cellH + gap; }
+      if (col >= cols) { col = 0; y += photoBlockH + gap; }
     }
-    if (col !== 0) y += cellH + gap;
+    if (col !== 0) y += photoBlockH + gap;
   }
 
   y = await renderVideoLinks(doc, data, y, {
