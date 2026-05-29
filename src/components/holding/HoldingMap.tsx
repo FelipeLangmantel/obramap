@@ -1,4 +1,4 @@
-import { useEffect, useRef, useImperativeHandle, forwardRef } from "react";
+import { useEffect, useRef, useImperativeHandle, forwardRef, useState, useCallback } from "react";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 
@@ -115,6 +115,16 @@ interface HoldingMapProps {
 const HoldingMap = forwardRef<HoldingMapHandle, HoldingMapProps>(({ obras, onObraClick }, ref) => {
   const mapRef = useRef<L.Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const [mapInteractionEnabled, setMapInteractionEnabled] = useState(false);
+
+  const disableMapInteraction = useCallback(() => {
+    setMapInteractionEnabled(false);
+  }, []);
+
+  const enableMapInteraction = useCallback(() => {
+    setMapInteractionEnabled(true);
+  }, []);
 
   useImperativeHandle(ref, () => ({
     flyTo: (lat: number, lng: number, zoom = 11) => {
@@ -128,8 +138,13 @@ const HoldingMap = forwardRef<HoldingMapHandle, HoldingMapProps>(({ obras, onObr
     const map = L.map(containerRef.current, {
       center: [-29.7, -52.5],
       zoom: 7,
-      zoomControl: true,
-      scrollWheelZoom: true,
+      zoomControl: false,
+      scrollWheelZoom: false,
+      dragging: false,
+      doubleClickZoom: false,
+      touchZoom: false,
+      boxZoom: false,
+      keyboard: false,
     });
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -143,6 +158,43 @@ const HoldingMap = forwardRef<HoldingMapHandle, HoldingMapProps>(({ obras, onObr
     mapRef.current = map;
     return () => { map.remove(); mapRef.current = null; };
   }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const handlers = [
+      map.scrollWheelZoom,
+      map.dragging,
+      map.doubleClickZoom,
+      map.touchZoom,
+      map.boxZoom,
+      map.keyboard,
+      (map as any).tap,
+    ].filter(Boolean);
+
+    handlers.forEach((handler: any) => {
+      if (mapInteractionEnabled) handler.enable();
+      else handler.disable();
+    });
+
+    const hasZoomControl = Boolean((map.zoomControl as any)?._map);
+    if (mapInteractionEnabled && !hasZoomControl) {
+      map.zoomControl.addTo(map);
+    } else if (!mapInteractionEnabled && hasZoomControl) {
+      map.zoomControl.remove();
+    }
+  }, [mapInteractionEnabled]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!wrapperRef.current?.contains(event.target as Node)) {
+        disableMapInteraction();
+      }
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [disableMapInteraction]);
 
   // Atualizar markers quando obras mudam
   useEffect(() => {
@@ -240,8 +292,15 @@ const HoldingMap = forwardRef<HoldingMapHandle, HoldingMapProps>(({ obras, onObr
   }, [obras, onObraClick]);
 
   return (
-    <div className="relative w-full">
-      <div ref={containerRef} style={{ height: 420, width: "100%" }} className="rounded-lg z-0" />
+    <div className="relative w-full" ref={wrapperRef}>
+      <div className="relative" onClick={enableMapInteraction} onMouseLeave={disableMapInteraction}>
+        <div ref={containerRef} style={{ height: 420, width: "100%" }} className="rounded-lg z-0" />
+        <div className="pointer-events-none absolute left-3 top-3 z-[500] rounded-md bg-background/90 px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground shadow-sm ring-1 ring-border/70 backdrop-blur">
+          {mapInteractionEnabled
+            ? "Mapa ativo — clique fora para liberar o scroll da página"
+            : "Clique para interagir com o mapa"}
+        </div>
+      </div>
       <div className="flex items-center gap-3 text-[10px] text-muted-foreground mt-2 flex-wrap">
         <span className="flex items-center gap-1.5">
           <span className="h-4 w-4 rounded-full inline-block border-2 border-blue-700" style={{ background: "#1d4ed8" }} />
