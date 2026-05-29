@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Upload, RotateCcw, Move3D, X, ChevronDown, ChevronRight, Save, Loader2, Home, AlertTriangle, Target, Layers, Camera, MousePointerClick, ScanSearch, RefreshCw, Eye, EyeOff, Boxes, Sparkles, SlidersHorizontal } from "lucide-react";
+import { Upload, RotateCcw, Move3D, X, ChevronDown, ChevronRight, Save, Loader2, Home, AlertTriangle, Target, Layers, Camera, MousePointerClick, ScanSearch, RefreshCw, Eye, EyeOff, Boxes, Sparkles, SlidersHorizontal, Download } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -69,6 +69,10 @@ import { MAP3D_STORAGE_BUCKET, createMap3DSignedUrlFromPath, resolveMap3DSignedU
 import { endMap3DPerf, logMap3DPerf, startMap3DPerf } from "@/lib/map3dPerf";
 const MAP3D_ZOOM_SENSITIVITY_KEY = "obramap:map3d:zoom-sensitivity";
 const MAP3D_WALK_HELP_HIDDEN_KEY = "obramap:map3d:walk-help-hidden";
+const TAPEJARA_PROJECT_ID = "ef9e2b1a-c1ff-4189-a655-99a925961460";
+const TAPEJARA_GLTF_FOLDER = "1660b1d1-7e60-4c44-9623-bbafdfd88a71/ef9e2b1a-c1ff-4189-a655-99a925961460/gltf";
+const TAPEJARA_GLTF_FILE = "1772486585475.gltf";
+const TAPEJARA_GLTF_PATH = `${TAPEJARA_GLTF_FOLDER}/${TAPEJARA_GLTF_FILE}`;
 
 type ZoomSensitivity = "low" | "normal" | "high" | "very_high";
 type LightingMode = "day" | "night";
@@ -1207,7 +1211,7 @@ function HouseWalkInspectPanel({
 export function Map3DView() {
   const { currentProject, refreshHousesFromDB } = useConstruction();
   const navigate = useNavigate();
-  const { profile, user, canEdit, canAccessManagement } = useAuth();
+  const { profile, user, canEdit, canAccessManagement, isSystemAdmin, isCompanyAdmin } = useAuth();
   const projectId = currentProject?.id;
   const activeProjectIdRef = useRef<string | null>(projectId ?? null);
   activeProjectIdRef.current = projectId ?? null;
@@ -1233,6 +1237,7 @@ export function Map3DView() {
   const canUsePerformanceMode = canUseMap3D("map3d.performance_mode");
   const canManage3D = canReviewModel;
   const canDelete3D = canDelete3DAssets(profile) || canResetMap || canManageGlbParts;
+  const canDownloadTapejaraGltf = projectId === TAPEJARA_PROJECT_ID && (isSystemAdmin || isCompanyAdmin);
   
   const [modelData, setModelData] = useState<ModelData | null>(null);
   const map3dLoadPerfRef = useRef<ReturnType<typeof startMap3DPerf> | null>(null);
@@ -4878,6 +4883,56 @@ export function Map3DView() {
     toast.success("Mapa resetado. Salve para confirmar.");
   };
 
+  // TEMPORÁRIO: botão criado apenas para recuperar manualmente o GLTF de Tapejara. Remover após download.
+  const handleDownloadTapejaraGltf = async () => {
+    if (!canDownloadTapejaraGltf) {
+      toast.error("Sem permissao para baixar o GLTF de Tapejara.");
+      return;
+    }
+
+    try {
+      const { data: folderFiles, error: listError } = await supabase.storage
+        .from(MAP3D_STORAGE_BUCKET)
+        .list(TAPEJARA_GLTF_FOLDER, { limit: 100 });
+
+      if (listError) {
+        console.warn("[Tapejara GLTF Download] Nao foi possivel listar arquivos auxiliares.", listError);
+      } else {
+        const auxiliaryFiles = (folderFiles || []).filter((file) =>
+          /\.(bin|png|jpe?g|webp)$/i.test(file.name || "")
+        );
+
+        if (auxiliaryFiles.length > 0) {
+          console.info("[Tapejara GLTF Download] Arquivos auxiliares encontrados", auxiliaryFiles.map(file => file.name));
+          toast.info("Este GLTF possui arquivos auxiliares. Sera necessario baixar tambem para abrir corretamente.");
+        }
+      }
+
+      const { data, error } = await supabase.storage
+        .from(MAP3D_STORAGE_BUCKET)
+        .createSignedUrl(TAPEJARA_GLTF_PATH, 3600);
+
+      if (error || !data?.signedUrl) {
+        console.error("[Tapejara GLTF Download] Falha ao gerar signed URL", error);
+        toast.error("Nao foi possivel gerar o link temporario do GLTF de Tapejara.");
+        return;
+      }
+
+      const link = document.createElement("a");
+      link.href = data.signedUrl;
+      link.download = "tapejara-modelo-3d-1772486585475.gltf";
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success("Download temporario do GLTF de Tapejara iniciado.");
+    } catch (error) {
+      console.error("[Tapejara GLTF Download] Erro inesperado", error);
+      toast.error("Erro ao preparar o download temporario do GLTF de Tapejara.");
+    }
+  };
+
   return (
     <div className="h-full flex flex-col gap-3">
       <Card>
@@ -4924,6 +4979,19 @@ export function Map3DView() {
               <Button variant="outline" size="sm" onClick={() => mtlInputRef.current?.click()} disabled={isLoading}>MTL</Button>
               <Button variant="secondary" size="sm" onClick={loadObjWithoutMtl} disabled={isLoading}>Sem MTL</Button>
             </>)}
+            {canDownloadTapejaraGltf && (
+              // TEMPORÁRIO: botão criado apenas para recuperar manualmente o GLTF de Tapejara. Remover após download.
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleDownloadTapejaraGltf}
+                disabled={isLoading}
+                title="Download temporario do GLTF de Tapejara"
+              >
+                <Download className="h-4 w-4 mr-1.5" />
+                Baixar GLTF Tapejara
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={centerCamera} disabled={isLoading}><Target className="h-4 w-4 mr-1.5" />Centralizar</Button>
             <Button variant="outline" size="sm" onClick={resetCameraView} disabled={isLoading}><Home className="h-4 w-4 mr-1.5" />Resetar Visão</Button>
             {canUseWalkMode && modelData && (
