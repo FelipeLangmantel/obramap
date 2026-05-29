@@ -426,8 +426,27 @@ export function useProjectModelMeshes(
         }
         endMap3DPerf(updatePerf, { ok: updateErrors.length === 0, errors: updateErrors.length });
       }
-      if (toInsert.length > 0 || toUpdate.length > 0) {
-        await refresh();
+      const shouldRefresh = toInsert.length > 0 || toUpdate.length > 0;
+      logMap3DPerf("project_model_meshes.bulkInventory.plan", {
+        projectId,
+        incoming: incoming.length,
+        existing: existing.size,
+        toInsert: toInsert.length,
+        toUpdate: toUpdate.length,
+        unchanged: incoming.length - toInsert.length - toUpdate.length,
+        willRefresh: shouldRefresh,
+      });
+      if (shouldRefresh) {
+        const refreshPerf = startMap3DPerf("project_model_meshes.bulkInventory.refreshAfterWrite", {
+          projectId,
+          toInsert: toInsert.length,
+          toUpdate: toUpdate.length,
+        });
+        const refreshed = await refresh();
+        endMap3DPerf(refreshPerf, {
+          ok: true,
+          totalLoaded: refreshed?.length ?? null,
+        });
       }
       endMap3DPerf(perf, {
         ok: true,

@@ -65,27 +65,24 @@ export async function createMap3DSignedUrlFromPath(
   const now = Date.now();
   const cached = signedUrlCache.get(cacheKey);
   if (cached && cached.expiresAt > now) {
-    logMap3DPerf("storage.createSignedUrl.cacheHit", { path: normalizedPath });
-    if (import.meta.env.DEV) {
-      console.info("[3D Storage] signed URL cache hit", {
-        bucket: MAP3D_STORAGE_BUCKET,
-        path: normalizedPath,
-        resolveMs: 0,
-      });
-    }
+    logMap3DPerf("storage.createSignedUrl.cacheHit", {
+      bucket: MAP3D_STORAGE_BUCKET,
+      path: normalizedPath,
+      resolveMs: 0,
+    });
     return cached.signedUrl;
   }
   if (cached) signedUrlCache.delete(cacheKey);
 
   const resolveStartedAt = performance.now();
-  logMap3DPerf("storage.createSignedUrl.cacheMiss", { path: normalizedPath });
-  if (import.meta.env.DEV) {
-    console.info("[3D Storage] signed URL cache miss", {
-      bucket: MAP3D_STORAGE_BUCKET,
-      path: normalizedPath,
-    });
-  }
-  const perf = startMap3DPerf("storage.createSignedUrl", { path: normalizedPath });
+  logMap3DPerf("storage.createSignedUrl.cacheMiss", {
+    bucket: MAP3D_STORAGE_BUCKET,
+    path: normalizedPath,
+  });
+  const perf = startMap3DPerf("storage.createSignedUrl", {
+    bucket: MAP3D_STORAGE_BUCKET,
+    path: normalizedPath,
+  });
   const { data, error } = await supabase.storage
     .from(MAP3D_STORAGE_BUCKET)
     .createSignedUrl(normalizedPath, MAP3D_SIGNED_URL_TTL_SECONDS);
@@ -121,14 +118,12 @@ export async function createMap3DSignedUrlFromPath(
     signedUrl: data.signedUrl,
     expiresAt: Date.now() + MAP3D_SIGNED_URL_CACHE_TTL_MS,
   });
-  if (import.meta.env.DEV) {
-    console.info("[3D Storage] signed URL resolved", {
-      bucket: MAP3D_STORAGE_BUCKET,
-      path: normalizedPath,
-      resolveMs: Math.round(performance.now() - resolveStartedAt),
-      cacheTtlMinutes: MAP3D_SIGNED_URL_CACHE_TTL_MS / 60_000,
-    });
-  }
+  logMap3DPerf("storage.createSignedUrl.resolved", {
+    bucket: MAP3D_STORAGE_BUCKET,
+    path: normalizedPath,
+    resolveMs: Math.round(performance.now() - resolveStartedAt),
+    cacheTtlMinutes: MAP3D_SIGNED_URL_CACHE_TTL_MS / 60_000,
+  });
   return data.signedUrl;
 }
 

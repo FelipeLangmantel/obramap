@@ -130,6 +130,27 @@ function getGlbPartIdFromLayerKey(layerKey: string): string | null {
   return partId || null;
 }
 
+function get3DUrlPerfDetail(url: string | null | undefined) {
+  if (!url) return { path: null, extension: null };
+  const path = url.split("?")[0] ?? "";
+  const extension = path.split(".").pop()?.toLowerCase() || null;
+  return {
+    path,
+    extension,
+  };
+}
+
+function countSceneMeshes(scene: THREE.Object3D | null | undefined) {
+  if (!scene) return { nodes: 0, meshes: 0 };
+  let nodes = 0;
+  let meshes = 0;
+  scene.traverse((child) => {
+    nodes += 1;
+    if ((child as THREE.Mesh).isMesh) meshes += 1;
+  });
+  return { nodes, meshes };
+}
+
 const GLB_REAL_SYNC_WATCH_KEYS = [
   "glb:Geom3D_300:0",
   "glb:Geom3D_302:0",
@@ -381,19 +402,26 @@ function useSelectionHighlight(scene: THREE.Object3D | null, selectedKey: string
 function GLTFModel({ url, onLoaded, onSceneReady, onMeshClick, onMeshDoubleClick, onMeshHover, onMeshHoverEnd, selectedMeshKey, selectedMeshKeys }: { url: string; onLoaded: () => void; onSceneReady?: (scene: THREE.Object3D) => void; onMeshClick?: (mesh: THREE.Object3D, point?: THREE.Vector3, event?: any) => void; onMeshDoubleClick?: (mesh: THREE.Object3D, point?: THREE.Vector3) => void; onMeshHover?: (mesh: THREE.Object3D, event: any) => void; onMeshHoverEnd?: () => void; selectedMeshKey?: string | null; selectedMeshKeys?: Set<string> }) {
   const { scene } = useGLTF(url);
   const calledRef = useRef(false);
+  const gltfPerfDetail = useMemo(() => ({
+    ...get3DUrlPerfDetail(url),
+    ...countSceneMeshes(scene),
+  }), [scene, url]);
   useSelectionHighlight(scene, selectedMeshKey ?? null, selectedMeshKeys);
 
   useEffect(() => {
     if (scene && !calledRef.current) {
       calledRef.current = true;
+      logMap3DPerf("map3d.gltfModel.loaded", gltfPerfDetail);
+      const callbackPerf = startMap3DPerf("map3d.gltfModel.sceneReadyCallbacks", gltfPerfDetail);
       onSceneReady?.(scene);
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           onLoaded();
+          endMap3DPerf(callbackPerf, gltfPerfDetail);
         });
       });
     }
-  }, [scene, onLoaded, onSceneReady]);
+  }, [gltfPerfDetail, scene, onLoaded, onSceneReady]);
 
   return (
     <primitive
@@ -1214,6 +1242,23 @@ export function Map3DView() {
   const projectId = currentProject?.id;
   const activeProjectIdRef = useRef<string | null>(projectId ?? null);
   activeProjectIdRef.current = projectId ?? null;
+  const mountPerfRef = useRef<ReturnType<typeof startMap3DPerf> | null>(null);
+  const renderCountRef = useRef(0);
+  renderCountRef.current += 1;
+  logMap3DPerf("map3d.view.render", {
+    projectId: projectId ?? null,
+    renderCount: renderCountRef.current,
+  });
+  useEffect(() => {
+    mountPerfRef.current = startMap3DPerf("map3d.view.mounted", { projectId: projectId ?? null });
+    return () => {
+      endMap3DPerf(mountPerfRef.current, {
+        projectId: projectId ?? null,
+        renderCount: renderCountRef.current,
+      });
+      mountPerfRef.current = null;
+    };
+  }, [projectId]);
   const companyId = (currentProject as any)?.company_id || profile?.company_id || null;
   const canUseMap3D = useCallback((action: Parameters<typeof canUseMap3DAction>[1]) => (
     canUseMap3DAction(profile, action, canAccessManagement)
@@ -1660,8 +1705,16 @@ export function Map3DView() {
       return;
     }
 
+    const signPerf = startMap3DPerf("project_model_parts.signUrls", {
+      projectId: requestedProjectId,
+      rows: Array.isArray(data) ? data.length : 0,
+    });
     const resolvedParts = (await Promise.all(((data || []) as any[]).map(toSupplementalGlbPart)))
       .filter((part): part is SupplementalGlbPart => Boolean(part));
+    endMap3DPerf(signPerf, {
+      projectId: requestedProjectId,
+      signed: resolvedParts.length,
+    });
     if (activeProjectIdRef.current !== requestedProjectId) {
       logMap3DPerf("project_model_parts.sign.staleIgnored", { requestedProjectId, activeProjectId: activeProjectIdRef.current });
       return;
@@ -2070,7 +2123,12 @@ export function Map3DView() {
 
   // Inventário automático: extrai todas as meshes para o banco.
   const handleSceneReady = useCallback(async (scene: THREE.Object3D) => {
-    const scenePerf = startMap3DPerf("map3d.sceneReady", { projectId, modelType: modelData?.type ?? null });
+    const sceneCounts = countSceneMeshes(scene);
+    const scenePerf = startMap3DPerf("map3d.sceneReady", {
+      projectId,
+      modelType: modelData?.type ?? null,
+      ...sceneCounts,
+    });
     setSceneObj(scene);
     const layerPerf = startMap3DPerf("map3d.sceneReady.extractLayers");
     layerManager.extractLayers(scene);
@@ -2126,9 +2184,27 @@ export function Map3DView() {
       });
     }
     if (meshesToUpsert.length > 0) {
-      void meshHooks.bulkUpsertMeshes(meshesToUpsert);
+      const bulkPerf = startMap3DPerf("map3d.sceneReady.bulkUpsertMeshes.dispatch", {
+        projectId,
+        meshes: meshesToUpsert.length,
+      });
+      void meshHooks.bulkUpsertMeshes(meshesToUpsert)
+        .then(() => {
+          endMap3DPerf(bulkPerf, { ok: true, meshes: meshesToUpsert.length });
+        })
+        .catch((error) => {
+          endMap3DPerf(bulkPerf, {
+            ok: false,
+            meshes: meshesToUpsert.length,
+            message: error instanceof Error ? error.message : String(error),
+          });
+        });
     }
-    endMap3DPerf(scenePerf, { meshes: meshesToUpsert.length });
+    endMap3DPerf(scenePerf, {
+      meshes: meshesToUpsert.length,
+      sceneNodes: sceneCounts.nodes,
+      uniqueMeshNames: nameCounts.size,
+    });
   }, [layerManager.extractLayers, projectId, modelData?.type, meshHooks.bulkUpsertMeshes]);
 
   // ====================================================
@@ -4609,9 +4685,15 @@ export function Map3DView() {
     setIsLoading(true);
     const perf = startMap3DPerf("map_layouts.loadSaved3DMap", { projectId: requestedProjectId });
     try {
+      const layoutPerf = startMap3DPerf("map_layouts.query", { projectId: requestedProjectId });
       const { data, error } = await supabase.from('map_layouts')
         .select('model_3d_url, model_3d_type, model_mtl_url, house_markers_3d, camera_position, camera_target')
         .eq('project_id', requestedProjectId).maybeSingle();
+      endMap3DPerf(layoutPerf, {
+        ok: !error,
+        hasLayout: Boolean(data),
+        hasModel: Boolean(data?.model_3d_url),
+      });
       if (activeProjectIdRef.current !== requestedProjectId) {
         endMap3DPerf(perf, { ok: false, stage: "stale-map-layout", requestedProjectId, activeProjectId: activeProjectIdRef.current });
         return;
@@ -4628,17 +4710,34 @@ export function Map3DView() {
           map3dLoadPerfRef.current = startMap3DPerf("map3d.totalUntilModelVisible", {
             projectId: requestedProjectId,
             type: data.model_3d_type,
+            modelPath: data.model_3d_url,
+          });
+          const signedUrlPerf = startMap3DPerf("map_layouts.resolveModelUrls", {
+            projectId: requestedProjectId,
+            type: data.model_3d_type,
+            modelPath: data.model_3d_url,
+            hasMtl: Boolean(data.model_mtl_url),
           });
           const [signedModel, signedMtl] = await Promise.all([
             resolveMap3DSignedUrl(data.model_3d_url),
             resolveMap3DSignedUrl(data.model_mtl_url),
           ]);
+          endMap3DPerf(signedUrlPerf, {
+            ok: Boolean(signedModel),
+            hasMtl: Boolean(signedMtl),
+          });
           if (activeProjectIdRef.current !== requestedProjectId) {
             endMap3DPerf(map3dLoadPerfRef.current, { stage: "stale-signed-url", requestedProjectId, activeProjectId: activeProjectIdRef.current });
             map3dLoadPerfRef.current = null;
             return;
           }
           if (signedModel) {
+            logMap3DPerf("map_layouts.setModelData", {
+              projectId: requestedProjectId,
+              layoutModelPath: data.model_3d_url,
+              resolvedModel: get3DUrlPerfDetail(signedModel),
+              resolvedMtl: get3DUrlPerfDetail(signedMtl),
+            });
             setModelData({ url: signedModel, type: data.model_3d_type as "gltf" | "obj", mtlUrl: signedMtl || undefined });
           } else {
             endMap3DPerf(map3dLoadPerfRef.current, { stage: "signed-url-missing", type: data.model_3d_type });
