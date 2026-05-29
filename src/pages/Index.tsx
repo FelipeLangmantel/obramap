@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -62,21 +62,9 @@ function Index() {
   const routeStateKey = "obramap_route_state_root";
   const mainScrollRef = useRef<HTMLElement | null>(null);
 
-  const restoredState = useMemo(() => {
-    try {
-      return JSON.parse(sessionStorage.getItem(routeStateKey) || "null") as {
-        activeView?: ViewType;
-        scrollTop?: number;
-      } | null;
-    } catch {
-      return null;
-    }
-  }, []);
-
-  // ✅ Restaurar view ativa do sessionStorage para preservar estado ao trocar aba
-  const [activeView, setActiveView] = useState<ViewType>(() => {
-    return restoredState?.activeView || "home";
-  });
+  // A abertura inicial do /dashboard deve ser sempre o Painel Inicial.
+  // O projeto atual continua sendo contexto separado no ConstructionContext.
+  const [activeView, setActiveView] = useState<ViewType>("home");
   const location = useLocation();
   const { selectedHouse, isLoading, projects, currentProject, setCurrentProject, ensureFreshProjectHouses } = useConstruction();
   const { canAccessProject, canAccessMenu, isLoading: authLoading } = useAuth();
@@ -93,12 +81,6 @@ function Index() {
   useEffect(() => {
     const scrollElement = document.querySelector("main") as HTMLElement | null;
     mainScrollRef.current = scrollElement;
-
-    if (scrollElement && typeof restoredState?.scrollTop === "number") {
-      requestAnimationFrame(() => {
-        scrollElement.scrollTop = restoredState.scrollTop ?? 0;
-      });
-    }
 
     const persistScroll = () => {
       if (!mainScrollRef.current) return;
@@ -123,7 +105,7 @@ function Index() {
       document.removeEventListener("visibilitychange", persistScroll);
       window.removeEventListener("beforeunload", persistScroll);
     };
-  }, [activeView, restoredState]);
+  }, [activeView]);
 
   useEffect(() => {
     console.log("[MOUNT] Index mounted");
