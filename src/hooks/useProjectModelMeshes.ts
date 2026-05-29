@@ -97,7 +97,7 @@ export function useProjectModelMeshes(
     const requestProjectId = projectId;
     const requestSeq = ++refreshSeqRef.current;
     setLoading(true);
-    const perf = startMap3DPerf("project_model_meshes.refresh", { projectId: requestProjectId });
+    const perf = startMap3DPerf("useProjectModelMeshes refresh", { projectId: requestProjectId });
     const allRows: ProjectModelMesh[] = [];
     let page = 0;
     let pagesLoaded = 0;
@@ -322,12 +322,12 @@ export function useProjectModelMeshes(
         return;
       }
 
-      const perf = startMap3DPerf("project_model_meshes.bulkInventory", {
+      const perf = startMap3DPerf("bulkUpsertMeshes", {
         projectId,
         incoming: incoming.length,
       });
       const existing = new Map<string, ExistingMeshInventoryRow>();
-      const existingPerf = startMap3DPerf("project_model_meshes.bulkInventory.fetchExisting", { projectId });
+      const existingPerf = startMap3DPerf("bulkUpsertMeshes fetchExisting", { projectId });
       // usa o estado mais recente sincronicamente refazendo o fetch
       const { data, error: existingError } = await supabase
         .from("project_model_meshes" as any)
@@ -396,7 +396,7 @@ export function useProjectModelMeshes(
       }
 
       if (toInsert.length > 0) {
-        const insertPerf = startMap3DPerf("project_model_meshes.bulkInventory.insert", { rows: toInsert.length });
+        const insertPerf = startMap3DPerf("bulkUpsertMeshes insert", { rows: toInsert.length });
         const { error } = await supabase
           .from("project_model_meshes" as any)
           .upsert(toInsert, { onConflict: "project_id,layer_key" });
@@ -405,7 +405,7 @@ export function useProjectModelMeshes(
       }
       // Updates em lote — paralelos
       if (toUpdate.length > 0) {
-        const updatePerf = startMap3DPerf("project_model_meshes.bulkInventory.updateChanged", { rows: toUpdate.length });
+        const updatePerf = startMap3DPerf("bulkUpsertMeshes updateChanged", { rows: toUpdate.length });
         const results = await Promise.all(
           toUpdate.map((u) =>
             supabase
@@ -427,7 +427,7 @@ export function useProjectModelMeshes(
         endMap3DPerf(updatePerf, { ok: updateErrors.length === 0, errors: updateErrors.length });
       }
       const shouldRefresh = toInsert.length > 0 || toUpdate.length > 0;
-      logMap3DPerf("project_model_meshes.bulkInventory.plan", {
+      logMap3DPerf("bulkUpsertMeshes plan", {
         projectId,
         incoming: incoming.length,
         existing: existing.size,
@@ -437,7 +437,7 @@ export function useProjectModelMeshes(
         willRefresh: shouldRefresh,
       });
       if (shouldRefresh) {
-        const refreshPerf = startMap3DPerf("project_model_meshes.bulkInventory.refreshAfterWrite", {
+        const refreshPerf = startMap3DPerf("bulkUpsertMeshes refreshAfterWrite", {
           projectId,
           toInsert: toInsert.length,
           toUpdate: toUpdate.length,

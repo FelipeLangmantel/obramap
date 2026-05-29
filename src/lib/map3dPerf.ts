@@ -6,19 +6,21 @@ type Map3DPerfMark = {
 const MAP3D_PERF_FLAG = "obramap:map3d:perf";
 
 export function isMap3DPerfEnabled() {
-  return typeof window !== "undefined" && window.localStorage.getItem(MAP3D_PERF_FLAG) === "1";
+  if (typeof window === "undefined") return false;
+  const value = window.localStorage.getItem(MAP3D_PERF_FLAG);
+  return value === "1" || value === "true";
 }
 
 export function startMap3DPerf(label: string, detail?: Record<string, unknown>): Map3DPerfMark | null {
   if (!isMap3DPerfEnabled()) return null;
   const mark = { label, start: performance.now() };
-  console.info(`[Map3D Perf] ${label}:start`, detail ?? {});
+  console.log(`[Map3D Perf] ${label}:start`, detail ?? {});
   return mark;
 }
 
 export function endMap3DPerf(mark: Map3DPerfMark | null, detail?: Record<string, unknown>) {
   if (!mark || !isMap3DPerfEnabled()) return;
-  console.info(`[Map3D Perf] ${mark.label}:end`, {
+  console.log(`[Map3D Perf] ${mark.label}:end`, {
     durationMs: Math.round(performance.now() - mark.start),
     ...(detail ?? {}),
   });
@@ -26,5 +28,5 @@ export function endMap3DPerf(mark: Map3DPerfMark | null, detail?: Record<string,
 
 export function logMap3DPerf(label: string, detail?: Record<string, unknown>) {
   if (!isMap3DPerfEnabled()) return;
-  console.info(`[Map3D Perf] ${label}`, detail ?? {});
+  console.log(`[Map3D Perf] ${label}`, detail ?? {});
 }

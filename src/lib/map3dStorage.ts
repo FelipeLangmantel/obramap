@@ -58,14 +58,17 @@ export async function createMap3DSignedUrlFromPath(
   const normalizedPath = normalizeMap3DStoragePath(path);
   if (!normalizedPath) return null;
   if (missingStoragePaths.has(normalizedPath)) {
-    logMap3DPerf("storage.createSignedUrl.skipMissing", { path: normalizedPath });
+    logMap3DPerf("resolveMap3DSignedUrl skip missing", {
+      bucket: MAP3D_STORAGE_BUCKET,
+      path: normalizedPath,
+    });
     return null;
   }
   const cacheKey = getSignedUrlCacheKey(normalizedPath);
   const now = Date.now();
   const cached = signedUrlCache.get(cacheKey);
   if (cached && cached.expiresAt > now) {
-    logMap3DPerf("storage.createSignedUrl.cacheHit", {
+    logMap3DPerf("signed URL cache hit", {
       bucket: MAP3D_STORAGE_BUCKET,
       path: normalizedPath,
       resolveMs: 0,
@@ -75,11 +78,11 @@ export async function createMap3DSignedUrlFromPath(
   if (cached) signedUrlCache.delete(cacheKey);
 
   const resolveStartedAt = performance.now();
-  logMap3DPerf("storage.createSignedUrl.cacheMiss", {
+  logMap3DPerf("signed URL cache miss", {
     bucket: MAP3D_STORAGE_BUCKET,
     path: normalizedPath,
   });
-  const perf = startMap3DPerf("storage.createSignedUrl", {
+  const perf = startMap3DPerf("resolveMap3DSignedUrl createSignedUrl", {
     bucket: MAP3D_STORAGE_BUCKET,
     path: normalizedPath,
   });
@@ -118,7 +121,7 @@ export async function createMap3DSignedUrlFromPath(
     signedUrl: data.signedUrl,
     expiresAt: Date.now() + MAP3D_SIGNED_URL_CACHE_TTL_MS,
   });
-  logMap3DPerf("storage.createSignedUrl.resolved", {
+  logMap3DPerf("resolveMap3DSignedUrl resolved", {
     bucket: MAP3D_STORAGE_BUCKET,
     path: normalizedPath,
     resolveMs: Math.round(performance.now() - resolveStartedAt),
@@ -135,7 +138,18 @@ export async function resolveMap3DSignedUrl(
   url: string | null | undefined,
 ): Promise<string | null> {
   if (!url) return null;
+  const perf = startMap3DPerf("resolveMap3DSignedUrl", {
+    input: url.split("?")[0],
+  });
   const path = extractMap3DStoragePath(url);
-  if (!path) return url;
-  return createMap3DSignedUrlFromPath(path);
+  if (!path) {
+    endMap3DPerf(perf, { storagePath: null, passthrough: true });
+    return url;
+  }
+  const signedUrl = await createMap3DSignedUrlFromPath(path);
+  endMap3DPerf(perf, {
+    storagePath: path,
+    ok: Boolean(signedUrl),
+  });
+  return signedUrl;
 }

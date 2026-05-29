@@ -411,8 +411,8 @@ function GLTFModel({ url, onLoaded, onSceneReady, onMeshClick, onMeshDoubleClick
   useEffect(() => {
     if (scene && !calledRef.current) {
       calledRef.current = true;
-      logMap3DPerf("map3d.gltfModel.loaded", gltfPerfDetail);
-      const callbackPerf = startMap3DPerf("map3d.gltfModel.sceneReadyCallbacks", gltfPerfDetail);
+      logMap3DPerf("GLTFModel load", gltfPerfDetail);
+      const callbackPerf = startMap3DPerf("GLTFModel onSceneReady", gltfPerfDetail);
       onSceneReady?.(scene);
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
@@ -1250,7 +1250,11 @@ export function Map3DView() {
     renderCount: renderCountRef.current,
   });
   useEffect(() => {
-    mountPerfRef.current = startMap3DPerf("map3d.view.mounted", { projectId: projectId ?? null });
+    logMap3DPerf("enabled", {
+      flag: "obramap:map3d:perf",
+      projectId: projectId ?? null,
+    });
+    mountPerfRef.current = startMap3DPerf("Map3DView mount", { projectId: projectId ?? null });
     return () => {
       endMap3DPerf(mountPerfRef.current, {
         projectId: projectId ?? null,
@@ -2124,13 +2128,13 @@ export function Map3DView() {
   // Inventário automático: extrai todas as meshes para o banco.
   const handleSceneReady = useCallback(async (scene: THREE.Object3D) => {
     const sceneCounts = countSceneMeshes(scene);
-    const scenePerf = startMap3DPerf("map3d.sceneReady", {
+    const scenePerf = startMap3DPerf("handleSceneReady", {
       projectId,
       modelType: modelData?.type ?? null,
       ...sceneCounts,
     });
     setSceneObj(scene);
-    const layerPerf = startMap3DPerf("map3d.sceneReady.extractLayers");
+    const layerPerf = startMap3DPerf("handleSceneReady extractLayers");
     layerManager.extractLayers(scene);
     endMap3DPerf(layerPerf);
     console.log('[3D] Layers extracted from model');
@@ -2141,7 +2145,7 @@ export function Map3DView() {
     }
     const meshesToUpsert: { layer_key: string; mesh_name: string; material_name: string; detected_house_number: number | null }[] = [];
     const nameCounts = new Map<string, number>();
-    const traversePerf = startMap3DPerf("map3d.sceneReady.traverseMeshes");
+    const traversePerf = startMap3DPerf("handleSceneReady traverseMeshes");
     scene.traverse((child) => {
       if (!(child as THREE.Mesh).isMesh) return;
       const mesh = child as THREE.Mesh;
@@ -2184,7 +2188,7 @@ export function Map3DView() {
       });
     }
     if (meshesToUpsert.length > 0) {
-      const bulkPerf = startMap3DPerf("map3d.sceneReady.bulkUpsertMeshes.dispatch", {
+      const bulkPerf = startMap3DPerf("handleSceneReady bulkUpsertMeshes", {
         projectId,
         meshes: meshesToUpsert.length,
       });
@@ -4683,7 +4687,7 @@ export function Map3DView() {
     if (!projectId) return;
     const requestedProjectId = projectId;
     setIsLoading(true);
-    const perf = startMap3DPerf("map_layouts.loadSaved3DMap", { projectId: requestedProjectId });
+    const perf = startMap3DPerf("loadSaved3DMap", { projectId: requestedProjectId });
     try {
       const layoutPerf = startMap3DPerf("map_layouts.query", { projectId: requestedProjectId });
       const { data, error } = await supabase.from('map_layouts')
