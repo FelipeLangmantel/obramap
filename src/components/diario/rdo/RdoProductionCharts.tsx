@@ -75,7 +75,16 @@ export function RdoProductionCharts({ items, totalCasas, projectId, entryDate, m
 
   const { byMacro, byScope, totalCasasAtendidas, totalLancamentos } = useMemo(() => {
     const macroMap = new Map<string, { name: string; color: string; casas: number; lancamentos: number }>();
-    const scopeMap = new Map<string, { name: string; macro: string; color: string; casas: number; pctMedio: number; n: number }>();
+    const scopeMap = new Map<string, {
+      name: string;
+      macro: string;
+      macroId: string;
+      scopeId?: string;
+      color: string;
+      casas: number;
+      pctMedio: number;
+      n: number;
+    }>();
     const casasUnicas = new Set<number>();
 
     for (const it of items) {
@@ -87,8 +96,17 @@ export function RdoProductionCharts({ items, totalCasas, projectId, entryDate, m
       m.lancamentos += 1;
       macroMap.set(it.macro_id, m);
 
-      const skey = `${it.macro_id}|${it.scope_name}`;
-      const s = scopeMap.get(skey) || { name: it.scope_name, macro: it.macro_name, color: it.macro_color, casas: 0, pctMedio: 0, n: 0 };
+      const skey = `${it.macro_id}|${it.scope_id || it.scope_name}`;
+      const s = scopeMap.get(skey) || {
+        name: it.scope_name,
+        macro: it.macro_name,
+        macroId: it.macro_id,
+        scopeId: it.scope_id,
+        color: it.macro_color,
+        casas: 0,
+        pctMedio: 0,
+        n: 0,
+      };
       s.casas += casas;
       s.pctMedio = (s.pctMedio * s.n + it.percentual_executado) / (s.n + 1);
       s.n += 1;
@@ -185,6 +203,27 @@ export function RdoProductionCharts({ items, totalCasas, projectId, entryDate, m
     : hasEapConfigured
       ? "eap"
       : "none";
+
+  const getScopeEquivalentProgress = useCallback((scope: typeof byScope[number]) => {
+    if (activeProgressMode === "ple") {
+      const unitValue = scope.scopeId ? unitValueByScope.get(scope.scopeId) || 0 : 0;
+      if (!unitValue || !contractTotalValue) return null;
+      const value = (unitValue * scope.casas * (Math.min(100, Math.max(0, scope.pctMedio)) / 100) / contractTotalValue) * 100;
+      return { label: "PLE", value };
+    }
+
+    if (activeProgressMode === "eap") {
+      if (!totalCasas || !totalPhysicalWeight) return null;
+      const weight = physicalWeightByScope.weightByScopedKey.get(`${scope.macroId}::${scope.scopeId}`)
+        ?? (scope.scopeId ? physicalWeightByScope.weightByScopeId.get(scope.scopeId) : undefined)
+        ?? 0;
+      if (!weight) return null;
+      const value = (weight * scope.casas * (Math.min(100, Math.max(0, scope.pctMedio)) / 100) / (totalPhysicalWeight * totalCasas)) * 100;
+      return { label: "EAP", value };
+    }
+
+    return null;
+  }, [activeProgressMode, contractTotalValue, physicalWeightByScope, totalCasas, totalPhysicalWeight, unitValueByScope]);
 
   if (items.length === 0) {
     return (
@@ -341,9 +380,11 @@ export function RdoProductionCharts({ items, totalCasas, projectId, entryDate, m
           <div>
             <p className="text-xs font-semibold text-muted-foreground mb-1">Top serviços</p>
             <div className="space-y-1.5">
-              {byScope.map((s, i) => (
+              {byScope.map((s, i) => {
+                const equivalent = getScopeEquivalentProgress(s);
+                return (
                 <div key={i} className="flex items-center gap-2 text-xs">
-                  <div className="w-2 h-6 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                  <div className="w-2 h-7 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
                   <div className="flex-1 min-w-0">
                     <p className="truncate font-medium">{s.name}</p>
                     <p className="text-[10px] text-muted-foreground truncate">{s.macro}</p>
@@ -351,9 +392,17 @@ export function RdoProductionCharts({ items, totalCasas, projectId, entryDate, m
                   <div className="text-right">
                     <p className="font-bold tabular-nums">{s.casas} casas</p>
                     <p className="text-[10px] text-muted-foreground tabular-nums">{Math.round(s.pctMedio)}% médio</p>
+                    {equivalent ? (
+                      <p className="text-[10px] text-muted-foreground tabular-nums">
+                        {fmtPct(equivalent.value)} {equivalent.label}
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-muted-foreground">Sem vínculo EAP/PLE</p>
+                    )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

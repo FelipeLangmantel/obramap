@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCoordenadorAccess } from "@/hooks/useCoordenadorAccess";
@@ -151,6 +151,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   const [statusAprovacao, setStatusAprovacao] = useState<StatusAprovacao>("preenchendo");
   const [numRelatorio, setNumRelatorio] = useState<number | null>(null);
   const [savingHeader, setSavingHeader] = useState(false);
+  const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [correcoesDoDia, setCorrecoesDoDia] = useState<any[]>([]);
   const [entryMeta, setEntryMeta] = useState<{ created_at: string | null; updated_at: string | null; engineer_name: string | null }>({
     created_at: null, updated_at: null, engineer_name: null,
@@ -210,9 +211,13 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   // Fotos vinculadas a serviços específicos (para PDF jurídico)
   const [fotosPorServico, setFotosPorServico] = useState<Record<string, { url: string; legenda: string | null }[]>>({});
   const [uploadingFoto, setUploadingFoto] = useState(false);
+  const [fotoLegenda, setFotoLegenda] = useState("");
   const [fotoAmpliada, setFotoAmpliada] = useState<{ id: string; url: string; legenda: string | null } | null>(null);
-  const galleryInputRef = React.useRef<HTMLInputElement>(null);
-  const inlineCameraInputRef = React.useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const inlineCameraInputRef = useRef<HTMLInputElement>(null);
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autosaveHydratedRef = useRef(false);
+  const autosaveSavingRef = useRef(false);
   const [photoSourceOpen, setPhotoSourceOpen] = useState(false);
 
   // RDO data
@@ -640,6 +645,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
         mmChuva: (data as any).mm_chuva ?? null,
       });
       setClimaAutoPreenchido(false);
+      autosaveHydratedRef.current = true;
       const { data: correcoes } = await supabase
         .from("diary_item_corrections")
         .select("tipo, macro_name, scope_name, house_ids_anterior, house_ids_posterior, percentual_anterior, percentual_posterior, justificativa, corrigido_por_nome, created_at")
@@ -676,6 +682,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       setCorrecoesDoDia([]);
       setFotos([]);
       setClimaAutoPreenchido(false);
+      autosaveHydratedRef.current = true;
       tryAutoFillClima(null);
     }
   };
@@ -728,7 +735,9 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
           .upload(path, payload, { contentType, upsert: false });
         if (uploadError) throw uploadError;
         const { error: dbError } = await supabase.from("diary_photos").insert({
-          diary_entry_id: resolvedEntryId, storage_path: path, legenda: null,
+          diary_entry_id: resolvedEntryId,
+          storage_path: path,
+          legenda: fotoLegenda.trim() || null,
         });
         if (dbError) {
           await supabase.storage.from("diary-photos").remove([path]);
@@ -737,6 +746,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
         uploaded++;
       }
       await loadFotos(resolvedEntryId);
+      setFotoLegenda("");
       toast.success(`${uploaded} foto(s) enviada(s).`);
     } catch (err: any) {
       toast.error("Erro ao enviar foto: " + (err.message || ""));
@@ -1095,6 +1105,58 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       setSavingHeader(false);
     }
   };
+
+  const saveHeaderSilently = useCallback(async () => {
+    if (!entryId || !currentProject?.id || !user?.id || !company?.id) return;
+    if (editingDisabled || autosaveSavingRef.current) return;
+    autosaveSavingRef.current = true;
+    setAutosaveStatus("saving");
+    try {
+      const climaPayload = buildClimaPayload();
+      const { error } = await supabase.from("diary_entries").update({
+        equipe_presente: equipePres,
+        observacao_geral: obsGeral || null,
+        ...climaPayload,
+      }).eq("id", entryId);
+      if (error) throw error;
+      setAutosaveStatus("saved");
+    } catch (err) {
+      console.error("[DiarioObra] autosave failed", err);
+      setAutosaveStatus("error");
+    } finally {
+      autosaveSavingRef.current = false;
+    }
+  }, [buildClimaPayload, company?.id, currentProject?.id, editingDisabled, entryId, equipePres, obsGeral, user?.id]);
+
+  useEffect(() => {
+    if (!entryId || editingDisabled || !autosaveHydratedRef.current) return;
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = setTimeout(() => {
+      void saveHeaderSilently();
+    }, 1000);
+    return () => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    };
+  }, [buildClimaPayload, editingDisabled, entryId, equipePres, obsGeral, saveHeaderSilently]);
+
+  useEffect(() => {
+    const flushAutosave = () => {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+      void saveHeaderSilently();
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === "hidden") flushAutosave();
+    };
+    window.addEventListener("beforeunload", flushAutosave);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("beforeunload", flushAutosave);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [saveHeaderSilently]);
 
   const getProgressFor = useCallback((houseId: number, macroId: string, scopeId: string): number => {
     const house = houses.find(h => h.id === houseId);
@@ -1520,6 +1582,11 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
         .filter((f) => !f.diary_item_id && f.url)
         .map((f) => f.url)
     ));
+    const generalPhotos = Array.from(new Map(
+      fotos
+        .filter((f) => !f.diary_item_id && f.url)
+        .map((f) => [f.url, { url: f.url, legenda: f.legenda || null }])
+    ).values());
     const projectLocation = projData?.location ||
       (projData?.municipio ? `${projData.municipio}${projData.estado ? "/" + projData.estado : ""}` : null);
 
@@ -1568,7 +1635,14 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
         percentual_anterior: c.percentual_anterior, percentual_posterior: c.percentual_posterior,
         justificativa: c.justificativa, corrigido_por_nome: c.corrigido_por_nome,
       })),
-      photoUrls, reportNumber, legal,
+      photoUrls, generalPhotos, reportNumber, legal,
+      videos: rdo.videos
+        .filter((video) => video.url)
+        .map((video) => ({
+          url: video.url,
+          nome_original: video.nome_original,
+          storage_path: video.storage_path,
+        })),
       photosByService: diaryItems
         .filter(it => fotosPorServico[it.id]?.length)
         .map(it => ({
@@ -1584,7 +1658,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
           ).values()),
         })),
     };
-  }, [entryId, currentProject, company, profile, user, entryDate, climaState, equipePres, obsGeral, diaryItems, correcoesDoDia, fotos, fotosPorServico, numRelatorio, legalConfig]);
+  }, [entryId, currentProject, company, profile, user, entryDate, climaState, equipePres, obsGeral, diaryItems, correcoesDoDia, fotos, fotosPorServico, rdo.videos, numRelatorio, legalConfig]);
 
   // Prazo decorrido / a vencer
   const prazoInfo = useMemo(() => {
@@ -1749,6 +1823,14 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                 Salvar
               </Button>
             )}
+            {entryId && !editingDisabled && (
+              <div className="flex min-h-[40px] items-center rounded-md border bg-muted/30 px-3 text-xs text-muted-foreground">
+                {autosaveStatus === "saving" && "Salvando..."}
+                {autosaveStatus === "saved" && "Salvo automaticamente"}
+                {autosaveStatus === "error" && <span className="text-destructive">Erro ao salvar</span>}
+                {autosaveStatus === "idle" && "Autosave ativo"}
+              </div>
+            )}
             {entryId && !editingDisabled && statusAprovacao === "preenchendo" && (
               <Button
                 variant="default"
@@ -1833,6 +1915,9 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                     <label className="text-xs font-medium text-muted-foreground">Data</label>
                     <Input type="date" value={entryDate} onChange={e => setEntryDate(e.target.value)}
                       className="mt-1" disabled={editingDisabled} />
+                    <p className="mt-1 text-xs capitalize text-muted-foreground">
+                      {format(parseISO(entryDate), "EEEE", { locale: ptBR })}
+                    </p>
                   </div>
                   <div>
                     <label className="text-xs font-medium text-muted-foreground">Equipe presente</label>
@@ -2249,15 +2334,29 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                 disabled={diaryFormDisabled || uploadingFoto}
               />
             <div className="space-y-3">
+              {!diaryFormDisabled && (
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">Legenda opcional para novas fotos</label>
+                  <Input
+                    value={fotoLegenda}
+                    onChange={(e) => setFotoLegenda(e.target.value)}
+                    placeholder="Ex.: Frente da casa 12, execução de fundação..."
+                    disabled={uploadingFoto}
+                  />
+                </div>
+              )}
               {fotos.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {fotos.map(foto => (
-                    <div key={foto.id} className="relative group">
+                    <div key={foto.id} className="relative group w-24">
                       <button type="button" onClick={() => setFotoAmpliada(foto)}
                         className="block focus:outline-none focus:ring-2 focus:ring-ring rounded-lg">
                         <img src={foto.url} alt={foto.legenda || "Foto do diário"}
                           className="w-20 h-20 object-cover rounded-lg border" />
                       </button>
+                      {foto.legenda && (
+                        <p className="mt-1 line-clamp-2 text-[10px] text-muted-foreground">{foto.legenda}</p>
+                      )}
                       {!diaryFormDisabled && (
                         <button type="button" onClick={() => handleRemoverFoto(foto.id, foto.storage_path)}
                           className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full w-5 h-5 text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow">

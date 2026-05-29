@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -54,6 +54,7 @@ export function DiaryItemPhotoButton({
   const [fotos, setFotos] = useState<FotoServico[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [caption, setCaption] = useState("");
   const [selectedHouse, setSelectedHouse] = useState<string>(
     houseIds.length === 1 ? String(houseIds[0]) : "all"
   );
@@ -120,7 +121,7 @@ export function DiaryItemPhotoButton({
           diary_entry_id: diaryEntryId,
           diary_item_id: diaryItemId,
           storage_path: path,
-          legenda: null,
+          legenda: caption.trim() || null,
           house_number: houseNum,
         } as any);
         if (dbErr) {
@@ -130,6 +131,7 @@ export function DiaryItemPhotoButton({
         uploaded++;
       }
       const houseLabel = houseNum != null ? `casa ${String(houseNum).padStart(2, "0")}` : "todas as casas";
+      setCaption("");
       toast.success(`${uploaded} foto(s) anexada(s) à ${houseLabel}.`);
       await loadFotos();
       await refreshCount();
@@ -190,11 +192,7 @@ export function DiaryItemPhotoButton({
         title="Anexar fotos a este serviço"
       >
         <Camera className="h-3.5 w-3.5" />
-        {count > 0 ? (
-          <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">{count}</Badge>
-        ) : (
-          <span className="hidden sm:inline">Foto</span>
-        )}
+        <span>Fotos{count > 0 ? ` (${count})` : ""}</span>
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -230,6 +228,17 @@ export function DiaryItemPhotoButton({
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="flex-1">
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                  Legenda opcional:
+                </label>
+                <Input
+                  value={caption}
+                  onChange={(e) => setCaption(e.target.value)}
+                  placeholder="Ex.: Casa 12, etapa de fundação..."
+                  disabled={uploading || disabled}
+                />
               </div>
               <div className="flex gap-2">
                 <Button
@@ -290,6 +299,11 @@ export function DiaryItemPhotoButton({
                     )}
                   >
                     <img src={f.url} alt={f.legenda || "Foto do serviço"} className="w-full h-32 object-cover" />
+                    {f.legenda && (
+                      <div className="px-2 py-1 text-[11px] text-muted-foreground bg-background border-t">
+                        {f.legenda}
+                      </div>
+                    )}
                     <div className="absolute bottom-1 left-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
                       {f.house_number != null
                         ? `Casa ${String(f.house_number).padStart(2, "0")}`

@@ -98,6 +98,7 @@ export interface DiarioPDFData {
   items: DiaryItem[];
   correcoes: Correction[];
   photoUrls: string[];
+  generalPhotos?: Array<{ url: string; legenda: string | null }>;
   /** Fotos vinculadas a serviços específicos — geram a seção "Registro Fotográfico por Serviço" */
   photosByService?: Array<{
     macro_name: string;
@@ -107,6 +108,7 @@ export interface DiarioPDFData {
     percentual_executado: number;
     photos: Array<{ url: string; legenda: string | null }>;
   }>;
+  videos?: Array<{ url?: string; nome_original: string | null; storage_path: string }>;
   reportNumber: number | null;
   legal: LegalConfig | null;
 }
@@ -136,10 +138,6 @@ function fmtDate(iso: string | null) {
   try { return format(parseISO(iso), "dd/MM/yyyy", { locale: ptBR }); } catch { return iso; }
 }
 
-function dedupeUrls(urls: string[]) {
-  return Array.from(new Set(urls.filter(Boolean)));
-}
-
 function getServicePhotoUrlSet(data: DiarioPDFData) {
   return new Set(
     (data.photosByService || [])
@@ -149,9 +147,65 @@ function getServicePhotoUrlSet(data: DiarioPDFData) {
   );
 }
 
-function getGeneralPhotoUrlsForPrint(data: DiarioPDFData) {
+function getGeneralPhotoItemsForPrint(data: DiarioPDFData) {
   const servicePhotoUrls = getServicePhotoUrlSet(data);
-  return dedupeUrls(data.photoUrls).filter((url) => !servicePhotoUrls.has(url));
+  const source = data.generalPhotos || data.photoUrls.map((url) => ({ url, legenda: null }));
+  const byUrl = new Map<string, { url: string; legenda: string | null }>();
+  source
+    .filter((photo) => photo.url && !servicePhotoUrls.has(photo.url))
+    .forEach((photo) => {
+      if (!byUrl.has(photo.url)) byUrl.set(photo.url, photo);
+    });
+  return Array.from(byUrl.values());
+}
+
+async function renderVideoLinks(
+  doc: jsPDF,
+  data: DiarioPDFData,
+  startY: number,
+  opts: { font: "times" | "helvetica"; title: string; titleColor: number[]; linkColor: number[]; }
+): Promise<number> {
+  const videos = (data.videos || []).filter((video) => video.url);
+  if (videos.length === 0) return startY;
+
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 14;
+  let y = startY;
+
+  if (y > pageH - 45) { doc.addPage(); y = margin; }
+  doc.setFont(opts.font, "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(opts.titleColor[0], opts.titleColor[1], opts.titleColor[2]);
+  doc.text(`${opts.title} (${videos.length})`, margin, y);
+  y += 5;
+
+  doc.setFont(opts.font, "normal");
+  doc.setFontSize(8);
+  for (const video of videos) {
+    const url = video.url!;
+    const title = video.nome_original || video.storage_path.split("/").pop() || "Video anexado";
+    const titleLines = doc.splitTextToSize(title, pageW - margin * 2);
+    const urlLines = doc.splitTextToSize(url, pageW - margin * 2);
+    const blockHeight = titleLines.length * 4 + urlLines.length * 3.5 + 5;
+
+    if (y + blockHeight > pageH - 20) { doc.addPage(); y = margin; }
+    doc.setTextColor(40);
+    doc.setFont(opts.font, "bold");
+    doc.text(titleLines, margin, y);
+    y += titleLines.length * 4;
+
+    doc.setFont(opts.font, "normal");
+    doc.setTextColor(opts.linkColor[0], opts.linkColor[1], opts.linkColor[2]);
+    if (typeof (doc as any).textWithLink === "function") {
+      (doc as any).textWithLink("Abrir video", margin, y, { url });
+      y += 4;
+    }
+    doc.text(urlLines, margin, y);
+    y += urlLines.length * 3.5 + 4;
+  }
+
+  return y;
 }
 
 /**
@@ -221,6 +275,12 @@ async function renderPhotosByService(
           doc.setLineWidth(0.2);
           doc.rect(x, y, cellW, cellH);
         } catch { /* */ }
+      }
+      if (photo.legenda) {
+        doc.setFont(opts.font, "normal");
+        doc.setFontSize(6);
+        doc.setTextColor(80);
+        doc.text(doc.splitTextToSize(photo.legenda, cellW), x, y + cellH + 3);
       }
       col++;
       if (col >= cols) { col = 0; y += cellH + gap; }
@@ -433,13 +493,13 @@ async function renderOrgaoPublico(
   }
 
   // ─── Fotos avulsas ───────────────────────────────────────────────
-  const generalPhotoUrls = getGeneralPhotoUrlsForPrint(data);
-  if (config.showPhotos && generalPhotoUrls.length > 0) {
+  const generalPhotos = getGeneralPhotoItemsForPrint(data);
+  if (config.showPhotos && generalPhotos.length > 0) {
     if (y > pageH - 60) { doc.addPage(); y = margin; }
     doc.setFont("times", "bold");
     doc.setFontSize(10);
     doc.setTextColor(20);
-    doc.text(`REGISTRO FOTOGRÁFICO (${generalPhotoUrls.length})`, margin, y);
+    doc.text(`REGISTRO FOTOGRAFICO (${generalPhotos.length})`, margin, y);
     y += 4;
 
     const cols = 3;
@@ -447,22 +507,35 @@ async function renderOrgaoPublico(
     const cellW = (pageW - margin * 2 - gap * (cols - 1)) / cols;
     const cellH = cellW * 0.75;
     let col = 0;
-    for (const url of generalPhotoUrls) {
+    for (const photo of generalPhotos) {
       if (y + cellH > pageH - 20) { doc.addPage(); y = margin; }
-      const dataUrl = await loadImageAsDataUrl(url);
+      const dataUrl = await loadImageAsDataUrl(photo.url);
+      const x = margin + col * (cellW + gap);
       if (dataUrl) {
         try {
-          const x = margin + col * (cellW + gap);
           doc.addImage(dataUrl, "JPEG", x, y, cellW, cellH);
           doc.setDrawColor(80);
           doc.rect(x, y, cellW, cellH);
         } catch { /* */ }
+      }
+      if (photo.legenda) {
+        doc.setFont("times", "normal");
+        doc.setFontSize(6);
+        doc.setTextColor(80);
+        doc.text(doc.splitTextToSize(photo.legenda, cellW), x, y + cellH + 3);
       }
       col++;
       if (col >= cols) { col = 0; y += cellH + gap; }
     }
     if (col !== 0) y += cellH + gap;
   }
+
+  y = await renderVideoLinks(doc, data, y, {
+    font: "times",
+    title: "VIDEOS ANEXADOS",
+    titleColor: [20, 20, 20],
+    linkColor: [37, 99, 235],
+  });
 
   // ─── Assinaturas ─────────────────────────────────────────────────
   if (config.showSignatures) {
@@ -680,32 +753,45 @@ async function renderCorporativoModerno(
     y = await renderPhotosByService(doc, data, y, { font: "helvetica", titleColor: [15, 23, 42] });
   }
 
-  const generalPhotoUrls = getGeneralPhotoUrlsForPrint(data);
-  if (config.showPhotos && generalPhotoUrls.length > 0) {
+  const generalPhotos = getGeneralPhotoItemsForPrint(data);
+  if (config.showPhotos && generalPhotos.length > 0) {
     if (y > pageH - 60) { doc.addPage(); y = margin; }
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
     doc.setTextColor(15, 23, 42);
-    doc.text(`Fotos (${generalPhotoUrls.length})`, margin, y);
+    doc.text(`Fotos (${generalPhotos.length})`, margin, y);
     y += 4;
     const cols = 3, gap = 3;
     const cellW = (pageW - margin * 2 - gap * (cols - 1)) / cols;
     const cellH = cellW * 0.75;
     let col = 0;
-    for (const url of generalPhotoUrls) {
+    for (const photo of generalPhotos) {
       if (y + cellH > pageH - 20) { doc.addPage(); y = margin; }
-      const dataUrl = await loadImageAsDataUrl(url);
+      const dataUrl = await loadImageAsDataUrl(photo.url);
+      const x = margin + col * (cellW + gap);
       if (dataUrl) {
         try {
-          const x = margin + col * (cellW + gap);
           doc.addImage(dataUrl, "JPEG", x, y, cellW, cellH);
         } catch { /* */ }
+      }
+      if (photo.legenda) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6);
+        doc.setTextColor(100, 116, 139);
+        doc.text(doc.splitTextToSize(photo.legenda, cellW), x, y + cellH + 3);
       }
       col++;
       if (col >= cols) { col = 0; y += cellH + gap; }
     }
     if (col !== 0) y += cellH + gap;
   }
+
+  y = await renderVideoLinks(doc, data, y, {
+    font: "helvetica",
+    title: "Videos anexados",
+    titleColor: [15, 23, 42],
+    linkColor: [37, 99, 235],
+  });
 
   if (config.showSignatures) {
     if (y > pageH - 50) { doc.addPage(); y = margin; } else y += 8;
