@@ -65,7 +65,7 @@ type GlbMeshInventoryInput = {
   detected_house_number: number | null;
 };
 
-import { MAP3D_STORAGE_BUCKET, createMap3DSignedUrlFromPath, resolveMap3DSignedUrl } from "@/lib/map3dStorage";
+import { MAP3D_STORAGE_BUCKET, createMap3DSignedUrlFromPath, invalidateMap3DSignedUrlCache, resolveMap3DSignedUrl } from "@/lib/map3dStorage";
 import { endMap3DPerf, logMap3DPerf, startMap3DPerf } from "@/lib/map3dPerf";
 const MAP3D_ZOOM_SENSITIVITY_KEY = "obramap:map3d:zoom-sensitivity";
 const MAP3D_WALK_HELP_HIDDEN_KEY = "obramap:map3d:walk-help-hidden";
@@ -1716,11 +1716,9 @@ export function Map3DView() {
         return null;
       }
 
-      const { data: signed, error: signError } = await supabase.storage
-        .from(MAP3D_STORAGE_BUCKET)
-        .createSignedUrl(data.path, 60 * 60 * 24 * 7);
-      const publicUrl = signed?.signedUrl;
-      if (signError || !publicUrl) {
+      invalidateMap3DSignedUrlCache(data.path);
+      const publicUrl = await createMap3DSignedUrlFromPath(data.path);
+      if (!publicUrl) {
         toast.error("Upload concluido, mas nao foi possivel gerar a URL assinada do modelo.");
         return null;
       }
@@ -4873,6 +4871,8 @@ export function Map3DView() {
   const resetView = () => {
     if (!canResetMap) { toast.error("Sem permissão para resetar o Mapa 3D."); return; }
     if (!projectId) return;
+    invalidateMap3DSignedUrlCache(modelData?.url);
+    invalidateMap3DSignedUrlCache(modelData?.mtlUrl);
     setModelData(null); setMarkers([]); setSelectedMarker(null); setPendingObjFile(null);
     clearAll3DSelection("map reset");
     setMeshReviewOverrides(new Map()); setTrustedGlbLinkKeys(new Set()); setGlbLinkScope("fresh");

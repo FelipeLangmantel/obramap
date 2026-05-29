@@ -2,9 +2,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { endMap3DPerf, logMap3DPerf, startMap3DPerf } from "@/lib/map3dPerf";
 
 export const MAP3D_STORAGE_BUCKET = "3d-models";
-export const MAP3D_SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
+export const MAP3D_SIGNED_URL_TTL_SECONDS = 60 * 60; // 1 hour
+const MAP3D_SIGNED_URL_CACHE_TTL_MS = 50 * 60 * 1000; // 50 minutes
 
 const missingStoragePaths = new Set<string>();
+const signedUrlCache = new Map<string, { signedUrl: string; expiresAt: number }>();
+
+function getSignedUrlCacheKey(path: string): string {
+  return `${MAP3D_STORAGE_BUCKET}:${path}`;
+}
 
 export function normalizeMap3DStoragePath(path: string | null | undefined): string | null {
   if (!path) return null;
@@ -36,6 +42,16 @@ export function extractMap3DStoragePath(url: string | null | undefined): string 
   }
 }
 
+export function invalidateMap3DSignedUrlCache(pathOrUrl?: string | null): void {
+  if (!pathOrUrl) {
+    signedUrlCache.clear();
+    return;
+  }
+  const path = extractMap3DStoragePath(pathOrUrl) ?? normalizeMap3DStoragePath(pathOrUrl);
+  if (!path) return;
+  signedUrlCache.delete(getSignedUrlCacheKey(path));
+}
+
 export async function createMap3DSignedUrlFromPath(
   path: string | null | undefined,
 ): Promise<string | null> {
@@ -45,18 +61,51 @@ export async function createMap3DSignedUrlFromPath(
     logMap3DPerf("storage.createSignedUrl.skipMissing", { path: normalizedPath });
     return null;
   }
+  const cacheKey = getSignedUrlCacheKey(normalizedPath);
+  const now = Date.now();
+  const cached = signedUrlCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    logMap3DPerf("storage.createSignedUrl.cacheHit", { path: normalizedPath });
+    if (import.meta.env.DEV) {
+      console.info("[3D Storage] signed URL cache hit", {
+        bucket: MAP3D_STORAGE_BUCKET,
+        path: normalizedPath,
+        resolveMs: 0,
+      });
+    }
+    return cached.signedUrl;
+  }
+  if (cached) signedUrlCache.delete(cacheKey);
+
+  const resolveStartedAt = performance.now();
+  logMap3DPerf("storage.createSignedUrl.cacheMiss", { path: normalizedPath });
+  if (import.meta.env.DEV) {
+    console.info("[3D Storage] signed URL cache miss", {
+      bucket: MAP3D_STORAGE_BUCKET,
+      path: normalizedPath,
+    });
+  }
   const perf = startMap3DPerf("storage.createSignedUrl", { path: normalizedPath });
   const { data, error } = await supabase.storage
     .from(MAP3D_STORAGE_BUCKET)
     .createSignedUrl(normalizedPath, MAP3D_SIGNED_URL_TTL_SECONDS);
   endMap3DPerf(perf, { ok: !error && !!data?.signedUrl });
   if (error || !data?.signedUrl) {
+    signedUrlCache.delete(cacheKey);
     const message = error instanceof Error ? error.message : String(error ?? "");
     const details = typeof error === "object" && error !== null ? error as Record<string, unknown> : {};
+    const statusCode = details.statusCode ?? details.status;
     const isMissingObject = message.toLowerCase().includes("object not found")
       || String(details.error ?? "").toLowerCase().includes("not found")
-      || details.statusCode === "404"
-      || details.statusCode === 404;
+      || statusCode === "404"
+      || statusCode === 404;
+    const shouldInvalidateCache = statusCode === "401"
+      || statusCode === 401
+      || statusCode === "403"
+      || statusCode === 403
+      || statusCode === "404"
+      || statusCode === 404;
+    if (shouldInvalidateCache) signedUrlCache.delete(cacheKey);
     if (isMissingObject) {
       missingStoragePaths.add(normalizedPath);
       console.warn("[3D] Arquivo do modelo nao encontrado no Storage; ignorando nas proximas tentativas desta sessao.", {
@@ -67,6 +116,18 @@ export async function createMap3DSignedUrlFromPath(
       console.error("[3D] Failed to sign URL for", normalizedPath, error);
     }
     return null;
+  }
+  signedUrlCache.set(cacheKey, {
+    signedUrl: data.signedUrl,
+    expiresAt: Date.now() + MAP3D_SIGNED_URL_CACHE_TTL_MS,
+  });
+  if (import.meta.env.DEV) {
+    console.info("[3D Storage] signed URL resolved", {
+      bucket: MAP3D_STORAGE_BUCKET,
+      path: normalizedPath,
+      resolveMs: Math.round(performance.now() - resolveStartedAt),
+      cacheTtlMinutes: MAP3D_SIGNED_URL_CACHE_TTL_MS / 60_000,
+    });
   }
   return data.signedUrl;
 }
