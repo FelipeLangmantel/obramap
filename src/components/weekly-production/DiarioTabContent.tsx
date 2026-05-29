@@ -260,17 +260,12 @@ export default function DiarioTabContent({ onOpenDiary }: DiarioTabContentProps 
   const pendentesEnvio = entries.filter(
     e => e.status !== "finalizado" && e.status_aprovacao !== "revisando"
   ).length;
+  const approvedEntries = entries.filter(e => e.status === "finalizado" || e.status_aprovacao === "aprovado");
 
-  const handleCloseWeek = async () => {
+  const handleGenerateWeeklyAnalysis = async () => {
     if (!currentProject?.id) return;
     setClosing(true);
     try {
-      await supabase.from("diary_entries")
-        .update({ status: "finalizado", status_aprovacao: "aprovado" })
-        .eq("project_id", currentProject.id)
-        .gte("entry_date", semanaInicio)
-        .lte("entry_date", semanaFim);
-
       const { data: planejados } = await supabase
         .from("planned_productions")
         .select("id, scope_id, scope_name, macro_id, macro_name, macro_color, planned_house_ids")
@@ -278,11 +273,22 @@ export default function DiarioTabContent({ onOpenDiary }: DiarioTabContentProps 
         .gte("week_start", semanaInicio)
         .lte("week_end", semanaFim);
 
+      if (!planejados || planejados.length === 0) {
+        toast.info("Não há planejamento cadastrado para gerar a análise semanal.");
+        return;
+      }
+
+      const approvedEntryIds = approvedEntries.map(e => e.id);
+      if (approvedEntryIds.length === 0) {
+        toast.info("Não há RDO aprovado para gerar análise semanal.");
+        return;
+      }
+
       // Busca diary_items frescos do banco — evita state stale após correções recentes
       const { data: freshRaw } = await supabase
         .from("diary_items")
         .select("id, scope_id, house_ids")
-        .in("diary_entry_id", entries.map(e => e.id))
+        .in("diary_entry_id", approvedEntryIds)
         .is("deleted_at", null)
         .or("review_status.is.null,review_status.neq.rejeitado");
       const freshItems = (freshRaw || []).map(d => ({
@@ -290,7 +296,21 @@ export default function DiarioTabContent({ onOpenDiary }: DiarioTabContentProps 
         house_ids: (d.house_ids as number[]) || [],
       }));
 
+      const plannedScopeIds = [...new Set((planejados || []).map(plan => plan.scope_id).filter(Boolean))];
+      const { data: existingRows } = plannedScopeIds.length > 0
+        ? await supabase
+            .from("production_deviations")
+            .select("id, scope_id, status")
+            .eq("project_id", currentProject.id)
+            .eq("week_start", semanaInicio)
+            .eq("week_end", semanaFim)
+            .in("scope_id", plannedScopeIds)
+        : { data: [] as any[] };
+      const existingScopes = new Set((existingRows || []).map(row => row.scope_id));
+      const existingStatusByScope = new Map((existingRows || []).map(row => [row.scope_id, row.status]));
+
       let deviationsCount = 0;
+      let updatedCount = 0;
       for (const plan of planejados || []) {
         const executedHouseIds = [...new Set(
           freshItems
@@ -301,37 +321,57 @@ export default function DiarioTabContent({ onOpenDiary }: DiarioTabContentProps 
         if (plannedIds.length === 0) continue;
         const missingIds = plannedIds.filter(id => !executedHouseIds.includes(id));
         const unplannedIds = executedHouseIds.filter(id => !plannedIds.includes(id));
+        const pct = (missingIds.length / plannedIds.length) * 100;
+        const payload = {
+          project_id: currentProject.id,
+          company_id: profile?.company_id,
+          week_start: semanaInicio,
+          week_end: semanaFim,
+          scope_id: plan.scope_id,
+          scope_name: plan.scope_name,
+          macro_id: plan.macro_id,
+          macro_name: plan.macro_name,
+          planned_count: plannedIds.length,
+          actual_count: executedHouseIds.length,
+          deviation: executedHouseIds.length - plannedIds.length,
+          planned_house_ids: plannedIds,
+          actual_house_ids: executedHouseIds,
+          missing_house_ids: missingIds,
+          unplanned_house_ids: unplannedIds,
+          severity: pct > 40 ? "critical" : pct > 20 ? "warning" : "info",
+          status: missingIds.length > 0
+            ? existingStatusByScope.get(plan.scope_id) === "acknowledged" ? "acknowledged" : "open"
+            : "resolved",
+          resolved_at: missingIds.length > 0 ? null : new Date().toISOString(),
+          resolved_by: missingIds.length > 0 ? null : profile?.user_id || null,
+        };
 
-        if (missingIds.length > 0) {
-          const pct = (missingIds.length / plannedIds.length) * 100;
-          await supabase.from("production_deviations").insert({
-            project_id: currentProject.id,
-            company_id: profile?.company_id,
-            week_start: semanaInicio,
-            week_end: semanaFim,
-            scope_id: plan.scope_id,
-            scope_name: plan.scope_name,
-            macro_id: plan.macro_id,
-            macro_name: plan.macro_name,
-            planned_count: plannedIds.length,
-            actual_count: executedHouseIds.length,
-            deviation: executedHouseIds.length - plannedIds.length,
-            planned_house_ids: plannedIds,
-            actual_house_ids: executedHouseIds,
-            missing_house_ids: missingIds,
-            unplanned_house_ids: unplannedIds,
-            severity: pct > 40 ? "critical" : pct > 20 ? "warning" : "info",
-            status: "open",
-          });
+        if (existingScopes.has(plan.scope_id)) {
+          const { error } = await supabase
+            .from("production_deviations")
+            .update(payload)
+            .eq("project_id", currentProject.id)
+            .eq("week_start", semanaInicio)
+            .eq("week_end", semanaFim)
+            .eq("scope_id", plan.scope_id);
+          if (error) throw error;
+          updatedCount++;
+        } else if (missingIds.length > 0) {
+          const { error } = await supabase.from("production_deviations").insert(payload);
+          if (error) throw error;
           deviationsCount++;
         }
       }
 
       queryClient.invalidateQueries({ queryKey: ["production_deviations"] });
-      toast.success(`Semana fechada! ${deviationsCount} desvio(s) registrado(s).`);
+      toast.success(
+        updatedCount > 0
+          ? `Análise semanal gerada com sucesso. ${deviationsCount} desvio(s) novo(s), ${updatedCount} atualizado(s).`
+          : "Análise semanal gerada com sucesso."
+      );
       loadData();
     } catch (err: any) {
-      toast.error("Erro ao fechar semana: " + (err.message || ""));
+      toast.error("Erro ao gerar análise semanal: " + (err.message || ""));
     } finally {
       setClosing(false);
       setConfirmOpen(false);
@@ -548,19 +588,19 @@ export default function DiarioTabContent({ onOpenDiary }: DiarioTabContentProps 
             />
             <Button
               variant="default"
-              disabled={!hasOpenEntries || entries.length === 0 || closing || !podeFecharSemana || !todasEmRevisao}
+              disabled={entries.length === 0 || approvedEntries.length === 0 || closing || !podeFecharSemana}
               onClick={() => setConfirmOpen(true)}
               className="ml-auto bg-emerald-600 hover:bg-emerald-700"
               title={
                 !podeFecharSemana
-                  ? "Apenas administrador ou coordenador da obra pode fechar a semana"
-                  : !todasEmRevisao && hasOpenEntries
-                    ? "Aguarde todos os engenheiros enviarem o RDO para revisão"
+                  ? "Apenas administrador ou coordenador da obra pode gerar a análise semanal"
+                  : approvedEntries.length === 0
+                    ? "É necessário ao menos um RDO aprovado para gerar a análise semanal"
                     : undefined
               }
             >
               {closing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
-              Fechar Semana
+              Gerar análise semanal
             </Button>
           </div>
           {coordenadorName && (
@@ -747,7 +787,7 @@ export default function DiarioTabContent({ onOpenDiary }: DiarioTabContentProps 
                                     </Button>
                                   </span>
                                 </TooltipTrigger>
-                                <TooltipContent>Semana fechada. Solicite ao administrador para corrigir.</TooltipContent>
+                                <TooltipContent>RDO aprovado/finalizado. Reabra o diário para corrigir.</TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
                           )}
@@ -811,20 +851,20 @@ export default function DiarioTabContent({ onOpenDiary }: DiarioTabContentProps 
         </Card>
       )}
 
-      {/* Confirmação de fechar semana */}
+      {/* Confirmação de gerar análise semanal */}
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Fechar Semana</AlertDialogTitle>
+            <AlertDialogTitle>Gerar análise semanal</AlertDialogTitle>
             <AlertDialogDescription>
-              Ao fechar a semana, todos os diários do período serão marcados como finalizados e os desvios serão calculados automaticamente em relação ao planejamento.
+              Gera a análise planejado x realizado da semana com base nos RDOs aprovados. Esta ação não aprova nem finaliza RDOs.
               <br /><br />
-              Esta ação não pode ser desfeita facilmente. Deseja continuar?
+              Se já existir análise para o mesmo serviço e período, ela será atualizada para evitar duplicidade.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleCloseWeek} disabled={closing}>
+            <AlertDialogAction onClick={handleGenerateWeeklyAnalysis} disabled={closing}>
               {closing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Confirmar
             </AlertDialogAction>
