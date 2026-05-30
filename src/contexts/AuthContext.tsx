@@ -680,6 +680,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isCompanyAdmin,
         isAdmin,
         isEditor,
+        isViewer,
         canEdit,
         mustChangePassword,
         canAccessMenu,
