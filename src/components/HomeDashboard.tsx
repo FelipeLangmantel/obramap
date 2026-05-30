@@ -364,7 +364,7 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
 
   useEffect(() => {
     let cancelled = false;
-    const projectsForDashboard = accessibleProjects as DashboardProject[];
+    const projectsForDashboard = accessibleProjects as unknown as DashboardProject[];
 
     const updateSummary = (projectId: string, summary: ProjectSummary) => {
       if (cancelled) return;

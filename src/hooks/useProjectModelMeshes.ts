@@ -339,7 +339,7 @@ export function useProjectModelMeshes(
         console.error("[useProjectModelMeshes] bulk existing fetch error", existingError);
         return;
       }
-      ((data || []) as ExistingMeshInventoryRow[]).forEach((r) => existing.set(r.layer_key, r));
+      ((data || []) as unknown as ExistingMeshInventoryRow[]).forEach((r) => existing.set(r.layer_key, r));
 
       const toInsert: any[] = [];
       const toUpdate: { id: string; layer_key: string; mesh_name: string; material_name: string; detected_house_number: number | null }[] = [];
@@ -531,7 +531,7 @@ export function useProjectModelMeshes(
       .select("*");
     if (error) throw error;
     const refreshed = await refresh();
-    return refreshed ?? ((data || []) as ProjectModelMesh[]);
+    return refreshed ?? ((data || []) as unknown as ProjectModelMesh[]);
   }, [canWrite, projectId, refresh]);
 
   return { meshes, meshMap, loading, refresh, upsertMesh, bulkUpsertMeshes, countGlbMeshes, clearGlbMeshes, setIgnored, setVisible, showAllVisibleMeshes };

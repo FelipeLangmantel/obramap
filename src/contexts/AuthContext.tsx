@@ -48,6 +48,7 @@ interface AuthContextType {
   isCompanyAdmin: boolean;
   isAdmin: boolean; // Legacy
   isEditor: boolean; // Legacy
+  isViewer: boolean;
   canEdit: boolean;
   mustChangePassword: boolean;
   canAccessMenu: (menuId: string) => boolean;
@@ -679,6 +680,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isCompanyAdmin,
         isAdmin,
         isEditor,
+        isViewer,
         canEdit,
         mustChangePassword,
         canAccessMenu,

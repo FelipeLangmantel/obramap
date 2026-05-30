@@ -1057,7 +1057,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       setFotosPorServico({});
       setDiaryItems([]);
       setCorrecoesDoDia([]);
-      setEntryMeta({});
+      setEntryMeta({} as unknown as { created_at: string; updated_at: string; engineer_name: string });
       await rdo.reload(null);
       await dWorkers.reload(null);
       setCancelEmptyOpen(false);

@@ -93,7 +93,7 @@ export async function createMap3DSignedUrlFromPath(
   if (error || !data?.signedUrl) {
     signedUrlCache.delete(cacheKey);
     const message = error instanceof Error ? error.message : String(error ?? "");
-    const details = typeof error === "object" && error !== null ? error as Record<string, unknown> : {};
+    const details = typeof error === "object" && error !== null ? error as unknown as Record<string, unknown> : {};
     const statusCode = details.statusCode ?? details.status;
     const isMissingObject = message.toLowerCase().includes("object not found")
       || String(details.error ?? "").toLowerCase().includes("not found")
