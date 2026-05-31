@@ -5837,6 +5837,84 @@ export type Database = {
           },
         ]
       }
+      map_3d_model_files: {
+        Row: {
+          company_id: string
+          created_at: string
+          file_hash: string | null
+          file_name: string
+          file_size: number | null
+          id: string
+          imported_at: string
+          imported_by: string | null
+          map_layout_id: string | null
+          model_type: string
+          notes: string | null
+          preserved: boolean
+          project_id: string
+          replaced_at: string | null
+          status: Database["public"]["Enums"]["map_3d_model_status"]
+          storage_bucket: string
+          storage_path: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          file_hash?: string | null
+          file_name: string
+          file_size?: number | null
+          id?: string
+          imported_at?: string
+          imported_by?: string | null
+          map_layout_id?: string | null
+          model_type?: string
+          notes?: string | null
+          preserved?: boolean
+          project_id: string
+          replaced_at?: string | null
+          status?: Database["public"]["Enums"]["map_3d_model_status"]
+          storage_bucket?: string
+          storage_path: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          file_hash?: string | null
+          file_name?: string
+          file_size?: number | null
+          id?: string
+          imported_at?: string
+          imported_by?: string | null
+          map_layout_id?: string | null
+          model_type?: string
+          notes?: string | null
+          preserved?: boolean
+          project_id?: string
+          replaced_at?: string | null
+          status?: Database["public"]["Enums"]["map_3d_model_status"]
+          storage_bucket?: string
+          storage_path?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "map_3d_model_files_map_layout_id_fkey"
+            columns: ["map_layout_id"]
+            isOneToOne: false
+            referencedRelation: "map_layouts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "map_3d_model_files_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       map_layer_stage_links: {
         Row: {
           created_at: string
@@ -12698,6 +12776,19 @@ export type Database = {
         Args: { p_period_id: string; p_user_id?: string }
         Returns: Json
       }
+      audit_3d_orphans_dry_run: {
+        Args: { _project_id?: string }
+        Returns: {
+          age_days: number
+          company_id: string
+          created_at: string
+          file_size: number
+          project_id: string
+          reason: string
+          storage_path: string
+          would_delete: boolean
+        }[]
+      }
       calculate_labor_needs: { Args: { p_project_id: string }; Returns: Json }
       calculate_labor_needs_v2: {
         Args: { p_project_id: string }
@@ -12870,6 +12961,10 @@ export type Database = {
           p_teams: number
         }
         Returns: number
+      }
+      extract_storage_path_from_url: {
+        Args: { _bucket?: string; _url: string }
+        Returns: string
       }
       fn_gerar_alertas_operacionais: { Args: never; Returns: undefined }
       generate_all_supply_requirements_for_project: {
@@ -13372,6 +13467,24 @@ export type Database = {
         Args: { p_service_id: string; p_supply_alert_id: string }
         Returns: undefined
       }
+      list_3d_model_files: {
+        Args: { _project_id: string }
+        Returns: {
+          file_name: string
+          file_size: number
+          id: string
+          imported_at: string
+          map_layout_id: string
+          model_type: string
+          notes: string
+          preserved: boolean
+          project_id: string
+          replaced_at: string
+          status: Database["public"]["Enums"]["map_3d_model_status"]
+          storage_bucket: string
+          storage_path: string
+        }[]
+      }
       log_production_for_planned_house: {
         Args: {
           p_cost: number
@@ -13637,6 +13750,12 @@ export type Database = {
         | "em_execucao"
         | "aguardando_validacao"
         | "encerrada"
+      map_3d_model_status:
+        | "active"
+        | "replaced"
+        | "preserved"
+        | "orphan_pending_delete"
+        | "upload_failed"
       medicao_status:
         | "aprovada"
         | "enviada"
@@ -13798,6 +13917,13 @@ export const Constants = {
         "em_execucao",
         "aguardando_validacao",
         "encerrada",
+      ],
+      map_3d_model_status: [
+        "active",
+        "replaced",
+        "preserved",
+        "orphan_pending_delete",
+        "upload_failed",
       ],
       medicao_status: [
         "aprovada",
