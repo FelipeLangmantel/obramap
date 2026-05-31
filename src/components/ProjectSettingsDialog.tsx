@@ -13,6 +13,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { LogoUploader } from "@/components/diario/LogoUploader";
 import { ProjectCoordinatorSelector } from "@/components/admin/ProjectCoordinatorSelector";
+import { Models3DPanel } from "@/components/map3d/Models3DPanel";
+import { Box } from "lucide-react";
 
 interface ProjectSettingsDialogProps {
   open: boolean;
