@@ -203,7 +203,7 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
         </DialogHeader>
         
         <Tabs defaultValue="info" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 h-auto">
+          <TabsList className="grid w-full grid-cols-4 h-auto">
             <TabsTrigger value="info" className="gap-2">
               <Home className="h-4 w-4" />
               <span className="hidden sm:inline">Informações</span>
@@ -212,6 +212,11 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
             <TabsTrigger value="quadras" className="gap-2">
               <Grid3X3 className="h-4 w-4" />
               Quadras
+            </TabsTrigger>
+            <TabsTrigger value="models3d" className="gap-2">
+              <Box className="h-4 w-4" />
+              <span className="hidden sm:inline">Modelos 3D</span>
+              <span className="sm:hidden">3D</span>
             </TabsTrigger>
             <TabsTrigger value="settings" className="gap-2">
               <Settings className="h-4 w-4" />
