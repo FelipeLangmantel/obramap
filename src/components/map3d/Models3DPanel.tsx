@@ -227,7 +227,38 @@ export function Models3DPanel({ projectId }: Models3DPanelProps) {
           allow_recent_delete: selectedRecentRows.length > 0,
         },
       });
-      if (error) throw error;
+      if (error) {
+        // Tenta extrair JSON de erro da Edge Function
+        let serverError: string | null = null;
+        const ctx: any = (error as any)?.context;
+        if (ctx && typeof ctx.json === "function") {
+          try {
+            const body = await ctx.json();
+            serverError = body?.error || body?.detail || null;
+          } catch { /* ignore */ }
+        }
+        const status: number | undefined = ctx?.status;
+        const rawMsg = (error as any)?.message ?? "";
+        const isNetworkFailure =
+          /Failed to send a request/i.test(rawMsg) ||
+          /Failed to fetch/i.test(rawMsg) ||
+          /NetworkError/i.test(rawMsg);
+
+        let friendly = serverError || rawMsg || "erro desconhecido";
+        if (isNetworkFailure && !serverError) {
+          friendly = "Edge Function não respondeu (verifique se 'delete-3d-model-files' está publicada e se há conexão).";
+        } else if (status === 401) friendly = "Sessão expirada — faça login novamente.";
+        else if (status === 403) friendly = serverError || "Sem permissão para esta exclusão.";
+        else if (status === 404) friendly = "Função 'delete-3d-model-files' não encontrada (não publicada).";
+        else if (serverError === "confirmation_mismatch") friendly = "Texto de confirmação incorreto.";
+        else if (serverError === "no_paths_selected") friendly = "Nenhum arquivo selecionado.";
+        else if (serverError === "too_many_paths_max_200") friendly = "Selecione no máximo 200 arquivos por vez.";
+        else if (serverError === "validation_failed") friendly = "Erro de validação no backend antes de remover do Storage.";
+        else if (serverError === "storage_remove_failed") friendly = "Erro ao remover arquivos do Storage.";
+        else if (serverError === "project_not_found_or_no_company") friendly = "Projeto não encontrado ou sem empresa.";
+
+        throw new Error(friendly);
+      }
       const result = data as { deleted: any[]; blocked: any[]; total_bytes_removed: number };
       toast.success(
         `Exclusão concluída — ${result.deleted?.length ?? 0} removido(s), ${
