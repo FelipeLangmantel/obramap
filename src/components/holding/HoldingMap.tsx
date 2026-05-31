@@ -179,11 +179,14 @@ const HoldingMap = forwardRef<HoldingMapHandle, HoldingMapProps>(({ obras, onObr
       else handler.disable();
     });
 
-    const hasZoomControl = Boolean((map.zoomControl as any)?._map);
+    const hasZoomControl = Boolean(zoomControlRef.current);
     if (mapInteractionEnabled && !hasZoomControl) {
-      map.zoomControl.addTo(map);
+      const zc = L.control.zoom();
+      zc.addTo(map);
+      zoomControlRef.current = zc;
     } else if (!mapInteractionEnabled && hasZoomControl) {
-      map.zoomControl.remove();
+      zoomControlRef.current!.remove();
+      zoomControlRef.current = null;
     }
   }, [mapInteractionEnabled]);
 
