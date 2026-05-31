@@ -454,6 +454,10 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
             </div>
           </TabsContent>
 
+          <TabsContent value="models3d" className="space-y-4 mt-4">
+            <Models3DPanel projectId={currentProject.id} />
+          </TabsContent>
+
           <TabsContent value="settings" className="space-y-4 mt-4">
             <div className="space-y-4">
               <ProjectCoordinatorSelector projectId={currentProject.id} />
