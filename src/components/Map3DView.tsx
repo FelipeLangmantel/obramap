@@ -5095,11 +5095,12 @@ export function Map3DView() {
         replaced_at: null,
         notes: "Modelo principal ativo importado pelo Mapa 3D.",
       };
-      const writeResult = existingFile?.id
+      const existingFileRow = existingFile as { id?: string } | null;
+      const writeResult = existingFileRow?.id
         ? await supabase
           .from("map_3d_model_files" as any)
           .update(modelFilePayload)
-          .eq("id", existingFile.id)
+          .eq("id", existingFileRow.id)
         : await supabase
           .from("map_3d_model_files" as any)
           .insert(modelFilePayload);
