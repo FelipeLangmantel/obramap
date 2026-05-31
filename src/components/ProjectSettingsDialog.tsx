@@ -13,6 +13,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { LogoUploader } from "@/components/diario/LogoUploader";
 import { ProjectCoordinatorSelector } from "@/components/admin/ProjectCoordinatorSelector";
+import { Models3DPanel } from "@/components/map3d/Models3DPanel";
+import { Box } from "lucide-react";
 
 interface ProjectSettingsDialogProps {
   open: boolean;
@@ -201,7 +203,7 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
         </DialogHeader>
         
         <Tabs defaultValue="info" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 h-auto">
+          <TabsList className="grid w-full grid-cols-4 h-auto">
             <TabsTrigger value="info" className="gap-2">
               <Home className="h-4 w-4" />
               <span className="hidden sm:inline">Informações</span>
@@ -210,6 +212,11 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
             <TabsTrigger value="quadras" className="gap-2">
               <Grid3X3 className="h-4 w-4" />
               Quadras
+            </TabsTrigger>
+            <TabsTrigger value="models3d" className="gap-2">
+              <Box className="h-4 w-4" />
+              <span className="hidden sm:inline">Modelos 3D</span>
+              <span className="sm:hidden">3D</span>
             </TabsTrigger>
             <TabsTrigger value="settings" className="gap-2">
               <Settings className="h-4 w-4" />
@@ -445,6 +452,10 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
                 </div>
               )}
             </div>
+          </TabsContent>
+
+          <TabsContent value="models3d" className="space-y-4 mt-4">
+            <Models3DPanel projectId={currentProject.id} />
           </TabsContent>
 
           <TabsContent value="settings" className="space-y-4 mt-4">
