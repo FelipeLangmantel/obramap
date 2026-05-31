@@ -1569,6 +1569,7 @@ export function Map3DView() {
   const supplementalGlbScenesRef = useRef<Map<string, THREE.Object3D>>(new Map());
   const supplementalInventoriedPartIdsRef = useRef<Set<string>>(new Set());
   const supplementalFitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mainGlbInventoryPathRef = useRef<string | null>(null);
 
   useEffect(() => {
     const nextProjectId = projectId ?? null;
@@ -1582,6 +1583,7 @@ export function Map3DView() {
     supplementalGlbPartsRef.current = [];
     supplementalGlbScenesRef.current.clear();
     supplementalInventoriedPartIdsRef.current.clear();
+    mainGlbInventoryPathRef.current = null;
 
     setModelData(null);
     setSupplementalGlbParts([]);
@@ -2238,12 +2240,75 @@ export function Map3DView() {
       });
     }
     if (meshesToUpsert.length > 0) {
+      const modelPath = modelData?.type === "gltf"
+        ? get3DUrlPerfDetail(modelData.url).path
+        : null;
+      const previousModelPath = mainGlbInventoryPathRef.current;
+      const modelPathChanged = Boolean(previousModelPath && modelPath && previousModelPath !== modelPath);
+      const existingLayerKeyCount = meshesToUpsert.reduce(
+        (count, mesh) => count + (meshHooks.meshMap.has(mesh.layer_key) ? 1 : 0),
+        0,
+      );
+      const missingLayerKeys = existingLayerKeyCount === meshesToUpsert.length
+        ? []
+        : meshesToUpsert
+          .filter((mesh) => !meshHooks.meshMap.has(mesh.layer_key))
+          .slice(0, 8)
+          .map((mesh) => mesh.layer_key);
+      const inventoryLooksComplete = modelData?.type === "gltf"
+        && Boolean(projectId)
+        && meshesToUpsert.length > 0
+        && meshHooks.meshMap.size > 0
+        && existingLayerKeyCount === meshesToUpsert.length
+        && !modelPathChanged
+        && glbLinkScope === "preserve";
+
+      logMap3DPerf("handleSceneReady inventory completeness", {
+        projectId,
+        modelType: modelData?.type ?? null,
+        modelPath,
+        previousModelPath,
+        glbLinkScope,
+        generatedMeshes: meshesToUpsert.length,
+        existingLayerKeys: existingLayerKeyCount,
+        meshMapSize: meshHooks.meshMap.size,
+        inventoryLooksComplete,
+        skippedBulkUpsert: inventoryLooksComplete,
+        skipReason: inventoryLooksComplete ? "complete-layer-key-inventory" : null,
+        runReason: inventoryLooksComplete
+          ? null
+          : modelData?.type !== "gltf"
+            ? "non-gltf-model"
+            : !projectId
+              ? "missing-project"
+              : meshHooks.meshMap.size === 0
+                ? "empty-inventory"
+                : modelPathChanged
+                  ? "model-path-changed"
+                  : glbLinkScope !== "preserve"
+                    ? "fresh-glb-scope"
+                    : missingLayerKeys.length > 0
+                      ? "missing-layer-keys"
+                      : "uncertain-inventory",
+        missingLayerKeys,
+      });
+
+      if (inventoryLooksComplete) {
+        mainGlbInventoryPathRef.current = modelPath;
+        logMap3DPerf("Inventário 3D já existe; pulando bulkUpsertMeshes na abertura.", {
+          projectId,
+          modelPath,
+          generatedMeshes: meshesToUpsert.length,
+          existingLayerKeys: existingLayerKeyCount,
+        });
+      } else {
       const bulkPerf = startMap3DPerf("handleSceneReady bulkUpsertMeshes", {
         projectId,
         meshes: meshesToUpsert.length,
       });
       void meshHooks.bulkUpsertMeshes(meshesToUpsert)
         .then(() => {
+          mainGlbInventoryPathRef.current = modelPath;
           endMap3DPerf(bulkPerf, { ok: true, meshes: meshesToUpsert.length });
         })
         .catch((error) => {
@@ -2253,13 +2318,14 @@ export function Map3DView() {
             message: error instanceof Error ? error.message : String(error),
           });
         });
+      }
     }
     endMap3DPerf(scenePerf, {
       meshes: meshesToUpsert.length,
       sceneNodes: sceneCounts.nodes,
       uniqueMeshNames: nameCounts.size,
     });
-  }, [layerManager.extractLayers, projectId, modelData?.type, meshHooks.bulkUpsertMeshes]);
+  }, [glbLinkScope, layerManager.extractLayers, projectId, modelData?.type, modelData?.url, meshHooks.bulkUpsertMeshes, meshHooks.meshMap]);
 
   // ====================================================
   // Modo "Revisar Modelo": clique destaca a mesh
