@@ -4,12 +4,96 @@ import { endMap3DPerf, logMap3DPerf, startMap3DPerf } from "@/lib/map3dPerf";
 export const MAP3D_STORAGE_BUCKET = "3d-models";
 export const MAP3D_SIGNED_URL_TTL_SECONDS = 60 * 60; // 1 hour
 const MAP3D_SIGNED_URL_CACHE_TTL_MS = 50 * 60 * 1000; // 50 minutes
+const MAP3D_SESSION_CACHE_PREFIX = "obramap:map3d:signed-url:";
 
 const missingStoragePaths = new Set<string>();
 const signedUrlCache = new Map<string, { signedUrl: string; expiresAt: number }>();
 
+type SignedUrlSessionCacheEntry = {
+  signedUrl: string;
+  bucket: string;
+  path: string;
+  expiresAt: number;
+  createdAt: number;
+};
+
 function getSignedUrlCacheKey(path: string): string {
   return `${MAP3D_STORAGE_BUCKET}:${path}`;
+}
+
+function getSignedUrlSessionCacheKey(path: string): string {
+  return `${MAP3D_SESSION_CACHE_PREFIX}${getSignedUrlCacheKey(path)}`;
+}
+
+function readSignedUrlSessionCache(path: string): SignedUrlSessionCacheEntry | null {
+  if (typeof window === "undefined") return null;
+  const sessionKey = getSignedUrlSessionCacheKey(path);
+  try {
+    const raw = window.sessionStorage.getItem(sessionKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<SignedUrlSessionCacheEntry>;
+    if (
+      typeof parsed.signedUrl !== "string"
+      || parsed.bucket !== MAP3D_STORAGE_BUCKET
+      || parsed.path !== path
+      || typeof parsed.expiresAt !== "number"
+      || typeof parsed.createdAt !== "number"
+    ) {
+      window.sessionStorage.removeItem(sessionKey);
+      return null;
+    }
+    return parsed as SignedUrlSessionCacheEntry;
+  } catch {
+    try {
+      window.sessionStorage.removeItem(sessionKey);
+    } catch {
+      // noop
+    }
+    return null;
+  }
+}
+
+function writeSignedUrlSessionCache(path: string, signedUrl: string, expiresAt: number): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(
+      getSignedUrlSessionCacheKey(path),
+      JSON.stringify({
+        signedUrl,
+        bucket: MAP3D_STORAGE_BUCKET,
+        path,
+        expiresAt,
+        createdAt: Date.now(),
+      } satisfies SignedUrlSessionCacheEntry),
+    );
+  } catch {
+    // sessionStorage can be unavailable or full; the in-memory cache remains enough.
+  }
+}
+
+function removeSignedUrlSessionCache(path: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(getSignedUrlSessionCacheKey(path));
+  } catch {
+    // noop
+  }
+}
+
+function clearSignedUrlSessionCache(): void {
+  if (typeof window === "undefined") return;
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < window.sessionStorage.length; i += 1) {
+      const key = window.sessionStorage.key(i);
+      if (key?.startsWith(MAP3D_SESSION_CACHE_PREFIX)) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach((key) => window.sessionStorage.removeItem(key));
+  } catch {
+    // noop
+  }
 }
 
 export function normalizeMap3DStoragePath(path: string | null | undefined): string | null {
@@ -45,11 +129,13 @@ export function extractMap3DStoragePath(url: string | null | undefined): string 
 export function invalidateMap3DSignedUrlCache(pathOrUrl?: string | null): void {
   if (!pathOrUrl) {
     signedUrlCache.clear();
+    clearSignedUrlSessionCache();
     return;
   }
   const path = extractMap3DStoragePath(pathOrUrl) ?? normalizeMap3DStoragePath(pathOrUrl);
   if (!path) return;
   signedUrlCache.delete(getSignedUrlCacheKey(path));
+  removeSignedUrlSessionCache(path);
 }
 
 export async function createMap3DSignedUrlFromPath(
@@ -68,7 +154,7 @@ export async function createMap3DSignedUrlFromPath(
   const now = Date.now();
   const cached = signedUrlCache.get(cacheKey);
   if (cached && cached.expiresAt > now) {
-    logMap3DPerf("signed URL cache hit", {
+    logMap3DPerf("signed URL memory cache hit", {
       bucket: MAP3D_STORAGE_BUCKET,
       path: normalizedPath,
       resolveMs: 0,
@@ -76,6 +162,29 @@ export async function createMap3DSignedUrlFromPath(
     return cached.signedUrl;
   }
   if (cached) signedUrlCache.delete(cacheKey);
+
+  const sessionCached = readSignedUrlSessionCache(normalizedPath);
+  if (sessionCached && sessionCached.expiresAt > now) {
+    signedUrlCache.set(cacheKey, {
+      signedUrl: sessionCached.signedUrl,
+      expiresAt: sessionCached.expiresAt,
+    });
+    logMap3DPerf("signed URL sessionStorage hit", {
+      bucket: MAP3D_STORAGE_BUCKET,
+      path: normalizedPath,
+      resolveMs: 0,
+      remainingMs: sessionCached.expiresAt - now,
+    });
+    return sessionCached.signedUrl;
+  }
+  if (sessionCached) {
+    removeSignedUrlSessionCache(normalizedPath);
+    logMap3DPerf("signed URL expired session cache", {
+      bucket: MAP3D_STORAGE_BUCKET,
+      path: normalizedPath,
+      expiredAt: sessionCached.expiresAt,
+    });
+  }
 
   const resolveStartedAt = performance.now();
   logMap3DPerf("signed URL cache miss", {
@@ -92,6 +201,7 @@ export async function createMap3DSignedUrlFromPath(
   endMap3DPerf(perf, { ok: !error && !!data?.signedUrl });
   if (error || !data?.signedUrl) {
     signedUrlCache.delete(cacheKey);
+    removeSignedUrlSessionCache(normalizedPath);
     const message = error instanceof Error ? error.message : String(error ?? "");
     const details = typeof error === "object" && error !== null ? error as unknown as Record<string, unknown> : {};
     const statusCode = details.statusCode ?? details.status;
@@ -105,7 +215,15 @@ export async function createMap3DSignedUrlFromPath(
       || statusCode === 403
       || statusCode === "404"
       || statusCode === 404;
-    if (shouldInvalidateCache) signedUrlCache.delete(cacheKey);
+    if (shouldInvalidateCache) {
+      signedUrlCache.delete(cacheKey);
+      removeSignedUrlSessionCache(normalizedPath);
+      logMap3DPerf("signed URL cache cleared on error", {
+        bucket: MAP3D_STORAGE_BUCKET,
+        path: normalizedPath,
+        statusCode,
+      });
+    }
     if (isMissingObject) {
       missingStoragePaths.add(normalizedPath);
       console.warn("[3D] Arquivo do modelo nao encontrado no Storage; ignorando nas proximas tentativas desta sessao.", {
@@ -117,9 +235,16 @@ export async function createMap3DSignedUrlFromPath(
     }
     return null;
   }
+  const cacheExpiresAt = Date.now() + MAP3D_SIGNED_URL_CACHE_TTL_MS;
   signedUrlCache.set(cacheKey, {
     signedUrl: data.signedUrl,
-    expiresAt: Date.now() + MAP3D_SIGNED_URL_CACHE_TTL_MS,
+    expiresAt: cacheExpiresAt,
+  });
+  writeSignedUrlSessionCache(normalizedPath, data.signedUrl, cacheExpiresAt);
+  logMap3DPerf("signed URL regenerated", {
+    bucket: MAP3D_STORAGE_BUCKET,
+    path: normalizedPath,
+    cacheTtlMinutes: MAP3D_SIGNED_URL_CACHE_TTL_MS / 60_000,
   });
   logMap3DPerf("resolveMap3DSignedUrl resolved", {
     bucket: MAP3D_STORAGE_BUCKET,
