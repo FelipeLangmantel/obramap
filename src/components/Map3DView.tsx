@@ -968,6 +968,20 @@ function WalkControls({ onExit, height = 1.7, startPoint = null }: { onExit: () 
   );
 }
 
+function WalkStartMarker({ point }: { point?: [number, number, number] | null }) {
+  if (!point) return null;
+  return (
+    <Html position={point} center style={{ pointerEvents: "none" }}>
+      <div className="flex -translate-y-3 flex-col items-center gap-1">
+        <div className="rounded-full border border-emerald-200 bg-emerald-600 px-2 py-1 text-[10px] font-semibold text-white shadow-lg">
+          Inicio
+        </div>
+        <div className="h-3 w-3 rotate-45 border border-emerald-200 bg-emerald-500 shadow-md" />
+      </div>
+    </Html>
+  );
+}
+
 function WalkMeshInspector({
   enabled,
   panelOpen,
@@ -1130,7 +1144,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   orbitFocusPoint, onMeshClick, onMeshDoubleClick, onMeshHover, onMeshHoverEnd, selectedMeshKey, selectedMeshKeys, projectId, companyId, ifcRealModeActive, ifcHouseOptions, ifcServiceOptions,
   cameraMode, walkInspectOpen, onWalkExit, onWalkInspectClose, onWalkMeshInspect,
   supplementalGlbParts, onSupplementalMeshClick, onSupplementalMeshDoubleClick, onSupplementalMeshHover, onSupplementalMeshHoverEnd, onSupplementalSceneReady, onSupplementalInventoryReady,
-  observerHeight, walkStartPoint, performanceMode, zoomSpeed,
+  observerHeight, walkStartPoint, savedWalkStartPoint, performanceMode, zoomSpeed,
   lightingMode,
 }: {
   modelData: ModelData | null; markers: HouseMarker[]; selectedMarkerId: number | null;
@@ -1167,6 +1181,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   onSupplementalInventoryReady?: (part: SupplementalGlbPart, meshes: GlbMeshInventoryInput[]) => void;
   observerHeight: number;
   walkStartPoint?: [number, number, number] | null;
+  savedWalkStartPoint?: [number, number, number] | null;
   performanceMode: boolean;
   lightingMode: LightingMode;
 }) {
@@ -1178,6 +1193,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
         savedPosition={savedPosition} savedTarget={savedTarget}
         onCameraChange={onCameraChange} sceneReady={sceneReady} enabled={cameraMode === "orbit"} />
       {cameraMode === "orbit" ? <ZoomToMouseControls focusPoint={orbitFocusPoint} zoomSpeed={zoomSpeed} /> : <WalkControls onExit={onWalkExit} height={observerHeight} startPoint={walkStartPoint} />}
+      <WalkStartMarker point={savedWalkStartPoint} />
       <WalkMeshInspector
         enabled={cameraMode === "walk"}
         panelOpen={walkInspectOpen}
@@ -1505,7 +1521,6 @@ export function Map3DView() {
   const [pendingPos, setPendingPos] = useState<[number, number, number] | null>(null);
   const [pendingTgt, setPendingTgt] = useState<[number, number, number] | null>(null);
   const [orbitFocusPoint, setOrbitFocusPoint] = useState<[number, number, number] | null>(null);
-  const [lastOrbitFocusPoint, setLastOrbitFocusPoint] = useState<[number, number, number] | null>(null);
   const [observerHeight, setObserverHeight] = useState(() => {
     const saved = Number(localStorage.getItem("obramap:map3d:observer-height"));
     return Number.isFinite(saved) && saved >= 1.2 && saved <= 2.2 ? saved : 1.7;
@@ -1602,7 +1617,6 @@ export function Map3DView() {
   const [sceneObj, setSceneObj] = useState<THREE.Object3D | null>(null);
 
   useEffect(() => {
-    setLastOrbitFocusPoint(null);
     setActiveWalkStartPoint(null);
     setOrbitFocusPoint(null);
     setCameraMode("orbit");
@@ -2498,7 +2512,6 @@ export function Map3DView() {
     if (!point) return;
     const tuple: [number, number, number] = [point.x, point.y, point.z];
     setOrbitFocusPoint(tuple);
-    setLastOrbitFocusPoint(tuple);
   }, []);
 
   const handleMeshDoubleClickFocus = useCallback((_obj: THREE.Object3D, point?: THREE.Vector3) => {
@@ -2516,8 +2529,30 @@ export function Map3DView() {
     const tuple: [number, number, number] = Array.isArray(point) ? point : [point.x, point.y, point.z];
     setWalkStartPoint(tuple);
     localStorage.setItem(`obramap:map3d:${projectId}:walk-start`, JSON.stringify(tuple));
+    toast.success("Ponto de entrada do Caminhar definido.");
+  }, [projectId]);
+
+  const startWalkStartPick = useCallback(() => {
+    setWalkStartPickMode(true);
+    setAssignMode(false);
+    setReviewMode(false);
+    setPickedMesh(null);
+    clearMeshSelection("walk start pick mode");
+    toast.info("Clique em um ponto do mapa para iniciar o modo Caminhar.");
+  }, [clearMeshSelection]);
+
+  const cancelWalkStartPick = useCallback(() => {
     setWalkStartPickMode(false);
-    toast.success("Ponto inicial do Caminhar definido.");
+    toast.info("Selecao do ponto de entrada cancelada.");
+  }, []);
+
+  const clearWalkStartPoint = useCallback(() => {
+    if (!projectId) return;
+    setWalkStartPoint(null);
+    setActiveWalkStartPoint(null);
+    setWalkStartPickMode(false);
+    localStorage.removeItem(`obramap:map3d:${projectId}:walk-start`);
+    toast.success("Ponto de entrada removido. O Caminhar usara o ponto automatico.");
   }, [projectId]);
 
   const handleReviewMeshClick = useCallback((obj: THREE.Object3D, point?: THREE.Vector3, event?: any) => {
@@ -2672,8 +2707,19 @@ export function Map3DView() {
 
   const handleWalkStartPick = useCallback((obj: THREE.Object3D, point?: THREE.Vector3) => {
     if (!walkStartPickMode || !point) return;
+    const tuple: [number, number, number] = [point.x, point.y, point.z];
+    const safeStart = resolveSafeWalkStartPoint(sceneObj, tuple, null);
     saveWalkStartPoint(point);
-  }, [saveWalkStartPoint, walkStartPickMode]);
+    setActiveWalkStartPoint(safeStart.point);
+    setWalkStartPickMode(false);
+    setAssignMode(false);
+    setReviewMode(false);
+    setPickedMesh(null);
+    clearMeshSelection("walk mode entered from picked point");
+    setSelectedMarker(null);
+    setWalkInspection(null);
+    setCameraMode("walk");
+  }, [clearMeshSelection, saveWalkStartPoint, sceneObj, walkStartPickMode]);
 
   const handleSupplementalWalkStartPick = useCallback((_part: SupplementalGlbPart, obj: THREE.Object3D, point?: THREE.Vector3) => {
     handleWalkStartPick(obj, point);
@@ -2752,25 +2798,13 @@ export function Map3DView() {
       return;
     }
 
-    const safeStart = resolveSafeWalkStartPoint(sceneObj, lastOrbitFocusPoint, walkStartPoint);
-    setActiveWalkStartPoint(safeStart.point);
-    console.log("[Walk Mode Check] cameraMode toggle", {
-      from: cameraMode,
-      to: "walk",
-      safeStart,
-    });
-    if (safeStart.floorDetected) {
-      toast.success("Modo caminhar iniciado proximo ao solo.");
-    } else {
-      toast.info("Usando ponto seguro aproximado para iniciar o modo caminhar.");
+    if (walkStartPickMode) {
+      cancelWalkStartPick();
+      return;
     }
-    setAssignMode(false);
-    setReviewMode(false);
-    setPickedMesh(null);
-    clearMeshSelection("walk mode entered");
-    setSelectedMarker(null);
-    setCameraMode("walk");
-  }, [cameraMode, clearMeshSelection, lastOrbitFocusPoint, sceneObj, walkStartPoint]);
+
+    startWalkStartPick();
+  }, [cameraMode, cancelWalkStartPick, startWalkStartPick, walkStartPickMode]);
 
   const houseNumbers = useMemo(() => {
     const arr = (currentProject?.houses || [])
@@ -3878,6 +3912,7 @@ export function Map3DView() {
     overrideHiddenRealServiceKeys?: Set<string>,
   ) => {
     setViewMode(mode);
+    setWalkStartPickMode(false);
     const hiddenServices = overrideHiddenRealServiceKeys ?? hiddenRealServiceKeys;
     const realStats = {
       visibleBefore: 0,
@@ -5515,16 +5550,35 @@ export function Map3DView() {
             <Button variant="outline" size="sm" onClick={centerCamera} disabled={isLoading}><Target className="h-4 w-4 mr-1.5" />Centralizar</Button>
             <Button variant="outline" size="sm" onClick={resetCameraView} disabled={isLoading}><Home className="h-4 w-4 mr-1.5" />Resetar Visão</Button>
             {canUseWalkMode && modelData && (
-              <Button
-                variant={cameraMode === "walk" ? "default" : "outline"}
-                size="sm"
-                onClick={toggleWalkMode}
-                disabled={isLoading}
-                title="Use Caminhar para entrar nas casas e olhar ao redor"
-              >
-                <Move3D className="h-4 w-4 mr-1.5" />
-                {cameraMode === "walk" ? "Sair do caminhar" : "Caminhar"}
-              </Button>
+              <div className="flex flex-wrap items-center gap-1">
+                {walkStartPoint && cameraMode !== "walk" && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearWalkStartPoint}
+                    disabled={isLoading}
+                    title="Remover ponto de entrada salvo"
+                  >
+                    <X className="h-4 w-4 mr-1.5" />
+                    Limpar ponto
+                  </Button>
+                )}
+                <Button
+                  variant={cameraMode === "walk" || walkStartPickMode ? "default" : "outline"}
+                  size="sm"
+                  onClick={toggleWalkMode}
+                  disabled={isLoading}
+                  title={cameraMode === "walk" ? "Sair do modo Caminhar" : walkStartPickMode ? "Cancelar escolha do ponto de entrada" : "Clique e depois escolha no mapa onde deseja iniciar"}
+                >
+                  <Move3D className="h-4 w-4 mr-1.5" />
+                  {cameraMode === "walk" ? "Sair do caminhar" : walkStartPickMode ? "Cancelar Caminhar" : "Caminhar"}
+                </Button>
+                {cameraMode !== "walk" && (
+                  <span className="hidden text-xs text-muted-foreground xl:inline">
+                    Clique em Caminhar e escolha no mapa onde deseja iniciar.
+                  </span>
+                )}
+              </div>
             )}
             {canUseWalkMode && modelData && (
               <label className="flex items-center gap-1 rounded-md border bg-background px-2 py-1 text-xs">
@@ -5608,7 +5662,7 @@ export function Map3DView() {
               <Button
                 variant={assignMode ? "default" : "outline"}
                 size="sm"
-                onClick={() => { setCameraMode("orbit"); setAssignMode(p => !p); clearAll3DSelection("assign mode toggled"); }}
+                onClick={() => { setCameraMode("orbit"); setWalkStartPickMode(false); setAssignMode(p => !p); clearAll3DSelection("assign mode toggled"); }}
                 disabled={isLoading}
                 title="Clique nas malhas do modelo para batizar cada casa"
               >
@@ -5627,6 +5681,7 @@ export function Map3DView() {
                 size="sm"
                 onClick={() => {
                   setCameraMode("orbit");
+                  setWalkStartPickMode(false);
                   setReviewMode(p => !p);
                   clearAll3DSelection("review mode toggled");
                   setQuickContextPanelOpen(false);
@@ -6004,7 +6059,7 @@ export function Map3DView() {
               onCameraChange={handleCameraChange} sceneReady={sceneReady}
               onModelLoaded={handleModelLoaded} onSceneReady={handleSceneReady}
               orbitFocusPoint={orbitFocusPoint}
-              onMeshClick={cameraMode === "walk" ? undefined : reviewMode ? handleReviewMeshClick : assignMode ? handleMeshClick : undefined}
+              onMeshClick={cameraMode === "walk" ? undefined : walkStartPickMode ? handleWalkStartPick : reviewMode ? handleReviewMeshClick : assignMode ? handleMeshClick : undefined}
               onMeshDoubleClick={cameraMode === "orbit" ? handleMeshDoubleClickFocus : undefined}
               onMeshHover={smartLinkPreviewEnabled ? handleSmartLinkCandidateHover : reviewLinksMode ? handleReviewLinkHover : undefined}
               onMeshHoverEnd={smartLinkPreviewEnabled ? clearSmartLinkCandidateHover : reviewLinksMode ? clearReviewLinkHover : undefined}
@@ -6021,19 +6076,28 @@ export function Map3DView() {
               onWalkInspectClose={() => setWalkInspection(null)}
               onWalkMeshInspect={handleWalkMeshInspect}
               supplementalGlbParts={supplementalGlbParts}
-              onSupplementalMeshClick={handleSupplementalMeshClick}
+              onSupplementalMeshClick={walkStartPickMode ? handleSupplementalWalkStartPick : handleSupplementalMeshClick}
               onSupplementalMeshDoubleClick={cameraMode === "orbit" ? handleSupplementalMeshDoubleClickFocus : undefined}
               onSupplementalMeshHover={smartLinkPreviewEnabled ? handleSupplementalSmartLinkCandidateHover : reviewLinksMode ? handleSupplementalReviewLinkHover : undefined}
               onSupplementalMeshHoverEnd={smartLinkPreviewEnabled ? clearSmartLinkCandidateHover : reviewLinksMode ? clearReviewLinkHover : undefined}
               onSupplementalSceneReady={handleSupplementalSceneReady}
               onSupplementalInventoryReady={handleSupplementalInventoryReady}
               observerHeight={observerHeight}
-              walkStartPoint={activeWalkStartPoint ?? walkStartPoint}
+              walkStartPoint={cameraMode === "walk" ? activeWalkStartPoint : null}
+              savedWalkStartPoint={walkStartPoint}
               zoomSpeed={orbitZoomSpeed}
               performanceMode={performanceMode}
               lightingMode={lightingMode} />
           </Canvas>
         </div>
+        {walkStartPickMode && cameraMode !== "walk" && (
+          <div className="pointer-events-none absolute left-1/2 top-4 z-40 max-w-[min(520px,calc(100%-2rem))] -translate-x-1/2 rounded-lg border border-emerald-300/60 bg-background/95 px-4 py-3 text-sm shadow-lg backdrop-blur">
+            <p className="font-semibold text-emerald-700 dark:text-emerald-300">Clique em um ponto do mapa para iniciar o modo Caminhar</p>
+            <p className="mt-1 text-muted-foreground">
+              Escolha o piso, radier, rua ou um local perto da casa onde deseja comecar.
+            </p>
+          </div>
+        )}
         <div id="map3d-ifc-panel-slot" className="pointer-events-none absolute bottom-3 left-0 right-3 top-3 z-40 overflow-hidden" />
         {cameraMode === "walk" && (
           <div className="pointer-events-none absolute left-1/2 top-1/2 z-30 h-4 w-4 -translate-x-1/2 -translate-y-1/2 opacity-80">
@@ -6043,11 +6107,11 @@ export function Map3DView() {
           </div>
         )}
         {cameraMode === "walk" && (
-          <div className="pointer-events-none absolute bottom-4 left-4 z-30 flex max-w-[min(360px,calc(100%-2rem))] items-end gap-2 text-xs">
+          <div className="pointer-events-none absolute bottom-4 left-4 z-30 flex max-w-[min(520px,calc(100%-2rem))] items-end gap-2 text-xs">
             {walkHelpVisible ? (
               <div className="pointer-events-auto rounded-lg border border-primary/20 bg-background/90 px-3 py-2 shadow-lg backdrop-blur">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="font-medium text-primary">WASD mover · Mouse olhar · Shift acelerar · Esc sair</span>
+                  <span className="font-medium text-primary">Como usar o modo Caminhar</span>
                   <div className="flex shrink-0 items-center gap-1">
                     <Button
                       type="button"
@@ -6070,9 +6134,24 @@ export function Map3DView() {
                   </div>
                 </div>
                 {walkHelpExpanded && (
-                  <p className="mt-1 text-muted-foreground">
-                    Clique no mapa para capturar o mouse · E inspecionar/fechar · Esc sair
-                  </p>
+                  <div className="mt-2 space-y-2 text-muted-foreground">
+                    <p>
+                      Para uma navegacao melhor, clique em "Caminhar" e depois clique no local do modelo onde deseja comecar. O sistema iniciara a navegacao a partir desse ponto.
+                    </p>
+                    <ol className="ml-4 list-decimal space-y-1">
+                      <li>Clique em "Caminhar".</li>
+                      <li>Clique no piso, radier, rua ou perto da casa onde deseja iniciar.</li>
+                      <li>O modo Caminhar sera aberto nesse ponto.</li>
+                      <li>Use WASD para mover, mouse para olhar e Shift para acelerar.</li>
+                      <li>Para sair, pressione ESC ou use o botao de sair.</li>
+                    </ol>
+                    <p className="font-medium text-foreground">
+                      {walkStartPoint
+                        ? "Ultimo ponto de entrada salvo como referencia visual. Ao entrar novamente, escolha o ponto no mapa."
+                        : "Nenhum ponto de entrada salvo. Ao clicar em Caminhar, escolha o ponto no mapa."}
+                    </p>
+                    <p>Clique no mapa para capturar o mouse. Use E para inspecionar ou fechar o painel.</p>
+                  </div>
                 )}
               </div>
             ) : (
