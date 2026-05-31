@@ -140,14 +140,13 @@ function ModelLoadingFallback({ modelUrl }: { modelUrl: string }) {
   }
 
   const stableProgress = maxProgressRef.current;
-  const showProgress = stableProgress > 0;
-  const isPreparingScene = stableProgress >= 95;
-  const displayProgress = isPreparingScene ? 100 : stableProgress;
-  const title = showProgress
-    ? isPreparingScene
-      ? "Preparando cena 3D... 100%"
-      : `Carregando modelo 3D... ${stableProgress}%`
-    : "Carregando modelo 3D...";
+  const showDownloadProgress = stableProgress > 0 && stableProgress < 100;
+  const isPreparingScene = stableProgress >= 100;
+  const title = isPreparingScene
+    ? "Montando cena 3D..."
+    : showDownloadProgress
+      ? `Baixando modelo 3D... ${stableProgress}%`
+      : "Baixando modelo 3D...";
 
   return (
     <Html center>
@@ -155,11 +154,11 @@ function ModelLoadingFallback({ modelUrl }: { modelUrl: string }) {
         <div className="text-sm font-medium text-foreground">
           {title}
         </div>
-        {showProgress ? (
+        {showDownloadProgress ? (
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
             <div
               className="h-full rounded-full bg-primary transition-[width] duration-300 ease-out"
-              style={{ width: `${displayProgress}%` }}
+              style={{ width: `${stableProgress}%` }}
             />
           </div>
         ) : (
