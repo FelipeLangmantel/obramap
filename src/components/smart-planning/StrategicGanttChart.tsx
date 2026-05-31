@@ -425,7 +425,7 @@ export function StrategicGanttChart({
         <Card className="rounded-2xl border-slate-200 dark:border-border shadow-sm">
           <CardContent className="py-16 text-center text-muted-foreground">
             <Home className="h-12 w-12 mx-auto mb-3 opacity-30" />
-            <p>Configure os serviços no Planejamento Estratégico para visualizar o Gantt</p>
+            <p>Configure serviços, produtividade e equipes para visualizar o Gantt.</p>
           </CardContent>
         </Card>
       </div>

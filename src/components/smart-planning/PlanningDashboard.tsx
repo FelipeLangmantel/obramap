@@ -144,17 +144,22 @@ export function PlanningDashboard({
       });
     }
 
-    // No services configured
     if (ganttServices.length === 0) {
       items.push({
         type: 'info',
         title: 'Nenhum serviço no planejamento',
-        description: 'Configure o planejamento estratégico para gerar o cronograma.',
+        description: 'Configure serviços, produtividade e equipes para iniciar o cronograma.',
+      });
+    } else if (!hasConfiguredMacroflow) {
+      items.push({
+        type: 'info',
+        title: 'Macrofluxo não configurado',
+        description: 'Configure a sequência dos serviços para gerar o Gantt e a Linha de Balanço.',
       });
     }
 
     return items;
-  }, [ganttServices, delayInfo]);
+  }, [ganttServices, delayInfo, hasConfiguredMacroflow]);
 
   // Top critical services (lowest progress, highest remaining)
   const criticalServices = useMemo(() => {

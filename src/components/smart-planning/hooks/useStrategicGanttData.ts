@@ -884,13 +884,17 @@ export function useStrategicGanttData(projectId: string | undefined) {
       : configuredMacroflows[0]?.summary.id || 'all';
     setDefaultMacroflowViewId(nextDefaultViewId);
     const defaultView = nextViews.find((view) => view.id === nextDefaultViewId) ?? nextViews[0] ?? null;
-    setGanttServices(defaultView?.services ?? []);
+    setGanttServices(defaultView?.services ?? nextAllGantt);
     setMacroflowDependencies(defaultView?.id === 'all'
       ? configuredMacroflows.flatMap((item) => item.dependencies)
-      : configuredMacroflows.find((item) => item.summary.id === defaultView?.summary?.id)?.dependencies ?? macroflowDependencies);
+      : defaultView
+        ? configuredMacroflows.find((item) => item.summary.id === defaultView.summary?.id)?.dependencies ?? macroflowDependencies
+        : []);
     setMacroflowPackages(defaultView?.id === 'all'
       ? configuredMacroflows.flatMap((item) => item.packages)
-      : configuredMacroflows.find((item) => item.summary.id === defaultView?.summary?.id)?.packages ?? macroflowPackages);
+      : defaultView
+        ? configuredMacroflows.find((item) => item.summary.id === defaultView.summary?.id)?.packages ?? macroflowPackages
+        : []);
   // buildGanttServices is pure and reads only the dependencies passed above.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [capacityModel.serviceCapacityMap, incompleteMacroflowsCount, macroflowData, productivities, projectStartDate, services, stages]);

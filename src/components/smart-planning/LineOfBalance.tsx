@@ -597,7 +597,7 @@ export function LineOfBalance({
       <div className="rounded-2xl bg-slate-50 p-6 dark:bg-transparent">
         <Card className="rounded-2xl border-slate-200 shadow-sm dark:border-border">
           <CardContent className="py-16 text-center text-muted-foreground">
-            Configure o planejamento estrategico para visualizar a Linha de Balanco.
+            Configure serviços, produtividade e equipes para visualizar a Linha de Balanço.
           </CardContent>
         </Card>
       </div>
@@ -612,14 +612,14 @@ export function LineOfBalance({
             <CardContent className="py-16 text-center">
               <Link2 className="mx-auto mb-4 h-12 w-12 text-primary/70" />
               <h3 className="text-lg font-semibold text-slate-900 dark:text-foreground">
-                Configure um Macrofluxo para visualizar a Linha de Balanco.
+                Macrofluxo não configurado
               </h3>
               <p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground">
-                A Linha de Balanco usa a sequencia oficial definida no Macrofluxo.
-                Crie um macrofluxo e conecte os servicos para visualizar o ritmo planejado.
+                Esta obra já pode ter serviços, equipes e produtividades, mas precisa de uma sequência de execução
+                para gerar a Linha de Balanço.
               </p>
               <p className="mx-auto mt-2 max-w-xl text-xs text-muted-foreground">
-                Filtros por etapa do contrato apenas agrupam servicos; eles nao criam predecessoras oficiais.
+                Configure a sequência dos serviços para gerar a Linha de Balanço e o Gantt.
               </p>
               <Button
                 className="mt-6 gap-2"
@@ -627,7 +627,7 @@ export function LineOfBalance({
                 disabled={!canEdit}
               >
                 <Plus className="h-4 w-4" />
-                Criar/Editar Macrofluxo
+                Configurar Macrofluxo
               </Button>
             </CardContent>
           </Card>
