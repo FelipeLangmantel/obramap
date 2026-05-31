@@ -20,8 +20,6 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useModelLayers } from "./map3d/useModelLayers";
 import { LayersPanel } from "./map3d/LayersPanel";
-import { LinkLayersDialog } from "./map3d/LinkLayersDialog";
-import { AssignHousePopover } from "./map3d/AssignHousePopover";
 import { useMeshHouseAssignments } from "@/hooks/useMeshHouseAssignments";
 import { IFCModel } from "./map3d/IFCModel";
 import { IfcSuggestionsPanel } from "./map3d/IfcSuggestionsPanel";
@@ -1487,7 +1485,6 @@ export function Map3DView() {
   const canImportMainModel = canUseMap3D("map3d.import_main_model");
   const canAddGlbPart = canUseMap3D("map3d.add_glb_part");
   const canManageLayers = canUseMap3D("map3d.manage_layers");
-  const canLinkServices = canUseMap3D("map3d.link_services");
   const canAssignHouses = canUseMap3D("map3d.assign_houses");
   const canReviewModel = canUseMap3D("map3d.review_model");
   const canUseSmartLink = canUseMap3D("map3d.smartlink");
@@ -1538,7 +1535,6 @@ export function Map3DView() {
   const [walkHelpVisible, setWalkHelpVisible] = useState(() => localStorage.getItem(MAP3D_WALK_HELP_HIDDEN_KEY) !== "true");
   const [walkHelpExpanded, setWalkHelpExpanded] = useState(false);
   const [sceneReady, setSceneReady] = useState(false);
-  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [ifcSuggestionsOpen, setIfcSuggestionsOpen] = useState(false);
   const [showLayers, setShowLayers] = useState(false);
 
@@ -1666,7 +1662,6 @@ export function Map3DView() {
       canImportMainModel ||
       canManage3D ||
       canManageLayers ||
-      canLinkServices ||
       canAssignHouses ||
       canSync3DReal
     ),
@@ -5693,23 +5688,6 @@ export function Map3DView() {
                 <Layers className="h-4 w-4 mr-1.5" />Camadas ({layerManager.layers.length})
               </Button>
             )}
-            {canAssignHouses && layerManager.layers.length > 0 && (currentProject?.houses?.length ?? 0) > 0 && (
-              <Button
-                variant={assignMode ? "default" : "outline"}
-                size="sm"
-                onClick={() => { setCameraMode("orbit"); setWalkStartPickMode(false); setAssignMode(p => !p); clearAll3DSelection("assign mode toggled"); }}
-                disabled={isLoading}
-                title="Clique nas malhas do modelo para batizar cada casa"
-              >
-                <MousePointerClick className="h-4 w-4 mr-1.5" />
-                {assignMode ? "Sair do modo Atribuir" : "Atribuir Casas"}
-                {meshAssignments.assignments.length > 0 && (
-                  <Badge variant="secondary" className="ml-1.5 h-4 text-[10px] px-1">
-                    {meshAssignments.assignments.length}
-                  </Badge>
-                )}
-              </Button>
-            )}
             {canReviewModel && modelData && (
               <Button
                 variant={reviewMode ? "default" : "outline"}
@@ -6303,23 +6281,6 @@ export function Map3DView() {
             <p>Origem: {reviewLinkHoverTooltip.originLabel}</p>
           </div>
         )}
-        {assignMode && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-primary text-primary-foreground px-3 py-1.5 rounded-full text-xs font-medium shadow-lg flex items-center gap-1.5 pointer-events-none">
-            <MousePointerClick className="h-3.5 w-3.5" />
-            Clique numa parte do modelo para atribuir a uma casa
-          </div>
-        )}
-        {canManage3D && (
-          <AssignHousePopover
-            picked={pickedMesh}
-            totalHouses={currentProject?.houses?.length ?? 0}
-            currentHouse={pickedMesh ? meshAssignments.assignmentMap.get(pickedMesh.name) ?? null : null}
-            saving={assignSaving}
-            onConfirm={confirmAssignment}
-            onClear={clearAssignment}
-            onClose={() => setPickedMesh(null)}
-          />
-        )}
         {reviewMode && (
           <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-primary text-primary-foreground px-3 py-1.5 rounded-full text-xs font-medium shadow-lg flex items-center gap-1.5 pointer-events-none">
             <ScanSearch className="h-3.5 w-3.5" />
@@ -6597,14 +6558,12 @@ export function Map3DView() {
             layers={layerManager.layers}
             links={layerManager.links}
             autoMode={layerManager.autoMode}
-            onAutoModeChange={layerManager.setAutoMode}
             onToggleLayer={(name) => {
               layerManager.toggleLayer(name);
               clearAll3DSelection("layer toggled");
             }}
             onOpacityChange={layerManager.setLayerOpacity}
             onShowAllLayers={reexibirTodasCamadas}
-            onOpenLinkDialog={() => setLinkDialogOpen(true)}
             onRenameLayer={layerManager.renameLayer}
           />
         )}
@@ -6716,17 +6675,6 @@ export function Map3DView() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {canLinkServices && projectId && (
-        <LinkLayersDialog
-          open={linkDialogOpen}
-          onOpenChange={setLinkDialogOpen}
-          layers={layerManager.layers}
-          links={layerManager.links}
-          projectId={projectId}
-          onSaveLink={layerManager.saveLink}
-          onRemoveLink={layerManager.removeLink}
-        />
-      )}
       {canReviewModel && projectId && (
         <IfcSuggestionsPanel
           open={ifcSuggestionsOpen}

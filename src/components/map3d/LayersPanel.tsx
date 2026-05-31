@@ -3,8 +3,6 @@ import { Eye, EyeOff, Link2, Unlink, Pencil, Check, X, Home, RotateCcw } from "l
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,17 +12,15 @@ interface LayersPanelProps {
   layers: ModelLayer[];
   links: LayerStageLink[];
   autoMode: boolean;
-  onAutoModeChange: (v: boolean) => void;
   onToggleLayer: (name: string) => void;
   onOpacityChange: (name: string, opacity: number) => void;
   onShowAllLayers: () => void;
-  onOpenLinkDialog: () => void;
   onRenameLayer?: (name: string, newDisplayName: string) => void;
 }
 
 export function LayersPanel({
-  layers, links, autoMode, onAutoModeChange,
-  onToggleLayer, onOpacityChange, onShowAllLayers, onOpenLinkDialog, onRenameLayer,
+  layers, links, autoMode,
+  onToggleLayer, onOpacityChange, onShowAllLayers, onRenameLayer,
 }: LayersPanelProps) {
   const [editingLayer, setEditingLayer] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
@@ -64,31 +60,11 @@ export function LayersPanel({
             >
               <RotateCcw className="h-3 w-3 mr-1" />Reexibir tudo
             </Button>
-            <Button variant="outline" size="sm" onClick={onOpenLinkDialog} className="h-7 whitespace-nowrap text-xs">
-              <Link2 className="h-3 w-3 mr-1" />Vincular Serviços
-            </Button>
           </div>
         </div>
         {hiddenCount > 0 && (
           <p className="text-[10px] text-muted-foreground mt-1">
             {hiddenCount} camada(s) ocultas ou com opacidade reduzida.
-          </p>
-        )}
-        <div className="flex items-center gap-2 mt-2">
-          <Switch
-            id="auto-mode"
-            checked={autoMode}
-            onCheckedChange={onAutoModeChange}
-            disabled={links.length === 0}
-          />
-          <Label htmlFor="auto-mode" className="text-xs cursor-pointer">
-            {autoMode ? "Visão Atual (por produção)" : "Visão Completa"}
-          </Label>
-        </div>
-        {links.length === 0 && (
-          <p className="text-[11px] text-muted-foreground mt-2 leading-snug">
-            Vincule camadas a serviços para ativar a sincronização automática
-            com o lançamento de produção.
           </p>
         )}
         {links.length > 0 && autoMode && (
