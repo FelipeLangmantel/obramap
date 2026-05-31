@@ -5017,6 +5017,111 @@ export function Map3DView() {
     return uploaded?.publicUrl ?? null;
   };
 
+  const persistMainModelReplacement = async (
+    file: File,
+    storagePath: string,
+    signedUrl: string,
+  ): Promise<void> => {
+    if (!projectId || !companyId) throw new Error("Projeto ou empresa nao identificados.");
+
+    const { data: previousLayout, error: previousLayoutError } = await supabase
+      .from("map_layouts")
+      .select("id, model_3d_url")
+      .eq("project_id", projectId)
+      .maybeSingle();
+    if (previousLayoutError) throw previousLayoutError;
+
+    const { data: previousActive, error: previousActiveError } = await supabase
+      .from("map_3d_model_files" as any)
+      .select("id, storage_path")
+      .eq("project_id", projectId)
+      .eq("status", "active");
+    if (previousActiveError) throw previousActiveError;
+
+    const layoutPayload = {
+      model_3d_url: signedUrl,
+      model_3d_type: "gltf",
+      model_mtl_url: null,
+    };
+    const savedLayout = previousLayout?.id
+      ? await supabase
+        .from("map_layouts")
+        .update(layoutPayload)
+        .eq("project_id", projectId)
+        .select("id")
+        .single()
+      : await supabase
+        .from("map_layouts")
+        .insert([{ project_id: projectId, ...layoutPayload }])
+        .select("id")
+        .single();
+    if (savedLayout.error) throw savedLayout.error;
+
+    const nowIso = new Date().toISOString();
+    try {
+      const { error: replaceError } = await supabase
+        .from("map_3d_model_files" as any)
+        .update({
+          status: "replaced",
+          replaced_at: nowIso,
+          notes: "Substituido por novo modelo principal. Arquivo antigo preservado no Storage.",
+        })
+        .eq("project_id", projectId)
+        .eq("status", "active")
+        .neq("storage_path", storagePath);
+      if (replaceError) throw replaceError;
+
+      const { data: existingFile, error: existingFileError } = await supabase
+        .from("map_3d_model_files" as any)
+        .select("id")
+        .eq("storage_bucket", MAP3D_STORAGE_BUCKET)
+        .eq("storage_path", storagePath)
+        .maybeSingle();
+      if (existingFileError) throw existingFileError;
+
+      const modelFilePayload = {
+        project_id: projectId,
+        company_id: companyId,
+        map_layout_id: savedLayout.data.id,
+        file_name: file.name,
+        storage_bucket: MAP3D_STORAGE_BUCKET,
+        storage_path: storagePath,
+        file_size: file.size,
+        model_type: file.name.toLowerCase().endsWith(".gltf") ? "gltf" : "glb",
+        status: "active",
+        preserved: false,
+        imported_by: user?.id ?? null,
+        imported_at: nowIso,
+        replaced_at: null,
+        notes: "Modelo principal ativo importado pelo Mapa 3D.",
+      };
+      const writeResult = existingFile?.id
+        ? await supabase
+          .from("map_3d_model_files" as any)
+          .update(modelFilePayload)
+          .eq("id", existingFile.id)
+        : await supabase
+          .from("map_3d_model_files" as any)
+          .insert(modelFilePayload);
+      if (writeResult.error) throw writeResult.error;
+    } catch (error) {
+      if (previousLayout?.model_3d_url) {
+        await supabase
+          .from("map_layouts")
+          .update({ model_3d_url: previousLayout.model_3d_url })
+          .eq("project_id", projectId);
+      }
+      const oldActiveId = (previousActive as any[] | null)?.find((item) => item.storage_path !== storagePath)?.id;
+      if (oldActiveId) {
+        await supabase
+          .from("map_3d_model_files" as any)
+          .update({ status: "active", replaced_at: null })
+          .eq("id", oldActiveId);
+      }
+      throw error;
+    }
+  };
+
   const importGltfFile = async (
     file: File,
     mode: "preserve" | "new",
@@ -5037,35 +5142,27 @@ export function Map3DView() {
     setWalkInspection(null);
     setMeshReviewOverrides(new Map());
     try {
-      const url = await uploadFile(file, 'gltf');
-      if (!url) return;
+      const upload = await uploadFileTo3DStorage(file, 'gltf');
+      if (!upload) return;
       if (supplementalGlbPartsRef.current.length > 0) {
         toast.info("As partes GLB complementares permanecem salvas e podem ser removidas separadamente.");
       }
       setTrustedGlbLinkKeys(new Set());
-      setGlbLinkScope(mode === "new" ? "fresh" : "preserve");
-      let clearedGlbRecords = 0;
-      if (mode === "new") {
-        clearedGlbRecords = await meshHooks.clearGlbMeshes();
-        setMeshReviewOverrides(new Map());
-      }
+      setGlbLinkScope("preserve");
+      await persistMainModelReplacement(file, upload.storagePath, upload.publicUrl);
       if (import.meta.env.DEV) {
         console.log("[GLB Import Safety]", {
           projectId,
           fileName: file.name,
           mode,
           oldRecordsFound: existingGlbRecords,
-          preservedRecords: mode === "preserve" ? existingGlbRecords : 0,
-          clearedGlbRecords,
+          preservedRecords: existingGlbRecords,
+          clearedGlbRecords: 0,
         });
       }
-      setModelData({ url, type: "gltf" });
-      setHasChanges(true);
-      toast.success(
-        mode === "new"
-          ? `Modelo carregado. ${clearedGlbRecords} vínculos GLB anteriores foram limpos.`
-          : "Modelo carregado preservando vínculos GLB existentes.",
-      );
+      setModelData({ url: upload.publicUrl, type: "gltf" });
+      setHasChanges(false);
+      toast.success("Novo modelo ativo salvo. Revise os vinculos se a estrutura do GLB mudou.");
     } finally {
       setPendingGlbImport(null);
       gltfImportInFlightRef.current = false;
@@ -6309,10 +6406,11 @@ export function Map3DView() {
       }}>
         <AlertDialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <AlertDialogHeader>
-            <AlertDialogTitle>Importar novo modelo GLB?</AlertDialogTitle>
+            <AlertDialogTitle>Substituir modelo 3D ativo?</AlertDialogTitle>
             <AlertDialogDescription>
-              Este projeto já possui {pendingGlbImport?.existingGlbRecords ?? 0} registro(s) GLB em project_model_meshes.
-              Escolha se deseja reaproveitar vínculos existentes ou iniciar o inventário GLB limpo para este novo arquivo.
+              Este projeto ja possui {pendingGlbImport?.existingGlbRecords ?? 0} registro(s) GLB em project_model_meshes.
+              O arquivo antigo sera preservado no Storage. Se o novo GLB tiver outra estrutura,
+              revise ou reset os vinculos em Configuracoes da Obra &gt; Modelos 3D.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col items-stretch gap-2 sm:flex-col sm:space-x-0 md:flex-row md:flex-wrap md:items-center md:justify-end">
@@ -6326,9 +6424,7 @@ export function Map3DView() {
             >
               Cancelar
             </AlertDialogCancel>
-            <Button
-              type="button"
-              variant="outline"
+            <AlertDialogAction
               className="h-auto min-h-10 whitespace-normal text-left"
               disabled={isLoading || isGltfImporting || !pendingGlbImport}
               onClick={() => {
@@ -6339,20 +6435,7 @@ export function Map3DView() {
                 void importGltfFile(nextImport.file, "preserve", nextImport.existingGlbRecords);
               }}
             >
-              Atualizar e preservar vínculos
-            </Button>
-            <AlertDialogAction
-              className="h-auto min-h-10 whitespace-normal text-left"
-              disabled={isLoading || isGltfImporting || !pendingGlbImport}
-              onClick={() => {
-                if (!pendingGlbImport || gltfImportInFlightRef.current) return;
-                const nextImport = pendingGlbImport;
-                setPendingGlbImport(null);
-                if (fileInputRef.current) fileInputRef.current.value = '';
-                void importGltfFile(nextImport.file, "new", nextImport.existingGlbRecords);
-              }}
-            >
-              Novo modelo e limpar vínculos GLB
+              Substituir modelo e preservar vinculos
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

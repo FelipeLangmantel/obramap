@@ -4,8 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Box, RefreshCw, Search, Loader2, ShieldAlert } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Box, RefreshCw, Search, Loader2, ShieldAlert, RotateCcw, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Models3DPanelProps {
   projectId: string;
@@ -52,10 +54,14 @@ const STATUS_LABEL: Record<string, { label: string; variant: "default" | "second
 };
 
 export function Models3DPanel({ projectId }: Models3DPanelProps) {
+  const { canEdit } = useAuth();
   const [models, setModels] = useState<ModelFile[]>([]);
   const [orphans, setOrphans] = useState<OrphanRow[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [auditing, setAuditing] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [preservingId, setPreservingId] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -86,6 +92,67 @@ export function Models3DPanel({ projectId }: Models3DPanelProps) {
     setAuditing(false);
   };
 
+  const markAsPreserved = async (model: ModelFile) => {
+    if (!canEdit) {
+      toast.error("Sem permissao para preservar modelo 3D.");
+      return;
+    }
+    setPreservingId(model.id);
+    try {
+      const payload = model.status === "active"
+        ? { preserved: true, notes: model.notes ?? "Modelo ativo marcado como preservado." }
+        : { preserved: true, status: "preserved", notes: model.notes ?? "Modelo antigo marcado como preservado." };
+      const { error } = await supabase
+        .from("map_3d_model_files" as any)
+        .update(payload)
+        .eq("id", model.id)
+        .eq("project_id", projectId);
+      if (error) throw error;
+      toast.success("Modelo 3D marcado como preservado.");
+      await load();
+    } catch (error) {
+      console.error("[Models3DPanel] preserve model error", error);
+      toast.error("Erro ao marcar modelo como preservado.");
+    } finally {
+      setPreservingId(null);
+    }
+  };
+
+  const resetModelLinks = async () => {
+    if (!canEdit) {
+      toast.error("Sem permissao para resetar vinculos 3D.");
+      return;
+    }
+    setResetting(true);
+    try {
+      const assignments = await supabase
+        .from("map_mesh_house_assignments" as any)
+        .delete()
+        .eq("project_id", projectId);
+      if (assignments.error) throw assignments.error;
+
+      const layerLinks = await supabase
+        .from("map_layer_stage_links" as any)
+        .delete()
+        .eq("project_id", projectId);
+      if (layerLinks.error) throw layerLinks.error;
+
+      const meshes = await supabase
+        .from("project_model_meshes" as any)
+        .delete()
+        .eq("project_id", projectId);
+      if (meshes.error) throw meshes.error;
+
+      toast.success("Vinculos do modelo 3D resetados. O GLB nao foi apagado.");
+      setResetOpen(false);
+    } catch (error) {
+      console.error("[Models3DPanel] reset links error", error);
+      toast.error("Erro ao resetar vinculos do modelo 3D.");
+    } finally {
+      setResetting(false);
+    }
+  };
+
   const totalCandidates = orphans?.filter((o) => o.would_delete) ?? [];
   const totalCandidateBytes = totalCandidates.reduce((s, o) => s + (o.file_size ?? 0), 0);
 
@@ -111,8 +178,24 @@ export function Models3DPanel({ projectId }: Models3DPanelProps) {
         </Button>
       </div>
 
+      {canEdit && (
+        <Alert className="border-amber-200 bg-amber-50 text-amber-950">
+          <RotateCcw className="h-4 w-4" />
+          <AlertDescription className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <span>
+              Para refazer vinculos apos substituir o GLB, use a acao separada abaixo.
+              Ela limpa inventario e vinculos do projeto, mas nao apaga arquivos do Storage.
+            </span>
+            <Button size="sm" variant="outline" className="shrink-0 gap-2" onClick={() => setResetOpen(true)}>
+              <RotateCcw className="h-4 w-4" />
+              Resetar vinculos do modelo
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="overflow-x-auto rounded-lg border">
-        <Table className="min-w-[820px]">
+        <Table className="min-w-[1000px]">
           <TableHeader>
             <TableRow>
               <TableHead className="min-w-[320px]">Arquivo</TableHead>
@@ -120,12 +203,13 @@ export function Models3DPanel({ projectId }: Models3DPanelProps) {
               <TableHead className="w-24">Tipo</TableHead>
               <TableHead className="w-28">Tamanho</TableHead>
               <TableHead className="w-36">Importado em</TableHead>
+              <TableHead className="w-48 text-right">Acoes</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {models.length === 0 && !loading && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                   Nenhum modelo 3D registrado para este projeto.
                 </TableCell>
               </TableRow>
@@ -148,6 +232,22 @@ export function Models3DPanel({ projectId }: Models3DPanelProps) {
                   <TableCell className="whitespace-nowrap text-xs">{m.model_type}</TableCell>
                   <TableCell className="whitespace-nowrap text-xs">{formatSize(m.file_size)}</TableCell>
                   <TableCell className="whitespace-nowrap text-xs">{formatDate(m.imported_at)}</TableCell>
+                  <TableCell className="text-right">
+                    {canEdit && !m.preserved ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 gap-1 whitespace-nowrap"
+                        disabled={preservingId === m.id}
+                        onClick={() => markAsPreserved(m)}
+                      >
+                        {preservingId === m.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <ShieldCheck className="h-3 w-3" />}
+                        Preservar
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">-</span>
+                    )}
+                  </TableCell>
                 </TableRow>
               );
             })}
@@ -209,6 +309,26 @@ export function Models3DPanel({ projectId }: Models3DPanelProps) {
           </div>
         )}
       </div>
+
+      <AlertDialog open={resetOpen} onOpenChange={(open) => !resetting && setResetOpen(open)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Resetar vinculos do modelo 3D?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acao vai limpar o inventario e os vinculos do modelo 3D desta obra para permitir
+              refazer os vinculos no novo modelo. O arquivo GLB nao sera apagado. Dados de Producao,
+              Diario, Planejamento e Relatorios nao serao alterados.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={resetting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction disabled={resetting} onClick={resetModelLinks}>
+              {resetting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Confirmar reset dos vinculos
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
