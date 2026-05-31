@@ -142,9 +142,10 @@ function ModelLoadingFallback({ modelUrl }: { modelUrl: string }) {
   const stableProgress = maxProgressRef.current;
   const showProgress = stableProgress > 0;
   const isPreparingScene = stableProgress >= 95;
+  const displayProgress = isPreparingScene ? 100 : stableProgress;
   const title = showProgress
     ? isPreparingScene
-      ? "Preparando cena 3D..."
+      ? "Preparando cena 3D... 100%"
       : `Carregando modelo 3D... ${stableProgress}%`
     : "Carregando modelo 3D...";
 
@@ -158,7 +159,7 @@ function ModelLoadingFallback({ modelUrl }: { modelUrl: string }) {
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
             <div
               className="h-full rounded-full bg-primary transition-[width] duration-300 ease-out"
-              style={{ width: `${stableProgress}%` }}
+              style={{ width: `${displayProgress}%` }}
             />
           </div>
         ) : (
@@ -199,6 +200,21 @@ function countSceneMeshes(scene: THREE.Object3D | null | undefined) {
     if ((child as THREE.Mesh).isMesh) meshes += 1;
   });
   return { nodes, meshes };
+}
+
+function reset3DObjectVisualState(root: THREE.Object3D | null | undefined, reason: string) {
+  if (!root) return { reason, totalObjects: 0, totalMeshes: 0, invisibleBefore: 0 };
+  const audit = { reason, totalObjects: 0, totalMeshes: 0, invisibleBefore: 0 };
+  root.traverse((child) => {
+    audit.totalObjects += 1;
+    if (!child.visible) audit.invisibleBefore += 1;
+    child.visible = true;
+    if ((child as THREE.Mesh).isMesh) {
+      audit.totalMeshes += 1;
+    }
+  });
+  logMap3DPerf("3D visual state reset", audit);
+  return audit;
 }
 
 const GLB_REAL_SYNC_WATCH_KEYS = [
@@ -1340,6 +1356,7 @@ export function Map3DView() {
   const [modelData, setModelData] = useState<ModelData | null>(null);
   const map3dLoadPerfRef = useRef<ReturnType<typeof startMap3DPerf> | null>(null);
   const [supplementalGlbParts, setSupplementalGlbParts] = useState<SupplementalGlbPart[]>([]);
+  const [supplementalSceneReadyNonce, setSupplementalSceneReadyNonce] = useState(0);
   const [markers, setMarkers] = useState<HouseMarker[]>([]);
   const [selectedMarker, setSelectedMarker] = useState<HouseMarker | null>(null);
   const [photoHistoryOpen, setPhotoHistoryOpen] = useState(false);
@@ -2003,7 +2020,9 @@ export function Map3DView() {
   }, [clearMeshSelection]);
 
   const handleSupplementalSceneReady = useCallback((part: SupplementalGlbPart, scene: THREE.Object3D) => {
+    reset3DObjectVisualState(scene, `supplemental-part-ready:${part.id}`);
     supplementalGlbScenesRef.current.set(part.id, scene);
+    setSupplementalSceneReadyNonce((value) => value + 1);
     if (sceneReady && cameraMode === "orbit") {
       if (supplementalFitTimerRef.current) clearTimeout(supplementalFitTimerRef.current);
       supplementalFitTimerRef.current = setTimeout(() => {
@@ -2185,6 +2204,7 @@ export function Map3DView() {
       modelType: modelData?.type ?? null,
       ...sceneCounts,
     });
+    reset3DObjectVisualState(scene, "main-scene-ready");
     setSceneObj(scene);
     const layerPerf = startMap3DPerf("handleSceneReady extractLayers");
     layerManager.extractLayers(scene);
@@ -3703,6 +3723,8 @@ export function Map3DView() {
     setViewMode(mode);
     const hiddenServices = overrideHiddenRealServiceKeys ?? hiddenRealServiceKeys;
     const realStats = {
+      visibleBefore: 0,
+      visibleAfter: 0,
       contextVisible: 0,
       linkedVisible: 0,
       linkedHidden: 0,
@@ -3712,9 +3734,29 @@ export function Map3DView() {
       contextExamples: [] as Array<{ layer_key: string; mesh_name: string | null; material_name: string | null }>,
     };
     const sourceMap = buildCurrentMeshMap(overrideMeshMap ?? meshHooks.meshMap);
+    const isEffectivelyVisible = (object: THREE.Object3D) => {
+      let current: THREE.Object3D | null = object;
+      while (current) {
+        if (!current.visible) return false;
+        current = current.parent;
+      }
+      return true;
+    };
+    if (mode === "real" && sourceMap.size === 0) {
+      logMap3DPerf("GLB Real skipped until meshMap is ready", {
+        projectId,
+        sceneReady,
+        hasScene: Boolean(sceneObj),
+        meshMapSize: meshHooks.meshMap.size,
+        supplementalParts: supplementalGlbParts.length,
+        loadedSupplementalParts: supplementalGlbScenesRef.current.size,
+      });
+      return realStats;
+    }
     let visitedMeshes = 0;
     traverseActiveModelMeshes((mesh) => {
       visitedMeshes++;
+      if (isEffectivelyVisible(mesh)) realStats.visibleBefore++;
       const saved = sourceMap.get(getMeshLayerKey(mesh));
       if (!saved) {
         mesh.visible = mode !== "real";
@@ -3763,13 +3805,26 @@ export function Map3DView() {
           mesh.visible = saved.visible;
           break;
       }
+      if (isEffectivelyVisible(mesh)) realStats.visibleAfter++;
     }, { includeHiddenParts: true });
     if (visitedMeshes === 0) return realStats;
     if (mode === "real") {
       logMap3DPerf("GLB Real Context", realStats);
+      if (realStats.visibleAfter === 0) {
+        logMap3DPerf("GLB Real resulted zero visible meshes", {
+          projectId,
+          meshMapSize: sourceMap.size,
+          visitedMeshes,
+          supplementalParts: supplementalGlbParts.length,
+          loadedSupplementalParts: supplementalGlbScenesRef.current.size,
+          ...realStats,
+        });
+      }
       if (import.meta.env.DEV) {
         logMap3DPerf("GLB Import Safety real mode applied", {
           visibleInReal: realStats.linkedVisible + realStats.contextVisible,
+          visibleBefore: realStats.visibleBefore,
+          visibleAfter: realStats.visibleAfter,
           hiddenWithoutLink: realStats.unlinkedHidden,
           linkedHidden: realStats.linkedHidden,
           serviceFilteredHidden: realStats.serviceFilteredHidden,
@@ -3778,7 +3833,7 @@ export function Map3DView() {
       }
     }
     return realStats;
-  }, [buildCurrentMeshMap, hiddenRealServiceKeys, hideLinkedInReview, isCompleteProductionLink, meshHooks.meshMap, reviewMode, traverseActiveModelMeshes]);
+  }, [buildCurrentMeshMap, hiddenRealServiceKeys, hideLinkedInReview, isCompleteProductionLink, meshHooks.meshMap, projectId, reviewMode, sceneObj, sceneReady, supplementalGlbParts.length, traverseActiveModelMeshes]);
 
   const reexibirTodasCamadas = useCallback(async () => {
     const beforeState = smartLinkPreviewStateRef.current;
@@ -3923,6 +3978,11 @@ export function Map3DView() {
   useEffect(() => {
     if (meshHooks.meshMap.size > 0 && (sceneObj || supplementalGlbParts.length > 0)) applyViewMode(viewMode);
   }, [meshHooks.meshMap, sceneObj, supplementalGlbParts.length, viewMode, applyViewMode]);
+
+  useEffect(() => {
+    if (supplementalSceneReadyNonce === 0 || viewMode !== "real" || meshHooks.meshMap.size === 0) return;
+    applyViewMode("real");
+  }, [applyViewMode, meshHooks.meshMap.size, supplementalSceneReadyNonce, viewMode]);
 
   // Aplica isolamento (sobrepõe modo de visão)
   useEffect(() => {
@@ -5134,6 +5194,10 @@ export function Map3DView() {
     }
   };
 
+  const realModePreparing = modelData?.type === "gltf"
+    && viewMode === "real"
+    && (!sceneObj || meshHooks.loading || meshHooks.meshMap.size === 0);
+
   return (
     <div className="h-full flex flex-col gap-3">
       <Card>
@@ -5427,6 +5491,17 @@ export function Map3DView() {
                     toast.error("Sem permissao para visualizar a simulacao.");
                     return;
                   }
+                  logMap3DPerf("Map3D view mode change", {
+                    from: viewMode,
+                    to: v,
+                    projectId,
+                    sceneReady,
+                    hasScene: Boolean(sceneObj),
+                    meshMapSize: meshHooks.meshMap.size,
+                    meshMapLoading: meshHooks.loading,
+                    supplementalParts: supplementalGlbParts.length,
+                    loadedSupplementalParts: supplementalGlbScenesRef.current.size,
+                  });
                   clearAll3DSelection("view mode changed");
                   applyViewMode(v as ViewMode);
                 }}
@@ -5645,6 +5720,14 @@ export function Map3DView() {
         {isLoading && (
           <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-20">
             <Loader2 className="h-6 w-6 animate-spin mr-2" /><span>Carregando...</span>
+          </div>
+        )}
+        {realModePreparing && !isLoading && (
+          <div className="pointer-events-none absolute inset-x-0 top-4 z-30 flex justify-center">
+            <div className="flex items-center gap-2 rounded-lg border border-border bg-background/90 px-4 py-2 text-sm shadow-lg backdrop-blur">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              <span>Preparando Mapa 3D Real...</span>
+            </div>
           </div>
         )}
         <div
