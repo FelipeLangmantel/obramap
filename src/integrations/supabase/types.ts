@@ -5837,10 +5837,55 @@ export type Database = {
           },
         ]
       }
+      map_3d_model_file_deletions: {
+        Row: {
+          company_id: string
+          created_at: string
+          delete_reason: string | null
+          deleted_at: string
+          deleted_by: string
+          id: string
+          project_id: string
+          size_bytes: number | null
+          source_status: string | null
+          storage_bucket: string
+          storage_path: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          delete_reason?: string | null
+          deleted_at?: string
+          deleted_by: string
+          id?: string
+          project_id: string
+          size_bytes?: number | null
+          source_status?: string | null
+          storage_bucket: string
+          storage_path: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          delete_reason?: string | null
+          deleted_at?: string
+          deleted_by?: string
+          id?: string
+          project_id?: string
+          size_bytes?: number | null
+          source_status?: string | null
+          storage_bucket?: string
+          storage_path?: string
+        }
+        Relationships: []
+      }
       map_3d_model_files: {
         Row: {
           company_id: string
           created_at: string
+          delete_reason: string | null
+          deleted_at: string | null
+          deleted_by: string | null
           file_hash: string | null
           file_name: string
           file_size: number | null
@@ -5861,6 +5906,9 @@ export type Database = {
         Insert: {
           company_id: string
           created_at?: string
+          delete_reason?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           file_hash?: string | null
           file_name: string
           file_size?: number | null
@@ -5881,6 +5929,9 @@ export type Database = {
         Update: {
           company_id?: string
           created_at?: string
+          delete_reason?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           file_hash?: string | null
           file_name?: string
           file_size?: number | null
@@ -13711,6 +13762,16 @@ export type Database = {
         Args: { _user_id: string }
         Returns: boolean
       }
+      validate_3d_model_files_for_delete: {
+        Args: { _paths: string[]; _project_id: string }
+        Returns: {
+          blocked_reason: string
+          can_delete: boolean
+          current_status: string
+          size_bytes: number
+          storage_path: string
+        }[]
+      }
       validate_alert_for_quotation: {
         Args: { p_alert_id: string }
         Returns: boolean
@@ -13756,6 +13817,7 @@ export type Database = {
         | "preserved"
         | "orphan_pending_delete"
         | "upload_failed"
+        | "deleted"
       medicao_status:
         | "aprovada"
         | "enviada"
@@ -13924,6 +13986,7 @@ export const Constants = {
         "preserved",
         "orphan_pending_delete",
         "upload_failed",
+        "deleted",
       ],
       medicao_status: [
         "aprovada",
