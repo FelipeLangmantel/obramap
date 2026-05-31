@@ -43,6 +43,7 @@ interface OrphanRow {
 }
 
 const REQUIRED_CONFIRMATION = "EXCLUIR MODELOS 3D";
+const REQUIRED_RECENT_CONFIRMATION = "EXCLUIR MODELOS 3D RECENTES";
 
 function formatSize(bytes: number | null): string {
   if (!bytes) return "—";
@@ -64,7 +65,7 @@ const STATUS_LABEL: Record<string, { label: string; variant: "default" | "second
 };
 
 export function Models3DPanel({ projectId }: Models3DPanelProps) {
-  const { canEdit } = useAuth();
+  const { canEdit, isCompanyAdmin } = useAuth();
   const [models, setModels] = useState<ModelFile[]>([]);
   const [orphans, setOrphans] = useState<OrphanRow[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -72,6 +73,7 @@ export function Models3DPanel({ projectId }: Models3DPanelProps) {
   const [resetOpen, setResetOpen] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [preservingId, setPreservingId] = useState<string | null>(null);
+  const [allowRecentSelection, setAllowRecentSelection] = useState(false);
 
   // Seleção/exclusão
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -131,15 +133,13 @@ export function Models3DPanel({ projectId }: Models3DPanelProps) {
   };
 
   const resetModelLinks = async () => {
-    if (!canEdit) return toast.error("Sem permissão para resetar vínculos 3D.");
+    if (!isCompanyAdmin) return toast.error("Apenas administrador da empresa pode resetar vínculos 3D.");
     setResetting(true);
     try {
-      const a = await supabase.from("map_mesh_house_assignments" as any).delete().eq("project_id", projectId);
-      if (a.error) throw a.error;
-      const b = await supabase.from("map_layer_stage_links" as any).delete().eq("project_id", projectId);
-      if (b.error) throw b.error;
-      const c = await supabase.from("project_model_meshes" as any).delete().eq("project_id", projectId);
-      if (c.error) throw c.error;
+      const { error } = await (supabase as any).rpc("reset_3d_model_links_for_project", {
+        _project_id: projectId,
+      });
+      if (error) throw error;
       toast.success("Vínculos do modelo 3D resetados. O GLB não foi apagado.");
       setResetOpen(false);
     } catch (e) {
@@ -150,10 +150,19 @@ export function Models3DPanel({ projectId }: Models3DPanelProps) {
     }
   };
 
-  // --- seleção controlada (somente would_delete=true) ---
+  // --- seleção controlada (would_delete=true; recentes apenas com admin + toggle) ---
+  const isRecentBlocked = (row: OrphanRow) =>
+    row.reason === "too_recent(<7d)" || row.reason === "too_recent_lt_7d";
+
+  const canSelectRow = (row: OrphanRow) => {
+    if (!canEdit) return false;
+    if (row.would_delete) return true;
+    return isCompanyAdmin && allowRecentSelection && isRecentBlocked(row);
+  };
+
   const selectableSet = useMemo(
-    () => new Set((orphans ?? []).filter((o) => o.would_delete).map((o) => o.storage_path)),
-    [orphans],
+    () => new Set((orphans ?? []).filter(canSelectRow).map((o) => o.storage_path)),
+    [orphans, canEdit, isCompanyAdmin, allowRecentSelection],
   );
 
   const toggleOne = (path: string) => {
@@ -169,20 +178,44 @@ export function Models3DPanel({ projectId }: Models3DPanelProps) {
     () => (orphans ?? []).filter((o) => selected.has(o.storage_path)),
     [orphans, selected],
   );
+  const selectedRecentRows = useMemo(
+    () => selectedRows.filter(isRecentBlocked),
+    [selectedRows],
+  );
   const selectedBytes = selectedRows.reduce((s, r) => s + (r.file_size ?? 0), 0);
+  const requiredConfirmation = selectedRecentRows.length > 0
+    ? REQUIRED_RECENT_CONFIRMATION
+    : REQUIRED_CONFIRMATION;
+
+  const setRecentSelectionEnabled = (enabled: boolean) => {
+    if (!isCompanyAdmin) return;
+    setAllowRecentSelection(enabled);
+    if (!enabled) {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        for (const row of orphans ?? []) {
+          if (isRecentBlocked(row)) next.delete(row.storage_path);
+        }
+        return next;
+      });
+    }
+  };
 
   const openConfirm = () => {
     if (!canEdit) return;
     if (selected.size === 0) return toast.error("Selecione ao menos 1 arquivo.");
+    if (selectedRecentRows.length > 0 && !isCompanyAdmin) {
+      return toast.error("Apenas administrador da empresa pode excluir arquivos recentes.");
+    }
     setConfirmText("");
     setDeleteReason("");
     setConfirmOpen(true);
   };
 
-  const confirmDisabled = confirmText !== REQUIRED_CONFIRMATION || deleting;
+  const confirmDisabled = confirmText !== requiredConfirmation || deleting;
 
   const executeDelete = async () => {
-    if (confirmText !== REQUIRED_CONFIRMATION) return;
+    if (confirmText !== requiredConfirmation) return;
     setDeleting(true);
     try {
       const { data, error } = await supabase.functions.invoke("delete-3d-model-files", {
@@ -191,6 +224,7 @@ export function Models3DPanel({ projectId }: Models3DPanelProps) {
           paths: Array.from(selected),
           delete_reason: deleteReason || "Exclusão manual via aba Modelos 3D",
           confirmation_text: confirmText,
+          allow_recent_delete: selectedRecentRows.length > 0,
         },
       });
       if (error) throw error;
@@ -213,6 +247,7 @@ export function Models3DPanel({ projectId }: Models3DPanelProps) {
 
   const totalCandidates = orphans?.filter((o) => o.would_delete) ?? [];
   const totalCandidateBytes = totalCandidates.reduce((s, o) => s + (o.file_size ?? 0), 0);
+  const recentBlockedRows = orphans?.filter(isRecentBlocked) ?? [];
 
   return (
     <div className="min-h-0 space-y-4">
@@ -237,15 +272,20 @@ export function Models3DPanel({ projectId }: Models3DPanelProps) {
         </Button>
       </div>
 
-      {canEdit && (
-        <Alert className="border-amber-200 bg-amber-50 text-amber-950">
+      {isCompanyAdmin && (
+        <Alert className="border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-500/60 dark:bg-amber-950/40 dark:text-amber-100">
           <RotateCcw className="h-4 w-4" />
           <AlertDescription className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <span>
               Para refazer vínculos após substituir o GLB, use a ação separada abaixo. Ela limpa
               inventário e vínculos do projeto, mas não apaga arquivos do Storage.
             </span>
-            <Button size="sm" variant="outline" className="shrink-0 gap-2" onClick={() => setResetOpen(true)}>
+            <Button
+              size="sm"
+              variant="outline"
+              className="shrink-0 gap-2 border-amber-500 bg-amber-100 text-amber-950 shadow-sm hover:bg-amber-200 focus-visible:ring-amber-500 disabled:opacity-60 dark:border-amber-300 dark:bg-amber-400 dark:text-amber-950 dark:hover:bg-amber-300"
+              onClick={() => setResetOpen(true)}
+            >
               <RotateCcw className="h-4 w-4" />
               Resetar vínculos do modelo
             </Button>
@@ -337,12 +377,35 @@ export function Models3DPanel({ projectId }: Models3DPanelProps) {
           </div>
         </div>
 
+        {isCompanyAdmin && orphans && recentBlockedRows.length > 0 && (
+          <Alert className="border-destructive/40 bg-destructive/10 text-destructive dark:border-destructive/60 dark:bg-destructive/15">
+            <ShieldAlert className="h-4 w-4" />
+            <AlertDescription className="space-y-3">
+              <label className="flex items-start gap-3 text-sm font-medium">
+                <Checkbox
+                  checked={allowRecentSelection}
+                  onCheckedChange={(checked) => setRecentSelectionEnabled(checked === true)}
+                  aria-label="Permitir selecionar arquivos recentes"
+                />
+                <span>
+                  Permitir selecionar arquivos recentes
+                  <span className="block text-xs font-normal opacity-90">
+                    Use somente depois de validar que eles não são modelo ativo, não são partes complementares
+                    e não serão mais usados.
+                  </span>
+                </span>
+              </label>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {orphans && (
           <div className="space-y-2">
             <div className="text-xs text-muted-foreground">
               {orphans.length} arquivo(s) no bucket • {totalCandidates.length} candidato(s) a remoção •{" "}
               {formatSize(totalCandidateBytes)} a recuperar • Selecionados:{" "}
               <strong>{selected.size}</strong> ({formatSize(selectedBytes)})
+              {selectedRecentRows.length > 0 ? <> • Recentes: <strong>{selectedRecentRows.length}</strong></> : null}
             </div>
             <div className="max-h-[42vh] overflow-auto rounded border bg-background">
               <Table className="min-w-[1040px]">
@@ -357,7 +420,7 @@ export function Models3DPanel({ projectId }: Models3DPanelProps) {
                 </TableHeader>
                 <TableBody>
                   {orphans.map((o) => {
-                    const canSelect = canEdit && o.would_delete;
+                    const canSelect = selectableSet.has(o.storage_path);
                     return (
                       <TableRow key={o.storage_path} className={o.would_delete ? "bg-destructive/5" : ""}>
                         <TableCell>
@@ -416,13 +479,23 @@ export function Models3DPanel({ projectId }: Models3DPanelProps) {
             <AlertDialogTitle className="text-destructive">Excluir modelos 3D do Storage?</AlertDialogTitle>
             <AlertDialogDescription>
               Esta ação remove arquivos do Storage de forma irreversível. Modelos ativos,
-              preservados, partes complementares e arquivos recentes serão bloqueados
-              automaticamente. Confirme apenas se você já validou que os arquivos selecionados são
-              realmente antigos ou órfãos.
+              preservados e partes complementares serão bloqueados automaticamente. Arquivos recentes
+              exigem autorização extra de administrador da empresa. Confirme apenas se você já validou
+              que os arquivos selecionados são realmente órfãos.
             </AlertDialogDescription>
           </AlertDialogHeader>
 
           <div className="space-y-3 text-sm">
+            {selectedRecentRows.length > 0 && (
+              <Alert className="border-destructive/50 bg-destructive/10 text-destructive">
+                <ShieldAlert className="h-4 w-4" />
+                <AlertDescription>
+                  Você selecionou arquivos criados há menos de 7 dias. Esta ação só é permitida para
+                  Administrador da empresa. Confirme apenas se já validou que eles não são o modelo
+                  ativo, não são partes complementares e não serão mais usados.
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="rounded border bg-muted/40 p-2 max-h-48 overflow-auto">
               <ul className="space-y-1 font-mono text-[10px]">
                 {selectedRows.map((r) => (
@@ -447,12 +520,12 @@ export function Models3DPanel({ projectId }: Models3DPanelProps) {
 
             <div className="space-y-1">
               <Label htmlFor="confirm">
-                Digite <code className="px-1 bg-muted rounded">{REQUIRED_CONFIRMATION}</code> para liberar a ação
+                Digite <code className="px-1 bg-muted rounded">{requiredConfirmation}</code> para liberar a ação
               </Label>
               <Input
                 id="confirm" value={confirmText} autoComplete="off"
                 onChange={(e) => setConfirmText(e.target.value)}
-                placeholder={REQUIRED_CONFIRMATION}
+                placeholder={requiredConfirmation}
               />
             </div>
           </div>

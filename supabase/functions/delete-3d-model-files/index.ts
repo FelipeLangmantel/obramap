@@ -1,8 +1,9 @@
 // Edge Function: delete-3d-model-files
 // Exclusão real CONTROLADA de modelos 3D antigos/órfãos.
 // Validações no backend (RPC validate_3d_model_files_for_delete).
-// Nunca apaga modelo ativo, preservado, parte complementar, arquivo recente,
+// Nunca apaga modelo ativo, preservado, parte complementar,
 // arquivo de outra company/project, ou path fora do bucket 3d-models.
+// Arquivos recentes exigem allow_recent_delete=true + administrador da empresa.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 
 const corsHeaders = {
@@ -12,6 +13,7 @@ const corsHeaders = {
 };
 
 const REQUIRED_CONFIRMATION = "EXCLUIR MODELOS 3D";
+const REQUIRED_RECENT_CONFIRMATION = "EXCLUIR MODELOS 3D RECENTES";
 const BUCKET = "3d-models";
 
 function json(body: unknown, status = 200) {
@@ -54,18 +56,39 @@ Deno.serve(async (req) => {
     : [];
   const deleteReason = typeof body?.delete_reason === "string" ? body.delete_reason.slice(0, 500) : "";
   const confirmationText = typeof body?.confirmation_text === "string" ? body.confirmation_text : "";
+  const allowRecentDelete = body?.allow_recent_delete === true;
 
   if (!projectId) return json({ error: "project_id_required" }, 400);
   if (paths.length === 0) return json({ error: "no_paths_selected" }, 400);
   if (paths.length > 200) return json({ error: "too_many_paths_max_200" }, 400);
-  if (confirmationText !== REQUIRED_CONFIRMATION) {
-    return json({ error: "confirmation_mismatch", required: REQUIRED_CONFIRMATION }, 400);
+  const requiredConfirmation = allowRecentDelete ? REQUIRED_RECENT_CONFIRMATION : REQUIRED_CONFIRMATION;
+  if (confirmationText !== requiredConfirmation) {
+    return json({ error: "confirmation_mismatch", required: requiredConfirmation }, 400);
+  }
+
+  if (allowRecentDelete) {
+    const { data: projectRow, error: projectError } = await userClient
+      .from("projects")
+      .select("company_id")
+      .eq("id", projectId)
+      .maybeSingle();
+    if (projectError || !projectRow?.company_id) {
+      return json({ error: "project_not_found_or_no_company" }, 400);
+    }
+
+    const { data: isCompanyAdmin, error: adminError } = await userClient.rpc(
+      "is_company_admin",
+      { _user_id: userId, _company_id: projectRow.company_id },
+    );
+    if (adminError || isCompanyAdmin !== true) {
+      return json({ error: "Apenas administrador da empresa pode excluir arquivos recentes." }, 403);
+    }
   }
 
   // Validação final no backend via RPC (roda como o usuário; respeita company)
   const { data: validation, error: validationError } = await userClient.rpc(
     "validate_3d_model_files_for_delete",
-    { _project_id: projectId, _paths: paths },
+    { _project_id: projectId, _paths: paths, _allow_recent_delete: allowRecentDelete },
   );
   if (validationError) {
     return json({ error: "validation_failed", detail: validationError.message }, 400);
