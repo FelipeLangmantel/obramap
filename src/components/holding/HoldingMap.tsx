@@ -116,6 +116,7 @@ const HoldingMap = forwardRef<HoldingMapHandle, HoldingMapProps>(({ obras, onObr
   const mapRef = useRef<L.Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const zoomControlRef = useRef<L.Control.Zoom | null>(null);
   const [mapInteractionEnabled, setMapInteractionEnabled] = useState(false);
 
   const disableMapInteraction = useCallback(() => {
@@ -178,11 +179,14 @@ const HoldingMap = forwardRef<HoldingMapHandle, HoldingMapProps>(({ obras, onObr
       else handler.disable();
     });
 
-    const hasZoomControl = Boolean((map.zoomControl as any)?._map);
+    const hasZoomControl = Boolean(zoomControlRef.current);
     if (mapInteractionEnabled && !hasZoomControl) {
-      map.zoomControl.addTo(map);
+      const zc = L.control.zoom();
+      zc.addTo(map);
+      zoomControlRef.current = zc;
     } else if (!mapInteractionEnabled && hasZoomControl) {
-      map.zoomControl.remove();
+      zoomControlRef.current!.remove();
+      zoomControlRef.current = null;
     }
   }, [mapInteractionEnabled]);
 
