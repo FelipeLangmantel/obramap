@@ -636,6 +636,10 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       .insert({
         name: projectData.name,
         location: projectData.location,
+        municipio: projectData.municipio || null,
+        estado: projectData.estado || null,
+        lat: projectData.lat ?? null,
+        lng: projectData.lng ?? null,
         contractor: projectData.contractor,
         start_date: projectData.startDate,
         expected_end_date: projectData.expectedEndDate,
@@ -703,6 +707,10 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     const newProject: Project = {
       ...projectData,
       id: newProjectData.id,
+      municipio: (newProjectData as any).municipio ?? projectData.municipio ?? null,
+      estado: (newProjectData as any).estado ?? projectData.estado ?? null,
+      lat: (newProjectData as any).lat ?? projectData.lat ?? null,
+      lng: (newProjectData as any).lng ?? projectData.lng ?? null,
       houses,
       quadras: [],
       macrosTemplate,

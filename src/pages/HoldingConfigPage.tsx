@@ -38,10 +38,124 @@ interface DocTipo {
   obrigatorio: boolean; ordem: number; ativo: boolean;
 }
 
+type GeocodeCandidate = {
+  key: string;
+  projectId: string | null;
+  portfolioId: string | null;
+  nome: string;
+  municipio: string | null;
+  estado: string | null;
+  source: "projects" | "obras_portfolio";
+};
+
+type GeocodeBlockedItem = {
+  id: string;
+  nome: string;
+  source: "projects" | "obras_portfolio";
+  reason: string;
+};
+
+const normalizeText = (value?: string | null) => value?.trim() || null;
+
+const parseLocationParts = (location?: string | null) => {
+  const normalized = normalizeText(location);
+  if (!normalized) return { municipio: null, estado: null };
+
+  const [cityPart, statePart] = normalized.split(/\s+-\s+|\s+\/\s+/);
+  const estado = normalizeText(statePart)?.toUpperCase() || null;
+
+  return {
+    municipio: normalizeText(cityPart),
+    estado: estado && estado.length <= 2 ? estado : null,
+  };
+};
+
 function GeocodeBackfillPanel({ companyId }: { companyId: string }) {
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0, errors: 0 });
   const [result, setResult] = useState<string | null>(null);
+  const [blockedItems, setBlockedItems] = useState<GeocodeBlockedItem[]>([]);
+
+  const loadCandidates = async () => {
+    const [portfolioRes, projectsRes] = await Promise.all([
+      supabase
+        .from("obras_portfolio")
+        .select("id, nome, municipio, estado, latitude, longitude, obramap_project_id")
+        .eq("company_id", companyId)
+        .or("latitude.is.null,longitude.is.null"),
+      supabase
+        .from("projects")
+        .select("id, name, location, municipio, estado, lat, lng")
+        .eq("company_id", companyId)
+        .or("lat.is.null,lng.is.null"),
+    ]);
+
+    if (portfolioRes.error) throw portfolioRes.error;
+    if (projectsRes.error) throw projectsRes.error;
+
+    const portfolioByProjectId = new Map<string, any>();
+    ((portfolioRes.data || []) as any[]).forEach((obra) => {
+      if (obra.obramap_project_id) portfolioByProjectId.set(obra.obramap_project_id, obra);
+    });
+
+    const candidates: GeocodeCandidate[] = [];
+    const blocked: GeocodeBlockedItem[] = [];
+    const seenProjectIds = new Set<string>();
+
+    ((projectsRes.data || []) as any[]).forEach((project) => {
+      seenProjectIds.add(project.id);
+      const linkedPortfolio = portfolioByProjectId.get(project.id);
+      const parsed = parseLocationParts(project.location);
+      const municipio = normalizeText(project.municipio) || normalizeText(linkedPortfolio?.municipio) || parsed.municipio;
+      const estado = normalizeText(project.estado) || normalizeText(linkedPortfolio?.estado) || parsed.estado || "RS";
+
+      if (municipio) {
+        candidates.push({
+          key: `project:${project.id}`,
+          projectId: project.id,
+          portfolioId: linkedPortfolio?.id || null,
+          nome: project.name,
+          municipio,
+          estado,
+          source: "projects",
+        });
+      } else {
+        blocked.push({
+          id: project.id,
+          nome: project.name,
+          source: "projects",
+          reason: "Sem municipio/endereco suficiente para geocodificar.",
+        });
+      }
+    });
+
+    ((portfolioRes.data || []) as any[]).forEach((obra) => {
+      if (obra.obramap_project_id && seenProjectIds.has(obra.obramap_project_id)) return;
+      const municipio = normalizeText(obra.municipio);
+      const estado = normalizeText(obra.estado) || "RS";
+
+      if (municipio) {
+        candidates.push({
+          key: `portfolio:${obra.id}`,
+          projectId: obra.obramap_project_id || null,
+          portfolioId: obra.id,
+          nome: obra.nome,
+          municipio,
+          estado,
+          source: "obras_portfolio",
+        });
+      } else {
+        blocked.push({
+          id: obra.id,
+          nome: obra.nome,
+          source: "obras_portfolio",
+          reason: "Sem municipio/endereco suficiente para geocodificar.",
+        });
+      }
+    });
+
+    return { candidates, blocked };
+  };
 
   const handleBackfill = async () => {
     if (!companyId) return;
@@ -100,6 +214,97 @@ function GeocodeBackfillPanel({ companyId }: { companyId: string }) {
     if (successCount > 0) toast.success(`${successCount} obra(s) geocodificada(s) com sucesso!`);
   };
 
+  const handleBackfillProjectsAndPortfolio = async () => {
+    if (!companyId) return;
+    setRunning(true);
+    setResult(null);
+    setBlockedItems([]);
+    setProgress({ done: 0, total: 0, errors: 0 });
+
+    let pending: GeocodeCandidate[] = [];
+    let blocked: GeocodeBlockedItem[] = [];
+    try {
+      const loaded = await loadCandidates();
+      pending = loaded.candidates;
+      blocked = loaded.blocked;
+      setBlockedItems(blocked);
+    } catch (error) {
+      console.error("Erro ao buscar obras para geocodificacao:", error);
+      toast.error("Erro ao buscar obras.");
+      setRunning(false);
+      return;
+    }
+
+    if (pending.length === 0) {
+      setResult(
+        blocked.length > 0
+          ? `${blocked.length} obra(s) sem coordenadas nao possuem municipio/endereco suficiente para geocodificar.`
+          : "Todas as obras ja possuem coordenadas."
+      );
+      setRunning(false);
+      return;
+    }
+
+    setProgress({ done: 0, total: pending.length, errors: 0 });
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (let i = 0; i < pending.length; i++) {
+      const obra = pending[i];
+      try {
+        const coords = await geocodeMunicipio(obra.municipio!, obra.estado || "RS");
+        if (coords) {
+          const updates: PromiseLike<any>[] = [];
+
+          if (obra.projectId) {
+            updates.push(
+              supabase
+                .from("projects")
+                .update({
+                  lat: coords.lat,
+                  lng: coords.lng,
+                  municipio: obra.municipio,
+                  estado: obra.estado || "RS",
+                } as any)
+                .eq("id", obra.projectId)
+            );
+          }
+
+          if (obra.portfolioId) {
+            updates.push(
+              supabase
+                .from("obras_portfolio")
+                .update({
+                  latitude: coords.lat,
+                  longitude: coords.lng,
+                  municipio: obra.municipio,
+                  estado: obra.estado || "RS",
+                } as any)
+                .eq("id", obra.portfolioId)
+            );
+          }
+
+          const results = await Promise.all(updates);
+          const updateError = results.find((res: any) => res?.error)?.error;
+          if (updateError) throw updateError;
+          successCount++;
+        } else {
+          errorCount++;
+        }
+      } catch {
+        errorCount++;
+      }
+      setProgress({ done: i + 1, total: pending.length, errors: errorCount });
+      if (i < pending.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 1100));
+      }
+    }
+
+    setResult(`Concluido: ${successCount} geocodificada(s), ${errorCount} sem resultado.${blocked.length > 0 ? ` ${blocked.length} pendente(s) sem municipio/endereco.` : ""}`);
+    setRunning(false);
+    if (successCount > 0) toast.success(`${successCount} obra(s) geocodificada(s) com sucesso!`);
+  };
+
   return (
     <div className="border rounded-lg p-4 space-y-4">
       <h3 className="font-semibold text-sm flex items-center gap-2">
@@ -125,7 +330,23 @@ function GeocodeBackfillPanel({ companyId }: { companyId: string }) {
         <p className="text-xs font-medium text-foreground bg-muted/50 rounded p-2">{result}</p>
       )}
 
-      <Button size="sm" onClick={handleBackfill} disabled={running || !companyId}>
+      {blockedItems.length > 0 && (
+        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3">
+          <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">
+            Obras sem municipio/endereco para geocodificar
+          </p>
+          <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+            {blockedItems.slice(0, 8).map((item) => (
+              <li key={`${item.source}:${item.id}`}>
+                {item.nome} <span className="text-muted-foreground/70">({item.source === "projects" ? "projects" : "portfolio"})</span>
+              </li>
+            ))}
+            {blockedItems.length > 8 && <li>+{blockedItems.length - 8} outra(s)</li>}
+          </ul>
+        </div>
+      )}
+
+      <Button size="sm" onClick={handleBackfillProjectsAndPortfolio} disabled={running || !companyId}>
         {running ? (
           <><Loader2 className="h-4 w-4 animate-spin mr-1" /> Processando...</>
         ) : (

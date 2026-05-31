@@ -21,6 +21,8 @@ interface UnlinkedObra {
   data_inicio: string | null;
   prazo_dias: number | null;
   tipo_contrato: string | null;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 interface ObraFormDialogProps {
@@ -117,7 +119,7 @@ export function ObraFormDialog({ open, onOpenChange, onSaved }: ObraFormDialogPr
       // Obras do Painel ainda não vinculadas — base do modo "linkar existente"
       supabase
         .from("obras_portfolio")
-        .select("id, nome, empresa, municipio, estado, uh, data_inicio, prazo_dias, tipo_contrato")
+        .select("id, nome, empresa, municipio, estado, latitude, longitude, uh, data_inicio, prazo_dias, tipo_contrato")
         .eq("company_id", company.id)
         .is("obramap_project_id", null)
         .order("nome")
@@ -180,6 +182,10 @@ export function ObraFormDialog({ open, onOpenChange, onSaved }: ObraFormDialogPr
       const projectId = await addProject({
         name: selectedObra.nome,
         location: `${selectedObra.municipio || ""} - ${selectedObra.estado || ""}`.trim(),
+        municipio: selectedObra.municipio,
+        estado: selectedObra.estado,
+        lat: selectedObra.latitude,
+        lng: selectedObra.longitude,
         contractor: selectedObra.empresa || "",
         startDate: selectedObra.data_inicio || new Date().toISOString().split("T")[0],
         expectedEndDate: expectedEnd,
@@ -269,6 +275,8 @@ export function ObraFormDialog({ open, onOpenChange, onSaved }: ObraFormDialogPr
         projectId = await addProject({
           name: form.nome.trim(),
           location: `${form.municipio} - ${form.estado}`,
+          municipio: form.municipio,
+          estado: form.estado,
           contractor: form.empresa,
           startDate: form.data_inicio,
           expectedEndDate: expectedEnd,

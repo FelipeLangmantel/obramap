@@ -3,6 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { calculateHouseProgress, House, Macro } from "@/data/constructionData";
 import { getProjectSnapshot, saveProjectSnapshot } from "@/offline/projectCache";
 import { Badge } from "@/components/ui/badge";
@@ -553,6 +554,28 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
       });
   }, [accessibleProjects, linkedPortfolioByProjectId, projectSummaries]);
 
+  const projectsWithoutCoordinates = useMemo(() => {
+    return accessibleProjects
+      .map((project) => {
+        const linkedPortfolio = linkedPortfolioByProjectId.get(project.id);
+        const latitude = project.lat ?? linkedPortfolio?.latitude;
+        const longitude = project.lng ?? linkedPortfolio?.longitude;
+        const location = [
+          project.municipio || linkedPortfolio?.municipio || project.location,
+          project.estado || linkedPortfolio?.estado,
+        ].filter(Boolean).join(" / ");
+
+        return {
+          id: project.id,
+          name: project.name,
+          location,
+          hasLocationHint: Boolean(project.municipio || linkedPortfolio?.municipio || project.location),
+          hasCoordinates: latitude != null && longitude != null,
+        };
+      })
+      .filter((project) => !project.hasCoordinates);
+  }, [accessibleProjects, linkedPortfolioByProjectId]);
+
   // Fetch aggregate financial data
   useEffect(() => {
     const fetchFinancialData = async () => {
@@ -823,6 +846,16 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
               <p className="text-xs text-muted-foreground mt-1">
                 Visualização geográfica dos empreendimentos em andamento
               </p>
+              {projectsWithoutCoordinates.length > 0 && (
+                <>
+                  <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                    Existem {projectsWithoutCoordinates.length} obra(s) sem coordenadas.
+                  </p>
+                  <Button size="sm" asChild>
+                    <a href="/holding-config">Ir para Geocodificacao</a>
+                  </Button>
+                </>
+              )}
             </div>
             {mapObras.length > 0 && (
               <Badge variant="secondary" className="text-xs">
@@ -833,7 +866,7 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
         </CardHeader>
         <CardContent>
           {mapObras.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 gap-2 text-center">
+            <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
               <MapPin className="h-8 w-8 text-muted-foreground/40" />
               <p className="text-sm text-muted-foreground">
                 Nenhuma obra ativa com coordenadas cadastradas.
