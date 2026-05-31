@@ -116,6 +116,7 @@ const HoldingMap = forwardRef<HoldingMapHandle, HoldingMapProps>(({ obras, onObr
   const mapRef = useRef<L.Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const zoomControlRef = useRef<L.Control.Zoom | null>(null);
   const [mapInteractionEnabled, setMapInteractionEnabled] = useState(false);
 
   const disableMapInteraction = useCallback(() => {
