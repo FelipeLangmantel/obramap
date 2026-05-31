@@ -124,17 +124,48 @@ function getSupplementalPartLayerKey(partId: string, localLayerKey: string): str
   return `glbpart:${partId}:${localLayerKey}`;
 }
 
-function ModelLoadingFallback() {
+function ModelLoadingFallback({ modelUrl }: { modelUrl: string }) {
   const { progress } = useProgress();
-  const roundedProgress = Number.isFinite(progress) ? Math.round(progress) : null;
-  const showProgress = roundedProgress !== null && roundedProgress > 0 && roundedProgress < 100;
+  const maxProgressRef = useRef(0);
+  const lastModelUrlRef = useRef(modelUrl);
+
+  if (lastModelUrlRef.current !== modelUrl) {
+    lastModelUrlRef.current = modelUrl;
+    maxProgressRef.current = 0;
+  }
+
+  const rawProgress = Number.isFinite(progress) ? Math.round(progress) : 0;
+  if (rawProgress > maxProgressRef.current) {
+    maxProgressRef.current = Math.min(rawProgress, 100);
+  }
+
+  const stableProgress = maxProgressRef.current;
+  const showProgress = stableProgress > 0;
+  const isPreparingScene = stableProgress >= 95;
+  const title = showProgress
+    ? isPreparingScene
+      ? "Preparando cena 3D..."
+      : `Carregando modelo 3D... ${stableProgress}%`
+    : "Carregando modelo 3D...";
 
   return (
     <Html center>
-      <div className="rounded-lg border border-border bg-background/95 px-4 py-3 text-center shadow-lg">
+      <div className="w-[280px] rounded-lg border border-border bg-background/95 px-4 py-3 text-center shadow-lg">
         <div className="text-sm font-medium text-foreground">
-          {showProgress ? `Carregando modelo 3D... ${roundedProgress}%` : "Carregando modelo 3D..."}
+          {title}
         </div>
+        {showProgress ? (
+          <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-primary transition-[width] duration-300 ease-out"
+              style={{ width: `${stableProgress}%` }}
+            />
+          </div>
+        ) : (
+          <div className="mt-3 flex justify-center">
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          </div>
+        )}
         <div className="mt-1 text-xs text-muted-foreground">
           Modelos grandes podem levar alguns segundos.
         </div>
@@ -1020,7 +1051,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
       />
 
       {modelData && (
-        <Suspense fallback={<ModelLoadingFallback />}>
+        <Suspense fallback={<ModelLoadingFallback modelUrl={modelData.url} />}>
           {modelData.type === "gltf" ? (
             <GLTFModel url={modelData.url} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} onMeshDoubleClick={onMeshDoubleClick} onMeshHover={onMeshHover} onMeshHoverEnd={onMeshHoverEnd} selectedMeshKey={selectedMeshKey} selectedMeshKeys={selectedMeshKeys} />
           ) : modelData.type === "ifc" ? (
