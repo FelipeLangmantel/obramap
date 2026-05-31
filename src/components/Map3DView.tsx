@@ -1,7 +1,7 @@
 import { useState, useRef, Suspense, useCallback, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, PointerLockControls, useGLTF, Html, PerspectiveCamera } from "@react-three/drei";
+import { OrbitControls, PointerLockControls, useGLTF, Html, PerspectiveCamera, useProgress } from "@react-three/drei";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { MTLLoader } from "three/examples/jsm/loaders/MTLLoader.js";
 import { useLoader } from "@react-three/fiber";
@@ -122,6 +122,25 @@ function getLocalGlbLayerKey(meshName: string, occurrence: number): string {
 
 function getSupplementalPartLayerKey(partId: string, localLayerKey: string): string {
   return `glbpart:${partId}:${localLayerKey}`;
+}
+
+function ModelLoadingFallback() {
+  const { progress } = useProgress();
+  const roundedProgress = Number.isFinite(progress) ? Math.round(progress) : null;
+  const showProgress = roundedProgress !== null && roundedProgress > 0 && roundedProgress < 100;
+
+  return (
+    <Html center>
+      <div className="rounded-lg border border-border bg-background/95 px-4 py-3 text-center shadow-lg">
+        <div className="text-sm font-medium text-foreground">
+          {showProgress ? `Carregando modelo 3D... ${roundedProgress}%` : "Carregando modelo 3D..."}
+        </div>
+        <div className="mt-1 text-xs text-muted-foreground">
+          Modelos grandes podem levar alguns segundos.
+        </div>
+      </div>
+    </Html>
+  );
 }
 
 function getGlbPartIdFromLayerKey(layerKey: string): string | null {
@@ -1001,7 +1020,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
       />
 
       {modelData && (
-        <Suspense fallback={<Html center><div className="bg-background/90 px-4 py-2 rounded-lg border border-border">Carregando modelo...</div></Html>}>
+        <Suspense fallback={<ModelLoadingFallback />}>
           {modelData.type === "gltf" ? (
             <GLTFModel url={modelData.url} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} onMeshDoubleClick={onMeshDoubleClick} onMeshHover={onMeshHover} onMeshHoverEnd={onMeshHoverEnd} selectedMeshKey={selectedMeshKey} selectedMeshKeys={selectedMeshKeys} />
           ) : modelData.type === "ifc" ? (

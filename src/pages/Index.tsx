@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { Suspense, lazy, useState, useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -15,7 +15,6 @@ import { WeeklyProductionView } from "@/components/WeeklyProductionView";
 import { PlanningView } from "@/components/PlanningView";
 import { ProjectCostsView } from "@/components/ProjectCostsView";
 import { InteractiveMapView } from "@/components/InteractiveMapView";
-import { Map3DView } from "@/components/Map3DView";
 import { SuppliesJITView } from "@/components/supplies";
 import { InputsManagementView } from "@/components/InputsManagementView";
 import { SuppliersManagementView } from "@/components/SuppliersManagementView";
@@ -40,6 +39,26 @@ import { Loader2, Menu, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OfflineStatusBadge } from "@/components/offline/OfflineStatusBadge";
 import { CurrentProjectHeaderBadge } from "@/components/CurrentProjectHeaderBadge";
+
+const LazyMap3DView = lazy(() =>
+  import("@/components/Map3DView").then((module) => ({ default: module.Map3DView }))
+);
+
+function Map3DLoadingFallback() {
+  return (
+    <div className="flex min-h-[calc(100vh-160px)] items-center justify-center rounded-lg border border-border bg-card/60 p-6">
+      <div className="flex max-w-md flex-col items-center gap-4 text-center">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <div className="space-y-1">
+          <p className="text-base font-semibold text-foreground">Carregando Mapa 3D...</p>
+          <p className="text-sm text-muted-foreground">
+            Modelos grandes podem levar alguns segundos.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // Sidebar trigger button - visible on all screen sizes
 function SidebarTriggerButton() {
@@ -421,7 +440,9 @@ function Index() {
 
                 {activeView === "3d-map" && (
                   <div className="flex-1">
-                    <Map3DView />
+                    <Suspense fallback={<Map3DLoadingFallback />}>
+                      <LazyMap3DView />
+                    </Suspense>
                   </div>
                 )}
 
