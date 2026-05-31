@@ -237,7 +237,7 @@ const GLB_CONTEXT_PRESETS = [
 
 type GlbContextPresetKey = typeof GLB_CONTEXT_PRESETS[number]["key"];
 
-type SmartLinkIsolationFilter = "all" | "applicable" | "selected" | "missing_house" | "medium" | "linked";
+type SmartLinkIsolationFilter = "all" | "applicable" | "selected" | "missing_house" | "medium" | "linked" | "context";
 
 type GlbContextPreview = {
   presetKey: GlbContextPresetKey | "clear";
@@ -2993,7 +2993,24 @@ export function Map3DView() {
     clearSmartLinkPreviewHighlight("reapply");
     if (!sceneObj || !smartLinkPreviewEnabled || !smartLinkBaseKey) return;
 
-    const candidateKeys = new Set(smartLinkCandidates.map((candidate) => candidate.layerKey));
+    const candidateKeys = new Set(
+      smartLinkCandidates
+        .filter((candidate) => {
+          if (smartLinkPreviewMode === "isolate") {
+            return smartLinkIsolationFilter === "all"
+              || (smartLinkIsolationFilter === "applicable" && candidate.status === "applicable")
+              || (smartLinkIsolationFilter === "selected" && smartLinkSelectedKeys.has(candidate.layerKey))
+              || (smartLinkIsolationFilter === "missing_house" && candidate.status === "missing_house")
+              || (smartLinkIsolationFilter === "medium" && candidate.suggestionConfidence === "media")
+              || (smartLinkIsolationFilter === "linked" && candidate.status === "linked")
+              || (smartLinkIsolationFilter === "context" && candidate.status === "context");
+          }
+          return candidate.status === "applicable"
+            || smartLinkSelectedKeys.has(candidate.layerKey)
+            || candidate.layerKey === smartLinkFocusedCandidateKey;
+        })
+        .map((candidate) => candidate.layerKey),
+    );
     const selectedKeys = smartLinkSelectedKeys;
     const targetKeys = new Set([smartLinkBaseKey, ...candidateKeys]);
     const previewed: Array<{ mesh: THREE.Mesh; originalMaterial: THREE.Material | THREE.Material[] }> = [];
@@ -3070,7 +3087,9 @@ export function Map3DView() {
     smartLinkCandidates,
     smartLinkFocusedCandidateKey,
     smartLinkPreviewEnabled,
+    smartLinkIsolationFilter,
     smartLinkSelectedKeys,
+    smartLinkPreviewMode,
     supplementalGlbParts,
   ]);
 
@@ -3330,7 +3349,8 @@ export function Map3DView() {
         || (filter === "selected" && smartLinkSelectedKeys.has(candidate.layerKey))
         || (filter === "missing_house" && candidate.status === "missing_house")
         || (filter === "medium" && candidate.suggestionConfidence === "media")
-        || (filter === "linked" && candidate.status === "linked");
+        || (filter === "linked" && candidate.status === "linked")
+        || (filter === "context" && candidate.status === "context");
       if (include) keys.add(candidate.layerKey);
     });
     return keys;
@@ -3381,11 +3401,11 @@ export function Map3DView() {
     clearSmartLinkCandidateHover();
     clearMeshSelection("smartlink show candidates");
     setIsolatedKeys(null);
-    setSmartLinkIsolationFilter("all");
+    setSmartLinkIsolationFilter("applicable");
     setSmartLinkPreviewMode("show");
     setSmartLinkPreviewBarOpen(true);
     setSmartLinkOpen(false);
-    toast.info("Candidatas destacadas no mapa.");
+    toast.info("Aplicaveis principais destacadas no mapa.");
   }, [clearMeshSelection, clearSmartLinkCandidateHover]);
 
   const isolateSmartLinkCandidates = useCallback(() => {
@@ -3569,6 +3589,20 @@ export function Map3DView() {
     const selectedRawCandidates = smartLinkCandidates.filter((candidate) =>
       smartLinkSelectedKeys.has(candidate.layerKey)
     );
+    const nonApplicableSelected = selectedRawCandidates.filter((candidate) => candidate.status !== "applicable");
+    if (nonApplicableSelected.length > 0) {
+      toast.error(`Remova da selecao ${nonApplicableSelected.length} candidata(s) de contexto, duplicada(s) ou sem casa.`);
+      console.log("[SmartLink Selection Override]", {
+        action: "apply-blocked-non-applicable",
+        candidates: nonApplicableSelected.slice(0, 10).map((candidate) => ({
+          layerKey: candidate.layerKey,
+          status: candidate.status,
+          suggestedHouseNumber: candidate.suggestedHouseNumber,
+          reason: candidate.houseSuggestionRejectReason || candidate.suggestionReason,
+        })),
+      });
+      return;
+    }
     const candidatesWithoutHouse = selectedRawCandidates.filter((candidate) =>
       candidate.suggestedHouseNumber == null || !validHouseNumbers.has(candidate.suggestedHouseNumber)
     );
@@ -3604,7 +3638,8 @@ export function Map3DView() {
       return;
     }
     const selectedCandidates = selectedRawCandidates.filter((candidate) =>
-      candidate.suggestedHouseNumber != null
+      candidate.status === "applicable"
+      && candidate.suggestedHouseNumber != null
       && validHouseNumbers.has(candidate.suggestedHouseNumber)
     );
     if (selectedCandidates.length === 0) {
@@ -6189,6 +6224,7 @@ export function Map3DView() {
               ["missing_house", "Sem casa"],
               ["medium", "Confianca media"],
               ["linked", "Ja vinculadas"],
+              ["context", "Contexto"],
             ] as Array<[SmartLinkIsolationFilter, string]>).map(([filter, label]) => (
               <Button
                 key={filter}

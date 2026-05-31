@@ -664,6 +664,12 @@ export function scoreGlbSimilarCandidates(
       ? baseInferredHouse.houseNumber
       : null
   );
+  const houseConfidenceRank: Record<GlbSmartLinkCandidate["suggestionConfidence"], number> = {
+    alta: 3,
+    media: 2,
+    baixa: 1,
+    nenhuma: 0,
+  };
 
   const scored = meshes
     .map<GlbSmartLinkCandidate>((mesh) => {
@@ -830,12 +836,20 @@ export function scoreGlbSimilarCandidates(
   const bestApplicableByHouse = new Map<number, GlbSmartLinkCandidate>();
   scored.forEach((candidate) => {
     if (candidate.status !== "applicable" || candidate.suggestedHouseNumber == null) return;
+    if (baseHouseForGrouping != null && candidate.suggestedHouseNumber === baseHouseForGrouping) return;
     const current = bestApplicableByHouse.get(candidate.suggestedHouseNumber);
+    const candidateConfidence = houseConfidenceRank[candidate.suggestionConfidence];
+    const currentConfidence = current ? houseConfidenceRank[current.suggestionConfidence] : -1;
     if (
       !current
       || candidate.score > current.score
       || (
         candidate.score === current.score
+        && candidateConfidence > currentConfidence
+      )
+      || (
+        candidate.score === current.score
+        && candidateConfidence === currentConfidence
         && (candidate.suggestionDistance ?? Number.POSITIVE_INFINITY) < (current.suggestionDistance ?? Number.POSITIVE_INFINITY)
       )
     ) {
@@ -845,12 +859,22 @@ export function scoreGlbSimilarCandidates(
 
   const result = scored.map((candidate) => {
     if (candidate.status !== "applicable" || candidate.suggestedHouseNumber == null) return candidate;
+    if (baseHouseForGrouping != null && candidate.suggestedHouseNumber === baseHouseForGrouping) {
+      return {
+        ...candidate,
+        status: "context",
+        suggestionReason: "mesma casa da mesh base; revisar manualmente",
+        suggestionConfidence: "baixa",
+        houseSuggestionRejectReason: "mesma casa da mesh base",
+        selectedByDefault: false,
+      };
+    }
     const best = bestApplicableByHouse.get(candidate.suggestedHouseNumber);
     if (best && best.layerKey !== candidate.layerKey) {
       return {
         ...candidate,
-        status: "missing_house",
-        suggestionReason: "casa duplicada em outra candidata melhor",
+        status: "context",
+        suggestionReason: "candidata secundaria da mesma casa",
         suggestionConfidence: "baixa",
         houseSuggestionRejectReason: "duplicada para o mesmo servico",
         selectedByDefault: false,

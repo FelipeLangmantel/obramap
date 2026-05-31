@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,6 +37,17 @@ const statusLabel: Record<GlbSmartLinkCandidate["status"], string> = {
   self: "mesh base",
 };
 
+type CandidateListFilter = "applicable" | "all" | "context" | "missing_house" | "medium" | "linked";
+
+const filterLabels: Record<CandidateListFilter, string> = {
+  applicable: "Aplicaveis",
+  all: "Todas",
+  context: "Contexto/revisao",
+  missing_house: "Sem casa",
+  medium: "Confianca media",
+  linked: "Ja vinculadas",
+};
+
 export function GlbSmartLinkDialog({
   open,
   base,
@@ -51,6 +62,7 @@ export function GlbSmartLinkDialog({
   onClearPreview,
   onApply,
 }: Props) {
+  const [listFilter, setListFilter] = useState<CandidateListFilter>("applicable");
   const counts = useMemo(() => {
     return candidates.reduce(
       (acc, item) => {
@@ -68,6 +80,17 @@ export function GlbSmartLinkDialog({
     );
   }, [candidates]);
   const isPartScoped = base?.layerKey.startsWith("glbpart:") ?? false;
+  const visibleCandidates = useMemo(() => (
+    candidates.filter((item) => {
+      if (listFilter === "all") return true;
+      if (listFilter === "applicable") return item.status === "applicable";
+      if (listFilter === "context") return item.status === "context" || item.status === "ignored";
+      if (listFilter === "missing_house") return item.status === "missing_house";
+      if (listFilter === "medium") return item.suggestionConfidence === "media";
+      if (listFilter === "linked") return item.status === "linked";
+      return true;
+    })
+  ), [candidates, listFilter]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -109,9 +132,14 @@ export function GlbSmartLinkDialog({
             <div className="rounded-md border p-2"><p className="text-muted-foreground">Ign./contexto</p><p className="text-base font-semibold">{counts.ignored + counts.context}</p></div>
           </div>
 
+          <div className="rounded-md border border-primary/20 bg-primary/5 p-2 text-xs text-muted-foreground">
+            <span className="font-semibold text-foreground">Aplicaveis: melhor candidata por casa.</span>{" "}
+            Outras pecas parecidas ficam em contexto/revisao manual e nao sao aplicadas automaticamente.
+          </div>
+
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" size="sm" onClick={onShowCandidates}>
-              Mostrar candidatas no mapa
+              Mostrar aplicaveis no mapa
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={onIsolateCandidates}>
               Isolar todas
@@ -121,19 +149,37 @@ export function GlbSmartLinkDialog({
             </Button>
           </div>
 
+          <div className="flex flex-wrap gap-2">
+            {(Object.keys(filterLabels) as CandidateListFilter[]).map((filter) => (
+              <Button
+                key={filter}
+                type="button"
+                variant={listFilter === filter ? "default" : "outline"}
+                size="sm"
+                onClick={() => setListFilter(filter)}
+              >
+                {filterLabels[filter]}
+              </Button>
+            ))}
+          </div>
+
           <ScrollArea className="h-[420px] rounded-md border">
             <div className="divide-y">
               {candidates.length === 0 ? (
                 <p className="p-4 text-sm text-muted-foreground">
                   {isPartScoped ? "Nenhuma candidata compativel encontrada nesta parte GLB." : "Nenhuma similar encontrada."}
                 </p>
-              ) : candidates.map((item) => {
+              ) : visibleCandidates.length === 0 ? (
+                <p className="p-4 text-sm text-muted-foreground">
+                  Nenhuma candidata neste filtro.
+                </p>
+              ) : visibleCandidates.map((item) => {
                 const canApplyAutomatically = item.status === "applicable";
                 return (
                   <div key={item.layerKey} className="grid grid-cols-[32px_1fr_92px_112px_96px] gap-3 p-3 text-xs">
                     <Checkbox
                       checked={selectedKeys.has(item.layerKey)}
-                      disabled={applying}
+                      disabled={applying || !canApplyAutomatically}
                       onCheckedChange={(checked) => onToggle(item.layerKey, checked === true)}
                       aria-label={`Selecionar ${item.layerKey}`}
                     />
@@ -180,7 +226,7 @@ export function GlbSmartLinkDialog({
                       </Badge>
                       {!canApplyAutomatically && (
                         <p className="mt-1 text-[10px] text-muted-foreground">
-                          Pode marcar para revisar manualmente.
+                          Visivel para revisao manual, sem aplicacao automatica.
                         </p>
                       )}
                     </div>
