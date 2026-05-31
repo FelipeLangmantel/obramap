@@ -73,6 +73,8 @@ interface QuadraLayout {
 }
 
 interface MapLayout {
+  layoutId?: string | null;
+  updatedAt?: string | null;
   imageUrl: string | null;
   quadras: QuadraLayout[];
   houses: HousePosition[];
@@ -81,6 +83,51 @@ interface MapLayout {
 }
 
 const MAP_LAYOUT_STORAGE_KEY = "obramap_interactive_map_layout";
+const MAP_LAYOUT_CACHE_KEY = "obramap_interactive_map_layout_cache";
+
+interface CachedMapLayout extends MapLayout {
+  cachedAt: number;
+  naturalWidth?: number | null;
+  naturalHeight?: number | null;
+}
+
+const getMapLayoutCacheKey = (projectId: string) => `${MAP_LAYOUT_CACHE_KEY}_${projectId}`;
+
+const readCachedMapLayout = (projectId: string): CachedMapLayout | null => {
+  try {
+    const raw = sessionStorage.getItem(getMapLayoutCacheKey(projectId));
+    if (!raw) return null;
+    return JSON.parse(raw) as CachedMapLayout;
+  } catch {
+    return null;
+  }
+};
+
+const writeCachedMapLayout = (
+  projectId: string,
+  layout: MapLayout,
+  naturalSize?: { width: number; height: number } | null,
+) => {
+  try {
+    const cached: CachedMapLayout = {
+      ...layout,
+      cachedAt: Date.now(),
+      naturalWidth: naturalSize?.width ?? null,
+      naturalHeight: naturalSize?.height ?? null,
+    };
+    sessionStorage.setItem(getMapLayoutCacheKey(projectId), JSON.stringify(cached));
+  } catch {
+    // Ignore cache quota/privacy errors; the database remains the source of truth.
+  }
+};
+
+const clearCachedMapLayout = (projectId: string) => {
+  try {
+    sessionStorage.removeItem(getMapLayoutCacheKey(projectId));
+  } catch {
+    // Ignore cache errors.
+  }
+};
 
 // Helper component for house details dialog content
 function HouseDetailsDialogContent({ 
@@ -247,6 +294,17 @@ export function InteractiveMapView() {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const positionRef = useRef({ x: 0, y: 0 });
+  const scaleRef = useRef(1);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const touchPointersRef = useRef(new Map<number, { x: number; y: number }>());
+  const pinchStateRef = useRef<{
+    distance: number;
+    scale: number;
+    centerX: number;
+    centerY: number;
+    position: { x: number; y: number };
+  } | null>(null);
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -256,6 +314,8 @@ export function InteractiveMapView() {
   const [customLayout, setCustomLayout] = useState<MapLayout | null>(null);
   const [isLayoutLoaded, setIsLayoutLoaded] = useState(true);
   const [isMapImageLoading, setIsMapImageLoading] = useState(false);
+  const [isMapImageLoaded, setIsMapImageLoaded] = useState(false);
+  const [mapImageSize, setMapImageSize] = useState<{ width: number; height: number } | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
   const [photoHistoryOpen, setPhotoHistoryOpen] = useState(false);
@@ -298,6 +358,18 @@ export function InteractiveMapView() {
   const MAP_HEIGHT = 1200;
   const BASE_HOUSE_RADIUS = 14;
   const MIN_QUADRA_SIZE = 80;
+
+  useEffect(() => {
+    positionRef.current = position;
+  }, [position]);
+
+  useEffect(() => {
+    scaleRef.current = scale;
+  }, [scale]);
+
+  useEffect(() => {
+    dragStartRef.current = dragStart;
+  }, [dragStart]);
   
   // Dynamic house radius - mantém tamanho visual consistente ao fazer zoom
   const displayRadius = useMemo(() => {
@@ -307,50 +379,101 @@ export function InteractiveMapView() {
 
   // Load saved map layout from database for current project
   useEffect(() => {
-    // Don't block rendering - load layout in background
-    
     const loadLayout = async () => {
-      if (!currentProject?.id) {
+      const projectId = currentProject?.id;
+      setIsLayoutLoaded(false);
+
+      if (!projectId) {
         setMapImage(null);
         setCustomLayout(null);
+        setIsMapImageLoaded(true);
+        setIsMapImageLoading(false);
+        setMapImageSize(null);
         setIsLayoutLoaded(true);
         return;
       }
 
+      const cachedLayout = readCachedMapLayout(projectId);
+      if (cachedLayout) {
+        setCustomLayout(cachedLayout);
+        setMapImage(cachedLayout.imageUrl);
+        setMapImageSize(
+          cachedLayout.naturalWidth && cachedLayout.naturalHeight
+            ? { width: cachedLayout.naturalWidth, height: cachedLayout.naturalHeight }
+            : null,
+        );
+        setIsMapImageLoaded(Boolean(cachedLayout.imageUrl));
+        setIsMapImageLoading(false);
+        setIsLayoutLoaded(true);
+      } else {
+        setIsMapImageLoaded(false);
+        setIsMapImageLoading(false);
+        setMapImageSize(null);
+      }
+
       try {
-        const { data, error } = await supabase
+        const { data: meta, error: metaError } = await supabase
           .from('map_layouts')
-          .select('*')
-          .eq('project_id', currentProject.id)
+          .select('id, updated_at')
+          .eq('project_id', projectId)
           .maybeSingle();
+
+        if (metaError) {
+          console.error("Error loading map layout metadata:", metaError);
+          if (!cachedLayout) setIsLayoutLoaded(true);
+          return;
+        }
+
+        if (cachedLayout && meta?.id === cachedLayout.layoutId && meta?.updated_at === cachedLayout.updatedAt) {
+          setIsLayoutLoaded(true);
+          return;
+        }
+
+        if (meta && cachedLayout) {
+          setIsMapImageLoaded(false);
+          setIsMapImageLoading(false);
+          setMapImageSize(null);
+        }
+
+        const { data, error } = meta
+          ? await supabase
+              .from('map_layouts')
+              .select('*')
+              .eq('project_id', projectId)
+              .maybeSingle()
+          : { data: null, error: null };
 
         if (error) {
           console.error("Error loading map layout:", error);
-          setIsLayoutLoaded(true);
+          if (!cachedLayout) setIsLayoutLoaded(true);
           return;
         }
 
         if (data) {
           const layout: MapLayout = {
+            layoutId: data.id,
+            updatedAt: data.updated_at,
             imageUrl: data.image_url,
             quadras: data.quadras as unknown as QuadraLayout[],
             houses: data.houses as unknown as HousePosition[],
             mapWidth: data.map_width,
             mapHeight: data.map_height,
           };
-          setMapImage(layout.imageUrl);
           setCustomLayout(layout);
+          setMapImage(layout.imageUrl);
+          writeCachedMapLayout(projectId, layout);
         } else {
           // Fallback: try to migrate from localStorage
-          const savedLayout = localStorage.getItem(`${MAP_LAYOUT_STORAGE_KEY}_${currentProject.id}`);
+          clearCachedMapLayout(projectId);
+          const savedLayout = localStorage.getItem(`${MAP_LAYOUT_STORAGE_KEY}_${projectId}`);
           if (savedLayout) {
             try {
               const layout: MapLayout = JSON.parse(savedLayout);
-              setMapImage(layout.imageUrl);
               setCustomLayout(layout);
+              setMapImage(layout.imageUrl);
               // Migrate to database
               await supabase.from('map_layouts').upsert([{
-                project_id: currentProject.id,
+                project_id: projectId,
                 image_url: layout.imageUrl,
                 quadras: layout.quadras as unknown as Json,
                 houses: layout.houses as unknown as Json,
@@ -358,7 +481,7 @@ export function InteractiveMapView() {
                 map_height: layout.mapHeight,
               }], { onConflict: 'project_id' });
               // Remove from localStorage after successful migration
-              localStorage.removeItem(`${MAP_LAYOUT_STORAGE_KEY}_${currentProject.id}`);
+              localStorage.removeItem(`${MAP_LAYOUT_STORAGE_KEY}_${projectId}`);
             } catch (e) {
               console.error("Error migrating map layout:", e);
             }
@@ -450,16 +573,29 @@ export function InteractiveMapView() {
   useEffect(() => {
     if (!isLayoutLoaded || !mapImage) {
       setIsMapImageLoading(false);
+      setIsMapImageLoaded(!mapImage);
+      setMapImageSize(null);
       return;
     }
 
     let cancelled = false;
     const image = new Image();
     setIsMapImageLoading(true);
+    setIsMapImageLoaded(false);
+    setMapImageSize(null);
 
     const finish = () => {
       if (cancelled) return;
+      const naturalSize = {
+        width: image.naturalWidth || MAP_WIDTH,
+        height: image.naturalHeight || MAP_HEIGHT,
+      };
+      setMapImageSize(naturalSize);
+      setIsMapImageLoaded(true);
       setIsMapImageLoading(false);
+      if (currentProject?.id && customLayout?.imageUrl === mapImage) {
+        writeCachedMapLayout(currentProject.id, customLayout, naturalSize);
+      }
       fitAfterImageReady();
     };
 
@@ -470,18 +606,32 @@ export function InteractiveMapView() {
         finish();
       }
     };
-    image.onerror = finish;
+    image.onerror = () => {
+      if (cancelled) return;
+      setIsMapImageLoaded(true);
+      setIsMapImageLoading(false);
+      setMapImageSize(null);
+    };
     image.src = mapImage;
 
     return () => {
       cancelled = true;
     };
-  }, [fitAfterImageReady, isLayoutLoaded, mapImage, customLayout?.imageUrl]);
+  }, [fitAfterImageReady, isLayoutLoaded, mapImage, customLayout, currentProject?.id]);
 
   const handleMapImageLoad = useCallback((event: SyntheticEvent<HTMLImageElement>) => {
     const image = event.currentTarget;
     const finish = () => {
+      const naturalSize = {
+        width: image.naturalWidth || MAP_WIDTH,
+        height: image.naturalHeight || MAP_HEIGHT,
+      };
+      setMapImageSize(naturalSize);
+      setIsMapImageLoaded(true);
       setIsMapImageLoading(false);
+      if (currentProject?.id && customLayout?.imageUrl === mapImage) {
+        writeCachedMapLayout(currentProject.id, customLayout, naturalSize);
+      }
       fitAfterImageReady();
     };
 
@@ -491,7 +641,7 @@ export function InteractiveMapView() {
     }
 
     finish();
-  }, [fitAfterImageReady]);
+  }, [fitAfterImageReady, currentProject?.id, customLayout, mapImage]);
 
   // Generate default layout with absolute house positions
   const generateDefaultLayout = useCallback((quadras: any[], allHouses: any[]): { quadras: QuadraLayout[], houses: HousePosition[] } => {
@@ -932,6 +1082,7 @@ export function InteractiveMapView() {
         return;
       }
 
+      clearCachedMapLayout(currentProject.id);
       setCustomLayout(layout);
       setIsEditMode(false);
       toast.success("Layout salvo com sucesso!");
@@ -1218,6 +1369,7 @@ export function InteractiveMapView() {
     }
     if (!window.confirm("Excluir a imagem do mapa interativo? Esta ação não poderá ser desfeita.")) return;
     if (currentProject) {
+      clearCachedMapLayout(currentProject.id);
       setMapImage(null);
       setCustomLayout(null);
       setEditingQuadras([]);
@@ -1429,6 +1581,134 @@ export function InteractiveMapView() {
     return () => container.removeEventListener('wheel', handleWheelEvent);
   }, [scale]);
 
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const getDistance = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    };
+
+    const getCenter = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+      return {
+        x: (a.x + b.x) / 2,
+        y: (a.y + b.y) / 2,
+      };
+    };
+
+    const preventMapTouch = (event: PointerEvent) => {
+      if (event.pointerType !== "touch") return false;
+      event.preventDefault();
+      event.stopPropagation();
+      return true;
+    };
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!preventMapTouch(event)) return;
+      container.setPointerCapture?.(event.pointerId);
+      touchPointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+      if (touchPointersRef.current.size === 1) {
+        setIsDragging(true);
+        const nextDragStart = {
+          x: event.clientX - positionRef.current.x,
+          y: event.clientY - positionRef.current.y,
+        };
+        dragStartRef.current = nextDragStart;
+        setDragStart(nextDragStart);
+        pinchStateRef.current = null;
+      }
+
+      if (touchPointersRef.current.size >= 2) {
+        const [first, second] = Array.from(touchPointersRef.current.values());
+        const rect = container.getBoundingClientRect();
+        const center = getCenter(first, second);
+        pinchStateRef.current = {
+          distance: Math.max(1, getDistance(first, second)),
+          scale: scaleRef.current,
+          centerX: center.x - rect.left,
+          centerY: center.y - rect.top,
+          position: positionRef.current,
+        };
+      }
+    };
+
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!preventMapTouch(event)) return;
+      if (!touchPointersRef.current.has(event.pointerId)) return;
+
+      touchPointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+      if (touchPointersRef.current.size >= 2 && pinchStateRef.current) {
+        const [first, second] = Array.from(touchPointersRef.current.values());
+        const distance = Math.max(1, getDistance(first, second));
+        const nextScale = Math.max(0.15, Math.min(6, pinchStateRef.current.scale * (distance / pinchStateRef.current.distance)));
+        const scaleRatio = nextScale / pinchStateRef.current.scale;
+        const center = getCenter(first, second);
+        const rect = container.getBoundingClientRect();
+        const centerX = center.x - rect.left;
+        const centerY = center.y - rect.top;
+
+        const nextPosition = {
+          x: centerX - (pinchStateRef.current.centerX - pinchStateRef.current.position.x) * scaleRatio,
+          y: centerY - (pinchStateRef.current.centerY - pinchStateRef.current.position.y) * scaleRatio,
+        };
+
+        setScale(nextScale);
+        setPosition(nextPosition);
+        return;
+      }
+
+      if (touchPointersRef.current.size === 1) {
+        setPosition({
+          x: event.clientX - dragStartRef.current.x,
+          y: event.clientY - dragStartRef.current.y,
+        });
+      }
+    };
+
+    const handlePointerEnd = (event: PointerEvent) => {
+      if (event.pointerType !== "touch") return;
+      event.preventDefault();
+      event.stopPropagation();
+      touchPointersRef.current.delete(event.pointerId);
+      if (container.hasPointerCapture?.(event.pointerId)) {
+        container.releasePointerCapture(event.pointerId);
+      }
+
+      if (touchPointersRef.current.size === 1) {
+        const [remaining] = Array.from(touchPointersRef.current.values());
+        const nextDragStart = {
+          x: remaining.x - positionRef.current.x,
+          y: remaining.y - positionRef.current.y,
+        };
+        dragStartRef.current = nextDragStart;
+        setDragStart(nextDragStart);
+        pinchStateRef.current = null;
+        return;
+      }
+
+      if (touchPointersRef.current.size === 0) {
+        setIsDragging(false);
+        pinchStateRef.current = null;
+      }
+    };
+
+    container.addEventListener("pointerdown", handlePointerDown, { passive: false });
+    container.addEventListener("pointermove", handlePointerMove, { passive: false });
+    container.addEventListener("pointerup", handlePointerEnd, { passive: false });
+    container.addEventListener("pointercancel", handlePointerEnd, { passive: false });
+
+    return () => {
+      container.removeEventListener("pointerdown", handlePointerDown);
+      container.removeEventListener("pointermove", handlePointerMove);
+      container.removeEventListener("pointerup", handlePointerEnd);
+      container.removeEventListener("pointercancel", handlePointerEnd);
+      touchPointersRef.current.clear();
+      pinchStateRef.current = null;
+    };
+  }, []);
+
   const handleHouseClick = (houseId: number, e: React.MouseEvent) => {
     if (isEditMode) return;
     e.stopPropagation();
@@ -1532,6 +1812,9 @@ export function InteractiveMapView() {
   const svgDimensions = useMemo(() => {
     return { width: MAP_WIDTH, height: MAP_HEIGHT };
   }, []);
+
+  const isMapReady = isLayoutLoaded && (!mapImage || (isMapImageLoaded && Boolean(mapImageSize || mapImage)));
+  const showMapLoading = !isAnalyzing && (!isMapReady || isMapImageLoading);
 
   if (!currentProject) {
     return (
@@ -1751,7 +2034,8 @@ export function InteractiveMapView() {
       {/* Full-screen Map Container */}
       <div 
         ref={containerRef}
-        className={`flex-1 relative overflow-hidden ${isDragging ? 'cursor-grabbing' : isEditMode ? 'cursor-crosshair' : 'cursor-grab'} bg-muted/10`}
+        className={`interactive-map-viewport flex-1 relative overflow-hidden select-none overscroll-contain ${isDragging ? 'cursor-grabbing' : isEditMode ? 'cursor-crosshair' : 'cursor-grab'} bg-muted/10`}
+        style={{ touchAction: "none", WebkitUserSelect: "none" }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -1766,15 +2050,16 @@ export function InteractiveMapView() {
             </div>
           </div>
         )}
-        {isMapImageLoading && !isAnalyzing && (
+        {showMapLoading && (
           <div className="absolute inset-0 bg-background/70 flex items-center justify-center z-40">
             <div className="flex items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm shadow-sm">
               <Loader2 className="h-4 w-4 animate-spin text-primary" />
-              <span>Carregando planta de implantação...</span>
+              <span>Carregando mapa interativo...</span>
             </div>
           </div>
         )}
         
+        {isMapReady && (
         <div
           className="absolute inset-0"
           style={{
@@ -1794,7 +2079,7 @@ export function InteractiveMapView() {
                 width: svgDimensions.width,
                 height: svgDimensions.height,
                 objectFit: 'contain',
-                opacity: isMapImageLoading ? 0 : isEditMode ? 0.6 : 0.4,
+                opacity: isEditMode ? 0.6 : 0.4,
               }}
             />
           )}
@@ -1944,6 +2229,7 @@ export function InteractiveMapView() {
             
           </svg>
         </div>
+        )}
       </div>
 
       {/* House Details Dialog */}
