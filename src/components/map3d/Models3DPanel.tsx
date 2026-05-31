@@ -90,7 +90,7 @@ export function Models3DPanel({ projectId }: Models3DPanelProps) {
   const totalCandidateBytes = totalCandidates.reduce((s, o) => s + (o.file_size ?? 0), 0);
 
   return (
-    <div className="space-y-4">
+    <div className="min-h-0 space-y-4">
       <Alert>
         <ShieldAlert className="h-4 w-4" />
         <AlertDescription>
@@ -99,7 +99,7 @@ export function Models3DPanel({ projectId }: Models3DPanelProps) {
         </AlertDescription>
       </Alert>
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Box className="h-5 w-5 text-muted-foreground" />
           <h3 className="font-medium">Modelos 3D do projeto</h3>
@@ -111,15 +111,15 @@ export function Models3DPanel({ projectId }: Models3DPanelProps) {
         </Button>
       </div>
 
-      <div className="border rounded-lg">
-        <Table>
+      <div className="overflow-x-auto rounded-lg border">
+        <Table className="min-w-[820px]">
           <TableHeader>
             <TableRow>
-              <TableHead>Arquivo</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Tipo</TableHead>
-              <TableHead>Tamanho</TableHead>
-              <TableHead>Importado em</TableHead>
+              <TableHead className="min-w-[320px]">Arquivo</TableHead>
+              <TableHead className="min-w-[150px]">Status</TableHead>
+              <TableHead className="w-24">Tipo</TableHead>
+              <TableHead className="w-28">Tamanho</TableHead>
+              <TableHead className="w-36">Importado em</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -134,8 +134,8 @@ export function Models3DPanel({ projectId }: Models3DPanelProps) {
               const s = STATUS_LABEL[m.status] ?? { label: m.status, variant: "outline" as const };
               return (
                 <TableRow key={m.id}>
-                  <TableCell className="font-mono text-xs max-w-[280px] truncate" title={m.file_name}>
-                    {m.file_name}
+                  <TableCell className="max-w-[360px]" title={m.file_name}>
+                    <span className="block truncate font-mono text-xs">{m.file_name}</span>
                   </TableCell>
                   <TableCell>
                     <Badge variant={s.variant}>{s.label}</Badge>
@@ -145,9 +145,9 @@ export function Models3DPanel({ projectId }: Models3DPanelProps) {
                       </Badge>
                     )}
                   </TableCell>
-                  <TableCell className="text-xs">{m.model_type}</TableCell>
-                  <TableCell className="text-xs">{formatSize(m.file_size)}</TableCell>
-                  <TableCell className="text-xs">{formatDate(m.imported_at)}</TableCell>
+                  <TableCell className="whitespace-nowrap text-xs">{m.model_type}</TableCell>
+                  <TableCell className="whitespace-nowrap text-xs">{formatSize(m.file_size)}</TableCell>
+                  <TableCell className="whitespace-nowrap text-xs">{formatDate(m.imported_at)}</TableCell>
                 </TableRow>
               );
             })}
@@ -156,7 +156,7 @@ export function Models3DPanel({ projectId }: Models3DPanelProps) {
       </div>
 
       <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h4 className="font-medium text-sm flex items-center gap-2">
               <Search className="h-4 w-4" /> Auditoria de órfãos (simulação)
@@ -178,26 +178,26 @@ export function Models3DPanel({ projectId }: Models3DPanelProps) {
               {orphans.length} arquivo(s) no bucket • {totalCandidates.length} candidato(s) a remoção •{" "}
               {formatSize(totalCandidateBytes)} a recuperar
             </div>
-            <div className="max-h-[260px] overflow-y-auto border rounded">
-              <Table>
+            <div className="max-h-[42vh] overflow-auto rounded border bg-background">
+              <Table className="min-w-[980px]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Caminho</TableHead>
-                    <TableHead>Tamanho</TableHead>
-                    <TableHead>Idade</TableHead>
-                    <TableHead>Motivo</TableHead>
+                    <TableHead className="min-w-[560px]">Caminho</TableHead>
+                    <TableHead className="w-28">Tamanho</TableHead>
+                    <TableHead className="w-20">Idade</TableHead>
+                    <TableHead className="min-w-[220px]">Motivo</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {orphans.map((o) => (
                     <TableRow key={o.storage_path} className={o.would_delete ? "bg-destructive/5" : ""}>
-                      <TableCell className="font-mono text-[10px] max-w-[340px] truncate" title={o.storage_path}>
-                        {o.storage_path}
+                      <TableCell className="max-w-[640px]" title={o.storage_path}>
+                        <span className="block truncate font-mono text-[10px] leading-5">{o.storage_path}</span>
                       </TableCell>
-                      <TableCell className="text-xs">{formatSize(o.file_size)}</TableCell>
-                      <TableCell className="text-xs">{o.age_days}d</TableCell>
-                      <TableCell>
-                        <Badge variant={o.would_delete ? "destructive" : "secondary"} className="text-[10px]">
+                      <TableCell className="whitespace-nowrap text-xs">{formatSize(o.file_size)}</TableCell>
+                      <TableCell className="whitespace-nowrap text-xs">{o.age_days}d</TableCell>
+                      <TableCell className="max-w-[260px]">
+                        <Badge variant={o.would_delete ? "destructive" : "secondary"} className="max-w-full truncate text-[10px]" title={o.reason}>
                           {o.reason}
                         </Badge>
                       </TableCell>

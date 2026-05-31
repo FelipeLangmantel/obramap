@@ -194,16 +194,16 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[90vh] w-[95vw] max-w-[95vw] flex-col overflow-hidden sm:max-w-[95vw] lg:max-w-6xl">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Building2 className="h-5 w-5" />
             Configurações da Obra
           </DialogTitle>
         </DialogHeader>
         
-        <Tabs defaultValue="info" className="w-full">
-          <TabsList className="grid w-full grid-cols-4 h-auto">
+        <Tabs defaultValue="info" className="flex min-h-0 flex-1 flex-col">
+          <TabsList className="grid h-auto w-full shrink-0 grid-cols-4">
             <TabsTrigger value="info" className="gap-2">
               <Home className="h-4 w-4" />
               <span className="hidden sm:inline">Informações</span>
@@ -225,7 +225,7 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
             </TabsTrigger>
           </TabsList>
           
-          <TabsContent value="info" className="space-y-4 mt-4">
+          <TabsContent value="info" className="mt-4 min-h-0 space-y-4 overflow-y-auto pr-1">
             {!canEdit && (
               <Alert>
                 <Eye className="h-4 w-4" />
@@ -330,7 +330,7 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
             </Button>
           </TabsContent>
           
-          <TabsContent value="quadras" className="space-y-4 mt-4">
+          <TabsContent value="quadras" className="mt-4 min-h-0 space-y-4 overflow-y-auto pr-1">
             {!canEdit && (
               <Alert>
                 <Eye className="h-4 w-4" />
@@ -454,11 +454,11 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
             </div>
           </TabsContent>
 
-          <TabsContent value="models3d" className="space-y-4 mt-4">
+          <TabsContent value="models3d" className="mt-4 min-h-0 overflow-y-auto pr-1">
             <Models3DPanel projectId={currentProject.id} />
           </TabsContent>
 
-          <TabsContent value="settings" className="space-y-4 mt-4">
+          <TabsContent value="settings" className="mt-4 min-h-0 space-y-4 overflow-y-auto pr-1">
             <div className="space-y-4">
               <ProjectCoordinatorSelector projectId={currentProject.id} />
 
@@ -494,7 +494,7 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
           </TabsContent>
         </Tabs>
         
-        <DialogFooter>
+        <DialogFooter className="shrink-0 pt-3">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Fechar
           </Button>
