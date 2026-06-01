@@ -1142,7 +1142,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   orbitFocusPoint, onMeshClick, onMeshDoubleClick, onMeshHover, onMeshHoverEnd, selectedMeshKey, selectedMeshKeys, projectId, companyId, ifcRealModeActive, ifcHouseOptions, ifcServiceOptions,
   cameraMode, walkInspectOpen, onWalkExit, onWalkInspectClose, onWalkMeshInspect,
   supplementalGlbParts, onSupplementalMeshClick, onSupplementalMeshDoubleClick, onSupplementalMeshHover, onSupplementalMeshHoverEnd, onSupplementalSceneReady, onSupplementalInventoryReady,
-  observerHeight, walkStartPoint, savedWalkStartPoint, performanceMode, zoomSpeed,
+  observerHeight, walkStartPoint, savedWalkStartPoint, showSavedWalkStartPoint, performanceMode, zoomSpeed,
   lightingMode,
 }: {
   modelData: ModelData | null; markers: HouseMarker[]; selectedMarkerId: number | null;
@@ -1180,6 +1180,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   observerHeight: number;
   walkStartPoint?: [number, number, number] | null;
   savedWalkStartPoint?: [number, number, number] | null;
+  showSavedWalkStartPoint?: boolean;
   performanceMode: boolean;
   lightingMode: LightingMode;
 }) {
@@ -1191,7 +1192,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
         savedPosition={savedPosition} savedTarget={savedTarget}
         onCameraChange={onCameraChange} sceneReady={sceneReady} enabled={cameraMode === "orbit"} />
       {cameraMode === "orbit" ? <ZoomToMouseControls focusPoint={orbitFocusPoint} zoomSpeed={zoomSpeed} /> : <WalkControls onExit={onWalkExit} height={observerHeight} startPoint={walkStartPoint} />}
-      <WalkStartMarker point={savedWalkStartPoint} />
+      <WalkStartMarker point={showSavedWalkStartPoint ? savedWalkStartPoint : null} />
       <WalkMeshInspector
         enabled={cameraMode === "walk"}
         panelOpen={walkInspectOpen}
@@ -1532,6 +1533,7 @@ export function Map3DView() {
   const [walkStartPoint, setWalkStartPoint] = useState<[number, number, number] | null>(null);
   const [activeWalkStartPoint, setActiveWalkStartPoint] = useState<[number, number, number] | null>(null);
   const [walkStartPickMode, setWalkStartPickMode] = useState(false);
+  const [walkStartMarkerVisible, setWalkStartMarkerVisible] = useState(false);
   const [walkHelpVisible, setWalkHelpVisible] = useState(() => localStorage.getItem(MAP3D_WALK_HELP_HIDDEN_KEY) !== "true");
   const [walkHelpExpanded, setWalkHelpExpanded] = useState(false);
   const [sceneReady, setSceneReady] = useState(false);
@@ -1601,6 +1603,9 @@ export function Map3DView() {
   const [walkInspection, setWalkInspection] = useState<WalkInspection | null>(null);
   const [walkHistoryOpen, setWalkHistoryOpen] = useState(false);
   const [walkHistoryHouseNumber, setWalkHistoryHouseNumber] = useState<number | null>(null);
+  const canvasCardRef = useRef<HTMLDivElement | null>(null);
+  const canvasContainerRef = useRef<HTMLDivElement | null>(null);
+  const walkStartMarkerTimerRef = useRef<number | null>(null);
 
   // Sincronização 3D Real
   const [isSyncing, setIsSyncing] = useState(false);
@@ -1616,7 +1621,16 @@ export function Map3DView() {
     setActiveWalkStartPoint(null);
     setOrbitFocusPoint(null);
     setCameraMode("orbit");
+    setWalkStartMarkerVisible(false);
   }, [projectId, modelData?.url]);
+
+  useEffect(() => {
+    return () => {
+      if (walkStartMarkerTimerRef.current != null) {
+        window.clearTimeout(walkStartMarkerTimerRef.current);
+      }
+    };
+  }, []);
 
   const clearMeshSelection = useCallback((reason = "manual") => {
     setSelectedMeshKey(null);
@@ -2523,12 +2537,21 @@ export function Map3DView() {
     if (!projectId) return;
     const tuple: [number, number, number] = Array.isArray(point) ? point : [point.x, point.y, point.z];
     setWalkStartPoint(tuple);
+    setWalkStartMarkerVisible(true);
+    if (walkStartMarkerTimerRef.current != null) {
+      window.clearTimeout(walkStartMarkerTimerRef.current);
+    }
+    walkStartMarkerTimerRef.current = window.setTimeout(() => {
+      setWalkStartMarkerVisible(false);
+      walkStartMarkerTimerRef.current = null;
+    }, 3500);
     localStorage.setItem(`obramap:map3d:${projectId}:walk-start`, JSON.stringify(tuple));
     toast.success("Ponto de entrada do Caminhar definido.");
   }, [projectId]);
 
   const startWalkStartPick = useCallback(() => {
     setWalkStartPickMode(true);
+    setWalkStartMarkerVisible(true);
     setAssignMode(false);
     setReviewMode(false);
     setPickedMesh(null);
@@ -2538,6 +2561,7 @@ export function Map3DView() {
 
   const cancelWalkStartPick = useCallback(() => {
     setWalkStartPickMode(false);
+    setWalkStartMarkerVisible(false);
     toast.info("Selecao do ponto de entrada cancelada.");
   }, []);
 
@@ -2546,6 +2570,7 @@ export function Map3DView() {
     setWalkStartPoint(null);
     setActiveWalkStartPoint(null);
     setWalkStartPickMode(false);
+    setWalkStartMarkerVisible(false);
     localStorage.removeItem(`obramap:map3d:${projectId}:walk-start`);
     toast.success("Ponto de entrada removido. O Caminhar usara o ponto automatico.");
   }, [projectId]);
@@ -2772,6 +2797,39 @@ export function Map3DView() {
     }, 6500);
     return () => window.clearTimeout(timer);
   }, [cameraMode, walkHelpVisible]);
+
+  useEffect(() => {
+    if (cameraMode !== "walk") return;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    const focusCanvas = () => {
+      canvasCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+      requestAnimationFrame(() => {
+        canvasContainerRef.current?.focus({ preventScroll: true });
+        window.dispatchEvent(new Event("resize"));
+        requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
+      });
+    };
+
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    focusCanvas();
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+      window.dispatchEvent(new Event("resize"));
+    };
+  }, [cameraMode]);
+
+  useEffect(() => {
+    if (!walkStartPickMode || cameraMode === "walk") return;
+    canvasCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+    requestAnimationFrame(() => {
+      canvasContainerRef.current?.focus({ preventScroll: true });
+      window.dispatchEvent(new Event("resize"));
+    });
+  }, [cameraMode, walkStartPickMode]);
 
   const hideWalkHelp = useCallback(() => {
     localStorage.setItem(MAP3D_WALK_HELP_HIDDEN_KEY, "true");
@@ -5522,7 +5580,7 @@ export function Map3DView() {
     <div className="h-full flex flex-col gap-3">
       <Card>
         <CardContent className="p-3">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
             {canImportMainModel && (
               <>
                 <Input ref={fileInputRef} type="file" accept=".gltf,.glb,.obj,.ifc" onChange={handleFileUpload} className="hidden" disabled={isLoading} />
@@ -5580,7 +5638,17 @@ export function Map3DView() {
             <Button variant="outline" size="sm" onClick={centerCamera} disabled={isLoading}><Target className="h-4 w-4 mr-1.5" />Centralizar</Button>
             <Button variant="outline" size="sm" onClick={resetCameraView} disabled={isLoading}><Home className="h-4 w-4 mr-1.5" />Resetar Visão</Button>
             {canUseWalkMode && modelData && (
-              <div className="flex flex-wrap items-center gap-1">
+              <div className="order-[20] flex flex-wrap items-center gap-1">
+                <Button
+                  variant={cameraMode === "walk" || walkStartPickMode ? "default" : "outline"}
+                  size="sm"
+                  onClick={toggleWalkMode}
+                  disabled={isLoading}
+                  title={cameraMode === "walk" ? "Sair do modo Caminhar" : walkStartPickMode ? "Cancelar escolha do ponto de entrada" : "Clique e depois escolha no mapa onde deseja iniciar"}
+                >
+                  <Move3D className="h-4 w-4 mr-1.5" />
+                  {cameraMode === "walk" ? "Sair do caminhar" : walkStartPickMode ? "Cancelar Caminhar" : "Caminhar"}
+                </Button>
                 {walkStartPoint && cameraMode !== "walk" && (
                   <Button
                     variant="ghost"
@@ -5593,16 +5661,6 @@ export function Map3DView() {
                     Limpar ponto
                   </Button>
                 )}
-                <Button
-                  variant={cameraMode === "walk" || walkStartPickMode ? "default" : "outline"}
-                  size="sm"
-                  onClick={toggleWalkMode}
-                  disabled={isLoading}
-                  title={cameraMode === "walk" ? "Sair do modo Caminhar" : walkStartPickMode ? "Cancelar escolha do ponto de entrada" : "Clique e depois escolha no mapa onde deseja iniciar"}
-                >
-                  <Move3D className="h-4 w-4 mr-1.5" />
-                  {cameraMode === "walk" ? "Sair do caminhar" : walkStartPickMode ? "Cancelar Caminhar" : "Caminhar"}
-                </Button>
                 {cameraMode !== "walk" && (
                   <span className="hidden text-xs text-muted-foreground xl:inline">
                     Clique em Caminhar e escolha no mapa onde deseja iniciar.
@@ -5611,7 +5669,7 @@ export function Map3DView() {
               </div>
             )}
             {canUseWalkMode && modelData && (
-              <label className="flex items-center gap-1 rounded-md border bg-background px-2 py-1 text-xs">
+              <label className="order-[20] flex items-center gap-1 rounded-md border bg-background px-2 py-1 text-xs">
                 <span className="text-muted-foreground">Altura do observador</span>
                 <Input
                   type="number"
@@ -5632,6 +5690,7 @@ export function Map3DView() {
               <Button
                 variant={performanceMode ? "default" : "outline"}
                 size="sm"
+                className="order-[20]"
                 onClick={() => setPerformanceMode((value) => !value)}
                 disabled={isLoading}
                 title="Reduz custo visual para navegar melhor em modelos pesados"
@@ -5643,6 +5702,7 @@ export function Map3DView() {
               <Button
                 variant={lightingMode === "night" ? "default" : "outline"}
                 size="sm"
+                className="order-[20]"
                 onClick={() => setLightingMode((mode) => mode === "night" ? "day" : "night")}
                 disabled={isLoading}
                 title={lightingMode === "night" ? "Voltar para iluminação de dia" : "Usar visualização noturna legível"}
@@ -5651,7 +5711,7 @@ export function Map3DView() {
               </Button>
             )}
             {canChangeZoomSensitivity && modelData && (
-              <div className="flex items-center gap-1 rounded-md border border-input bg-background px-1 py-1">
+              <div className="order-[20] flex items-center gap-1 rounded-md border border-input bg-background px-1 py-1">
                 <span className="hidden items-center gap-1 px-1 text-xs text-muted-foreground sm:flex">
                   <SlidersHorizontal className="h-3.5 w-3.5" />
                   Zoom
@@ -5679,6 +5739,7 @@ export function Map3DView() {
               <Button
                 variant={showLayers ? "default" : "outline"}
                 size="sm"
+                className="order-[10]"
                 onClick={() => {
                   clearAll3DSelection("layers panel toggled");
                   setShowLayers(p => !p);
@@ -5692,6 +5753,7 @@ export function Map3DView() {
               <Button
                 variant={reviewMode ? "default" : "outline"}
                 size="sm"
+                className="order-[10]"
                 onClick={() => {
                   setCameraMode("orbit");
                   setWalkStartPickMode(false);
@@ -5716,7 +5778,7 @@ export function Map3DView() {
               </Button>
             )}
             {canReviewModel && reviewMode && (
-              <div className="flex items-center gap-2 rounded-md border border-input bg-background px-2 py-1 text-xs">
+              <div className="order-[10] flex items-center gap-2 rounded-md border border-input bg-background px-2 py-1 text-xs">
                 <Button
                   type="button"
                   variant={hideLinkedInReview ? "default" : "outline"}
@@ -5778,6 +5840,7 @@ export function Map3DView() {
                 type="button"
                 variant={quickContextPanelOpen ? "default" : "outline"}
                 size="sm"
+                className="order-[10]"
                 onClick={() => setQuickContextPanelOpen((open) => !open)}
                 disabled={isLoading}
                 title="Abrir ferramentas manuais de contexto do 3D Real"
@@ -5790,6 +5853,7 @@ export function Map3DView() {
               <Button
                 variant="outline"
                 size="sm"
+                className="order-[10]"
                 onClick={() => setIfcSuggestionsOpen(true)}
                 disabled={isLoading}
                 title="Revisar sugestões IFC persistidas"
@@ -5798,7 +5862,8 @@ export function Map3DView() {
                 Sugestões IFC
               </Button>
             )}
-            <div id="map3d-ifc-toolbar-slot" className="flex items-center gap-2" />
+            <div id="map3d-ifc-toolbar-slot" className="order-[10] flex items-center gap-2" />
+            <div className="order-[15] basis-full border-t border-border/70" />
             {modelData && (
               <ToggleGroup
                 type="single"
@@ -5828,7 +5893,7 @@ export function Map3DView() {
                   clearAll3DSelection("view mode changed");
                   applyViewMode(v as ViewMode);
                 }}
-                className="border border-input rounded-md p-0.5 bg-background"
+                className="order-[20] border border-input rounded-md p-0.5 bg-background"
               >
                 <ToggleGroupItem value="complete" className="h-7 px-2 text-xs gap-1" title="Mostrar todo o modelo">
                   <Boxes className="h-3.5 w-3.5" />Completa
@@ -5842,7 +5907,7 @@ export function Map3DView() {
               </ToggleGroup>
             )}
             {modelData && viewMode === "real" && canView3DReal && (
-              <div className="relative">
+              <div className="order-[20] relative">
                 <Button
                   type="button"
                   variant={realServiceFilterOpen ? "default" : "outline"}
@@ -5932,6 +5997,7 @@ export function Map3DView() {
               <Button
                 variant="outline"
                 size="sm"
+                className="order-[20]"
                 onClick={() => handleSync3DReal()}
                 disabled={!canSync3DReal || isLoading || isSyncing || meshHooks.meshMap.size === 0}
                 title={canSync3DReal ? "Atualiza a visibilidade das meshes a partir da produção real" : "Você precisa ter permissão de edição para sincronizar o 3D Real."}
@@ -5947,7 +6013,7 @@ export function Map3DView() {
             )}
             {canResetMap && (
               <AlertDialog>
-                <AlertDialogTrigger asChild><Button variant="outline" size="sm" disabled={isLoading}><RotateCcw className="h-4 w-4 mr-1.5" />Resetar Mapa</Button></AlertDialogTrigger>
+                <AlertDialogTrigger asChild><Button variant="outline" size="sm" className="order-[20]" disabled={isLoading}><RotateCcw className="h-4 w-4 mr-1.5" />Resetar Mapa</Button></AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
                     <AlertDialogTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-destructive" />Confirmar Reset</AlertDialogTitle>
@@ -5961,12 +6027,12 @@ export function Map3DView() {
               </AlertDialog>
             )}
             {canSaveMap && (
-              <Button variant={hasChanges ? "default" : "outline"} size="sm" onClick={save3DMap} disabled={isSaving || isLoading}>
+              <Button variant={hasChanges ? "default" : "outline"} size="sm" className="order-[20]" onClick={save3DMap} disabled={isSaving || isLoading}>
                 {isSaving ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}Salvar
               </Button>
             )}
-            <div className="flex-1" />
-            <span className="text-xs text-muted-foreground hidden lg:inline">
+            <div className="order-[30] flex-1" />
+            <span className="order-[30] text-xs text-muted-foreground hidden lg:inline">
               <strong>Arrastar</strong> rotacionar | <strong>Scroll</strong> zoom | <strong>Direito</strong> mover | <strong>Duplo clique</strong> fixa ponto de rotacao | <strong>Centralizar</strong> ajusta a obra inteira
             </span>
           </div>
@@ -6039,7 +6105,7 @@ export function Map3DView() {
         </CardContent>
       </Card>
 
-      <Card className="flex-1 relative overflow-hidden" style={{ minHeight: "calc(100vh - 220px)" }}>
+      <Card ref={canvasCardRef} className="flex-1 relative overflow-hidden" style={{ minHeight: "calc(100vh - 220px)" }}>
         {isLoading && (
           <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-20">
             <Loader2 className="h-6 w-6 animate-spin mr-2" /><span>Carregando...</span>
@@ -6054,8 +6120,10 @@ export function Map3DView() {
           </div>
         )}
         <div
+          ref={canvasContainerRef}
+          tabIndex={-1}
           className="map3d-walk-lock-target absolute inset-0"
-          style={assignMode ? { cursor: "crosshair", overscrollBehavior: "contain" } : { overscrollBehavior: "contain" }}
+          style={assignMode || walkStartPickMode ? { cursor: "crosshair", overscrollBehavior: "contain" } : { overscrollBehavior: "contain" }}
         >
           <Canvas shadows={!performanceMode} dpr={[1, performanceMode ? 1 : 1.25]} frameloop="always"
             gl={{ antialias: !performanceMode, powerPreference: "high-performance", stencil: false, depth: true }}
@@ -6098,6 +6166,7 @@ export function Map3DView() {
               observerHeight={observerHeight}
               walkStartPoint={cameraMode === "walk" ? activeWalkStartPoint : null}
               savedWalkStartPoint={walkStartPoint}
+              showSavedWalkStartPoint={walkStartPickMode || walkStartMarkerVisible}
               zoomSpeed={orbitZoomSpeed}
               performanceMode={performanceMode}
               lightingMode={lightingMode} />
