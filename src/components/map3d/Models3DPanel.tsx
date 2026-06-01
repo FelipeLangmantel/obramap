@@ -154,8 +154,13 @@ export function Models3DPanel({ projectId }: Models3DPanelProps) {
   const isRecentBlocked = (row: OrphanRow) =>
     row.reason === "too_recent(<7d)" || row.reason === "too_recent_lt_7d";
 
+  const isOutOfScopePath = (row: OrphanRow) =>
+    /\/ifc\//.test(row.storage_path) ||
+    (!/\/gltf\//.test(row.storage_path) && !/\/gltf-parts\//.test(row.storage_path));
+
   const canSelectRow = (row: OrphanRow) => {
     if (!canEdit) return false;
+    if (isOutOfScopePath(row)) return false; // /ifc/ e outros fora de escopo nunca selecionáveis
     if (row.would_delete) return true;
     return isCompanyAdmin && allowRecentSelection && isRecentBlocked(row);
   };
@@ -253,7 +258,13 @@ export function Models3DPanel({ projectId }: Models3DPanelProps) {
         else if (serverError === "confirmation_mismatch") friendly = "Texto de confirmação incorreto.";
         else if (serverError === "no_paths_selected") friendly = "Nenhum arquivo selecionado.";
         else if (serverError === "too_many_paths_max_200") friendly = "Selecione no máximo 200 arquivos por vez.";
+        else if (serverError === "not_company_admin_for_recent")
+          friendly = "Apenas administrador da empresa pode excluir arquivos recentes.";
+        else if (serverError === "rpc_signature_error")
+          friendly = "Migração da função de validação não está atualizada no banco. Avise o administrador.";
         else if (serverError === "validation_failed") friendly = "Erro de validação no backend antes de remover do Storage.";
+        else if (serverError === "no_deletable_files")
+          friendly = "Nenhum arquivo selecionado passou na validação final. Veja os motivos na lista.";
         else if (serverError === "storage_remove_failed") friendly = "Erro ao remover arquivos do Storage.";
         else if (serverError === "project_not_found_or_no_company") friendly = "Projeto não encontrado ou sem empresa.";
 

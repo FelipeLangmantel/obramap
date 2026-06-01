@@ -13688,6 +13688,10 @@ export type Database = {
         Args: { p_item_id: string; p_reason: string }
         Returns: string
       }
+      reset_3d_model_links_for_project: {
+        Args: { _project_id: string }
+        Returns: Json
+      }
       reset_user_temp_password: { Args: { p_user_id: string }; Returns: string }
       resolve_notification_recipients: {
         Args: { _company_id: string; _event_type: string; _obra_id?: string }
@@ -13763,7 +13767,11 @@ export type Database = {
         Returns: boolean
       }
       validate_3d_model_files_for_delete: {
-        Args: { _paths: string[]; _project_id: string }
+        Args: {
+          _allow_recent_delete?: boolean
+          _paths: string[]
+          _project_id: string
+        }
         Returns: {
           blocked_reason: string
           can_delete: boolean
