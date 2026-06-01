@@ -38,6 +38,26 @@ const translatePasswordError = (message: string) => {
   return message;
 };
 
+const translatePasswordStatusError = (message: string) => {
+  const lower = message.toLowerCase();
+  if (lower.includes("could not find the function") || (lower.includes("function") && lower.includes("not found"))) {
+    return "A função interna de conclusão da troca de senha ainda não está aplicada no banco. Avise o administrador.";
+  }
+  if (lower.includes("permission denied") || lower.includes("permission")) {
+    return "Sem permissão para atualizar o status interno da senha. Avise o administrador.";
+  }
+  if (lower.includes("auth_required")) {
+    return "Sessão expirada. Faça login novamente e tente trocar a senha.";
+  }
+  if (lower.includes("profile_not_found")) {
+    return "Perfil do usuário não encontrado. Avise o administrador.";
+  }
+  if (lower.includes("must_change_password") || lower.includes("not allowed to change")) {
+    return "A proteção do perfil bloqueou a atualização do status interno. Avise o administrador.";
+  }
+  return "Senha alterada, mas não foi possível atualizar o status interno. Avise o administrador.";
+};
+
 export default function ChangePassword() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -112,7 +132,7 @@ export default function ChangePassword() {
         }
       } else if (statusError) {
         console.error("Erro ao atualizar status interno da senha:", statusError);
-        toast.error("Senha alterada, mas não foi possível atualizar o status interno. Avise o administrador.");
+        toast.error(translatePasswordStatusError(statusError.message));
       } else {
         toast.success("Senha alterada com sucesso!");
         // Redirecionar baseado no papel
@@ -127,6 +147,16 @@ export default function ChangePassword() {
     }
 
     setIsLoading(false);
+  };
+
+  const handleCancelAndSignOut = async () => {
+    setIsLoading(true);
+    try {
+      await signOut();
+    } finally {
+      setIsLoading(false);
+      navigate("/auth", { replace: true });
+    }
   };
 
   return (
@@ -215,7 +245,8 @@ export default function ChangePassword() {
             <Button
               variant="ghost"
               className="w-full mt-4"
-              onClick={() => signOut()}
+              onClick={handleCancelAndSignOut}
+              disabled={isLoading}
             >
               Cancelar e Sair
             </Button>

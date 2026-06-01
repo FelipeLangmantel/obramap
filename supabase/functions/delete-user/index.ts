@@ -5,6 +5,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const jsonResponse = (body: Record<string, unknown>, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -13,10 +19,7 @@ Deno.serve(async (req) => {
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Missing authorization header" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return jsonResponse({ error: "Sessão ausente. Faça login novamente." }, 401);
     }
 
     // Create client with user's token to verify they are system_admin
@@ -29,10 +32,7 @@ Deno.serve(async (req) => {
     // Get current user
     const { data: { user: currentUser }, error: authError } = await supabaseClient.auth.getUser();
     if (authError || !currentUser) {
-      return new Response(
-        JSON.stringify({ error: "Not authenticated" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return jsonResponse({ error: "Sessão inválida. Faça login novamente." }, 401);
     }
 
     // Check if current user is system_admin
@@ -43,41 +43,44 @@ Deno.serve(async (req) => {
       .single();
 
     if (profileError || profile?.system_role !== "system_admin") {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized - only system admins can delete users" }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return jsonResponse({ error: "Sem permissão. Apenas System Admin pode excluir usuários." }, 403);
     }
 
-    const { user_id } = await req.json();
+    let payload: { user_id?: string };
+    try {
+      payload = await req.json();
+    } catch {
+      return jsonResponse({ error: "Payload inválido." }, 400);
+    }
+    const { user_id } = payload;
 
     if (!user_id) {
-      return new Response(
-        JSON.stringify({ error: "user_id is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return jsonResponse({ error: "Parâmetro obrigatório ausente: user_id." }, 400);
     }
 
     // Prevent self-deletion
     if (user_id === currentUser.id) {
-      return new Response(
-        JSON.stringify({ error: "Cannot delete yourself" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return jsonResponse({ error: "Você não pode excluir a própria conta." }, 400);
     }
 
     // Check if target user is system_admin (cannot delete system admins)
-    const { data: targetProfile } = await supabaseClient
+    const { data: targetProfile, error: targetError } = await supabaseClient
       .from("profiles")
-      .select("system_role")
+      .select("system_role, email")
       .eq("user_id", user_id)
-      .single();
+      .maybeSingle();
+
+    if (targetError) {
+      console.error("Error fetching target profile:", targetError);
+      return jsonResponse({ error: "Erro ao verificar o usuário selecionado." }, 500);
+    }
+
+    if (!targetProfile) {
+      return jsonResponse({ error: "Usuário não encontrado no ObraMap." }, 404);
+    }
 
     if (targetProfile?.system_role === "system_admin") {
-      return new Response(
-        JSON.stringify({ error: "Cannot delete system admin users" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return jsonResponse({ error: "Não é possível excluir usuários System Admin." }, 400);
     }
 
     // Create admin client to delete from auth.users
@@ -98,23 +101,14 @@ Deno.serve(async (req) => {
         await supabaseAdmin.from("profiles").delete().eq("user_id", user_id);
       } else {
         console.error("Error deleting user:", deleteError);
-        return new Response(
-          JSON.stringify({ error: deleteError.message }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return jsonResponse({ error: `Erro ao remover usuário do Auth: ${deleteError.message}` }, 500);
       }
     }
 
-    return new Response(
-      JSON.stringify({ success: true, message: "User deleted successfully" }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return jsonResponse({ success: true, message: "Usuário excluído com sucesso." });
   } catch (error: unknown) {
     console.error("Error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
-    return new Response(
-      JSON.stringify({ error: message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return jsonResponse({ error: message }, 500);
   }
 });

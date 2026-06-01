@@ -585,19 +585,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const updatePassword = async (newPassword: string) => {
-    const { error } = await supabase.auth.updateUser({
+    const { data, error } = await supabase.auth.updateUser({
       password: newPassword,
     });
 
-    if (!error && user?.id) {
+    if (!error) {
       const { error: statusError } = await (supabase as any).rpc("mark_own_password_changed");
       if (statusError) {
         return { error: null, statusError };
       }
       
       // Refresh profile
-      hasFetchedUserData.current = null;
-      await fetchUserData(user.id);
+      const updatedUserId = data.user?.id || user?.id;
+      if (updatedUserId) {
+        hasFetchedUserData.current = null;
+        await fetchUserData(updatedUserId);
+      }
     }
 
     return { error, statusError: null };

@@ -75,6 +75,21 @@ const userSchema = z.object({
   system_role: z.enum(["admin", "editor", "user"], { required_error: "Selecione um perfil" }),
 });
 
+const getEdgeFunctionErrorMessage = async (error: unknown) => {
+  const fallback = error instanceof Error ? error.message : "Erro ao executar a função";
+  const response = (error as any)?.context;
+  if (response && typeof response.json === "function") {
+    try {
+      const body = await response.json();
+      if (typeof body?.error === "string") return body.error;
+      if (typeof body?.message === "string") return body.message;
+    } catch {
+      return fallback;
+    }
+  }
+  return fallback;
+};
+
 export default function SystemUserManagement() {
   const [companiesWithUsers, setCompaniesWithUsers] = useState<CompanyWithUsers[]>([]);
   const [orphanUsers, setOrphanUsers] = useState<UserProfile[]>([]);
@@ -308,7 +323,9 @@ export default function SystemUserManagement() {
         body: { user_id: user.user_id }
       });
 
-      if (error) throw error;
+      if (error) {
+        throw new Error(await getEdgeFunctionErrorMessage(error));
+      }
       if (data?.error) throw new Error(data.error);
 
       toast.success("Usuário excluído com sucesso!");
