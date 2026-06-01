@@ -94,8 +94,8 @@ export function GlbSmartLinkDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-6xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]">
+        <DialogHeader className="shrink-0 px-6 pb-3 pt-6">
           <DialogTitle>Encontrar similares GLB</DialogTitle>
           <DialogDescription>
             Revise antes de aplicar. O servico sera copiado da mesh base e vinculos existentes nao serao sobrescritos.
@@ -107,9 +107,9 @@ export function GlbSmartLinkDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3">
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-6 pb-3">
           {base && (
-            <div className="rounded-md border bg-muted/30 p-3 text-xs">
+            <div className="shrink-0 rounded-md border bg-muted/30 p-3 text-xs">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="secondary">Base</Badge>
                 <span className="font-mono">{base.layerKey}</span>
@@ -122,7 +122,7 @@ export function GlbSmartLinkDialog({
             </div>
           )}
 
-          <div className="grid grid-cols-7 gap-2 text-xs">
+          <div className="grid shrink-0 grid-cols-2 gap-2 text-xs sm:grid-cols-4 lg:grid-cols-7">
             <div className="rounded-md border p-2"><p className="text-muted-foreground">Candidatas</p><p className="text-base font-semibold">{candidates.length}</p></div>
             <div className="rounded-md border p-2"><p className="text-muted-foreground">Aplicaveis</p><p className="text-base font-semibold">{counts.applicable}</p></div>
             <div className="rounded-md border p-2"><p className="text-muted-foreground">Selecionadas</p><p className="text-base font-semibold">{selectedKeys.size}</p></div>
@@ -132,12 +132,12 @@ export function GlbSmartLinkDialog({
             <div className="rounded-md border p-2"><p className="text-muted-foreground">Ign./contexto</p><p className="text-base font-semibold">{counts.ignored + counts.context}</p></div>
           </div>
 
-          <div className="rounded-md border border-primary/20 bg-primary/5 p-2 text-xs text-muted-foreground">
+          <div className="shrink-0 rounded-md border border-primary/20 bg-primary/5 p-2 text-xs text-muted-foreground">
             <span className="font-semibold text-foreground">Aplicaveis: melhor candidata por casa.</span>{" "}
             Outras pecas parecidas ficam em contexto/revisao manual e nao sao aplicadas automaticamente.
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex shrink-0 flex-wrap gap-2">
             <Button type="button" variant="outline" size="sm" onClick={onShowCandidates}>
               Mostrar aplicaveis no mapa
             </Button>
@@ -149,7 +149,7 @@ export function GlbSmartLinkDialog({
             </Button>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex shrink-0 flex-wrap gap-2">
             {(Object.keys(filterLabels) as CandidateListFilter[]).map((filter) => (
               <Button
                 key={filter}
@@ -163,7 +163,7 @@ export function GlbSmartLinkDialog({
             ))}
           </div>
 
-          <ScrollArea className="h-[420px] rounded-md border">
+          <ScrollArea className="min-h-[180px] flex-1 rounded-md border">
             <div className="divide-y">
               {candidates.length === 0 ? (
                 <p className="p-4 text-sm text-muted-foreground">
@@ -176,7 +176,7 @@ export function GlbSmartLinkDialog({
               ) : visibleCandidates.map((item) => {
                 const canApplyAutomatically = item.status === "applicable";
                 return (
-                  <div key={item.layerKey} className="grid grid-cols-[32px_1fr_92px_112px_96px] gap-3 p-3 text-xs">
+                  <div key={item.layerKey} className="grid grid-cols-[32px_1fr] gap-3 p-3 text-xs md:grid-cols-[32px_minmax(0,1fr)_92px_112px_96px]">
                     <Checkbox
                       checked={selectedKeys.has(item.layerKey)}
                       disabled={applying || !canApplyAutomatically}
@@ -237,7 +237,7 @@ export function GlbSmartLinkDialog({
           </ScrollArea>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0 border-t bg-background px-6 py-4">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={applying}>
             Cancelar
           </Button>

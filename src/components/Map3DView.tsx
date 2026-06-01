@@ -2364,7 +2364,10 @@ export function Map3DView() {
   }, [modelData?.type]);
 
   // Inventário automático: extrai todas as meshes para o banco.
-  const handleSceneReady = useCallback(async (scene: THREE.Object3D) => {
+  const handleSceneReady = useCallback(async (
+    scene: THREE.Object3D,
+    options?: { forceInventory?: boolean },
+  ) => {
     const sceneCounts = countSceneMeshes(scene);
     const scenePerf = startMap3DPerf("handleSceneReady", {
       projectId,
@@ -2448,7 +2451,8 @@ export function Map3DView() {
         && meshHooks.meshMap.size > 0
         && existingLayerKeyCount === meshesToUpsert.length
         && !modelPathChanged
-        && glbLinkScope === "preserve";
+        && glbLinkScope === "preserve"
+        && !options?.forceInventory;
 
       logMap3DPerf("handleSceneReady inventory completeness", {
         projectId,
@@ -2461,10 +2465,13 @@ export function Map3DView() {
         meshMapSize: meshHooks.meshMap.size,
         inventoryLooksComplete,
         skippedBulkUpsert: inventoryLooksComplete,
+        forceInventory: Boolean(options?.forceInventory),
         skipReason: inventoryLooksComplete ? "complete-layer-key-inventory" : null,
         runReason: inventoryLooksComplete
           ? null
-          : modelData?.type !== "gltf"
+          : options?.forceInventory
+            ? "forced-after-link-reset"
+            : modelData?.type !== "gltf"
             ? "non-gltf-model"
             : !projectId
               ? "missing-project"
@@ -3579,6 +3586,85 @@ export function Map3DView() {
     setPickedMesh(null);
     setWalkInspection(null);
   }, [clearMeshSelection, clearSmartLinkPreview]);
+
+  useEffect(() => {
+    const handleLinksReset = (event: Event) => {
+      const detailProjectId = (event as CustomEvent<{ projectId?: string }>).detail?.projectId;
+      if (!projectId || detailProjectId !== projectId) return;
+
+      clearAll3DSelection("model links reset");
+      mainGlbInventoryPathRef.current = null;
+      supplementalInventoriedPartIdsRef.current.clear();
+      setMeshReviewOverrides(new Map());
+      setTrustedGlbLinkKeys(new Set());
+      setSmartLinkBase(null);
+      setSmartLinkBaseKey(null);
+      setSmartLinkCandidates([]);
+      setSmartLinkSelectedKeys(new Set());
+      setSmartLinkFocusedCandidateKey(null);
+      setSmartLinkHoverTooltip(null);
+      setGlbLinkScope("fresh");
+      setHiddenRealServiceKeys(new Set());
+      setViewMode("complete");
+
+      void (async () => {
+        await Promise.all([
+          meshHooks.refresh(),
+          meshAssignments.refresh(),
+          layerManager.loadLinks(),
+        ]);
+
+        if (sceneObj && modelData?.type === "gltf") {
+          await handleSceneReady(sceneObj, { forceInventory: true });
+        }
+
+        for (const part of supplementalGlbPartsRef.current) {
+          if (!part.persisted) continue;
+          const scene = supplementalGlbScenesRef.current.get(part.id);
+          if (!scene) continue;
+          const nameCounts = new Map<string, number>();
+          const meshesToUpsert: GlbMeshInventoryInput[] = [];
+          scene.traverse((child) => {
+            if (!(child as THREE.Mesh).isMesh) return;
+            const mesh = child as THREE.Mesh;
+            const meshName = mesh.name || "mesh";
+            const occurrence = nameCounts.get(meshName) ?? 0;
+            nameCounts.set(meshName, occurrence + 1);
+            const localLayerKey = getLocalGlbLayerKey(meshName, occurrence);
+            meshesToUpsert.push({
+              layer_key: getSupplementalPartLayerKey(part.id, localLayerKey),
+              mesh_name: meshName,
+              material_name: getMeshMaterialName(mesh),
+              detected_house_number: parseHouseNumberFromMesh(meshName),
+            });
+          });
+          handleSupplementalInventoryReady(part, meshesToUpsert);
+        }
+
+        await Promise.all([
+          meshHooks.refresh(),
+          meshAssignments.refresh(),
+          layerManager.loadLinks(),
+        ]);
+      })().catch((error) => {
+        console.error("[Map3DView] refresh after 3D link reset failed", error);
+        toast.error("Vínculos resetados, mas a atualização da tela falhou. Recarregue o Mapa 3D.");
+      });
+    };
+
+    window.addEventListener("obramap:map3d:links-reset", handleLinksReset);
+    return () => window.removeEventListener("obramap:map3d:links-reset", handleLinksReset);
+  }, [
+    clearAll3DSelection,
+    handleSceneReady,
+    handleSupplementalInventoryReady,
+    layerManager.loadLinks,
+    meshAssignments.refresh,
+    meshHooks.refresh,
+    modelData?.type,
+    projectId,
+    sceneObj,
+  ]);
 
   const returnToSmartLinkList = useCallback(() => {
     if (!smartLinkBase || smartLinkCandidates.length === 0) return;

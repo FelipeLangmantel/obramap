@@ -141,6 +141,12 @@ export function Models3DPanel({ projectId }: Models3DPanelProps) {
       });
       if (error) throw error;
       toast.success("Vínculos do modelo 3D resetados. O GLB não foi apagado.");
+      window.dispatchEvent(new CustomEvent("obramap:map3d:links-reset", {
+        detail: { projectId },
+      }));
+      setSelected(new Set());
+      setOrphans(null);
+      await load();
       setResetOpen(false);
     } catch (e) {
       console.error("[Models3DPanel] reset links error", e);
