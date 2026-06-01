@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
       { _user_id: userId, _company_id: projectRow.company_id },
     );
     if (adminError || isCompanyAdmin !== true) {
-      return json({ error: "Apenas administrador da empresa pode excluir arquivos recentes." }, 403);
+      return json({ error: "not_company_admin_for_recent" }, 403);
     }
   }
 
