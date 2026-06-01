@@ -60,7 +60,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, displayName: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
-  updatePassword: (newPassword: string) => Promise<{ error: Error | null }>;
+  updatePassword: (newPassword: string) => Promise<{ error: Error | null; statusError?: Error | null }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -482,8 +482,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user?.id]);
 
   const signIn = async (email: string, password: string) => {
+    const normalizedEmail = email.trim().toLowerCase();
     const { data, error } = await supabase.auth.signInWithPassword({
-      email,
+      email: normalizedEmail,
       password,
     });
     
@@ -542,9 +543,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = async (email: string, password: string, displayName: string) => {
     const redirectUrl = `${window.location.origin}/`;
+    const normalizedEmail = email.trim().toLowerCase();
 
     const { error } = await supabase.auth.signUp({
-      email,
+      email: normalizedEmail,
       password,
       options: {
         emailRedirectTo: redirectUrl,
@@ -588,18 +590,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     if (!error && user?.id) {
-      // Atualizar flag must_change_password
-      await supabase
-        .from("profiles")
-        .update({ must_change_password: false } as any)
-        .eq("user_id", user.id);
+      const { error: statusError } = await (supabase as any).rpc("mark_own_password_changed");
+      if (statusError) {
+        return { error: null, statusError };
+      }
       
       // Refresh profile
       hasFetchedUserData.current = null;
       await fetchUserData(user.id);
     }
 
-    return { error };
+    return { error, statusError: null };
   };
 
   const isSystemAdmin = systemRole === "system_admin";

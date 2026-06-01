@@ -343,8 +343,9 @@ export function UserPermissionsPanel() {
 
     setIsCreating(true);
     try {
+      const normalizedEmail = email.trim().toLowerCase();
       const { data, error } = await supabase.rpc('create_company_user', {
-        p_email: email,
+        p_email: normalizedEmail,
         p_display_name: displayName,
         p_temp_password: password,
         p_role: role,
@@ -759,10 +760,10 @@ export function UserPermissionsPanel() {
                                className="text-xs gap-1"
                                disabled={isResettingPassword}
                                onClick={() => handleResendTempPassword(u.user_id)}
-                               title="Reenviar senha temporária"
+                               title="Gerar nova senha temporária"
                              >
                                <RefreshCw className={cn("h-3 w-3", isResettingPassword && "animate-spin")} />
-                               Reenviar
+                               Gerar senha
                              </Button>
                            )}
                            <Button

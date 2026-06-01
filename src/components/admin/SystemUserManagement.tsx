@@ -175,7 +175,8 @@ export default function SystemUserManagement() {
     setIsSubmitting(true);
 
     try {
-      const result = userSchema.safeParse(formData);
+      const normalizedEmail = formData.email.trim().toLowerCase();
+      const result = userSchema.safeParse({ ...formData, email: normalizedEmail });
       if (!result.success) {
         const fieldErrors: Record<string, string> = {};
         result.error.errors.forEach((err) => {
@@ -192,7 +193,7 @@ export default function SystemUserManagement() {
       const { data: existingUser } = await supabase
         .from("profiles")
         .select("id")
-        .eq("email", formData.email.trim().toLowerCase())
+        .eq("email", normalizedEmail)
         .single();
 
       if (existingUser) {
@@ -207,7 +208,7 @@ export default function SystemUserManagement() {
       // Usar edge function para não alterar a sessão atual
       const { data, error: fnError } = await supabase.functions.invoke("create-user", {
         body: {
-          email: formData.email.trim().toLowerCase(),
+          email: normalizedEmail,
           password: password,
           display_name: formData.display_name.trim(),
           role: formData.system_role === "admin" ? "admin" : formData.system_role === "editor" ? "editor" : "viewer",
@@ -273,7 +274,7 @@ export default function SystemUserManagement() {
     }
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
+      const { error } = await supabase.auth.resetPasswordForEmail(user.email.trim().toLowerCase(), {
         redirectTo: `${window.location.origin}/change-password`,
       });
 

@@ -13,6 +13,11 @@ const loginSchema = z.object({
   password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
 });
 
+const translateAuthError = (message: string) => {
+  if (message.includes("Invalid login credentials")) return "E-mail ou senha incorretos.";
+  return message;
+};
+
 export default function Auth() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -51,7 +56,8 @@ export default function Auth() {
     setIsLoading(true);
 
     try {
-      const result = loginSchema.safeParse({ email, password });
+      const normalizedEmail = email.trim().toLowerCase();
+      const result = loginSchema.safeParse({ email: normalizedEmail, password });
       if (!result.success) {
         const fieldErrors: Record<string, string> = {};
         result.error.errors.forEach((err) => {
@@ -64,13 +70,9 @@ export default function Auth() {
         return;
       }
 
-      const { error } = await signIn(email, password);
+      const { error } = await signIn(normalizedEmail, password);
       if (error) {
-        if (error.message.includes("Invalid login credentials")) {
-          toast.error("Email ou senha incorretos");
-        } else {
-          toast.error(error.message);
-        }
+        toast.error(translateAuthError(error.message));
       } else {
         toast.success("Login realizado com sucesso!");
       }

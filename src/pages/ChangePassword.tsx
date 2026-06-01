@@ -11,13 +11,32 @@ import { Loader2, Eye, EyeOff, Lock } from "lucide-react";
 import { z } from "zod";
 import obraMapLogo from "@/assets/obramap-logo-new.png";
 
+const MIN_PASSWORD_LENGTH = 8;
+
 const passwordSchema = z.object({
-  newPassword: z.string().min(8, "Senha deve ter pelo menos 8 caracteres"),
+  newPassword: z.string().min(MIN_PASSWORD_LENGTH, `Senha deve ter pelo menos ${MIN_PASSWORD_LENGTH} caracteres`),
   confirmPassword: z.string(),
 }).refine((data) => data.newPassword === data.confirmPassword, {
   message: "As senhas não coincidem",
   path: ["confirmPassword"],
 });
+
+const translatePasswordError = (message: string) => {
+  const lower = message.toLowerCase();
+  if (message.includes("New password should be different from the old password")) {
+    return "A nova senha precisa ser diferente da senha atual ou temporária.";
+  }
+  if (lower.includes("password should be at least") || lower.includes("password must be at least")) {
+    return `A senha deve ter pelo menos ${MIN_PASSWORD_LENGTH} caracteres.`;
+  }
+  if (message.includes("Auth session missing") || lower.includes("session")) {
+    return "Sessão expirada. Solicite um novo acesso.";
+  }
+  if (lower.includes("invalid") || lower.includes("expired")) {
+    return "Link expirado ou inválido. Solicite um novo acesso.";
+  }
+  return message;
+};
 
 export default function ChangePassword() {
   const navigate = useNavigate();
@@ -48,7 +67,7 @@ export default function ChangePassword() {
       }).then(({ error }) => {
         if (error) {
           console.error('Erro ao estabelecer sessão de recuperação:', error);
-          toast.error('Link de recuperação inválido ou expirado. Solicite um novo.');
+          toast.error('Link expirado ou inválido. Solicite um novo acesso.');
           navigate('/auth');
         }
       });
@@ -84,14 +103,16 @@ export default function ChangePassword() {
         return;
       }
 
-      const { error } = await updatePassword(newPassword);
+      const { error, statusError } = await updatePassword(newPassword);
       if (error) {
-        if (error.message.includes('Auth session missing')) {
-          toast.error("Sessão expirada. Por favor, solicite um novo link de recuperação.");
+        const friendlyError = translatePasswordError(error.message);
+        toast.error("Erro ao alterar senha: " + friendlyError);
+        if (friendlyError.includes("Sessão expirada") || friendlyError.includes("Link expirado")) {
           navigate('/auth');
-        } else {
-          toast.error("Erro ao alterar senha: " + error.message);
         }
+      } else if (statusError) {
+        console.error("Erro ao atualizar status interno da senha:", statusError);
+        toast.error("Senha alterada, mas não foi possível atualizar o status interno. Avise o administrador.");
       } else {
         toast.success("Senha alterada com sucesso!");
         // Redirecionar baseado no papel
@@ -127,6 +148,14 @@ export default function ChangePassword() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground">
+                <p className="font-medium text-foreground">Antes de continuar</p>
+                <ul className="mt-2 list-disc space-y-1 pl-5">
+                  <li>A nova senha deve ser diferente da senha temporária ou atual.</li>
+                  <li>Use uma senha segura, com pelo menos {MIN_PASSWORD_LENGTH} caracteres.</li>
+                  <li>Confirme a nova senha exatamente igual no segundo campo.</li>
+                </ul>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="newPassword">Nova Senha</Label>
                 <div className="relative">
