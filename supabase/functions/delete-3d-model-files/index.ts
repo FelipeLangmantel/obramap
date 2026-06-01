@@ -91,7 +91,13 @@ Deno.serve(async (req) => {
     { _project_id: projectId, _paths: paths, _allow_recent_delete: allowRecentDelete },
   );
   if (validationError) {
-    return json({ error: "validation_failed", detail: validationError.message }, 400);
+    const msg = validationError.message || "";
+    // Assinatura/migration desatualizada no Cloud
+    const sigError = /function .* does not exist/i.test(msg) || /PGRST202/i.test(msg);
+    return json({
+      error: sigError ? "rpc_signature_error" : "validation_failed",
+      detail: msg,
+    }, 400);
   }
 
   const rows = (validation ?? []) as Array<{
@@ -107,12 +113,12 @@ Deno.serve(async (req) => {
 
   if (allowed.length === 0) {
     return json({
+      error: "no_deletable_files",
       deleted: [],
       blocked,
       errors: [],
       total_bytes_removed: 0,
-      message: "no_files_passed_validation",
-    });
+    }, 400);
   }
 
   // Service client SOMENTE dentro da Edge Function (nunca exposto ao client)
