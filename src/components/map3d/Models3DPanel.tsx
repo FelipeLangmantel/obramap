@@ -154,8 +154,13 @@ export function Models3DPanel({ projectId }: Models3DPanelProps) {
   const isRecentBlocked = (row: OrphanRow) =>
     row.reason === "too_recent(<7d)" || row.reason === "too_recent_lt_7d";
 
+  const isOutOfScopePath = (row: OrphanRow) =>
+    /\/ifc\//.test(row.storage_path) ||
+    (!/\/gltf\//.test(row.storage_path) && !/\/gltf-parts\//.test(row.storage_path));
+
   const canSelectRow = (row: OrphanRow) => {
     if (!canEdit) return false;
+    if (isOutOfScopePath(row)) return false; // /ifc/ e outros fora de escopo nunca selecionáveis
     if (row.would_delete) return true;
     return isCompanyAdmin && allowRecentSelection && isRecentBlocked(row);
   };
