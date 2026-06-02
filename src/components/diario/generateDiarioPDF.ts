@@ -80,6 +80,7 @@ export interface LegalConfig {
   responsavel_tecnico_nome: string | null;
   responsavel_tecnico_crea: string | null;
   responsavel_tecnico_art: string | null;
+  responsavel_dia_nome?: string | null;
   rodape_observacoes: string | null;
 }
 

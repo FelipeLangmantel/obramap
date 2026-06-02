@@ -89,6 +89,14 @@ function legacyToTurno(code: string | null): ClimaTurno {
   return "claro";
 }
 
+function makeHeaderSnapshot(equipePresente: number, observacaoGeral: string, climaState: ClimaState) {
+  return JSON.stringify({
+    equipePresente: Number(equipePresente || 0),
+    observacaoGeral: observacaoGeral || "",
+    climaState,
+  });
+}
+
 interface DiaryItem {
   id: string;
   macro_id: string;
@@ -157,6 +165,9 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   const [entryMeta, setEntryMeta] = useState<{ created_at: string | null; updated_at: string | null; engineer_name: string | null }>({
     created_at: null, updated_at: null, engineer_name: null,
   });
+  const [latestEditMeta, setLatestEditMeta] = useState<{ user_nome: string | null; user_email: string | null; created_at: string | null }>({
+    user_nome: null, user_email: null, created_at: null,
+  });
 
   // Clima (novo formato)
   const [climaState, setClimaState] = useState<ClimaState>(DEFAULT_CLIMA);
@@ -220,6 +231,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autosaveHydratedRef = useRef(false);
   const autosaveSavingRef = useRef(false);
+  const lastSavedHeaderSnapshotRef = useRef<string | null>(null);
   const loadEntryRequestRef = useRef(0);
   const [photoSourceOpen, setPhotoSourceOpen] = useState(false);
 
@@ -287,7 +299,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   const { canApprove: canApproveObra, isAdmin: isGlobalAdmin } = useCoordenadorAccess(currentProject?.id || null);
   // 'isAdmin' aqui significa "pode aprovar/corrigir sem restrição": admin global, coordenador global ou coordenador desta obra
   const isAdmin = canApproveObra;
-  const isLocked = entryStatus === "finalizado" || statusAprovacao === "aprovado";
+  const isLocked = entryStatus === "finalizado" || statusAprovacao === "aprovado" || statusAprovacao === "revisando" || statusAprovacao === "solicitando_edicao";
   const canEditLockedDiary = isAdmin;
   const editingDisabled = !canEdit || (isLocked && !canEditLockedDiary);
   const isDiaryOpen = Boolean(entryId);
@@ -424,6 +436,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       }
       setClimaState(prev => ({ ...prev, mmChuva: mmFinal }));
       setStatusAprovacao("revisando");
+      await recordDiaryEditLog(entryId);
       toast.success("RDO enviado ao coordenador para revisão e aprovação.");
 
       // ── Notificar coordenador da obra (in-app + e-mail via trigger) ──
@@ -651,7 +664,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
         engineer_name: (data as any).engineer_name || null,
       });
       setNumRelatorio((data as any).num_relatorio ?? null);
-      setClimaState({
+      const loadedClimaState = {
         noiteAtiva: !!(data as any).noite_ativa,
         climaManha: legacyToTurno((data as any).clima_manha || data.clima),
         climaTarde: legacyToTurno((data as any).clima_tarde || data.clima),
@@ -660,8 +673,10 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
         condicaoTarde: ((data as any).condicao_tarde || "praticavel") as any,
         condicaoNoite: ((data as any).condicao_noite || null) as any,
         mmChuva: (data as any).mm_chuva ?? null,
-      });
+      };
+      setClimaState(loadedClimaState);
       setClimaAutoPreenchido(false);
+      lastSavedHeaderSnapshotRef.current = makeHeaderSnapshot(data.equipe_presente || 0, data.observacao_geral || "", loadedClimaState);
       autosaveHydratedRef.current = true;
       setLoadingEntry(false);
       const { data: correcoes } = await supabase
@@ -670,10 +685,22 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
         .eq("diary_entry_id", data.id)
         .order("created_at", { ascending: false });
       setCorrecoesDoDia(correcoes || []);
+      const { data: latestLog } = await (supabase as any)
+        .from("diary_edit_log")
+        .select("user_nome, user_email, created_at")
+        .eq("diary_entry_id", data.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      setLatestEditMeta({
+        user_nome: latestLog?.user_nome || null,
+        user_email: latestLog?.user_email || null,
+        created_at: latestLog?.created_at || null,
+      });
       loadItems(data.id);
       loadFotos(data.id);
       if (!data.clima && !(data as any).clima_manha) {
-        tryAutoFillClima(data.id);
+        tryAutoFillClima(null);
       }
       // Registrar visualização (upsert para evitar duplicatas)
       if (user?.id && company?.id) {
@@ -694,8 +721,10 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       setEntryStatus("rascunho");
       setStatusAprovacao("preenchendo");
       setEntryMeta({ created_at: null, updated_at: null, engineer_name: null });
+      setLatestEditMeta({ user_nome: null, user_email: null, created_at: null });
       setNumRelatorio(null);
       setClimaState(DEFAULT_CLIMA);
+      lastSavedHeaderSnapshotRef.current = makeHeaderSnapshot(0, "", DEFAULT_CLIMA);
       setDiaryItems([]);
       setCorrecoesDoDia([]);
       setFotos([]);
@@ -909,10 +938,9 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   }, [currentProject?.id, refreshHousesFromDB, queryClient]);
 
   useEffect(() => {
+    if (rdo.loading || rdo.labor.length === 0) return;
     setEquipePres(equipeCalculada);
-    if (!entryId) return;
-    void supabase.from("diary_entries").update({ equipe_presente: equipeCalculada }).eq("id", entryId);
-  }, [equipeCalculada, entryId]);
+  }, [equipeCalculada, rdo.labor.length, rdo.loading]);
 
   const buildClimaPayload = useCallback(() => ({
     clima_manha: climaState.climaManha,
@@ -1058,6 +1086,8 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       setDiaryItems([]);
       setCorrecoesDoDia([]);
       setEntryMeta({} as unknown as { created_at: string; updated_at: string; engineer_name: string });
+      setLatestEditMeta({ user_nome: null, user_email: null, created_at: null });
+      lastSavedHeaderSnapshotRef.current = makeHeaderSnapshot(0, "", DEFAULT_CLIMA);
       await rdo.reload(null);
       await dWorkers.reload(null);
       setCancelEmptyOpen(false);
@@ -1100,6 +1130,34 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
     }
   }, [company?.id, entryDate, entryId, navigate]);
 
+  async function recordDiaryEditLog(savedEntryId: string) {
+    if (!company?.id || !user?.id) return;
+    try {
+      const ua = navigator.userAgent;
+      const dispositivo = /Android/i.test(ua) ? "android"
+        : /iPhone|iPad|iPod/i.test(ua) ? "ios"
+        : /Tablet|iPad/i.test(ua) ? "tablet" : "web";
+      const logRow = {
+        company_id: company.id,
+        diary_entry_id: savedEntryId,
+        user_id: user.id,
+        user_nome: profile?.display_name || user.email || "UsuÃ¡rio",
+        user_email: user.email || null,
+        dispositivo,
+      };
+      const { data } = await (supabase as any)
+        .from("diary_edit_log")
+        .insert(logRow)
+        .select("user_nome, user_email, created_at")
+        .maybeSingle();
+      setLatestEditMeta({
+        user_nome: data?.user_nome || logRow.user_nome,
+        user_email: data?.user_email || logRow.user_email,
+        created_at: data?.created_at || new Date().toISOString(),
+      });
+    } catch { /* silencioso */ }
+  }
+
   // Save header (cabeçalho + clima novo)
   const handleSaveHeader = async () => {
     if (!currentProject?.id || !user?.id || !company?.id) return;
@@ -1110,31 +1168,20 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
 
       const savedEntryId = entryId;
       if (entryId) {
+        const snapshot = makeHeaderSnapshot(equipePres, obsGeral, climaState);
         await supabase.from("diary_entries").update({
           equipe_presente: equipePres,
           observacao_geral: obsGeral || null,
           ...climaPayload,
         }).eq("id", entryId);
+        lastSavedHeaderSnapshotRef.current = snapshot;
       } else {
         toast.error("Abra o diário deste dia antes de salvar o relatório.");
         return;
       }
       // Registrar log de edição
       if (savedEntryId) {
-        try {
-          const ua = navigator.userAgent;
-          const dispositivo = /Android/i.test(ua) ? "android"
-            : /iPhone|iPad|iPod/i.test(ua) ? "ios"
-            : /Tablet|iPad/i.test(ua) ? "tablet" : "web";
-          await (supabase as any).from("diary_edit_log").insert({
-            company_id: company.id,
-            diary_entry_id: savedEntryId,
-            user_id: user.id,
-            user_nome: profile?.display_name || user.email || "Usuário",
-            user_email: user.email || null,
-            dispositivo,
-          });
-        } catch { /* silencioso */ }
+        await recordDiaryEditLog(savedEntryId);
       }
       toast.success("Relatório salvo!");
     } catch (err: any) {
@@ -1147,6 +1194,8 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   const saveHeaderSilently = useCallback(async () => {
     if (!entryId || !currentProject?.id || !user?.id || !company?.id) return;
     if (editingDisabled || autosaveSavingRef.current) return;
+    const snapshot = makeHeaderSnapshot(equipePres, obsGeral, climaState);
+    if (snapshot === lastSavedHeaderSnapshotRef.current) return;
     autosaveSavingRef.current = true;
     setAutosaveStatus("saving");
     try {
@@ -1157,6 +1206,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
         ...climaPayload,
       }).eq("id", entryId);
       if (error) throw error;
+      lastSavedHeaderSnapshotRef.current = snapshot;
       setAutosaveStatus("saved");
     } catch (err) {
       console.error("[DiarioObra] autosave failed", err);
@@ -1164,7 +1214,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
     } finally {
       autosaveSavingRef.current = false;
     }
-  }, [buildClimaPayload, company?.id, currentProject?.id, editingDisabled, entryId, equipePres, obsGeral, user?.id]);
+  }, [buildClimaPayload, climaState, company?.id, currentProject?.id, editingDisabled, entryId, equipePres, obsGeral, user?.id]);
 
   useEffect(() => {
     if (!entryId || editingDisabled || !autosaveHydratedRef.current) return;
@@ -1662,14 +1712,19 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       responsavel_tecnico_nome: legalConfig.responsavel_tecnico_nome,
       responsavel_tecnico_crea: legalConfig.responsavel_tecnico_crea,
       responsavel_tecnico_art: legalConfig.responsavel_tecnico_art,
+      responsavel_dia_nome: legalConfig.responsavel_dia_nome,
       rodape_observacoes: legalConfig.rodape_observacoes,
     } : null;
+    const responsavelDia = legalConfig?.responsavel_dia_nome?.trim()
+      || entryMeta.engineer_name?.trim()
+      || legalConfig?.responsavel_tecnico_nome?.trim()
+      || "";
 
     return {
       logoUrl, companyName: company?.name || "Empresa",
       projectName: currentProject.name || "Projeto",
       projectLocation, contractor: null,
-      engineerName: profile?.display_name || user?.email || "Engenheiro",
+      engineerName: responsavelDia,
       entryDate,
       clima: climaState.climaManha === "chuvoso" ? "chuva_fraca" : (climaState.climaManha === "nublado" ? "nublado" : "sol"),
       equipePresente: equipePres, observacaoGeral: obsGeral || null,
@@ -1706,7 +1761,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
           ).values()),
         })),
     };
-  }, [entryId, currentProject, company, profile, user, entryDate, climaState, equipePres, obsGeral, diaryItems, correcoesDoDia, fotos, fotosPorServico, rdo.videos, numRelatorio, legalConfig]);
+  }, [entryId, currentProject, company, entryDate, climaState, equipePres, obsGeral, diaryItems, correcoesDoDia, fotos, fotosPorServico, rdo.videos, numRelatorio, legalConfig, entryMeta.engineer_name]);
 
   // Prazo decorrido / a vencer
   const prazoInfo = useMemo(() => {
@@ -1891,7 +1946,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                 <span className="sm:hidden">Enviar</span>
               </Button>
             )}
-            {entryId && editingDisabled && !pendingEditRequest && (
+            {entryId && editingDisabled && canEdit && !pendingEditRequest && (
               <Button
                 variant="outline"
                 onClick={() => setEditRequestOpen(true)}
@@ -2478,8 +2533,8 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
               onNavigate={(d) => setEntryDate(d)}
               createdByName={entryMeta.engineer_name}
               createdAt={entryMeta.created_at}
-              updatedByName={profile?.display_name || null}
-              updatedAt={entryMeta.updated_at}
+              updatedByName={latestEditMeta.user_nome || latestEditMeta.user_email}
+              updatedAt={latestEditMeta.created_at}
             />
           )}
 

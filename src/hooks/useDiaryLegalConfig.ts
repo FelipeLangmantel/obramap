@@ -31,6 +31,7 @@ export interface DiaryLegalConfig {
   responsavel_tecnico_nome: string | null;
   responsavel_tecnico_crea: string | null;
   responsavel_tecnico_art: string | null;
+  responsavel_dia_nome: string | null;
 
   pdf_template: "orgao_publico" | "corporativo_moderno";
   rodape_observacoes: string | null;
@@ -59,6 +60,7 @@ export const EMPTY_LEGAL_CONFIG: Omit<DiaryLegalConfig, "project_id"> = {
   responsavel_tecnico_nome: null,
   responsavel_tecnico_crea: null,
   responsavel_tecnico_art: null,
+  responsavel_dia_nome: null,
   pdf_template: "orgao_publico",
   rodape_observacoes: null,
 };

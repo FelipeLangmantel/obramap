@@ -318,6 +318,13 @@ export function DiarioLegalConfigPanel({ embedded = false }: Props) {
               <Input value={draft.responsavel_tecnico_crea || ""} onChange={e => update("responsavel_tecnico_crea", e.target.value)} placeholder="Ex.: CREA-SP 0123456" disabled={!canApprove} />
             </div>
             <div className="space-y-2 md:col-span-3">
+              <Label>Responsavel do dia</Label>
+              <Input value={draft.responsavel_dia_nome || ""} onChange={e => update("responsavel_dia_nome", e.target.value)} placeholder="Nome exibido no campo RESPONSAVEL DO DIA do RDO" disabled={!canApprove} />
+              <p className="text-xs text-muted-foreground">
+                Usado como responsavel padrao do RDO impresso. Se vazio, o PDF usa o criador do diario ou o responsavel tecnico.
+              </p>
+            </div>
+            <div className="space-y-2 md:col-span-3">
               <Label>Nº ART / RRT / TRT</Label>
               <Input value={draft.responsavel_tecnico_art || ""} onChange={e => update("responsavel_tecnico_art", e.target.value)} placeholder="Anotação de Responsabilidade Técnica" disabled={!canApprove} />
             </div>
