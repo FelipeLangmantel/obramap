@@ -1423,12 +1423,9 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
         const progressMap: Record<number, number> = {};
         for (const houseId of selectedHouses) {
           const housePct = housePercents[houseId] ?? percentual;
-          const currentProg = getHouseProgress(houseId);
-          const remaining = 100 - currentProg;
-          const addPct = Math.min(housePct, remaining);
-          progressMap[houseId] = Math.min(100, currentProg + addPct);
+          progressMap[houseId] = Math.max(0, Math.min(100, housePct));
         }
-        await updateBatchScopeProgress(selectedHouses, selectedMacro.id, selectedScope.id, 100, progressMap);
+        await updateBatchScopeProgress(selectedHouses, selectedMacro.id, selectedScope.id, percentual, progressMap, { mode: "increment" });
 
         queryClient.invalidateQueries({ queryKey: ["productions"] });
         queryClient.invalidateQueries({ queryKey: ["weekly_productions"] });

@@ -81,7 +81,14 @@ interface ConstructionContextType {
   selectedHouse: House | null;
   setSelectedHouse: (house: House | null) => void;
   updateScopeProgress: (houseId: number, macroId: string, scopeId: string, progress: number, startDate?: string | null, endDate?: string | null) => void;
-  updateBatchScopeProgress: (houseIds: number[], macroId: string, scopeId: string, progress: number, houseProgressMap?: Record<number, number>) => Promise<void>;
+  updateBatchScopeProgress: (
+    houseIds: number[],
+    macroId: string,
+    scopeId: string,
+    progress: number,
+    houseProgressMap?: Record<number, number>,
+    options?: { mode?: "set" | "increment" },
+  ) => Promise<void>;
   updateHouseInfo: (houseId: number, updates: Partial<Pick<House, "area" | "constructorName" | "type" | "expectedDate">>) => void;
   renameHouse: (oldNumber: number, newNumber: number) => Promise<boolean>;
   getHouseProgress: (houseId: number) => number;
@@ -1624,7 +1631,14 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
 
   // Batch update scope progress for multiple houses - optimized for performance
   // houseProgressMap allows setting different percentages per house
-  const updateBatchScopeProgress = useCallback(async (houseIds: number[], macroId: string, scopeId: string, progress: number, houseProgressMap?: Record<number, number>) => {
+  const updateBatchScopeProgress = useCallback(async (
+    houseIds: number[],
+    macroId: string,
+    scopeId: string,
+    progress: number,
+    houseProgressMap?: Record<number, number>,
+    options?: { mode?: "set" | "increment" },
+  ) => {
     if (!currentProjectId || houseIds.length === 0) return;
 
     try {
@@ -1656,9 +1670,14 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       const updates: { houseNumber: number; updatedMacros: Macro[] }[] = [];
       
       for (const houseData of housesData) {
-        // Use individual percentage if available, otherwise use the default progress
-        const houseProgress = houseProgressMap?.[houseData.house_number] ?? progress;
-        
+        const requestedProgress = Number(houseProgressMap?.[houseData.house_number] ?? progress);
+        const applyProgress = (currentProgress: number) => {
+          if (options?.mode === "increment") {
+            return Math.max(0, Math.min(100, currentProgress + requestedProgress));
+          }
+          return Math.max(0, Math.min(100, requestedProgress));
+        };
+
         const currentMacros = jsonToMacros(houseData.macros);
         let macroFound = false;
         const updatedMacros = currentMacros.map(macro => {
@@ -1672,7 +1691,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
             ...macro,
             scopes: scopes.map(scope => {
               if (scope.id !== scopeId) return scope;
-              return { ...scope, progress: houseProgress };
+              return { ...scope, progress: applyProgress(Number(scope.progress) || 0) };
             })
           };
         });
@@ -1686,7 +1705,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
                 ...templateMacro,
                 scopes: templateMacro.scopes.map((scope) => ({
                   ...scope,
-                  progress: scope.id === scopeId ? houseProgress : 0,
+                  progress: scope.id === scopeId ? applyProgress(0) : 0,
                   startDate: null,
                   endDate: null,
                 })),
