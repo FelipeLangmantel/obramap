@@ -1386,6 +1386,12 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       const productionDate = entryDate;
       const isOffline = !navigator.onLine;
       const finalProgressMap: Record<number, number> = {};
+      const selectedHousePercents = selectedHouses.map((houseId) =>
+        Math.max(0, Math.min(100, Number(housePercents[houseId] ?? percentual)))
+      );
+      const diaryPercentualExecutado = selectedHousePercents.length > 0
+        ? Math.round(selectedHousePercents.reduce((sum, value) => sum + value, 0) / selectedHousePercents.length)
+        : percentual;
 
       if (!isOffline) {
         const { data: freshHouses, error: freshHousesError } = await supabase
@@ -1421,6 +1427,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
         macro_id: selectedMacro.id, macro_name: selectedMacro.name, macro_color: selectedMacro.color,
         scope_id: selectedScope.id, scope_name: selectedScope.name,
         house_ids: selectedHouses, houses_count: selectedHouses.length,
+        percentage: diaryPercentualExecutado,
         production_date: productionDate, notes: obsItem || null,
         created_by: user?.id || null,
       });
@@ -1443,7 +1450,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
         macro_id: selectedMacro.id, macro_name: selectedMacro.name, macro_color: selectedMacro.color,
         scope_id: selectedScope.id, scope_name: selectedScope.name,
         house_ids: selectedHouses, houses_count: selectedHouses.length,
-        percentual_executado: percentual, observacao: obsItem || null,
+        percentual_executado: diaryPercentualExecutado, observacao: obsItem || null,
       });
 
       // 4) Progresso das casas — só atualiza no servidor quando online.

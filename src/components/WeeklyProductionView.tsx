@@ -840,6 +840,12 @@ export function WeeklyProductionView() {
           revertMap[houseId] = currentProgress;
           progressMap[houseId] = Math.min(100, currentProgress + percentToAdd);
         }
+        const appliedProgressValues = selectedHouses
+          .map((houseId) => progressMap[houseId])
+          .filter((value): value is number => Number.isFinite(value));
+        const appliedSourcePercentual = appliedProgressValues.length > 0
+          ? Math.round((appliedProgressValues.reduce((sum, value) => sum + value, 0) / appliedProgressValues.length) * 10) / 10
+          : null;
 
         await updateBatchScopeProgress(selectedHouses, macro.id, scope.id, 100, progressMap);
 
@@ -858,6 +864,7 @@ export function WeeklyProductionView() {
             scope_name: scope.name,
             house_ids: selectedHouses,
             houses_count: selectedHouses.length,
+            percentage: appliedSourcePercentual,
             production_date: format(new Date(), 'yyyy-MM-dd'),
             is_initial_database: isInitialDatabase,
             is_unplanned: isUnplanned,
@@ -925,7 +932,7 @@ export function WeeklyProductionView() {
             {
               ...(insertedWeeklyProduction as WeeklyProduction),
               source_origin: sourceOrigin,
-              source_percentual: customPercentMode ? massPercentage : 100,
+              source_percentual: appliedSourcePercentual,
             },
             ...prev.filter(prod => prod.id !== insertedWeeklyProduction.id),
           ]);
