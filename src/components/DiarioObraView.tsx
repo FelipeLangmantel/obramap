@@ -1427,7 +1427,6 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
         macro_id: selectedMacro.id, macro_name: selectedMacro.name, macro_color: selectedMacro.color,
         scope_id: selectedScope.id, scope_name: selectedScope.name,
         house_ids: selectedHouses, houses_count: selectedHouses.length,
-        percentage: diaryPercentualExecutado,
         production_date: productionDate, notes: obsItem || null,
         created_by: user?.id || null,
       });
@@ -1657,7 +1656,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
     if (item.production_id) {
       await supabase
         .from("productions")
-        .update({ house_ids: newHouseIds, percentage: avgPct } as any)
+        .update({ house_ids: newHouseIds } as any)
         .eq("id", item.production_id);
     }
 

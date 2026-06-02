@@ -864,7 +864,6 @@ export function WeeklyProductionView() {
             scope_name: scope.name,
             house_ids: selectedHouses,
             houses_count: selectedHouses.length,
-            percentage: appliedSourcePercentual,
             production_date: format(new Date(), 'yyyy-MM-dd'),
             is_initial_database: isInitialDatabase,
             is_unplanned: isUnplanned,
