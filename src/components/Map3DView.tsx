@@ -1362,6 +1362,9 @@ function HouseWalkInspectPanel({
     ?? null;
   const clickedMacro = macroSummaries.find((macro: any) => macro.id === meshData?.service_macro_id) ?? null;
   const clickedScope = clickedMacro?.scopes?.find((scope: any) => scope.id === meshData?.service_scope_id) ?? null;
+  const clickedScopeProgress = clickedScope
+    ? (Number(clickedScope.progress) || Number(meshData?.progress_percent ?? 0) || 0)
+    : 0;
   const serviceRows = macroSummaries
     .flatMap((macro: any) => (macro.scopes ?? []).map((scope: any) => ({ macro, scope })))
     .filter(({ scope }: any) => Number(scope.progress) > 0 || scope.id === meshData?.service_scope_id)
@@ -1410,7 +1413,9 @@ function HouseWalkInspectPanel({
               <div className="rounded-lg border border-primary/25 bg-primary/5 p-3 text-sm">
                 <p className="text-[10px] font-semibold uppercase text-muted-foreground">Serviço clicado</p>
                 <p className="mt-1 font-medium">{clickedMacro.name} → {clickedScope.name}</p>
-                <p className="text-xs text-muted-foreground">{Number(clickedScope.progress) || 0}% concluído</p>
+                <p className="text-xs text-muted-foreground">
+                  {clickedScopeProgress}% {clickedScopeProgress >= 100 ? "concluído" : clickedScopeProgress > 0 ? "em andamento" : "sem avanço confirmado"}
+                </p>
               </div>
             )}
 
@@ -4754,7 +4759,7 @@ export function Map3DView() {
       }
 
       const progressMap = new Map<string, number>();
-      const progressSourceMap = new Map<string, "houses.macros" | "weekly_productions">();
+      const progressSourceMap = new Map<string, "houses.macros" | "weekly_productions_unconfirmed">();
       housesForSync.forEach((h: any) => {
         const hn = h.houseNumber ?? h.house_number ?? h.number ?? h.id;
         (h.macros || []).forEach((macro: any) => {
@@ -4786,8 +4791,8 @@ export function Map3DView() {
             const progressKey = `${houseId}::${row.macro_id}::${row.scope_id}`;
             const currentProgress = progressMap.get(progressKey) ?? 0;
             if (currentProgress <= 0) {
-              progressMap.set(progressKey, 100);
-              progressSourceMap.set(progressKey, "weekly_productions");
+              progressMap.set(progressKey, 1);
+              progressSourceMap.set(progressKey, "weekly_productions_unconfirmed");
             }
           });
         });

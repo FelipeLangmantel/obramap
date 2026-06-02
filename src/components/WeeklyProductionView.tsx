@@ -148,9 +148,10 @@ function productionDiaryMatchKey(
 }
 
 function getProductionHousePercent(prod: WeeklyProduction) {
-  const rawPercent = prod.percentual_executado ?? prod.source_percentual ?? 100;
+  const rawPercent = prod.percentual_executado ?? prod.source_percentual ?? null;
+  if (rawPercent == null) return null;
   const numericPercent = Number(rawPercent);
-  return Number.isFinite(numericPercent) ? Math.max(0, Math.min(100, numericPercent)) : 100;
+  return Number.isFinite(numericPercent) ? Math.max(0, Math.min(100, numericPercent)) : null;
 }
 
 function ProductionRecordItem({ prod, canEdit, podeExcluir, onEdit, onDelete, showFullDetails = false }: {
@@ -164,6 +165,7 @@ function ProductionRecordItem({ prod, canEdit, podeExcluir, onEdit, onDelete, sh
   const origin = getProductionOrigin(prod);
   const originStyle = productionOriginStyles[origin];
   const visibleHouses = showFullDetails ? prod.house_ids : prod.house_ids.slice(0, 6);
+  const confirmedPercent = getProductionHousePercent(prod);
 
   return (
     <div 
@@ -202,7 +204,7 @@ function ProductionRecordItem({ prod, canEdit, podeExcluir, onEdit, onDelete, sh
                 originStyle.chipClass,
               )}
             >
-              {String(houseId).padStart(2, "0")} • {getProductionHousePercent(prod)}%
+              {String(houseId).padStart(2, "0")} • {confirmedPercent == null ? "—" : `${confirmedPercent}%`}
             </span>
           ))}
           {!showFullDetails && prod.house_ids.length > visibleHouses.length && (
@@ -377,7 +379,7 @@ export function WeeklyProductionView() {
         scope_id,
         house_ids,
         percentual_executado,
-        diary_entries!inner(project_id, data_relatorio)
+        diary_entries!inner(project_id, entry_date)
       `)
       .eq("diary_entries.project_id", currentProject.id)
       .is("deleted_at", null)
@@ -389,7 +391,7 @@ export function WeeklyProductionView() {
 
     const matches = new Map<string, number>();
     for (const item of data || []) {
-      const entryDate = item.diary_entries?.data_relatorio;
+      const entryDate = item.diary_entries?.entry_date;
       if (!entryDate) continue;
       const parsedDate = parseISO(entryDate);
       const weekStart = format(startOfWeek(parsedDate, { weekStartsOn: 1 }), "yyyy-MM-dd");
