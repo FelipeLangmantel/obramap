@@ -9,7 +9,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { format, subDays, parseISO } from "date-fns";
+import { format, subDays, parseISO, startOfWeek, endOfWeek } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { FileText, Loader2, CalendarDays, Users, ClipboardCheck, Hammer, AlertTriangle, MessageSquare, CheckCircle2, Camera } from "lucide-react";
 import { toast } from "sonner";
@@ -18,6 +18,21 @@ type Periodo = "semanal" | "quinzenal" | "mensal" | "personalizado";
 type PhotoReportType = "simples" | "gerencial";
 
 const PERIODO_DAYS: Record<Exclude<Periodo, "personalizado">, number> = { semanal: 7, quinzenal: 15, mensal: 30 };
+
+function getPeriodoRange(periodo: Exclude<Periodo, "personalizado">, referenceDate: string) {
+  const reference = parseISO(referenceDate);
+  if (periodo === "semanal") {
+    return {
+      inicio: format(startOfWeek(reference, { weekStartsOn: 1 }), "yyyy-MM-dd"),
+      fim: format(endOfWeek(reference, { weekStartsOn: 1 }), "yyyy-MM-dd"),
+    };
+  }
+
+  return {
+    inicio: format(subDays(reference, PERIODO_DAYS[periodo] - 1), "yyyy-MM-dd"),
+    fim: referenceDate,
+  };
+}
 
 interface DiaryEntryRow {
   id: string;
@@ -73,8 +88,9 @@ const SEVERITY_BADGE: Record<string, { label: string; cls: string; icon: string 
 export default function RelatorioObraView() {
   const { currentProject } = useConstruction();
   const [periodo, setPeriodo] = useState<Periodo>("semanal");
-  const [dataFim, setDataFim] = useState<string>(format(new Date(), "yyyy-MM-dd"));
-  const [dataInicioCustom, setDataInicioCustom] = useState<string>(format(subDays(new Date(), 7), "yyyy-MM-dd"));
+  const initialRange = useMemo(() => getPeriodoRange("semanal", format(new Date(), "yyyy-MM-dd")), []);
+  const [dataInicio, setDataInicio] = useState<string>(initialRange.inicio);
+  const [dataFim, setDataFim] = useState<string>(initialRange.fim);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportingPhotos, setExportingPhotos] = useState(false);
@@ -85,11 +101,30 @@ export default function RelatorioObraView() {
   const [photos, setPhotos] = useState<PhotoReportRow[]>([]);
   const [deviations, setDeviations] = useState<DeviationRow[]>([]);
 
-  const dataInicio = useMemo(() => {
-    if (periodo === "personalizado") return dataInicioCustom;
-    const fim = parseISO(dataFim);
-    return format(subDays(fim, PERIODO_DAYS[periodo] - 1), "yyyy-MM-dd");
-  }, [periodo, dataFim, dataInicioCustom]);
+  const handlePeriodoChange = (value: Periodo) => {
+    setPeriodo(value);
+    if (value !== "personalizado") {
+      const range = getPeriodoRange(value, dataFim);
+      setDataInicio(range.inicio);
+      setDataFim(range.fim);
+    }
+  };
+
+  const handleDataInicioChange = (value: string) => {
+    setDataInicio(value);
+    setPeriodo("personalizado");
+  };
+
+  const handleDataFimChange = (value: string) => {
+    if (periodo === "personalizado") {
+      setDataFim(value);
+      return;
+    }
+
+    const range = getPeriodoRange(periodo, value);
+    setDataInicio(range.inicio);
+    setDataFim(range.fim);
+  };
 
   useEffect(() => {
     if (!currentProject?.id) return;
@@ -998,7 +1033,7 @@ export default function RelatorioObraView() {
           <div className="flex flex-wrap items-end gap-3">
             <div className="flex-1 min-w-[140px]">
               <label className="text-xs font-medium text-muted-foreground">Período</label>
-              <Select value={periodo} onValueChange={(v) => setPeriodo(v as Periodo)}>
+              <Select value={periodo} onValueChange={(v) => handlePeriodoChange(v as Periodo)}>
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="semanal">Semanal (7 dias)</SelectItem>
@@ -1008,15 +1043,13 @@ export default function RelatorioObraView() {
                 </SelectContent>
               </Select>
             </div>
-            {periodo === "personalizado" && (
-              <div className="flex-1 min-w-[160px]">
-                <label className="text-xs font-medium text-muted-foreground">Data Início</label>
-                <Input type="date" value={dataInicioCustom} onChange={(e) => setDataInicioCustom(e.target.value)} className="mt-1" />
-              </div>
-            )}
+            <div className="flex-1 min-w-[160px]">
+              <label className="text-xs font-medium text-muted-foreground">Data Início</label>
+              <Input type="date" value={dataInicio} onChange={(e) => handleDataInicioChange(e.target.value)} className="mt-1" />
+            </div>
             <div className="flex-1 min-w-[160px]">
               <label className="text-xs font-medium text-muted-foreground">Data Fim</label>
-              <Input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="mt-1" />
+              <Input type="date" value={dataFim} onChange={(e) => handleDataFimChange(e.target.value)} className="mt-1" />
             </div>
             <div className="text-xs text-muted-foreground pb-2">
               Período analisado: <span className="font-semibold">{format(parseISO(dataInicio), "dd/MM/yyyy")}</span> até{" "}
