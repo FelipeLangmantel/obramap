@@ -94,7 +94,7 @@ export function GlbSmartLinkDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-6xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]">
+      <DialogContent className="flex h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-6xl flex-col gap-0 overflow-hidden p-0 sm:h-[90vh]">
         <DialogHeader className="shrink-0 px-6 pb-3 pt-6">
           <DialogTitle>Encontrar similares GLB</DialogTitle>
           <DialogDescription>
@@ -163,78 +163,80 @@ export function GlbSmartLinkDialog({
             ))}
           </div>
 
-          <ScrollArea className="min-h-[180px] flex-1 rounded-md border">
-            <div className="divide-y">
-              {candidates.length === 0 ? (
-                <p className="p-4 text-sm text-muted-foreground">
-                  {isPartScoped ? "Nenhuma candidata compativel encontrada nesta parte GLB." : "Nenhuma similar encontrada."}
-                </p>
-              ) : visibleCandidates.length === 0 ? (
-                <p className="p-4 text-sm text-muted-foreground">
-                  Nenhuma candidata neste filtro.
-                </p>
-              ) : visibleCandidates.map((item) => {
-                const canApplyAutomatically = item.status === "applicable";
-                return (
-                  <div key={item.layerKey} className="grid grid-cols-[32px_1fr] gap-3 p-3 text-xs md:grid-cols-[32px_minmax(0,1fr)_92px_112px_96px]">
-                    <Checkbox
-                      checked={selectedKeys.has(item.layerKey)}
-                      disabled={applying || !canApplyAutomatically}
-                      onCheckedChange={(checked) => onToggle(item.layerKey, checked === true)}
-                      aria-label={`Selecionar ${item.layerKey}`}
-                    />
-                    <div className="min-w-0">
-                      <p className="truncate font-mono">{item.layerKey}</p>
-                      <p className="truncate">{item.meshName || "sem nome"} | {item.materialName || "sem material"}</p>
-                      <p className="text-muted-foreground">
-                        {item.size.x.toFixed(2)} x {item.size.y.toFixed(2)} x {item.size.z.toFixed(2)} | {item.reasons.join(" | ")}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Score</p>
-                      <p className="font-semibold">{item.score}% | {item.confidence}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Casa</p>
-                      <p className="font-semibold">{item.suggestedHouseNumber != null ? `Casa ${item.suggestedHouseNumber}` : "-"}</p>
-                      <p className="text-[10px] text-muted-foreground">{item.suggestionReason}</p>
-                      <p className="text-[10px] text-muted-foreground">
-                        confianca {item.suggestionConfidence}
-                        {item.suggestionDistance != null ? ` | ${item.suggestionDistance.toFixed(1)}m` : ""}
-                      </p>
-                      {item.secondSuggestionDistance != null && (
+          <div className="min-h-0 flex-1 rounded-md border">
+            <ScrollArea className="h-full">
+              <div className="divide-y">
+                {candidates.length === 0 ? (
+                  <p className="p-4 text-sm text-muted-foreground">
+                    {isPartScoped ? "Nenhuma candidata compativel encontrada nesta parte GLB." : "Nenhuma similar encontrada."}
+                  </p>
+                ) : visibleCandidates.length === 0 ? (
+                  <p className="p-4 text-sm text-muted-foreground">
+                    Nenhuma candidata neste filtro.
+                  </p>
+                ) : visibleCandidates.map((item) => {
+                  const canApplyAutomatically = item.status === "applicable";
+                  return (
+                    <div key={item.layerKey} className="grid grid-cols-[32px_1fr] gap-3 p-3 text-xs md:grid-cols-[32px_minmax(0,1fr)_92px_112px_96px]">
+                      <Checkbox
+                        checked={selectedKeys.has(item.layerKey)}
+                        disabled={applying || !canApplyAutomatically}
+                        onCheckedChange={(checked) => onToggle(item.layerKey, checked === true)}
+                        aria-label={`Selecionar ${item.layerKey}`}
+                      />
+                      <div className="min-w-0">
+                        <p className="truncate font-mono">{item.layerKey}</p>
+                        <p className="truncate">{item.meshName || "sem nome"} | {item.materialName || "sem material"}</p>
+                        <p className="text-muted-foreground">
+                          {item.size.x.toFixed(2)} x {item.size.y.toFixed(2)} x {item.size.z.toFixed(2)} | {item.reasons.join(" | ")}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Score</p>
+                        <p className="font-semibold">{item.score}% | {item.confidence}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Casa</p>
+                        <p className="font-semibold">{item.suggestedHouseNumber != null ? `Casa ${item.suggestedHouseNumber}` : "-"}</p>
+                        <p className="text-[10px] text-muted-foreground">{item.suggestionReason}</p>
                         <p className="text-[10px] text-muted-foreground">
-                          2a ancora {item.secondSuggestionDistance.toFixed(1)}m
-                          {item.suggestionDistanceGap != null ? ` | gap ${item.suggestionDistanceGap.toFixed(1)}m` : ""}
-                          {item.suggestionDistanceRatio != null ? ` | ratio ${item.suggestionDistanceRatio.toFixed(2)}` : ""}
+                          confianca {item.suggestionConfidence}
+                          {item.suggestionDistance != null ? ` | ${item.suggestionDistance.toFixed(1)}m` : ""}
                         </p>
-                      )}
-                      {item.suggestionSource !== "none" && (
-                        <p className="text-[10px] text-muted-foreground">fonte: {item.suggestionSource}</p>
-                      )}
-                      {item.houseSuggestionRejectReason && (
-                        <p className="text-[10px] text-amber-600">motivo: {item.houseSuggestionRejectReason}</p>
-                      )}
-                      {item.currentAssignedHouseNumber != null && (
-                        <p className="text-[10px] text-muted-foreground">atual: {item.currentAssignedHouseNumber}</p>
-                      )}
+                        {item.secondSuggestionDistance != null && (
+                          <p className="text-[10px] text-muted-foreground">
+                            2a ancora {item.secondSuggestionDistance.toFixed(1)}m
+                            {item.suggestionDistanceGap != null ? ` | gap ${item.suggestionDistanceGap.toFixed(1)}m` : ""}
+                            {item.suggestionDistanceRatio != null ? ` | ratio ${item.suggestionDistanceRatio.toFixed(2)}` : ""}
+                          </p>
+                        )}
+                        {item.suggestionSource !== "none" && (
+                          <p className="text-[10px] text-muted-foreground">fonte: {item.suggestionSource}</p>
+                        )}
+                        {item.houseSuggestionRejectReason && (
+                          <p className="text-[10px] text-amber-600">motivo: {item.houseSuggestionRejectReason}</p>
+                        )}
+                        {item.currentAssignedHouseNumber != null && (
+                          <p className="text-[10px] text-muted-foreground">atual: {item.currentAssignedHouseNumber}</p>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Status</p>
+                        <Badge variant={canApplyAutomatically ? "default" : "outline"} className="text-[10px]">
+                          {statusLabel[item.status]}
+                        </Badge>
+                        {!canApplyAutomatically && (
+                          <p className="mt-1 text-[10px] text-muted-foreground">
+                            Visivel para revisao manual, sem aplicacao automatica.
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-muted-foreground">Status</p>
-                      <Badge variant={canApplyAutomatically ? "default" : "outline"} className="text-[10px]">
-                        {statusLabel[item.status]}
-                      </Badge>
-                      {!canApplyAutomatically && (
-                        <p className="mt-1 text-[10px] text-muted-foreground">
-                          Visivel para revisao manual, sem aplicacao automatica.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </ScrollArea>
+                  );
+                })}
+              </div>
+            </ScrollArea>
+          </div>
         </div>
 
         <DialogFooter className="shrink-0 border-t bg-background px-6 py-4">
