@@ -87,7 +87,6 @@ interface ConstructionContextType {
     scopeId: string,
     progress: number,
     houseProgressMap?: Record<number, number>,
-    options?: { mode?: "set" | "increment" },
   ) => Promise<void>;
   updateHouseInfo: (houseId: number, updates: Partial<Pick<House, "area" | "constructorName" | "type" | "expectedDate">>) => void;
   renameHouse: (oldNumber: number, newNumber: number) => Promise<boolean>;
@@ -1637,7 +1636,6 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     scopeId: string,
     progress: number,
     houseProgressMap?: Record<number, number>,
-    options?: { mode?: "set" | "increment" },
   ) => {
     if (!currentProjectId || houseIds.length === 0) return;
 
@@ -1670,13 +1668,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       const updates: { houseNumber: number; updatedMacros: Macro[] }[] = [];
       
       for (const houseData of housesData) {
-        const requestedProgress = Number(houseProgressMap?.[houseData.house_number] ?? progress);
-        const applyProgress = (currentProgress: number) => {
-          if (options?.mode === "increment") {
-            return Math.max(0, Math.min(100, currentProgress + requestedProgress));
-          }
-          return Math.max(0, Math.min(100, requestedProgress));
-        };
+        const houseProgress = Math.max(0, Math.min(100, Number(houseProgressMap?.[houseData.house_number] ?? progress)));
 
         const currentMacros = jsonToMacros(houseData.macros);
         let macroFound = false;
@@ -1691,7 +1683,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
             ...macro,
             scopes: scopes.map(scope => {
               if (scope.id !== scopeId) return scope;
-              return { ...scope, progress: applyProgress(Number(scope.progress) || 0) };
+              return { ...scope, progress: houseProgress };
             })
           };
         });
@@ -1705,7 +1697,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
                 ...templateMacro,
                 scopes: templateMacro.scopes.map((scope) => ({
                   ...scope,
-                  progress: scope.id === scopeId ? applyProgress(0) : 0,
+                  progress: scope.id === scopeId ? houseProgress : 0,
                   startDate: null,
                   endDate: null,
                 })),

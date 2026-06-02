@@ -154,6 +154,22 @@ function getProductionHousePercent(prod: WeeklyProduction) {
   return Number.isFinite(numericPercent) ? Math.max(0, Math.min(100, numericPercent)) : null;
 }
 
+function getProductionProgressFromHouses(prod: WeeklyProduction, houses: any[]) {
+  const progressValues = (prod.house_ids || [])
+    .map((houseId) => {
+      const house = houses.find((item) => Number(item.id) === Number(houseId));
+      const macro = house?.macros?.find((item: any) => item?.id === prod.macro_id || item?.name === prod.macro_name);
+      const scope = macro?.scopes?.find((item: any) => item?.id === prod.scope_id || item?.name === prod.scope_name);
+      const progress = Number(scope?.progress);
+      return Number.isFinite(progress) ? Math.max(0, Math.min(100, progress)) : null;
+    })
+    .filter((value): value is number => value !== null);
+
+  if (progressValues.length === 0) return null;
+  const average = progressValues.reduce((sum, value) => sum + value, 0) / progressValues.length;
+  return Math.round(average * 10) / 10;
+}
+
 function ProductionRecordItem({ prod, canEdit, podeExcluir, onEdit, onDelete, showFullDetails = false }: {
   prod: WeeklyProduction;
   canEdit: boolean;
@@ -410,17 +426,18 @@ export function WeeklyProductionView() {
 
   const applyProductionOrigins = useCallback((rows: WeeklyProduction[], diaryMatches: Map<string, number>) => {
     return rows.map((row) => {
+      const houseProgress = getProductionProgressFromHouses(row, houses);
       if (row.is_initial_database) {
-        return { ...row, source_origin: "initial" as const, source_percentual: row.percentual_executado ?? 100 };
+        return { ...row, source_origin: "initial" as const, source_percentual: row.percentual_executado ?? houseProgress ?? 100 };
       }
       const key = productionDiaryMatchKey(row.macro_id, row.scope_id, row.week_start, row.week_end, row.house_ids || []);
       const diaryPercent = diaryMatches.get(key);
       if (diaryPercent !== undefined) {
         return { ...row, source_origin: "diary" as const, source_percentual: diaryPercent };
       }
-      return { ...row, source_origin: "weekly" as const, source_percentual: row.percentual_executado ?? 100 };
+      return { ...row, source_origin: "weekly" as const, source_percentual: row.percentual_executado ?? houseProgress };
     });
-  }, []);
+  }, [houses]);
 
   useEffect(() => {
     const savedPeriod = localStorage.getItem(`${FILTER_STORAGE_KEY}_period`);

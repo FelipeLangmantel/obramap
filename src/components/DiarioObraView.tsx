@@ -1385,6 +1385,35 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
 
       const productionDate = entryDate;
       const isOffline = !navigator.onLine;
+      const finalProgressMap: Record<number, number> = {};
+
+      if (!isOffline) {
+        const { data: freshHouses, error: freshHousesError } = await supabase
+          .from("houses")
+          .select("house_number, macros")
+          .eq("project_id", currentProject.id)
+          .in("house_number", selectedHouses);
+
+        if (freshHousesError || !freshHouses) {
+          throw freshHousesError || new Error("Erro ao buscar progresso atual das casas.");
+        }
+
+        const currentProgressByHouse = new Map<number, number>();
+        for (const house of freshHouses) {
+          const macros = Array.isArray(house.macros) ? house.macros as any[] : [];
+          const macro = macros.find((item) => item?.id === selectedMacro.id);
+          const scope = Array.isArray(macro?.scopes)
+            ? macro.scopes.find((item: any) => item?.id === selectedScope.id)
+            : null;
+          currentProgressByHouse.set(Number(house.house_number), Number(scope?.progress) || 0);
+        }
+
+        for (const houseId of selectedHouses) {
+          const currentProgress = currentProgressByHouse.get(houseId) || 0;
+          const housePct = Math.max(0, Math.min(100, Number(housePercents[houseId] ?? percentual)));
+          finalProgressMap[houseId] = Math.max(0, Math.min(100, currentProgress + housePct));
+        }
+      }
 
       // 1) productions
       const prodResult = await createProductionAware(guaranteedEntryId, {
@@ -1420,12 +1449,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       // 4) Progresso das casas — só atualiza no servidor quando online.
       // Offline: o progresso será recalculado na próxima reabertura quando os dados voltarem.
       if (!isOffline) {
-        const progressMap: Record<number, number> = {};
-        for (const houseId of selectedHouses) {
-          const housePct = housePercents[houseId] ?? percentual;
-          progressMap[houseId] = Math.max(0, Math.min(100, housePct));
-        }
-        await updateBatchScopeProgress(selectedHouses, selectedMacro.id, selectedScope.id, percentual, progressMap, { mode: "increment" });
+        await updateBatchScopeProgress(selectedHouses, selectedMacro.id, selectedScope.id, percentual, finalProgressMap);
 
         queryClient.invalidateQueries({ queryKey: ["productions"] });
         queryClient.invalidateQueries({ queryKey: ["weekly_productions"] });
