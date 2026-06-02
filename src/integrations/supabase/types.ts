@@ -13546,6 +13546,7 @@ export type Database = {
         }
         Returns: Json
       }
+      mark_own_password_changed: { Args: never; Returns: Json }
       migrate_orphan_data_to_company: {
         Args: { target_company_id: string }
         Returns: Json
