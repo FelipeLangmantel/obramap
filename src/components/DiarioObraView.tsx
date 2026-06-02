@@ -1406,8 +1406,18 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       if (!isOffline) loadItems(guaranteedEntryId);
     } catch (err: any) {
       const msg = err?.message || "";
+      const code = err?.code || "";
+      const isRlsError =
+        code === "42501" ||
+        msg.includes("row-level security") ||
+        msg.includes("violates row-level security");
       if (msg.includes("Capacidade excedida")) {
         toast.error("Capacidade da casa excedida", { description: msg, duration: 9000 });
+      } else if (isRlsError) {
+        toast.error("Sem permissão para lançar produção", {
+          description: "Você não tem permissão para lançar produção nesta obra. Verifique sua função com o administrador.",
+          duration: 9000,
+        });
       } else {
         toast.error("Erro ao registrar: " + msg);
       }
