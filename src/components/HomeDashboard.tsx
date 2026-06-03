@@ -11,12 +11,12 @@ import { Progress } from "@/components/ui/progress";
 import {
   Building2,
   TrendingUp,
-  DollarSign,
   CheckCircle2,
   BarChart3,
   ArrowRight,
   Home,
   Layers,
+  Activity,
   AlertTriangle,
   MapPin,
 } from "lucide-react";
@@ -237,7 +237,17 @@ type LinkedPortfolioCoords = {
   estado: string | null;
   latitude: number | null;
   longitude: number | null;
+  valor_contrato: number;
   obramap_project_id: string | null;
+};
+
+type ProductionStats = {
+  total: number;
+  last7: number;
+  last30: number;
+  projectsWithRecentLaunch: number;
+  projectsWithoutRecentLaunch: number;
+  lastByProjectId: Map<string, string>;
 };
 
 type DashboardProject = {
@@ -306,16 +316,40 @@ const buildProjectSummary = (
   };
 };
 
+const localISODate = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const daysAgoISO = (days: number) => {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return localISODate(date);
+};
+
+const formatRelativeProductionDate = (value?: string | null) => {
+  if (!value) return "Sem lançamento";
+  const [year, month, day] = value.split("-");
+  if (!year || !month || !day) return value;
+  return `${day}/${month}/${year}`;
+};
+
 export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (view: string) => void }) {
   const { profile, company, canAccessProject: authCanAccessProject } = useAuth();
   const { projects, setCurrentProject } = useConstruction();
 
   const [projectSummaries, setProjectSummaries] = useState<ProjectSummary[]>([]);
   const [linkedPortfolioByProjectId, setLinkedPortfolioByProjectId] = useState<Map<string, LinkedPortfolioCoords>>(new Map());
-  const [totalRevenue, setTotalRevenue] = useState(0);
-  const [totalCost, setTotalCost] = useState(0);
-  const [totalProductions, setTotalProductions] = useState(0);
-  const [recentAlerts, setRecentAlerts] = useState(0);
+  const [productionStats, setProductionStats] = useState<ProductionStats>({
+    total: 0,
+    last7: 0,
+    last30: 0,
+    projectsWithRecentLaunch: 0,
+    projectsWithoutRecentLaunch: 0,
+    lastByProjectId: new Map(),
+  });
 
   // First accessible project ID for the 3D preview
   const accessibleProjects = useMemo(
@@ -476,7 +510,7 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
 
       const { data, error } = await supabase
         .from("obras_portfolio")
-        .select("id, nome, municipio, estado, latitude, longitude, obramap_project_id")
+        .select("id, nome, municipio, estado, latitude, longitude, valor_contrato, obramap_project_id")
         .in("obramap_project_id", projectIds);
 
       if (cancelled) return;
@@ -520,11 +554,16 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
         const summary = summaryByProjectId.get(project.id);
         const progress = summary?.progress;
         const numericProgress = progress ?? 0;
+        const lastProductionDate = productionStats.lastByProjectId.get(project.id);
         const health = progress === null || progress === undefined
           ? "gray"
           : numericProgress >= 100
             ? "green"
-            : numericProgress >= 50
+            : !lastProductionDate && numericProgress < 100
+              ? "gray"
+              : productionStats.projectsWithoutRecentLaunch > 0 && !lastProductionDate
+                ? "yellow"
+                : numericProgress >= 50
               ? "green"
               : numericProgress > 0
                 ? "yellow"
@@ -548,11 +587,15 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
           lat: Number(latitude),
           lng: Number(longitude),
           health,
-          valor_contrato: 0,
+          valor_contrato: linkedPortfolio?.valor_contrato && linkedPortfolio.valor_contrato > 0
+            ? linkedPortfolio.valor_contrato
+            : null,
           status,
+          progress,
+          units: summary?.totalHouses ?? Number(project.totalHouses) ?? null,
         };
       });
-  }, [accessibleProjects, linkedPortfolioByProjectId, projectSummaries]);
+  }, [accessibleProjects, linkedPortfolioByProjectId, productionStats.lastByProjectId, productionStats.projectsWithoutRecentLaunch, projectSummaries]);
 
   const projectsWithoutCoordinates = useMemo(() => {
     return accessibleProjects
@@ -576,60 +619,78 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
       .filter((project) => !project.hasCoordinates);
   }, [accessibleProjects, linkedPortfolioByProjectId]);
 
-  // Fetch aggregate financial data
+  // Fetch production activity only for projects visible to the current user.
   useEffect(() => {
-    const fetchFinancialData = async () => {
-      if (!company?.id) return;
-      
+    let cancelled = false;
+
+    const fetchProductionStats = async () => {
+      const projectIds = accessibleProjects.map((project) => project.id).filter(Boolean);
+      if (projectIds.length === 0) {
+        setProductionStats({
+          total: 0,
+          last7: 0,
+          last30: 0,
+          projectsWithRecentLaunch: 0,
+          projectsWithoutRecentLaunch: 0,
+          lastByProjectId: new Map(),
+        });
+        return;
+      }
+
       try {
-        // Get total productions count
-        const { count: prodCount } = await supabase
+        const { data, error } = await supabase
           .from("productions")
-          .select("*", { count: "exact", head: true });
-        setTotalProductions(prodCount || 0);
+          .select("project_id, production_date, created_at")
+          .in("project_id", projectIds)
+          .is("deleted_at", null)
+          .order("production_date", { ascending: false })
+          .limit(5000);
 
-        // Get financial entries summary
-        const { data: financialData } = await supabase
-          .from("financial_entries")
-          .select("amount, category, status");
-        
-        if (financialData) {
-          const costs = financialData.reduce((sum, e) => sum + (e.amount || 0), 0);
-          setTotalCost(costs);
+        if (cancelled) return;
+
+        if (error) {
+          console.error("Error fetching dashboard production stats:", error);
+          return;
         }
 
-        // Get measurements revenue
-        const { data: measurementData } = await supabase
-          .from("measurements")
-          .select("revenue_expected");
-        
-        if (measurementData) {
-          const rev = measurementData.reduce((sum, m) => sum + (m.revenue_expected || 0), 0);
-          setTotalRevenue(rev);
-        }
+        const last7Start = daysAgoISO(7);
+        const last30Start = daysAgoISO(30);
+        const staleStart = daysAgoISO(14);
+        const rows = data || [];
+        const lastByProjectId = new Map<string, string>();
 
-        // Get active alerts
-        const { count: alertCount } = await supabase
-          .from("planning_alerts")
-          .select("*", { count: "exact", head: true })
-          .eq("is_resolved", false);
-        setRecentAlerts(alertCount || 0);
+        rows.forEach((row) => {
+          const date = row.production_date || row.created_at?.slice(0, 10);
+          if (!date || lastByProjectId.has(row.project_id)) return;
+          lastByProjectId.set(row.project_id, date);
+        });
+
+        const last7 = rows.filter((row) => (row.production_date || row.created_at?.slice(0, 10) || "") >= last7Start).length;
+        const last30 = rows.filter((row) => (row.production_date || row.created_at?.slice(0, 10) || "") >= last30Start).length;
+        const projectsWithRecentLaunch = projectIds.filter((projectId) => {
+          const last = lastByProjectId.get(projectId);
+          return Boolean(last && last >= staleStart);
+        }).length;
+
+        setProductionStats({
+          total: rows.length,
+          last7,
+          last30,
+          projectsWithRecentLaunch,
+          projectsWithoutRecentLaunch: projectIds.length - projectsWithRecentLaunch,
+          lastByProjectId,
+        });
       } catch (err) {
         console.error("Error fetching dashboard data:", err);
       }
     };
 
-    fetchFinancialData();
-  }, [company?.id]);
+    fetchProductionStats();
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
+    return () => {
+      cancelled = true;
+    };
+  }, [accessibleProjects]);
 
   const loadedProjectSummaries = projectSummaries.filter((project) => project.progress !== null);
   const loadingProgressCount = projectSummaries.filter((project) => project.progressStatus === "loading").length;
@@ -690,7 +751,7 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
                 <Building2 className="h-5 w-5 text-primary" />
               </div>
               <div className="min-w-0">
-                <p className="text-xs text-muted-foreground font-medium">Obras</p>
+                <p className="text-xs text-muted-foreground font-medium">Obras ativas</p>
                 <p className="text-xl font-bold text-foreground">{projectSummaries.length}</p>
               </div>
             </div>
@@ -704,10 +765,9 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
                 <Home className="h-5 w-5 text-emerald-600" />
               </div>
               <div className="min-w-0">
-                <p className="text-xs text-muted-foreground font-medium">Unidades</p>
+                <p className="text-xs text-muted-foreground font-medium">Unidades totais</p>
                 <p className="text-xl font-bold text-foreground">
-                  {loadedProjectSummaries.length > 0 ? totalCompletedAll : "..."}
-                  <span className="text-sm text-muted-foreground font-normal">/{totalHousesAll}</span>
+                  {totalHousesAll}
                 </p>
               </div>
             </div>
@@ -721,8 +781,10 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
                 <TrendingUp className="h-5 w-5 text-blue-600" />
               </div>
               <div className="min-w-0">
-                <p className="text-xs text-muted-foreground font-medium">Faturamento</p>
-                <p className="text-lg font-bold text-foreground truncate">{formatCurrency(totalRevenue)}</p>
+                <p className="text-xs text-muted-foreground font-medium">Avanço físico médio</p>
+                <p className="text-lg font-bold text-foreground truncate">
+                  {overallProgress !== null ? `${overallProgress}%` : "Atualizando"}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -732,15 +794,15 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-amber-500/10">
-                {recentAlerts > 0 ? (
-                  <AlertTriangle className="h-5 w-5 text-amber-600" />
+                {productionStats.last7 > 0 ? (
+                  <Activity className="h-5 w-5 text-amber-600" />
                 ) : (
-                  <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                  <AlertTriangle className="h-5 w-5 text-amber-600" />
                 )}
               </div>
               <div className="min-w-0">
-                <p className="text-xs text-muted-foreground font-medium">Alertas</p>
-                <p className="text-xl font-bold text-foreground">{recentAlerts}</p>
+                <p className="text-xs text-muted-foreground font-medium">Lançamentos 7 dias</p>
+                <p className="text-xl font-bold text-foreground">{productionStats.last7}</p>
               </div>
             </div>
           </CardContent>
@@ -826,6 +888,12 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
                         </span>
                       </div>
                     </div>
+                    <div className="flex items-center justify-between text-xs pt-1 border-t border-border/70">
+                      <span className="text-muted-foreground">Última atualização</span>
+                      <span className="font-medium text-foreground">
+                        {formatRelativeProductionDate(productionStats.lastByProjectId.get(project.id))}
+                      </span>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -893,23 +961,29 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
           <Card className="border-border/50 shadow-sm">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <DollarSign className="h-4 w-4" />
-                Resumo Financeiro
+                <TrendingUp className="h-4 w-4" />
+                Evolução Física
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Faturamento previsto</span>
-                <span className="font-semibold text-foreground">{formatCurrency(totalRevenue)}</span>
+                <span className="text-sm text-muted-foreground">Avanço físico médio</span>
+                <span className="font-semibold text-foreground">
+                  {overallProgress !== null ? `${overallProgress}%` : "Atualizando"}
+                </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Custos lançados</span>
-                <span className="font-semibold text-foreground">{formatCurrency(totalCost)}</span>
+                <span className="text-sm text-muted-foreground">Lançamentos nos últimos 7 dias</span>
+                <span className="font-semibold text-foreground">{productionStats.last7.toLocaleString("pt-BR")}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Lançamentos nos últimos 30 dias</span>
+                <span className="font-semibold text-foreground">{productionStats.last30.toLocaleString("pt-BR")}</span>
               </div>
               <div className="border-t border-border pt-2 flex items-center justify-between">
-                <span className="text-sm font-medium text-foreground">Resultado estimado</span>
-                <span className={`font-bold ${totalRevenue - totalCost >= 0 ? "text-emerald-600" : "text-destructive"}`}>
-                  {formatCurrency(totalRevenue - totalCost)}
+                <span className="text-sm font-medium text-foreground">Obras sem lançamento há 14 dias</span>
+                <span className="font-bold text-amber-600">
+                  {productionStats.projectsWithoutRecentLaunch}
                 </span>
               </div>
             </CardContent>
@@ -925,7 +999,7 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
             <CardContent className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Lançamentos registrados</span>
-                <span className="font-semibold text-foreground">{totalProductions.toLocaleString("pt-BR")}</span>
+                <span className="font-semibold text-foreground">{productionStats.total.toLocaleString("pt-BR")}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Progresso médio</span>
@@ -938,6 +1012,10 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
                 <span className="font-bold text-primary">
                   {loadedProjectSummaries.length > 0 ? totalCompletedAll : "..."} de {totalHousesAll}
                 </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Obras com lançamento recente</span>
+                <span className="font-semibold text-foreground">{productionStats.projectsWithRecentLaunch}</span>
               </div>
             </CardContent>
           </Card>

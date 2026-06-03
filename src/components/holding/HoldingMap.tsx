@@ -99,8 +99,10 @@ export interface MapObra {
   lat: number;
   lng: number;
   health: string;
-  valor_contrato: number;
+  valor_contrato?: number | null;
   status: string;
+  progress?: number | null;
+  units?: number | null;
 }
 
 export interface HoldingMapHandle {
@@ -211,10 +213,19 @@ const HoldingMap = forwardRef<HoldingMapHandle, HoldingMapProps>(({ obras, onObr
       }
     });
 
-    const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
     const statusLabel: Record<string, string> = {
       em_andamento: "Em Andamento", nao_iniciada: "Não Iniciada",
       concluida: "Concluída", paralisada: "Paralisada",
+    };
+    const formatContractLine = (value?: number | null) => {
+      if (!value || value <= 0) return "";
+      const formatted = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+      return `<span style="font-size:12px;font-weight:600">${formatted}</span><br/>`;
+    };
+    const formatProgressLine = (obra: MapObra) => {
+      if (obra.progress == null) return "";
+      const units = obra.units != null ? ` · ${obra.units} unidade${obra.units === 1 ? "" : "s"}` : "";
+      return `<span style="font-size:11px">Avanço físico: <b>${obra.progress}%</b>${units}</span><br/>`;
     };
 
     // Group obras by coordinates (rounded to 3 decimals for clustering)
@@ -240,7 +251,8 @@ const HoldingMap = forwardRef<HoldingMapHandle, HoldingMapProps>(({ obras, onObr
           <div style="min-width:200px;font-family:sans-serif;line-height:1.7">
             <b style="font-size:13px">${obra.nome}</b><br/>
             <span style="color:#666;font-size:11px">📍 ${obra.municipio}</span><br/>
-            <span style="font-size:12px;font-weight:600">${BRL.format(obra.valor_contrato)}</span><br/>
+            ${formatContractLine(obra.valor_contrato)}
+            ${formatProgressLine(obra)}
             <span style="font-size:11px">${statusLabel[obra.status] || obra.status}</span><br/>
             <span style="color:#1d4ed8;font-size:11px">${distStr}</span>
           </div>
@@ -268,7 +280,7 @@ const HoldingMap = forwardRef<HoldingMapHandle, HoldingMapProps>(({ obras, onObr
               " onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='transparent'">
                 <span style="width:8px;height:8px;border-radius:50%;background:${hc};flex-shrink:0;"></span>
                 <span style="font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${o.nome}</span>
-                <span style="font-size:10px;color:#888;">${BRL.format(o.valor_contrato)}</span>
+                ${o.progress != null ? `<span style="font-size:10px;color:#888;">${o.progress}%</span>` : ""}
               </div>`;
             }).join("")}
           </div>
