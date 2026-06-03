@@ -1308,10 +1308,13 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
     if (getHouseProgress(houseId) >= 100) return;
     setSelectedHouses(prev => {
       const next = prev.includes(houseId) ? prev.filter(h => h !== houseId) : [...prev, houseId];
+      // NÃO pré-popular housePercents: deixar undefined para que o fallback `?? percentual`
+      // sempre reflita o valor ATUAL do slider. Pré-popular causava bug 50→100 quando o usuário
+      // movia o slider depois de selecionar casas.
       setHousePercents(prevP => {
+        if (next.includes(houseId)) return prevP;
         const np = { ...prevP };
-        if (next.includes(houseId) && np[houseId] == null) np[houseId] = percentual;
-        if (!next.includes(houseId)) delete np[houseId];
+        delete np[houseId];
         return np;
       });
       return next;
@@ -1325,9 +1328,9 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       const next = allSelected
         ? prev.filter(id => !selectableIds.includes(id))
         : [...new Set([...prev, ...selectableIds])];
+      // Limpa custom percents de casas que saíram da seleção; não pré-popula novas.
       setHousePercents(prevP => {
         const np = { ...prevP };
-        next.forEach(id => { if (np[id] == null) np[id] = percentual; });
         Object.keys(np).forEach(k => { if (!next.includes(Number(k))) delete np[Number(k)]; });
         return np;
       });
@@ -1362,8 +1365,15 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       return getHouseProgress(hId) + housePct > 100;
     });
     if (casasLimitadas.length > 0) {
-      const disponivel = 100 - getHouseProgress(casasLimitadas[0]);
-      toast.warning(`${casasLimitadas.length} casa(s) têm apenas ${disponivel}% disponível.`, { duration: 5000 });
+      const exemplo = casasLimitadas[0];
+      const atual = getHouseProgress(exemplo);
+      const disponivel = 100 - atual;
+      toast.error(
+        `Casa ${String(exemplo).padStart(2, "0")} já possui ${atual}% executado neste serviço. ` +
+        `Percentual disponível para lançamento: ${disponivel}%. O lançamento informado ultrapassa 100%.`,
+        { duration: 7000 }
+      );
+      return;
     }
     if (produtividadeRef && produtividadeRef > 0 && equipePres > 0) {
       const produtividadeReal = selectedHouses.length / equipePres;
