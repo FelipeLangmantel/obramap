@@ -7,6 +7,50 @@ const corsHeaders = {
 
 const allowedRoles = new Set(["viewer", "editor", "admin"]);
 
+async function sendWelcomeEmail(payload: {
+  email: string;
+  displayName: string;
+  temporaryPassword: string;
+  companyName?: string | null;
+}) {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const appUrl = Deno.env.get("OBRA_MAP_APP_URL") || "https://obramap.app.br";
+  const logoUrl = `${appUrl.replace(/\/$/, "")}/obramap_icon_dark.png`;
+
+  const response = await fetch(`${supabaseUrl}/functions/v1/send-transactional-email`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${serviceRoleKey}`,
+    },
+    body: JSON.stringify({
+      templateName: "user-welcome",
+      recipientEmail: payload.email,
+      idempotencyKey: `user-welcome:${payload.email}:${Date.now()}`,
+      templateData: {
+        userName: payload.displayName,
+        companyName: payload.companyName ?? null,
+        loginEmail: payload.email,
+        temporaryPassword: payload.temporaryPassword,
+        appUrl,
+        logoUrl,
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    let message = "Failed to enqueue welcome email";
+    try {
+      const body = await response.json();
+      if (typeof body?.error === "string") message = body.error;
+    } catch {
+      // Keep the generic message. Never log the temporary password.
+    }
+    throw new Error(message);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -169,10 +213,37 @@ Deno.serve(async (req) => {
       }
     }
 
+    let welcomeEmailSent = false;
+    let welcomeEmailError: string | null = null;
+    try {
+      let companyName: string | null = null;
+      if (targetCompanyId) {
+        const { data: company } = await supabaseAdmin
+          .from("companies")
+          .select("name")
+          .eq("id", targetCompanyId)
+          .maybeSingle();
+        companyName = company?.name ?? null;
+      }
+
+      await sendWelcomeEmail({
+        email,
+        displayName: display_name,
+        temporaryPassword: password,
+        companyName,
+      });
+      welcomeEmailSent = true;
+    } catch (emailError: unknown) {
+      welcomeEmailError = emailError instanceof Error ? emailError.message : "Failed to send welcome email";
+      console.error("Welcome email failed:", welcomeEmailError);
+    }
+
     return new Response(
       JSON.stringify({ 
         success: true, 
         user_id: newUserId,
+        welcome_email_sent: welcomeEmailSent,
+        welcome_email_error: welcomeEmailError,
         message: "User created successfully" 
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }

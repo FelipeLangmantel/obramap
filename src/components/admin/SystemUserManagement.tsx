@@ -255,7 +255,11 @@ export default function SystemUserManagement() {
       }
 
       setTempPassword(password);
-      toast.success("Usuário criado com sucesso!");
+      if (data?.welcome_email_sent) {
+        toast.success("Usuario criado e e-mail de boas-vindas enviado.");
+      } else {
+        toast.warning("Usuario criado, mas houve falha ao enviar o e-mail de boas-vindas.");
+      }
       fetchData();
     } catch (error: any) {
       console.error("Error creating user:", error);

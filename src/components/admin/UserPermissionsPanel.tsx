@@ -159,6 +159,21 @@ const createUserSchema = z.object({
   role: z.enum(["admin", "editor", "viewer"]),
 });
 
+const getEdgeFunctionErrorMessage = async (error: unknown) => {
+  const fallback = error instanceof Error ? error.message : "Erro ao executar a funcao";
+  const response = (error as any)?.context;
+  if (response && typeof response.json === "function") {
+    try {
+      const body = await response.json();
+      if (typeof body?.error === "string") return body.error;
+      if (typeof body?.message === "string") return body.message;
+    } catch {
+      return fallback;
+    }
+  }
+  return fallback;
+};
+
 export function UserPermissionsPanel() {
   const { isAdmin, user, company } = useAuth();
   const { canApprove: isCoordenadorGlobal } = useCoordenadorAccess(undefined);
@@ -354,7 +369,34 @@ export function UserPermissionsPanel() {
 
       if (error) throw error;
 
-      toast.success(`Usuário criado! Senha temporária definida. O usuário deverá trocar no primeiro login.`);
+      const newUserId = (data as any)?.user_id;
+      let welcomeEmailSent = false;
+      try {
+        if (!newUserId) {
+          throw new Error("Usuario criado, mas a RPC nao retornou user_id para envio do e-mail.");
+        }
+        const { data: emailData, error: emailError } = await supabase.functions.invoke("send-user-welcome-email", {
+          body: {
+            user_id: newUserId,
+            email: normalizedEmail,
+            display_name: displayName,
+            temporary_password: password,
+            company_id: company!.id,
+            company_name: company?.name,
+          },
+        });
+
+        if (emailError) throw emailError;
+        if (emailData?.error) throw new Error(emailData.error);
+        welcomeEmailSent = true;
+      } catch (emailError: unknown) {
+        const message = await getEdgeFunctionErrorMessage(emailError);
+        toast.warning(`Usuario criado, mas houve falha ao enviar o e-mail de boas-vindas: ${message}`);
+      }
+
+      if (welcomeEmailSent) {
+        toast.success("Usuario criado! E-mail de boas-vindas enviado.");
+      }
       setIsCreateDialogOpen(false);
       resetForm();
       fetchData();
