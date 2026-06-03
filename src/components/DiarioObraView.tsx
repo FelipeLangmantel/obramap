@@ -1308,10 +1308,13 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
     if (getHouseProgress(houseId) >= 100) return;
     setSelectedHouses(prev => {
       const next = prev.includes(houseId) ? prev.filter(h => h !== houseId) : [...prev, houseId];
+      // NÃO pré-popular housePercents: deixar undefined para que o fallback `?? percentual`
+      // sempre reflita o valor ATUAL do slider. Pré-popular causava bug 50→100 quando o usuário
+      // movia o slider depois de selecionar casas.
       setHousePercents(prevP => {
+        if (next.includes(houseId)) return prevP;
         const np = { ...prevP };
-        if (next.includes(houseId) && np[houseId] == null) np[houseId] = percentual;
-        if (!next.includes(houseId)) delete np[houseId];
+        delete np[houseId];
         return np;
       });
       return next;
@@ -1325,9 +1328,9 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       const next = allSelected
         ? prev.filter(id => !selectableIds.includes(id))
         : [...new Set([...prev, ...selectableIds])];
+      // Limpa custom percents de casas que saíram da seleção; não pré-popula novas.
       setHousePercents(prevP => {
         const np = { ...prevP };
-        next.forEach(id => { if (np[id] == null) np[id] = percentual; });
         Object.keys(np).forEach(k => { if (!next.includes(Number(k))) delete np[Number(k)]; });
         return np;
       });
