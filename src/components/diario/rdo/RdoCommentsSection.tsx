@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { X } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Check, Edit2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { RdoComment } from "./types";
@@ -22,6 +24,39 @@ function initials(name: string | null) {
 }
 
 export function RdoCommentsSection({ items, onAdd, disabled, onChanged }: Props) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+
+  const startEdit = (item: RdoComment) => {
+    setEditingId(item.id);
+    setDraft(item.texto);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setDraft("");
+  };
+
+  const handleSave = async (id: string) => {
+    const texto = draft.trim();
+    if (!texto) {
+      toast.error("Informe o comentário.");
+      return;
+    }
+    try {
+      const { error } = await supabase
+        .from("diary_comments")
+        .update({ texto })
+        .eq("id", id);
+      if (error) throw error;
+      cancelEdit();
+      onChanged();
+      toast.success("Comentário atualizado.");
+    } catch (err: any) {
+      toast.error("Erro: " + (err.message || ""));
+    }
+  };
+
   const handleRemove = async (id: string) => {
     try {
       await supabase.from("diary_comments").update({ deleted_at: new Date().toISOString() }).eq("id", id);
@@ -52,12 +87,38 @@ export function RdoCommentsSection({ items, onAdd, disabled, onChanged }: Props)
                     {format(new Date(c.created_at), "dd/MM HH:mm", { locale: ptBR })}
                   </span>
                 </div>
-                <p className="text-sm whitespace-pre-wrap">{c.texto}</p>
+                {editingId === c.id ? (
+                  <Textarea
+                    value={draft}
+                    onChange={(event) => setDraft(event.target.value)}
+                    className="min-h-[72px] text-sm"
+                  />
+                ) : (
+                  <p className="text-sm whitespace-pre-wrap">{c.texto}</p>
+                )}
               </div>
               {!disabled && (
-                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => handleRemove(c.id)}>
-                  <X className="h-3.5 w-3.5" />
-                </Button>
+                <div className="flex shrink-0 gap-1">
+                  {editingId === c.id ? (
+                    <>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleSave(c.id)}>
+                        <Check className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={cancelEdit}>
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(c)}>
+                        <Edit2 className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRemove(c.id)}>
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
+                  )}
+                </div>
               )}
             </div>
           ))}

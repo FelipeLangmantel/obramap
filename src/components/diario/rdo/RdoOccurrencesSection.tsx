@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { X } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Check, Edit2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { RdoOccurrence } from "./types";
@@ -14,6 +16,39 @@ interface Props {
 }
 
 export function RdoOccurrencesSection({ items, onAdd, disabled, onChanged }: Props) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+
+  const startEdit = (item: RdoOccurrence) => {
+    setEditingId(item.id);
+    setDraft(item.descricao);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setDraft("");
+  };
+
+  const handleSave = async (id: string) => {
+    const descricao = draft.trim();
+    if (!descricao) {
+      toast.error("Informe a ocorrência.");
+      return;
+    }
+    try {
+      const { error } = await supabase
+        .from("diary_occurrences")
+        .update({ descricao })
+        .eq("id", id);
+      if (error) throw error;
+      cancelEdit();
+      onChanged();
+      toast.success("Ocorrência atualizada.");
+    } catch (err: any) {
+      toast.error("Erro: " + (err.message || ""));
+    }
+  };
+
   const handleRemove = async (id: string) => {
     try {
       await supabase.from("diary_occurrences").update({ deleted_at: new Date().toISOString() }).eq("id", id);
@@ -35,7 +70,15 @@ export function RdoOccurrencesSection({ items, onAdd, disabled, onChanged }: Pro
           {items.map(o => (
             <div key={o.id} className="flex items-start gap-2 p-2 rounded border bg-card">
               <div className="flex-1 space-y-1">
-                <p className="text-sm">{o.descricao}</p>
+                {editingId === o.id ? (
+                  <Textarea
+                    value={draft}
+                    onChange={(event) => setDraft(event.target.value)}
+                    className="min-h-[72px] text-sm"
+                  />
+                ) : (
+                  <p className="text-sm">{o.descricao}</p>
+                )}
                 {o.tags?.length > 0 && (
                   <div className="flex flex-wrap gap-1">
                     {o.tags.map((t, i) => (
@@ -45,9 +88,27 @@ export function RdoOccurrencesSection({ items, onAdd, disabled, onChanged }: Pro
                 )}
               </div>
               {!disabled && (
-                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => handleRemove(o.id)}>
-                  <X className="h-3.5 w-3.5" />
-                </Button>
+                <div className="flex shrink-0 gap-1">
+                  {editingId === o.id ? (
+                    <>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleSave(o.id)}>
+                        <Check className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={cancelEdit}>
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(o)}>
+                        <Edit2 className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRemove(o.id)}>
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
+                  )}
+                </div>
               )}
             </div>
           ))}

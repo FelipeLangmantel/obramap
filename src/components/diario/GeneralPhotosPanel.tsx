@@ -25,7 +25,11 @@ interface PhotoRow {
   house_number: number | null;
   created_at: string | null;
   diary_entry_id: string;
+  diary_item_id: string | null;
   entry_date?: string;
+  item_macro_name?: string | null;
+  item_scope_name?: string | null;
+  item_house_ids?: number[];
   url?: string;
 }
 
@@ -34,6 +38,28 @@ const daysAgoISO = (n: number) => {
   const d = new Date();
   d.setDate(d.getDate() - n);
   return d.toISOString().slice(0, 10);
+};
+
+const formatDateBR = (value?: string | null) => {
+  if (!value) return "—";
+  const [datePart] = value.split("T");
+  const [year, month, day] = datePart.split("-");
+  if (!year || !month || !day) return value;
+  return `${day}/${month}/${year}`;
+};
+
+const formatHouseLabel = (photo: PhotoRow) => {
+  if (photo.house_number != null) return `Casa ${String(photo.house_number).padStart(2, "0")}`;
+  const houses = photo.item_house_ids || [];
+  if (houses.length === 1) return `Casa ${String(houses[0]).padStart(2, "0")}`;
+  if (houses.length > 1) return `Casas ${houses.map((h) => String(h).padStart(2, "0")).join(", ")}`;
+  return "Geral / sem casa";
+};
+
+const getPhotoType = (photo: PhotoRow) => {
+  if (photo.diary_item_id) return "Foto vinculada ao serviço";
+  if (photo.house_number != null) return "Foto vinculada à casa";
+  return "Foto geral";
 };
 
 /**
@@ -88,8 +114,7 @@ export function GeneralPhotosPanel() {
 
     const { data: rows, error } = await supabase
       .from("diary_photos")
-      .select("id, storage_path, legenda, house_number, created_at, diary_entry_id")
-      .is("house_number", null)
+      .select("id, storage_path, legenda, house_number, created_at, diary_entry_id, diary_item_id")
       .in("diary_entry_id", entryIds)
       .order("created_at", { ascending: false })
       .limit(500);
@@ -100,15 +125,44 @@ export function GeneralPhotosPanel() {
       return;
     }
 
+    const itemIds = Array.from(new Set((rows || []).map((r: any) => r.diary_item_id).filter(Boolean)));
+    let itemMap = new Map<string, { macro_name: string | null; scope_name: string | null; house_ids: number[] }>();
+
+    if (itemIds.length > 0) {
+      const { data: items, error: itemError } = await supabase
+        .from("diary_items")
+        .select("id, macro_name, scope_name, house_ids")
+        .in("id", itemIds);
+
+      if (itemError) {
+        toast.error("Erro ao carregar vínculos das fotos: " + itemError.message);
+      } else {
+        itemMap = new Map(
+          (items || []).map((item: any) => [
+            item.id,
+            {
+              macro_name: item.macro_name,
+              scope_name: item.scope_name,
+              house_ids: item.house_ids || [],
+            },
+          ])
+        );
+      }
+    }
+
     const withUrls = await Promise.all(
       (rows || []).map(async (r: any) => {
         const { data: signed } = await (supabase.storage.from("diary-photos") as any)
           .createSignedUrl(r.storage_path, 60 * 60, {
             transform: { width: 500, resize: "contain", quality: 65 },
           });
+        const item = r.diary_item_id ? itemMap.get(r.diary_item_id) : null;
         return {
           ...r,
           entry_date: entryMap.get(r.diary_entry_id),
+          item_macro_name: item?.macro_name || null,
+          item_scope_name: item?.scope_name || null,
+          item_house_ids: item?.house_ids || [],
           url: signed?.signedUrl || "",
         } as PhotoRow;
       })
@@ -148,14 +202,7 @@ export function GeneralPhotosPanel() {
     }
     toast.success(newHouse != null ? `Vinculada à Casa ${newHouse}` : "Marcada como geral");
     // Se ganhou casa, sai da lista (esta lista é só de "sem casa")
-    if (newHouse != null) {
-      setPhotos((prev) => prev.filter((p) => p.id !== photo.id));
-      setSelected((prev) => {
-        const next = new Set(prev);
-        next.delete(photo.id);
-        return next;
-      });
-    }
+    setPhotos((prev) => prev.map((p) => (p.id === photo.id ? { ...p, house_number: newHouse } : p)));
   };
 
   const handleBulkLink = async () => {
@@ -171,7 +218,7 @@ export function GeneralPhotosPanel() {
       return;
     }
     toast.success(`${ids.length} foto(s) vinculada(s) à Casa ${newHouse}`);
-    setPhotos((prev) => prev.filter((p) => !selected.has(p.id)));
+    setPhotos((prev) => prev.map((p) => (selected.has(p.id) ? { ...p, house_number: newHouse } : p)));
     setSelected(new Set());
   };
 
@@ -222,7 +269,7 @@ export function GeneralPhotosPanel() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <ImageIcon className="h-5 w-5" />
-            Fotos Gerais (sem casa vinculada)
+            Fotos Gerais
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -311,7 +358,7 @@ export function GeneralPhotosPanel() {
       ) : photos.length === 0 ? (
         <Card>
           <CardContent className="p-8 text-center text-muted-foreground text-sm">
-            Nenhuma foto geral (sem casa) no período selecionado.
+            Nenhuma foto no período selecionado.
           </CardContent>
         </Card>
       ) : (
@@ -319,7 +366,7 @@ export function GeneralPhotosPanel() {
           <Card key={date}>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
-                <Badge variant="outline">{date}</Badge>
+                <Badge variant="outline">{formatDateBR(date)}</Badge>
                 <span className="text-muted-foreground font-normal">{items.length} foto(s)</span>
               </CardTitle>
             </CardHeader>
@@ -352,6 +399,15 @@ export function GeneralPhotosPanel() {
                         </div>
                       )}
                       <div className="p-1.5 space-y-1">
+                        <div className="space-y-0.5 text-[11px]">
+                          <p><span className="font-medium">Data:</span> {formatDateBR(p.entry_date)}</p>
+                          <p><span className="font-medium">Casa:</span> {formatHouseLabel(p)}</p>
+                          <p><span className="font-medium">Serviço:</span> {p.item_scope_name || "Geral"}</p>
+                          {p.item_macro_name && (
+                            <p className="text-muted-foreground">{p.item_macro_name}</p>
+                          )}
+                          <p className="text-muted-foreground">{getPhotoType(p)}</p>
+                        </div>
                         {p.legenda && (
                           <p className="text-xs text-muted-foreground line-clamp-2">{p.legenda}</p>
                         )}
