@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
+import { getAvailablePercent, validateBatchLaunch } from "@/lib/productionEngine";
 import { Textarea } from "@/components/ui/textarea";
 import { 
   ClipboardList, 
@@ -813,6 +814,29 @@ export function WeeklyProductionView() {
     const scope = scopes.find(s => s.id === selectedScope);
 
     if (!macro || !scope) return;
+
+    const launchByHouse = customPercentMode
+      ? housePercentages
+      : selectedHouses.reduce<Record<number, number>>((acc, houseId) => {
+          const house = houses.find((h) => h.id === houseId);
+          acc[houseId] = getAvailablePercent(house, macro.id, scope.id);
+          return acc;
+        }, {});
+
+    const defaultLaunch = customPercentMode ? massPercentage : 0;
+    const validation = validateBatchLaunch(
+      houses,
+      selectedHouses,
+      macro.id,
+      scope.id,
+      launchByHouse,
+      defaultLaunch
+    );
+
+    if (!validation.valid) {
+      toast.error(validation.message, { duration: 7000 });
+      return;
+    }
 
     setIsSaving(true);
     try {
