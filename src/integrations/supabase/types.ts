@@ -2586,6 +2586,7 @@ export type Database = {
           pdf_template: Database["public"]["Enums"]["rdo_pdf_template"]
           processo_licitatorio: string | null
           project_id: string
+          responsavel_dia_nome: string | null
           responsavel_tecnico_art: string | null
           responsavel_tecnico_crea: string | null
           responsavel_tecnico_nome: string | null
@@ -2619,6 +2620,7 @@ export type Database = {
           pdf_template?: Database["public"]["Enums"]["rdo_pdf_template"]
           processo_licitatorio?: string | null
           project_id: string
+          responsavel_dia_nome?: string | null
           responsavel_tecnico_art?: string | null
           responsavel_tecnico_crea?: string | null
           responsavel_tecnico_nome?: string | null
@@ -2652,6 +2654,7 @@ export type Database = {
           pdf_template?: Database["public"]["Enums"]["rdo_pdf_template"]
           processo_licitatorio?: string | null
           project_id?: string
+          responsavel_dia_nome?: string | null
           responsavel_tecnico_art?: string | null
           responsavel_tecnico_crea?: string | null
           responsavel_tecnico_nome?: string | null
