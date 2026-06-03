@@ -11,7 +11,11 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import type { GlbMeshRuntimeInfo, GlbSmartLinkCandidate } from "./glbSmartLink";
+import {
+  getGlbSmartLinkCandidateApplyState,
+  type GlbMeshRuntimeInfo,
+  type GlbSmartLinkCandidate,
+} from "./glbSmartLink";
 
 interface Props {
   open: boolean;
@@ -22,6 +26,8 @@ interface Props {
   serviceLabel: string;
   onOpenChange: (open: boolean) => void;
   onToggle: (layerKey: string, checked: boolean) => void;
+  onSelectAllApplicable: () => void;
+  onClearSelection: () => void;
   onShowCandidates: () => void;
   onIsolateCandidates: () => void;
   onClearPreview: () => void;
@@ -57,6 +63,8 @@ export function GlbSmartLinkDialog({
   serviceLabel,
   onOpenChange,
   onToggle,
+  onSelectAllApplicable,
+  onClearSelection,
   onShowCandidates,
   onIsolateCandidates,
   onClearPreview,
@@ -66,7 +74,10 @@ export function GlbSmartLinkDialog({
   const counts = useMemo(() => {
     return candidates.reduce(
       (acc, item) => {
+        const applyState = getGlbSmartLinkCandidateApplyState(item, base);
         acc[item.status] += 1;
+        if (applyState.selectable) acc.selectable += 1;
+        if (applyState.autoSelectable) acc.autoSelectable += 1;
         if (
           item.suggestedHouseNumber != null
           && item.currentAssignedHouseNumber == null
@@ -76,21 +87,21 @@ export function GlbSmartLinkDialog({
         }
         return acc;
       },
-      { applicable: 0, missing_house: 0, linked: 0, context: 0, ignored: 0, self: 0, suggested: 0 },
+      { applicable: 0, missing_house: 0, linked: 0, context: 0, ignored: 0, self: 0, suggested: 0, selectable: 0, autoSelectable: 0 },
     );
-  }, [candidates]);
+  }, [base, candidates]);
   const isPartScoped = base?.layerKey.startsWith("glbpart:") ?? false;
   const visibleCandidates = useMemo(() => (
     candidates.filter((item) => {
       if (listFilter === "all") return true;
-      if (listFilter === "applicable") return item.status === "applicable";
+      if (listFilter === "applicable") return getGlbSmartLinkCandidateApplyState(item, base).selectable;
       if (listFilter === "context") return item.status === "context" || item.status === "ignored";
       if (listFilter === "missing_house") return item.status === "missing_house";
       if (listFilter === "medium") return item.suggestionConfidence === "media";
       if (listFilter === "linked") return item.status === "linked";
       return true;
     })
-  ), [candidates, listFilter]);
+  ), [base, candidates, listFilter]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -124,7 +135,7 @@ export function GlbSmartLinkDialog({
 
           <div className="grid shrink-0 grid-cols-2 gap-2 text-xs sm:grid-cols-4 lg:grid-cols-7">
             <div className="rounded-md border p-2"><p className="text-muted-foreground">Candidatas</p><p className="text-base font-semibold">{candidates.length}</p></div>
-            <div className="rounded-md border p-2"><p className="text-muted-foreground">Aplicaveis</p><p className="text-base font-semibold">{counts.applicable}</p></div>
+            <div className="rounded-md border p-2"><p className="text-muted-foreground">Aplicaveis</p><p className="text-base font-semibold">{counts.selectable}</p></div>
             <div className="rounded-md border p-2"><p className="text-muted-foreground">Selecionadas</p><p className="text-base font-semibold">{selectedKeys.size}</p></div>
             <div className="rounded-md border p-2"><p className="text-muted-foreground">Sugeridas</p><p className="text-base font-semibold">{counts.suggested}</p></div>
             <div className="rounded-md border p-2"><p className="text-muted-foreground">Sem casa</p><p className="text-base font-semibold">{counts.missing_house}</p></div>
@@ -133,11 +144,17 @@ export function GlbSmartLinkDialog({
           </div>
 
           <div className="shrink-0 rounded-md border border-primary/20 bg-primary/5 p-2 text-xs text-muted-foreground">
-            <span className="font-semibold text-foreground">Aplicaveis: melhor candidata por casa.</span>{" "}
-            Outras pecas parecidas ficam em contexto/revisao manual e nao sao aplicadas automaticamente.
+            <span className="font-semibold text-foreground">Aplicaveis: candidatas com casa sugerida e sem vinculo conflitante.</span>{" "}
+            Itens de contexto/revisao podem ser selecionados manualmente quando forem seguros; vinculos existentes nao sao sobrescritos.
           </div>
 
           <div className="flex shrink-0 flex-wrap gap-2">
+            <Button type="button" variant="secondary" size="sm" onClick={onSelectAllApplicable} disabled={applying || counts.autoSelectable === 0}>
+              Selecionar todas aplicaveis
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={onClearSelection} disabled={applying || selectedKeys.size === 0}>
+              Limpar selecao
+            </Button>
             <Button type="button" variant="outline" size="sm" onClick={onShowCandidates}>
               Mostrar aplicaveis no mapa
             </Button>
@@ -175,12 +192,12 @@ export function GlbSmartLinkDialog({
                     Nenhuma candidata neste filtro.
                   </p>
                 ) : visibleCandidates.map((item) => {
-                  const canApplyAutomatically = item.status === "applicable";
+                  const applyState = getGlbSmartLinkCandidateApplyState(item, base);
                   return (
                     <div key={item.layerKey} className="grid grid-cols-[32px_1fr] gap-3 p-3 text-xs md:grid-cols-[32px_minmax(0,1fr)_92px_112px_96px]">
                       <Checkbox
                         checked={selectedKeys.has(item.layerKey)}
-                        disabled={applying || !canApplyAutomatically}
+                        disabled={applying || !applyState.selectable}
                         onCheckedChange={(checked) => onToggle(item.layerKey, checked === true)}
                         aria-label={`Selecionar ${item.layerKey}`}
                       />
@@ -222,14 +239,12 @@ export function GlbSmartLinkDialog({
                       </div>
                       <div>
                         <p className="text-muted-foreground">Status</p>
-                        <Badge variant={canApplyAutomatically ? "default" : "outline"} className="text-[10px]">
+                        <Badge variant={applyState.selectable ? "default" : "outline"} className="text-[10px]">
                           {statusLabel[item.status]}
                         </Badge>
-                        {!canApplyAutomatically && (
-                          <p className="mt-1 text-[10px] text-muted-foreground">
-                            Visivel para revisao manual, sem aplicacao automatica.
-                          </p>
-                        )}
+                        <p className={applyState.selectable ? "mt-1 text-[10px] text-muted-foreground" : "mt-1 text-[10px] text-amber-600"}>
+                          {applyState.reason}
+                        </p>
                       </div>
                     </div>
                   );

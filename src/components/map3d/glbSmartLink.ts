@@ -62,6 +62,86 @@ export interface GlbSmartLinkCandidate extends GlbMeshRuntimeInfo {
   selectedByDefault: boolean;
 }
 
+export type GlbSmartLinkCandidateApplyState = {
+  selectable: boolean;
+  autoSelectable: boolean;
+  reason: string;
+};
+
+function hasAnySavedLinkData(mesh: ProjectModelMesh | null | undefined) {
+  return !!mesh
+    && (
+      mesh.assigned_house_number != null
+      || mesh.service_macro_id != null
+      || mesh.service_scope_id != null
+    );
+}
+
+export function getGlbSmartLinkCandidateApplyState(
+  candidate: GlbSmartLinkCandidate,
+  base: GlbMeshRuntimeInfo | null | undefined,
+  validHouseNumbers?: Set<number>,
+): GlbSmartLinkCandidateApplyState {
+  const baseSaved = base?.saved ?? null;
+  const targetMacroId = baseSaved?.service_macro_id ?? null;
+  const targetScopeId = baseSaved?.service_scope_id ?? null;
+  const targetHouseNumber = candidate.suggestedHouseNumber;
+
+  if (!base || !targetMacroId || !targetScopeId || isContextProjectModelMesh(baseSaved)) {
+    return { selectable: false, autoSelectable: false, reason: "Mesh base sem Casa/Servico completo" };
+  }
+  if (candidate.layerKey === base.layerKey || candidate.status === "self") {
+    return { selectable: false, autoSelectable: false, reason: "Mesh base nao pode ser aplicada novamente" };
+  }
+  if (targetHouseNumber == null || (validHouseNumbers && !validHouseNumbers.has(targetHouseNumber))) {
+    return { selectable: false, autoSelectable: false, reason: "Sem casa identificada" };
+  }
+
+  const saved = candidate.saved;
+  if (saved?.ignored) {
+    return { selectable: false, autoSelectable: false, reason: "Mesh marcada como ignorada" };
+  }
+
+  const hasCompleteExistingLink = !!saved
+    && saved.assigned_house_number != null
+    && saved.service_macro_id != null
+    && saved.service_scope_id != null
+    && !isContextProjectModelMesh(saved);
+
+  if (hasCompleteExistingLink) {
+    const sameTarget = Number(saved.assigned_house_number) === targetHouseNumber
+      && saved.service_macro_id === targetMacroId
+      && saved.service_scope_id === targetScopeId;
+    return {
+      selectable: false,
+      autoSelectable: false,
+      reason: sameTarget
+        ? "Ja vinculada a esta casa/servico"
+        : "Ja possui vinculo com outra casa/servico",
+    };
+  }
+
+  if (hasAnySavedLinkData(saved) && !isContextProjectModelMesh(saved)) {
+    return {
+      selectable: false,
+      autoSelectable: false,
+      reason: "Ja possui vinculo parcial; revise manualmente",
+    };
+  }
+
+  const requiresManualReview = candidate.status === "context"
+    || candidate.suggestionConfidence === "baixa"
+    || candidate.acceptedDominantAnchor === false;
+
+  return {
+    selectable: true,
+    autoSelectable: !requiresManualReview,
+    reason: requiresManualReview
+      ? "Requer revisao manual; pode selecionar individualmente"
+      : "Aplicavel",
+  };
+}
+
 const EPSILON = 0.0001;
 
 function materialNameOf(mesh: THREE.Mesh) {

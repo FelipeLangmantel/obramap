@@ -27,6 +27,7 @@ import { GLB_CONTEXT_MESH_MARKER, isCompleteProductionLink, isContextProjectMode
 import { MeshReviewPanel, type ServiceOption } from "./map3d/MeshReviewPanel";
 import { GlbSmartLinkDialog } from "./map3d/GlbSmartLinkDialog";
 import {
+  getGlbSmartLinkCandidateApplyState,
   getGlbHouseSuggestionDiagnostics,
   getGlbTextHouseAnchors,
   getSceneMeshInfo,
@@ -3058,19 +3059,20 @@ export function Map3DView() {
     clearSmartLinkPreviewHighlight("reapply");
     if (!sceneObj || !smartLinkPreviewEnabled || !smartLinkBaseKey) return;
 
+    const validHouseNumbers = new Set(houseNumbers);
     const candidateKeys = new Set(
       smartLinkCandidates
         .filter((candidate) => {
           if (smartLinkPreviewMode === "isolate") {
             return smartLinkIsolationFilter === "all"
-              || (smartLinkIsolationFilter === "applicable" && candidate.status === "applicable")
+              || (smartLinkIsolationFilter === "applicable" && getGlbSmartLinkCandidateApplyState(candidate, smartLinkBase, validHouseNumbers).selectable)
               || (smartLinkIsolationFilter === "selected" && smartLinkSelectedKeys.has(candidate.layerKey))
               || (smartLinkIsolationFilter === "missing_house" && candidate.status === "missing_house")
               || (smartLinkIsolationFilter === "medium" && candidate.suggestionConfidence === "media")
               || (smartLinkIsolationFilter === "linked" && candidate.status === "linked")
               || (smartLinkIsolationFilter === "context" && candidate.status === "context");
           }
-          return candidate.status === "applicable"
+          return getGlbSmartLinkCandidateApplyState(candidate, smartLinkBase, validHouseNumbers).selectable
             || smartLinkSelectedKeys.has(candidate.layerKey)
             || candidate.layerKey === smartLinkFocusedCandidateKey;
         })
@@ -3148,6 +3150,8 @@ export function Map3DView() {
   }, [
     clearSmartLinkPreviewHighlight,
     sceneObj,
+    houseNumbers,
+    smartLinkBase,
     smartLinkBaseKey,
     smartLinkCandidates,
     smartLinkFocusedCandidateKey,
@@ -3376,15 +3380,22 @@ export function Map3DView() {
   const toggleSmartLinkCandidate = useCallback((layerKey: string, checked: boolean) => {
     setSmartLinkSelectedKeys((prev) => {
       const next = new Set(prev);
+      const candidate = smartLinkCandidates.find((item) => item.layerKey === layerKey) ?? null;
+      const applyState = candidate
+        ? getGlbSmartLinkCandidateApplyState(candidate, smartLinkBase, new Set(houseNumbers))
+        : { selectable: false, autoSelectable: false, reason: "Candidata nao encontrada" };
+      if (checked && (!candidate || !applyState.selectable)) {
+        toast.warning(applyState.reason);
+        return next;
+      }
       if (checked) next.add(layerKey);
       else next.delete(layerKey);
-      const candidate = smartLinkCandidates.find((item) => item.layerKey === layerKey) ?? null;
-      if (candidate && checked && candidate.status !== "applicable") {
+      if (candidate && checked && !applyState.autoSelectable) {
         console.log("[SmartLink Selection Override]", {
           candidate: layerKey,
           status: candidate.status,
           selectedManually: true,
-          reason: candidate.houseSuggestionRejectReason || candidate.suggestionReason,
+          reason: applyState.reason,
         });
       }
       console.log("[GLB Smart Review]", {
@@ -3398,7 +3409,24 @@ export function Map3DView() {
       });
       return next;
     });
-  }, [smartLinkCandidates, smartLinkFocusedCandidateKey, smartLinkIsolationFilter]);
+  }, [houseNumbers, smartLinkBase, smartLinkCandidates, smartLinkFocusedCandidateKey, smartLinkIsolationFilter]);
+
+  const selectAllApplicableSmartLinkCandidates = useCallback(() => {
+    const validHouseNumbers = new Set(houseNumbers);
+    const next = new Set(
+      smartLinkCandidates
+        .filter((candidate) =>
+          getGlbSmartLinkCandidateApplyState(candidate, smartLinkBase, validHouseNumbers).autoSelectable
+        )
+        .map((candidate) => candidate.layerKey),
+    );
+    setSmartLinkSelectedKeys(next);
+    toast.info(`${next.size} candidata(s) aplicaveis selecionada(s).`);
+  }, [houseNumbers, smartLinkBase, smartLinkCandidates]);
+
+  const clearSmartLinkSelection = useCallback(() => {
+    setSmartLinkSelectedKeys(new Set());
+  }, []);
 
   const smartLinkFocusedCandidate = useMemo(() => {
     if (!smartLinkFocusedCandidateKey) return null;
@@ -3408,9 +3436,10 @@ export function Map3DView() {
   const getSmartLinkIsolationKeys = useCallback((filter: SmartLinkIsolationFilter) => {
     const keys = new Set<string>();
     if (smartLinkBaseKey) keys.add(smartLinkBaseKey);
+    const validHouseNumbers = new Set(houseNumbers);
     smartLinkCandidates.forEach((candidate) => {
       const include = filter === "all"
-        || (filter === "applicable" && candidate.status === "applicable")
+        || (filter === "applicable" && getGlbSmartLinkCandidateApplyState(candidate, smartLinkBase, validHouseNumbers).selectable)
         || (filter === "selected" && smartLinkSelectedKeys.has(candidate.layerKey))
         || (filter === "missing_house" && candidate.status === "missing_house")
         || (filter === "medium" && candidate.suggestionConfidence === "media")
@@ -3419,7 +3448,7 @@ export function Map3DView() {
       if (include) keys.add(candidate.layerKey);
     });
     return keys;
-  }, [smartLinkBaseKey, smartLinkCandidates, smartLinkSelectedKeys]);
+  }, [houseNumbers, smartLinkBase, smartLinkBaseKey, smartLinkCandidates, smartLinkSelectedKeys]);
 
   const isolateSmartLinkByFilter = useCallback((filter: SmartLinkIsolationFilter) => {
     const keys = getSmartLinkIsolationKeys(filter);
@@ -3733,58 +3762,27 @@ export function Map3DView() {
     const selectedRawCandidates = smartLinkCandidates.filter((candidate) =>
       smartLinkSelectedKeys.has(candidate.layerKey)
     );
-    const nonApplicableSelected = selectedRawCandidates.filter((candidate) => candidate.status !== "applicable");
-    if (nonApplicableSelected.length > 0) {
-      toast.error(`Remova da selecao ${nonApplicableSelected.length} candidata(s) de contexto, duplicada(s) ou sem casa.`);
+    const blockedSelected = selectedRawCandidates
+      .map((candidate) => ({
+        candidate,
+        applyState: getGlbSmartLinkCandidateApplyState(candidate, smartLinkBase, validHouseNumbers),
+      }))
+      .filter((item) => !item.applyState.selectable);
+    if (blockedSelected.length > 0) {
+      toast.error(`Remova da selecao ${blockedSelected.length} candidata(s) bloqueada(s).`);
       console.log("[SmartLink Selection Override]", {
-        action: "apply-blocked-non-applicable",
-        candidates: nonApplicableSelected.slice(0, 10).map((candidate) => ({
+        action: "apply-blocked-by-link-state",
+        candidates: blockedSelected.slice(0, 10).map(({ candidate, applyState }) => ({
           layerKey: candidate.layerKey,
           status: candidate.status,
           suggestedHouseNumber: candidate.suggestedHouseNumber,
-          reason: candidate.houseSuggestionRejectReason || candidate.suggestionReason,
-        })),
-      });
-      return;
-    }
-    const candidatesWithoutHouse = selectedRawCandidates.filter((candidate) =>
-      candidate.suggestedHouseNumber == null || !validHouseNumbers.has(candidate.suggestedHouseNumber)
-    );
-    if (candidatesWithoutHouse.length > 0) {
-      toast.error(`Defina Casa antes de aplicar ${candidatesWithoutHouse.length} candidata(s) selecionada(s).`);
-      console.log("[SmartLink Selection Override]", {
-        action: "apply-blocked-missing-house",
-        candidates: candidatesWithoutHouse.slice(0, 10).map((candidate) => ({
-          layerKey: candidate.layerKey,
-          status: candidate.status,
-          suggestedHouseNumber: candidate.suggestedHouseNumber,
-          reason: candidate.houseSuggestionRejectReason || candidate.suggestionReason,
-        })),
-      });
-      return;
-    }
-    const blockedByExistingState = selectedRawCandidates.filter((candidate) =>
-      candidate.status === "linked"
-      || candidate.status === "context"
-      || candidate.status === "ignored"
-      || candidate.status === "self"
-    );
-    if (blockedByExistingState.length > 0) {
-      toast.error(`Remova da selecao ${blockedByExistingState.length} candidata(s) ja vinculada(s), contexto, ignorada(s) ou base.`);
-      console.log("[SmartLink Selection Override]", {
-        action: "apply-blocked-existing-state",
-        candidates: blockedByExistingState.slice(0, 10).map((candidate) => ({
-          layerKey: candidate.layerKey,
-          status: candidate.status,
-          suggestedHouseNumber: candidate.suggestedHouseNumber,
+          reason: applyState.reason,
         })),
       });
       return;
     }
     const selectedCandidates = selectedRawCandidates.filter((candidate) =>
-      candidate.status === "applicable"
-      && candidate.suggestedHouseNumber != null
-      && validHouseNumbers.has(candidate.suggestedHouseNumber)
+      getGlbSmartLinkCandidateApplyState(candidate, smartLinkBase, validHouseNumbers).selectable
     );
     if (selectedCandidates.length === 0) {
       toast.error("Nenhuma candidata aplicável com casa sugerida foi selecionada.");
@@ -6786,6 +6784,8 @@ export function Map3DView() {
         serviceLabel={smartLinkServiceLabel}
         onOpenChange={handleSmartLinkOpenChange}
         onToggle={toggleSmartLinkCandidate}
+        onSelectAllApplicable={selectAllApplicableSmartLinkCandidates}
+        onClearSelection={clearSmartLinkSelection}
         onShowCandidates={showSmartLinkCandidatesOnMap}
         onIsolateCandidates={isolateSmartLinkCandidates}
         onClearPreview={() => clearSmartLinkPreview("dialog clear preview")}
