@@ -743,7 +743,7 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
                 className="text-xs"
               >
                 <Calculator className="w-3 h-3 mr-1" />
-                Importar Pesos do Orçamento
+                Configurar Pesos
               </Button>
             )}
           </div>
