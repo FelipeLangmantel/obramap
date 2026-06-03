@@ -377,8 +377,9 @@ export function GeneralPhotosPanel() {
                   return (
                     <div
                       key={p.id}
-                      className={`relative rounded-md border overflow-hidden bg-muted ${isSel ? "ring-2 ring-primary" : ""}`}
+                      className={`overflow-hidden rounded-lg border bg-card shadow-sm ${isSel ? "ring-2 ring-primary" : ""}`}
                     >
+                      <div className="relative bg-muted/50">
                       <div className="absolute top-1 left-1 z-10 bg-background/80 rounded p-0.5">
                         <Checkbox
                           checked={isSel}
@@ -391,13 +392,14 @@ export function GeneralPhotosPanel() {
                           src={p.url}
                           alt={p.legenda || "foto"}
                           loading="lazy"
-                          className="w-full h-32 object-cover"
+                          className="h-36 w-full object-contain"
                         />
                       ) : (
-                        <div className="w-full h-32 flex items-center justify-center text-muted-foreground">
+                        <div className="flex h-36 w-full items-center justify-center text-muted-foreground">
                           <ImageIcon className="h-6 w-6" />
                         </div>
                       )}
+                      </div>
                       <div className="p-1.5 space-y-1">
                         <div className="space-y-0.5 text-[11px]">
                           <p><span className="font-medium">Data:</span> {formatDateBR(p.entry_date)}</p>
@@ -408,9 +410,14 @@ export function GeneralPhotosPanel() {
                           )}
                           <p className="text-muted-foreground">{getPhotoType(p)}</p>
                         </div>
-                        {p.legenda && (
-                          <p className="text-xs text-muted-foreground line-clamp-2">{p.legenda}</p>
-                        )}
+                        <div className="rounded-md border bg-muted/30 p-2">
+                          <p className="text-[11px] font-medium text-muted-foreground">Legenda/descrição</p>
+                          {p.legenda ? (
+                            <p className="mt-1 line-clamp-2 text-xs leading-snug text-foreground">{p.legenda}</p>
+                          ) : (
+                            <p className="mt-1 text-xs italic text-muted-foreground">Sem legenda adicionada.</p>
+                          )}
+                        </div>
                         <Select
                           value={p.house_number == null ? "none" : String(p.house_number)}
                           onValueChange={(v) => handleRelinkOne(p, v)}

@@ -2488,28 +2488,62 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
               />
             <div className="space-y-3">
               {fotos.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {fotos.map(foto => (
-                    <div key={foto.id} className="relative group w-24">
-                      <button type="button" onClick={() => {
-                        setFotoAmpliada(foto);
-                        setFotoLegendaDraft(foto.legenda || "");
-                      }}
-                        className="block focus:outline-none focus:ring-2 focus:ring-ring rounded-lg">
-                        <img src={foto.url} alt={foto.legenda || "Foto do diário"}
-                          className="w-20 h-20 object-cover rounded-lg border" />
-                      </button>
-                      {foto.legenda && (
-                        <p className="mt-1 line-clamp-2 text-[10px] text-muted-foreground">{foto.legenda}</p>
-                      )}
-                      {!diaryFormDisabled && (
-                        <button type="button" onClick={() => handleRemoverFoto(foto.id, foto.storage_path)}
-                          className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full w-5 h-5 text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow">
-                          <X className="h-3 w-3" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {fotos.map(foto => {
+                    const openPhoto = () => {
+                      setFotoAmpliada(foto);
+                      setFotoLegendaDraft(foto.legenda || "");
+                    };
+
+                    return (
+                      <div key={foto.id} className="group overflow-hidden rounded-lg border bg-card shadow-sm">
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={openPhoto}
+                            className="flex h-40 w-full items-center justify-center bg-muted/50 focus:outline-none focus:ring-2 focus:ring-ring"
+                            aria-label="Abrir foto ampliada"
+                          >
+                            <img
+                              src={foto.url}
+                              alt={foto.legenda || "Foto do diário"}
+                              loading="lazy"
+                              className="h-full w-full object-contain"
+                            />
+                          </button>
+                          {!diaryFormDisabled && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoverFoto(foto.id, foto.storage_path)}
+                              className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-destructive text-destructive-foreground opacity-0 shadow transition-opacity group-hover:opacity-100"
+                              aria-label="Remover foto"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                        <div className="space-y-2 p-3">
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground">Legenda/descrição</p>
+                            {foto.legenda ? (
+                              <p className="mt-1 line-clamp-3 text-sm leading-snug text-foreground">{foto.legenda}</p>
+                            ) : (
+                              <p className="mt-1 text-sm italic text-muted-foreground">Sem legenda adicionada.</p>
+                            )}
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="w-full justify-center"
+                            onClick={openPhoto}
+                          >
+                            {!diaryFormDisabled ? "Ver / editar legenda" : "Ver foto"}
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
               {uploadingFoto && (
@@ -2608,12 +2642,18 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
         <Dialog open={!!fotoAmpliada} onOpenChange={(open) => {
           if (!open) setFotoAmpliada(null);
         }}>
-          <DialogContent className="max-w-3xl p-2">
+          <DialogContent className="max-h-[92vh] max-w-[95vw] overflow-y-auto p-3 sm:max-w-4xl">
             <DialogHeader className="sr-only">
               <DialogTitle>Foto ampliada</DialogTitle>
               <DialogDescription>Visualização ampliada da foto anexada ao diário.</DialogDescription>
             </DialogHeader>
-            <img src={fotoAmpliada.url} alt={fotoAmpliada.legenda || "Foto do diário"} className="w-full rounded-lg" />
+            <div className="flex max-h-[72vh] min-h-[220px] items-center justify-center rounded-lg bg-muted/50">
+              <img
+                src={fotoAmpliada.url}
+                alt={fotoAmpliada.legenda || "Foto do diário"}
+                className="max-h-[72vh] max-w-full rounded-lg object-contain"
+              />
+            </div>
             {!diaryFormDisabled ? (
               <div className="space-y-2 px-2 pb-2">
                 <label className="text-xs font-medium text-muted-foreground">Legenda opcional</label>

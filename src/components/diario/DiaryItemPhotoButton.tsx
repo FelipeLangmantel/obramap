@@ -303,45 +303,62 @@ export function DiaryItemPhotoButton({
                 Nenhuma foto anexada a este serviço ainda.
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
                 {fotos.map(f => (
                   <div
                     key={f.id}
                     className={cn(
-                      "relative group rounded-md overflow-hidden border bg-muted",
+                      "group overflow-hidden rounded-lg border bg-card shadow-sm",
                       f.house_number != null && "ring-1 ring-primary/40"
                     )}
                   >
-                    <button
-                      type="button"
-                      className="block w-full"
-                      onClick={() => {
-                        setSelectedPhoto(f);
-                        setCaptionDraft(f.legenda || "");
-                      }}
-                    >
-                      <img src={f.url} alt={f.legenda || "Foto do serviço"} className="w-full h-32 object-cover" />
-                    </button>
-                    {f.legenda && (
-                      <div className="px-2 py-1 text-[11px] text-muted-foreground bg-background border-t">
-                        {f.legenda}
-                      </div>
-                    )}
-                    <div className="absolute bottom-1 left-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
-                      {f.house_number != null
-                        ? `Casa ${String(f.house_number).padStart(2, "0")}`
-                        : "Geral"}
-                    </div>
-                    {!disabled && (
-                      <Button
-                        size="icon"
-                        variant="destructive"
-                        className="absolute top-1 right-1 h-7 w-7 opacity-0 group-hover:opacity-100 transition"
-                        onClick={() => handleRemove(f)}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        className="flex h-36 w-full items-center justify-center bg-muted/50"
+                        onClick={() => {
+                          setSelectedPhoto(f);
+                          setCaptionDraft(f.legenda || "");
+                        }}
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <img src={f.url} alt={f.legenda || "Foto do serviço"} className="h-full w-full object-contain" />
+                      </button>
+                      <div className="absolute bottom-2 left-2 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white">
+                        {f.house_number != null
+                          ? `Casa ${String(f.house_number).padStart(2, "0")}`
+                          : "Geral"}
+                      </div>
+                      {!disabled && (
+                        <Button
+                          size="icon"
+                          variant="destructive"
+                          className="absolute right-2 top-2 h-7 w-7 opacity-0 transition group-hover:opacity-100"
+                          onClick={() => handleRemove(f)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                    <div className="border-t bg-background p-2">
+                      <p className="text-[11px] font-medium text-muted-foreground">Legenda/descrição</p>
+                      {f.legenda ? (
+                        <p className="mt-1 line-clamp-2 text-xs leading-snug text-foreground">{f.legenda}</p>
+                      ) : (
+                        <p className="mt-1 text-xs italic text-muted-foreground">Sem legenda adicionada.</p>
+                      )}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="mt-2 h-7 w-full text-xs"
+                        onClick={() => {
+                          setSelectedPhoto(f);
+                          setCaptionDraft(f.legenda || "");
+                        }}
+                      >
+                        {!disabled ? "Ver / editar legenda" : "Ver foto"}
                       </Button>
-                    )}
+                    </div>
                     {!disabled && (
                       <div className="p-1.5 bg-background border-t">
                         <Select
@@ -376,14 +393,16 @@ export function DiaryItemPhotoButton({
       <Dialog open={!!selectedPhoto} onOpenChange={(nextOpen) => {
         if (!nextOpen) setSelectedPhoto(null);
       }}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-h-[92vh] max-w-[95vw] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>Foto do serviço</DialogTitle>
             <DialogDescription>Visualize a foto e edite a legenda opcional.</DialogDescription>
           </DialogHeader>
           {selectedPhoto && (
             <div className="space-y-3">
-              <img src={selectedPhoto.url} alt={selectedPhoto.legenda || "Foto do serviço"} className="max-h-[60vh] w-full rounded-lg object-contain" />
+              <div className="flex max-h-[66vh] min-h-[220px] items-center justify-center rounded-lg bg-muted/50">
+                <img src={selectedPhoto.url} alt={selectedPhoto.legenda || "Foto do serviço"} className="max-h-[66vh] max-w-full rounded-lg object-contain" />
+              </div>
               {!disabled ? (
                 <div className="space-y-2">
                   <label className="text-xs font-medium text-muted-foreground">Legenda opcional</label>
