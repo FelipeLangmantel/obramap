@@ -13,6 +13,7 @@ import { format, subDays, parseISO, startOfWeek, endOfWeek } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { FileText, Loader2, CalendarDays, Users, ClipboardCheck, Hammer, AlertTriangle, MessageSquare, CheckCircle2, Camera } from "lucide-react";
 import { toast } from "sonner";
+import { calculateHouseProgress } from "@/data/constructionData";
 
 type Periodo = "semanal" | "quinzenal" | "mensal" | "personalizado";
 type PhotoReportType = "simples" | "gerencial";
@@ -56,6 +57,39 @@ interface DiaryItemRow {
   percentual_executado: number;
   observacao: string | null;
 }
+interface HouseProgressRow {
+  id: string;
+  house_number: number;
+  macros: any[];
+}
+interface WeeklyProductionRow {
+  id: string;
+  macro_id: string;
+  macro_name: string;
+  scope_id: string;
+  scope_name: string;
+  house_ids: number[];
+  week_start: string;
+  week_end: string;
+  is_initial_database: boolean;
+  deleted_at: string | null;
+}
+interface WeeklyPlanWeekRow {
+  id: string;
+  week_start: string;
+  week_end: string;
+  status: string;
+}
+interface WeeklyPlanServiceRow {
+  id: string;
+  weekly_plan_week_id: string;
+  macro_id: string;
+  macro_name: string;
+  scope_id: string;
+  scope_name: string;
+  planned_house_ids: number[];
+  planned_houses: number;
+}
 interface PhotoReportRow {
   id: string;
   diary_entry_id: string;
@@ -85,6 +119,45 @@ const SEVERITY_BADGE: Record<string, { label: string; cls: string; icon: string 
   info: { label: "Info", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-blue-300", icon: "🔵" },
 };
 
+const clampPercent = (value: unknown) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  return Math.max(0, Math.min(100, numeric));
+};
+
+const serviceKey = (macroId: string | null | undefined, scopeId: string | null | undefined, macroName?: string, scopeName?: string) =>
+  `${macroId || macroName || "sem-etapa"}|${scopeId || scopeName || "sem-servico"}`;
+
+const productionPairKey = (houseNumber: number, macroId: string | null | undefined, scopeId: string | null | undefined, macroName?: string, scopeName?: string) =>
+  `${houseNumber}|${serviceKey(macroId, scopeId, macroName, scopeName)}`;
+
+const formatHouses = (houses: number[]) =>
+  houses.length > 0
+    ? [...new Set(houses)].sort((a, b) => a - b).map(n => String(n).padStart(2, "0")).join(", ")
+    : "—";
+
+function getHouseScopeProgress(
+  house: HouseProgressRow | undefined,
+  macroId: string | null | undefined,
+  scopeId: string | null | undefined,
+  macroName?: string,
+  scopeName?: string,
+) {
+  if (!house || !Array.isArray(house.macros)) return null;
+  const normalizedMacroName = macroName?.trim().toLowerCase();
+  const normalizedScopeName = scopeName?.trim().toLowerCase();
+  const macro = house.macros.find((item: any) =>
+    item?.id === macroId ||
+    (normalizedMacroName && String(item?.name || "").trim().toLowerCase() === normalizedMacroName)
+  );
+  const scopes = Array.isArray(macro?.scopes) ? macro.scopes : [];
+  const scope = scopes.find((item: any) =>
+    item?.id === scopeId ||
+    (normalizedScopeName && String(item?.name || "").trim().toLowerCase() === normalizedScopeName)
+  );
+  return clampPercent(scope?.progress);
+}
+
 export default function RelatorioObraView() {
   const { currentProject } = useConstruction();
   const [periodo, setPeriodo] = useState<Periodo>("semanal");
@@ -100,6 +173,10 @@ export default function RelatorioObraView() {
   const [items, setItems] = useState<DiaryItemRow[]>([]);
   const [photos, setPhotos] = useState<PhotoReportRow[]>([]);
   const [deviations, setDeviations] = useState<DeviationRow[]>([]);
+  const [housesProgress, setHousesProgress] = useState<HouseProgressRow[]>([]);
+  const [weeklyProductions, setWeeklyProductions] = useState<WeeklyProductionRow[]>([]);
+  const [weeklyPlanWeeks, setWeeklyPlanWeeks] = useState<WeeklyPlanWeekRow[]>([]);
+  const [weeklyPlanServices, setWeeklyPlanServices] = useState<WeeklyPlanServiceRow[]>([]);
 
   const handlePeriodoChange = (value: Periodo) => {
     setPeriodo(value);
@@ -157,6 +234,30 @@ export default function RelatorioObraView() {
           table: "production_deviations",
           filter: `project_id=eq.${currentProject.id}`,
         }, () => loadData())
+        .on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: "houses",
+          filter: `project_id=eq.${currentProject.id}`,
+        }, () => loadData())
+        .on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: "weekly_productions",
+          filter: `project_id=eq.${currentProject.id}`,
+        }, () => loadData())
+        .on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: "weekly_plan_weeks",
+          filter: `project_id=eq.${currentProject.id}`,
+        }, () => loadData())
+        .on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: "weekly_plan_services",
+          filter: `project_id=eq.${currentProject.id}`,
+        }, () => loadData())
         .subscribe();
     };
 
@@ -183,7 +284,59 @@ export default function RelatorioObraView() {
     if (!currentProject?.id) return;
     setLoading(true);
     try {
-      // 1. Diary entries
+      // 1. Casas e progresso acumulado oficial
+      const { data: housesData } = await supabase
+        .from("houses")
+        .select("id, house_number, macros")
+        .eq("project_id", currentProject.id)
+        .order("house_number", { ascending: true });
+      setHousesProgress(((housesData || []) as any[]).map(house => ({
+        id: house.id,
+        house_number: Number(house.house_number),
+        macros: Array.isArray(house.macros) ? house.macros : [],
+      })));
+
+      // 2. Produção semanal direta no intervalo. A tabela nao possui percentual
+      // dedicado; quando necessário, o relatório deriva o percentual de houses.macros.
+      const { data: weeklyData } = await supabase
+        .from("weekly_productions")
+        .select("id, macro_id, macro_name, scope_id, scope_name, house_ids, week_start, week_end, is_initial_database, deleted_at")
+        .eq("project_id", currentProject.id)
+        .lte("week_start", dataFim)
+        .gte("week_end", dataInicio)
+        .is("deleted_at", null)
+        .order("week_start", { ascending: true });
+      setWeeklyProductions(((weeklyData || []) as any[]).map(row => ({
+        ...row,
+        house_ids: (row.house_ids || []).map(Number),
+      })));
+
+      // 3. Planejamento semanal liberado no intervalo
+      const { data: planWeeksData } = await supabase
+        .from("weekly_plan_weeks")
+        .select("id, week_start, week_end, status")
+        .eq("project_id", currentProject.id)
+        .lte("week_start", dataFim)
+        .gte("week_end", dataInicio)
+        .order("week_start", { ascending: true });
+      const planWeeks = (planWeeksData || []) as WeeklyPlanWeekRow[];
+      setWeeklyPlanWeeks(planWeeks);
+
+      if (planWeeks.length > 0) {
+        const { data: planServicesData } = await supabase
+          .from("weekly_plan_services")
+          .select("id, weekly_plan_week_id, macro_id, macro_name, scope_id, scope_name, planned_house_ids, planned_houses")
+          .in("weekly_plan_week_id", planWeeks.map(week => week.id));
+        setWeeklyPlanServices(((planServicesData || []) as any[]).map(row => ({
+          ...row,
+          planned_house_ids: (row.planned_house_ids || []).map(Number),
+          planned_houses: Number(row.planned_houses || (row.planned_house_ids || []).length),
+        })));
+      } else {
+        setWeeklyPlanServices([]);
+      }
+
+      // 4. Diary entries
       const { data: entriesData } = await supabase
         .from("diary_entries")
         .select("id, entry_date, engineer_name, clima, equipe_presente, observacao_geral, status, status_aprovacao, mm_chuva")
@@ -197,56 +350,55 @@ export default function RelatorioObraView() {
       if (entryIds.length === 0) {
         setItems([]);
         setPhotos([]);
-        setDeviations([]);
-        return;
-      }
-
-      // 2. Diary items
-      let itemsData: DiaryItemRow[] = [];
-      const { data } = await supabase
-        .from("diary_items")
-        .select("id, diary_entry_id, macro_id, macro_name, scope_id, scope_name, house_ids, percentual_executado, observacao")
-        .in("diary_entry_id", entryIds);
-      itemsData = (data || []).map(d => ({
-        ...d,
-        house_ids: d.house_ids || [],
-        percentual_executado: Number(d.percentual_executado),
-      }));
-      setItems(itemsData);
-
-      // 3. Diary photos
-      const { data: photosData } = await supabase
-        .from("diary_photos")
-        .select("id, diary_entry_id, diary_item_id, storage_path, legenda, house_number, created_at")
-        .in("diary_entry_id", entryIds)
-        .order("created_at", { ascending: true });
-
-      if (!photosData || photosData.length === 0) {
-        setPhotos([]);
       } else {
-        const photosWithUrls = await Promise.all(
-          photosData.map(async (photo: any) => {
-            const { data: signed } = await (supabase.storage.from("diary-photos") as any)
-              .createSignedUrl(photo.storage_path, 60 * 60, {
-                transform: { width: 900, resize: "contain", quality: 70 },
-              });
+        // 5. Diary items
+        let itemsData: DiaryItemRow[] = [];
+        const { data } = await supabase
+          .from("diary_items")
+          .select("id, diary_entry_id, macro_id, macro_name, scope_id, scope_name, house_ids, percentual_executado, observacao")
+          .in("diary_entry_id", entryIds)
+          .is("deleted_at", null);
+        itemsData = (data || []).map(d => ({
+          ...d,
+          house_ids: d.house_ids || [],
+          percentual_executado: Number(d.percentual_executado),
+        }));
+        setItems(itemsData);
 
-            return {
-              id: photo.id,
-              diary_entry_id: photo.diary_entry_id,
-              diary_item_id: photo.diary_item_id,
-              storage_path: photo.storage_path,
-              legenda: photo.legenda,
-              house_number: photo.house_number,
-              created_at: photo.created_at,
-              url: signed?.signedUrl || "",
-            } as PhotoReportRow;
-          })
-        );
-        setPhotos(photosWithUrls);
+        // 6. Diary photos
+        const { data: photosData } = await supabase
+          .from("diary_photos")
+          .select("id, diary_entry_id, diary_item_id, storage_path, legenda, house_number, created_at")
+          .in("diary_entry_id", entryIds)
+          .order("created_at", { ascending: true });
+
+        if (!photosData || photosData.length === 0) {
+          setPhotos([]);
+        } else {
+          const photosWithUrls = await Promise.all(
+            photosData.map(async (photo: any) => {
+              const { data: signed } = await (supabase.storage.from("diary-photos") as any)
+                .createSignedUrl(photo.storage_path, 60 * 60, {
+                  transform: { width: 900, resize: "contain", quality: 70 },
+                });
+
+              return {
+                id: photo.id,
+                diary_entry_id: photo.diary_entry_id,
+                diary_item_id: photo.diary_item_id,
+                storage_path: photo.storage_path,
+                legenda: photo.legenda,
+                house_number: photo.house_number,
+                created_at: photo.created_at,
+                url: signed?.signedUrl || "",
+              } as PhotoReportRow;
+            })
+          );
+          setPhotos(photosWithUrls);
+        }
       }
 
-      // 4. Deviations
+      // 7. Deviations
       const { data: devData } = await supabase
         .from("production_deviations")
         .select("id, scope_name, macro_name, planned_count, actual_count, missing_house_ids, severity, deviation_reason, week_start, week_end")
@@ -272,6 +424,207 @@ export default function RelatorioObraView() {
     const equipeMedia = equipes.length > 0 ? Math.round(equipes.reduce((s, n) => s + n, 0) / equipes.length) : 0;
     return { diasTrabalhados, casasExecutadas, servicos, equipeMedia };
   }, [entries, items]);
+
+  const physicalReport = useMemo(() => {
+    const templateServices = ((currentProject as any)?.macrosTemplate || [])
+      .flatMap((macro: any) => (macro.scopes || []).map((scope: any) => ({
+        macroId: macro.id,
+        macroName: macro.name,
+        scopeId: scope.id,
+        scopeName: scope.name,
+        weight: Number(scope.weight) || 0,
+      })));
+
+    const fallbackServicesMap = new Map<string, { macroId: string; macroName: string; scopeId: string; scopeName: string; weight: number }>();
+    const addFallbackService = (macroId: string, macroName: string, scopeId: string, scopeName: string) => {
+      const key = serviceKey(macroId, scopeId, macroName, scopeName);
+      if (!fallbackServicesMap.has(key)) {
+        fallbackServicesMap.set(key, { macroId, macroName, scopeId, scopeName, weight: 1 });
+      }
+    };
+
+    housesProgress.forEach(house => {
+      (house.macros || []).forEach((macro: any) => {
+        (macro.scopes || []).forEach((scope: any) => {
+          addFallbackService(String(macro.id || macro.name || ""), macro.name || "Etapa", String(scope.id || scope.name || ""), scope.name || "Serviço");
+        });
+      });
+    });
+    items.forEach(item => addFallbackService(item.macro_id, item.macro_name, item.scope_id, item.scope_name));
+    weeklyProductions.forEach(row => addFallbackService(row.macro_id, row.macro_name, row.scope_id, row.scope_name));
+
+    const services = templateServices.length > 0 ? templateServices : Array.from(fallbackServicesMap.values());
+    const serviceWeights = new Map<string, number>();
+    services.forEach(service => {
+      serviceWeights.set(serviceKey(service.macroId, service.scopeId, service.macroName, service.scopeName), service.weight > 0 ? service.weight : 1);
+    });
+    const totalServiceWeight = Array.from(serviceWeights.values()).reduce((sum, weight) => sum + weight, 0) || services.length || 1;
+
+    const housesByNumber = new Map(housesProgress.map(house => [Number(house.house_number), house]));
+    const diaryPairKeys = new Set<string>();
+    const periodPairs = new Map<string, {
+      houseNumber: number;
+      macroId: string;
+      macroName: string;
+      scopeId: string;
+      scopeName: string;
+      periodPercent: number;
+      accumulatedPercent: number | null;
+      sources: Set<string>;
+    }>();
+
+    const addPair = (
+      houseNumber: number,
+      macroId: string,
+      macroName: string,
+      scopeId: string,
+      scopeName: string,
+      percent: number | null,
+      source: string,
+    ) => {
+      if (percent == null) return;
+      const key = productionPairKey(houseNumber, macroId, scopeId, macroName, scopeName);
+      const current = periodPairs.get(key);
+      const accumulatedPercent = getHouseScopeProgress(housesByNumber.get(houseNumber), macroId, scopeId, macroName, scopeName);
+      if (!current) {
+        periodPairs.set(key, {
+          houseNumber,
+          macroId,
+          macroName,
+          scopeId,
+          scopeName,
+          periodPercent: percent,
+          accumulatedPercent,
+          sources: new Set([source]),
+        });
+        return;
+      }
+      current.periodPercent = Math.min(100, current.periodPercent + percent);
+      current.accumulatedPercent = accumulatedPercent ?? current.accumulatedPercent;
+      current.sources.add(source);
+    };
+
+    items.forEach(item => {
+      const percent = clampPercent(item.percentual_executado);
+      item.house_ids.forEach(houseNumber => {
+        const key = productionPairKey(Number(houseNumber), item.macro_id, item.scope_id, item.macro_name, item.scope_name);
+        diaryPairKeys.add(key);
+        addPair(Number(houseNumber), item.macro_id, item.macro_name, item.scope_id, item.scope_name, percent, "Diário");
+      });
+    });
+
+    weeklyProductions.forEach(row => {
+      row.house_ids.forEach(houseNumber => {
+        const numericHouse = Number(houseNumber);
+        const pairKey = productionPairKey(numericHouse, row.macro_id, row.scope_id, row.macro_name, row.scope_name);
+        if (diaryPairKeys.has(pairKey)) return;
+        const accumulated = getHouseScopeProgress(housesByNumber.get(numericHouse), row.macro_id, row.scope_id, row.macro_name, row.scope_name);
+        addPair(
+          numericHouse,
+          row.macro_id,
+          row.macro_name,
+          row.scope_id,
+          row.scope_name,
+          accumulated,
+          row.is_initial_database ? "Banco inicial (acumulado atual)" : "Semanal (acumulado atual)",
+        );
+      });
+    });
+
+    const pairRows = Array.from(periodPairs.values());
+    const weightedPeriod = pairRows.reduce((sum, pair) => {
+      const weight = serviceWeights.get(serviceKey(pair.macroId, pair.scopeId, pair.macroName, pair.scopeName)) || 1;
+      return sum + pair.periodPercent * weight;
+    }, 0);
+    const periodProgressPercent = housesProgress.length > 0
+      ? Math.round((weightedPeriod / (housesProgress.length * totalServiceWeight)) * 10) / 10
+      : 0;
+
+    const accumulatedProgressPercent = housesProgress.length > 0
+      ? Math.round(
+          housesProgress.reduce((sum, house) => sum + calculateHouseProgress(house as any, (currentProject as any)?.macrosTemplate), 0) /
+          housesProgress.length * 10
+        ) / 10
+      : 0;
+
+    const servicesMap = new Map<string, {
+      macro: string;
+      scope: string;
+      houses: Set<number>;
+      periodValues: number[];
+      accumulatedValues: number[];
+      sources: Set<string>;
+    }>();
+    pairRows.forEach(pair => {
+      const key = serviceKey(pair.macroId, pair.scopeId, pair.macroName, pair.scopeName);
+      if (!servicesMap.has(key)) {
+        servicesMap.set(key, {
+          macro: pair.macroName,
+          scope: pair.scopeName,
+          houses: new Set<number>(),
+          periodValues: [],
+          accumulatedValues: [],
+          sources: new Set<string>(),
+        });
+      }
+      const group = servicesMap.get(key)!;
+      group.houses.add(pair.houseNumber);
+      group.periodValues.push(pair.periodPercent);
+      if (pair.accumulatedPercent != null) group.accumulatedValues.push(pair.accumulatedPercent);
+      pair.sources.forEach(source => group.sources.add(source));
+    });
+
+    const servicesPeriod = Array.from(servicesMap.values()).map(group => ({
+      macro: group.macro,
+      scope: group.scope,
+      housesArr: Array.from(group.houses).sort((a, b) => a - b),
+      houses: formatHouses(Array.from(group.houses)),
+      periodPercent: group.periodValues.length > 0
+        ? Math.round((group.periodValues.reduce((sum, value) => sum + value, 0) / group.periodValues.length) * 10) / 10
+        : null,
+      accumulatedPercent: group.accumulatedValues.length > 0
+        ? Math.round((group.accumulatedValues.reduce((sum, value) => sum + value, 0) / group.accumulatedValues.length) * 10) / 10
+        : null,
+      sources: Array.from(group.sources).join(", "),
+    })).sort((a, b) => a.macro.localeCompare(b.macro) || a.scope.localeCompare(b.scope));
+
+    const pairProgressByKey = new Map(pairRows.map(pair => [
+      productionPairKey(pair.houseNumber, pair.macroId, pair.scopeId, pair.macroName, pair.scopeName),
+      pair.periodPercent,
+    ]));
+
+    const planningComparison = weeklyPlanServices.map(plan => {
+      const plannedHouses = (plan.planned_house_ids || []).map(Number);
+      const executedValues = plannedHouses.map(houseNumber =>
+        pairProgressByKey.get(productionPairKey(houseNumber, plan.macro_id, plan.scope_id, plan.macro_name, plan.scope_name)) || 0
+      );
+      const executedAverage = executedValues.length > 0
+        ? Math.round((executedValues.reduce((sum, value) => sum + value, 0) / executedValues.length) * 10) / 10
+        : 0;
+      const executedHouses = plannedHouses.filter((_, index) => executedValues[index] > 0);
+      const status = executedAverage >= 100 ? "Atendido" : executedAverage > 0 ? "Parcial" : "Não iniciado";
+      return {
+        macro: plan.macro_name,
+        scope: plan.scope_name,
+        plannedHouses,
+        plannedCount: plan.planned_houses || plannedHouses.length,
+        executedHouses,
+        executedAverage,
+        diff: Math.round((executedAverage - 100) * 10) / 10,
+        status,
+      };
+    }).sort((a, b) => a.macro.localeCompare(b.macro) || a.scope.localeCompare(b.scope));
+
+    return {
+      periodProgressPercent,
+      accumulatedProgressPercent,
+      servicesPeriod,
+      housesWithProgress: new Set(pairRows.map(pair => pair.houseNumber)).size,
+      servicesWithProgress: servicesPeriod.length,
+      planningComparison,
+      hasWeeklyPlanning: weeklyPlanWeeks.length > 0 && weeklyPlanServices.length > 0,
+    };
+  }, [currentProject, housesProgress, items, weeklyProductions, weeklyPlanServices, weeklyPlanWeeks.length]);
 
   const photosByServicePeriod = useMemo(() => {
     const itemMap = new Map(items.map(item => [item.id, item]));
@@ -925,8 +1278,53 @@ export default function RelatorioObraView() {
         styles: { fontSize: 9 },
       });
 
-      // Atividades
+      // Evolucao fisica
       let cursorY = (doc as any).lastAutoTable.finalY + 8;
+      doc.setFont("helvetica", "bold");
+      doc.text("Evolucao fisica no periodo", 14, cursorY);
+      autoTable(doc, {
+        startY: cursorY + 4,
+        head: [["Etapa/EAP", "Servico", "Casas", "% Periodo", "Acumulado", "Fonte"]],
+        body: physicalReport.servicesPeriod.length > 0
+          ? physicalReport.servicesPeriod.map(row => [
+              row.macro,
+              row.scope,
+              row.houses,
+              row.periodPercent == null ? "—" : `${row.periodPercent}%`,
+              row.accumulatedPercent == null ? "—" : `${row.accumulatedPercent}%`,
+              row.sources,
+            ])
+          : [["—", "Sem avanco fisico no periodo", "—", "—", "—", "—"]],
+        theme: "striped",
+        headStyles: { fillColor: [16, 185, 129] },
+        styles: { fontSize: 8, cellWidth: "auto" },
+        columnStyles: { 2: { cellWidth: 45 }, 5: { cellWidth: 32 } },
+      });
+
+      cursorY = (doc as any).lastAutoTable.finalY + 8;
+      doc.setFont("helvetica", "bold");
+      doc.text("Planejado x Executado", 14, cursorY);
+      autoTable(doc, {
+        startY: cursorY + 4,
+        head: [["Etapa/EAP", "Servico", "Planejado", "Executado", "% Exec.", "Status"]],
+        body: physicalReport.hasWeeklyPlanning
+          ? physicalReport.planningComparison.map(row => [
+              row.macro,
+              row.scope,
+              formatHouses(row.plannedHouses),
+              formatHouses(row.executedHouses),
+              `${row.executedAverage}%`,
+              row.status,
+            ])
+          : [["—", "Sem planejamento semanal lancado para este periodo", "—", "—", "—", "—"]],
+        theme: "grid",
+        headStyles: { fillColor: [37, 99, 235] },
+        styles: { fontSize: 8, cellWidth: "auto" },
+        columnStyles: { 2: { cellWidth: 42 }, 3: { cellWidth: 42 } },
+      });
+
+      // Atividades
+      cursorY = (doc as any).lastAutoTable.finalY + 8;
       doc.setFont("helvetica", "bold");
       doc.text("Atividades executadas", 14, cursorY);
       autoTable(doc, {
@@ -1086,6 +1484,106 @@ export default function RelatorioObraView() {
         <KpiCard icon={<Hammer />} label="Serviços distintos" value={kpis.servicos} color="text-amber-600" />
         <KpiCard icon={<Users />} label="Equipe média/dia" value={kpis.equipeMedia} color="text-purple-600" />
       </div>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Evolução física da obra</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <MetricCard label="Avanço no período" value={`${physicalReport.periodProgressPercent}%`} />
+            <MetricCard label="Acumulado da obra" value={`${physicalReport.accumulatedProgressPercent}%`} />
+            <MetricCard label="Casas com avanço" value={String(physicalReport.housesWithProgress)} />
+            <MetricCard label="Serviços com avanço" value={String(physicalReport.servicesWithProgress)} />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            O acumulado usa houses.macros como fonte oficial. O avanço do período respeita percentuais parciais do Diário e,
+            para registros semanais sem percentual próprio, usa o acumulado atual da casa/serviço.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Serviços executados no período</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {physicalReport.servicesPeriod.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">Nenhum avanço físico encontrado no período.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Etapa/EAP</TableHead>
+                    <TableHead>Serviço</TableHead>
+                    <TableHead>Casas</TableHead>
+                    <TableHead className="text-right">% no período</TableHead>
+                    <TableHead className="text-right">Acumulado atual</TableHead>
+                    <TableHead>Fonte</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {physicalReport.servicesPeriod.map((row, index) => (
+                    <TableRow key={`${row.macro}-${row.scope}-${index}`}>
+                      <TableCell className="font-medium">{row.macro}</TableCell>
+                      <TableCell>{row.scope}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground max-w-[360px]">{row.houses}</TableCell>
+                      <TableCell className="text-right font-semibold">{row.periodPercent == null ? "—" : `${row.periodPercent}%`}</TableCell>
+                      <TableCell className="text-right">{row.accumulatedPercent == null ? "—" : `${row.accumulatedPercent}%`}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{row.sources}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Planejado x Executado no período</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!physicalReport.hasWeeklyPlanning ? (
+            <p className="text-sm text-muted-foreground text-center py-4">Sem planejamento semanal lançado para este período.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Etapa/EAP</TableHead>
+                    <TableHead>Serviço</TableHead>
+                    <TableHead>Casas planejadas</TableHead>
+                    <TableHead>Casas executadas</TableHead>
+                    <TableHead className="text-right">% executado</TableHead>
+                    <TableHead className="text-right">Diferença</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {physicalReport.planningComparison.map((row, index) => (
+                    <TableRow key={`${row.macro}-${row.scope}-${index}`}>
+                      <TableCell className="font-medium">{row.macro}</TableCell>
+                      <TableCell>{row.scope}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{formatHouses(row.plannedHouses)}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{formatHouses(row.executedHouses)}</TableCell>
+                      <TableCell className="text-right font-semibold">{row.executedAverage}%</TableCell>
+                      <TableCell className="text-right">{row.diff}%</TableCell>
+                      <TableCell>
+                        <Badge variant={row.status === "Atendido" ? "default" : row.status === "Parcial" ? "secondary" : "outline"}>
+                          {row.status}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="pb-2">
@@ -1275,6 +1773,15 @@ function KpiCard({ icon, label, value, color }: { icon: React.ReactNode; label: 
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function MetricCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border bg-muted/30 px-3 py-2">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-xl font-bold">{value}</p>
+    </div>
   );
 }
 
