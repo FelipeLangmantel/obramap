@@ -1297,6 +1297,35 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
     return getProgressFor(houseId, selectedMacro.id, selectedScope.id);
   }, [selectedMacro, selectedScope, getProgressFor]);
 
+  const getHouseAvailablePercent = useCallback((houseId: number): number => {
+    const currentProgress = Math.max(0, Math.min(100, Number(getHouseProgress(houseId)) || 0));
+    return Math.max(0, 100 - currentProgress);
+  }, [getHouseProgress]);
+
+  const selectedHouseBalances = useMemo(() => (
+    selectedHouses.map(houseId => ({
+      houseId,
+      currentProgress: Math.max(0, Math.min(100, Number(getHouseProgress(houseId)) || 0)),
+      available: getHouseAvailablePercent(houseId),
+    }))
+  ), [selectedHouses, getHouseProgress, getHouseAvailablePercent]);
+
+  const maxAvailablePercent = useMemo(() => {
+    if (selectedHouseBalances.length === 0) return 100;
+    return Math.max(0, Math.min(...selectedHouseBalances.map(item => item.available)));
+  }, [selectedHouseBalances]);
+
+  const selectedHouseBalanceKey = useMemo(() => (
+    selectedHouseBalances
+      .map(item => `${item.houseId}:${item.available}`)
+      .sort()
+      .join("|")
+  ), [selectedHouseBalances]);
+
+  const formatPercent = useCallback((value: number): string => (
+    Number.isInteger(value) ? `${value}%` : `${value.toFixed(1)}%`
+  ), []);
+
   const getPctLancadoHoje = useCallback((houseId: number): number => {
     if (!selectedScope) return 0;
     return diaryItems
@@ -1339,7 +1368,8 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   };
 
   const setHousePercent = (houseId: number, value: number) => {
-    setHousePercents(prev => ({ ...prev, [houseId]: Math.max(0, Math.min(100, value)) }));
+    const available = getHouseAvailablePercent(houseId);
+    setHousePercents(prev => ({ ...prev, [houseId]: Math.max(0, Math.min(available, value)) }));
   };
 
   const applyPercentToAll = () => {
@@ -1349,6 +1379,33 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       return np;
     });
   };
+
+  useEffect(() => {
+    if (selectedHouses.length === 0) return;
+
+    setPercentual(maxAvailablePercent);
+    setHousePercents(prev => {
+      let changed = false;
+      const next = { ...prev };
+
+      Object.keys(next).forEach(key => {
+        const houseId = Number(key);
+        if (!selectedHouses.includes(houseId)) {
+          delete next[houseId];
+          changed = true;
+          return;
+        }
+
+        const available = getHouseAvailablePercent(houseId);
+        if (next[houseId] > available) {
+          next[houseId] = available;
+          changed = true;
+        }
+      });
+
+      return changed ? next : prev;
+    });
+  }, [selectedHouses, selectedHouseBalanceKey, maxAvailablePercent, getHouseAvailablePercent]);
 
   const handleRegister = async () => {
     if (!requireEdit()) return;
@@ -2287,11 +2344,22 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                       <div className="rounded-lg border p-3 bg-muted/30 space-y-2">
                         <div className="flex items-center justify-between">
                           <span className="text-xs text-muted-foreground">Padrão (aplica a todas):</span>
-                          <span className="text-xl font-bold text-primary">{percentual}%</span>
+                          <span className="text-xl font-bold text-primary">{formatPercent(percentual)}</span>
                         </div>
-                        <Slider min={10} max={100} step={10} value={[percentual]} onValueChange={v => setPercentual(v[0])} />
-                        <Button variant="outline" size="sm" className="w-full text-xs h-8" onClick={applyPercentToAll}>
-                          Aplicar {percentual}% a todas as casas
+                        <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                          <span>Máximo disponível: {formatPercent(maxAvailablePercent)}</span>
+                          {maxAvailablePercent <= 0 && <span className="font-medium text-destructive">Sem saldo para lançar</span>}
+                        </div>
+                        <Slider
+                          min={0}
+                          max={maxAvailablePercent}
+                          step={1}
+                          value={[Math.min(percentual, maxAvailablePercent)]}
+                          onValueChange={v => setPercentual(Math.max(0, Math.min(maxAvailablePercent, v[0])))}
+                          disabled={maxAvailablePercent <= 0}
+                        />
+                        <Button variant="outline" size="sm" className="w-full text-xs h-8" onClick={applyPercentToAll} disabled={maxAvailablePercent <= 0}>
+                          Aplicar {formatPercent(percentual)} às casas selecionadas
                         </Button>
                       </div>
                       {selectedHouses.length > 1 && (
@@ -2303,8 +2371,8 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                           <div className="max-h-48 overflow-y-auto divide-y">
                             {[...selectedHouses].sort((a, b) => a - b).map(houseId => {
                               const currentProg = getHouseProgress(houseId);
-                              const remaining = 100 - currentProg;
-                              const value = housePercents[houseId] ?? percentual;
+                              const remaining = getHouseAvailablePercent(houseId);
+                              const value = Math.min(housePercents[houseId] ?? percentual, remaining);
                               return (
                                 <div key={houseId} className="flex items-center gap-2 px-3 py-1.5 text-sm">
                                   <span className="font-mono font-bold w-10">{String(houseId).padStart(2, "0")}</span>
@@ -2314,7 +2382,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                                     </span>
                                   )}
                                   <div className="flex-1" />
-                                  <Input type="number" min={0} max={100} value={value}
+                                  <Input type="number" min={0} max={remaining} value={value}
                                     onChange={e => setHousePercent(houseId, Number(e.target.value))}
                                     className="h-8 w-20 text-right" />
                                   <span className="text-xs text-muted-foreground w-4">%</span>
@@ -2326,7 +2394,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                       )}
                       <Textarea value={obsItem} onChange={e => setObsItem(e.target.value)}
                         placeholder="Observação do serviço (opcional)..." className="min-h-[50px]" />
-                      <Button onClick={handleRegister} disabled={registering || !selectedMacro || !selectedScope}
+                      <Button onClick={handleRegister} disabled={registering || !selectedMacro || !selectedScope || maxAvailablePercent <= 0}
                         className="w-full min-h-[48px] text-base font-semibold">
                         {registering ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-5 w-5 mr-2" />}
                         Registrar Serviço
