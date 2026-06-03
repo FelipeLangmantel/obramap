@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 
 interface CurrentProjectHeaderBadgeProps {
   className?: string;
+  mode?: "select" | "readonly";
 }
 
 const normalizeText = (value: string | null | undefined) =>
@@ -41,7 +42,7 @@ const formatProjectDisplayName = (project: {
   return units > 0 ? `${name} - ${units} U.H.` : name;
 };
 
-export function CurrentProjectHeaderBadge({ className }: CurrentProjectHeaderBadgeProps) {
+export function CurrentProjectHeaderBadge({ className, mode = "select" }: CurrentProjectHeaderBadgeProps) {
   const { projects, currentProject, setCurrentProject } = useConstruction();
   const { canAccessProject } = useAuth();
   const [open, setOpen] = useState(false);
@@ -70,6 +71,41 @@ export function CurrentProjectHeaderBadge({ className }: CurrentProjectHeaderBad
 
   const displayName = formatProjectDisplayName(currentProject);
   const location = getProjectLocation(currentProject);
+  const badgeContent = (
+    <>
+      <Building2 className="h-3.5 w-3.5 shrink-0 text-primary" />
+      <div className="min-w-0">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-primary/80">
+          Obra atual
+        </p>
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+          <span className="max-w-[240px] truncate font-semibold text-foreground sm:max-w-[360px]">
+            {displayName}
+          </span>
+          {location && (
+            <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+              <Home className="h-3 w-3" />
+              {location}
+            </span>
+          )}
+        </div>
+      </div>
+    </>
+  );
+
+  if (mode === "readonly") {
+    return (
+      <div
+        className={cn(
+          "flex h-auto min-w-0 max-w-full justify-start gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 text-left text-xs shadow-sm",
+          className,
+        )}
+        title={[currentProject.name, location].filter(Boolean).join(" - ")}
+      >
+        {badgeContent}
+      </div>
+    );
+  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -83,23 +119,7 @@ export function CurrentProjectHeaderBadge({ className }: CurrentProjectHeaderBad
           )}
           title={[currentProject.name, location].filter(Boolean).join(" - ")}
         >
-          <Building2 className="h-3.5 w-3.5 shrink-0 text-primary" />
-          <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-primary/80">
-              Obra atual
-            </p>
-            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
-              <span className="max-w-[240px] truncate font-semibold text-foreground sm:max-w-[360px]">
-                {displayName}
-              </span>
-              {location && (
-                <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                  <Home className="h-3 w-3" />
-                  {location}
-                </span>
-              )}
-            </div>
-          </div>
+          {badgeContent}
           <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-primary/70" />
         </Button>
       </PopoverTrigger>

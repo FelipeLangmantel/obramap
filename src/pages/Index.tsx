@@ -295,8 +295,8 @@ function Index() {
     "contractors",
     "delivery",
     "industrialization",
-    "holding-dashboard",
   ].includes(activeView);
+  const readonlyProjectHeaderViews: ViewType[] = ["map", "interactive-map", "3d-map"];
 
   return (
     <SidebarProvider defaultOpen={true}>
@@ -316,7 +316,9 @@ function Index() {
             </h2>
             
             <div className="flex min-w-0 flex-1 justify-center px-2">
-              {showCurrentProjectHeader && <CurrentProjectHeaderBadge />}
+              {showCurrentProjectHeader && (
+                <CurrentProjectHeaderBadge mode={readonlyProjectHeaderViews.includes(activeView) ? "readonly" : "select"} />
+              )}
             </div>
             
             <div className="flex items-center gap-1.5 md:gap-3 shrink-0 flex-wrap">

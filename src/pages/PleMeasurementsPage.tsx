@@ -4,7 +4,6 @@ import { PleModuleView } from "@/components/ple/PleModuleView";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { ModuleAccessGuard } from "@/components/guards/ModuleAccessGuard";
-import { CurrentProjectHeaderBadge } from "@/components/CurrentProjectHeaderBadge";
 import { Menu } from "lucide-react";
 
 export default function PleMeasurementsPage() {
@@ -23,9 +22,6 @@ export default function PleMeasurementsPage() {
                 <Menu className="h-5 w-5" />
               </SidebarTrigger>
               <span className="text-xs sm:text-sm font-medium text-muted-foreground">Medições do Contrato</span>
-              <div className="ml-auto">
-                <CurrentProjectHeaderBadge />
-              </div>
             </header>
             <main className="flex-1 min-w-0 min-h-0 overflow-hidden">
               <PleModuleView {...pleData} />
