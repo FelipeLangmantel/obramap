@@ -1365,8 +1365,15 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       return getHouseProgress(hId) + housePct > 100;
     });
     if (casasLimitadas.length > 0) {
-      const disponivel = 100 - getHouseProgress(casasLimitadas[0]);
-      toast.warning(`${casasLimitadas.length} casa(s) têm apenas ${disponivel}% disponível.`, { duration: 5000 });
+      const exemplo = casasLimitadas[0];
+      const atual = getHouseProgress(exemplo);
+      const disponivel = 100 - atual;
+      toast.error(
+        `Casa ${String(exemplo).padStart(2, "0")} já possui ${atual}% executado neste serviço. ` +
+        `Percentual disponível para lançamento: ${disponivel}%. O lançamento informado ultrapassa 100%.`,
+        { duration: 7000 }
+      );
+      return;
     }
     if (produtividadeRef && produtividadeRef > 0 && equipePres > 0) {
       const produtividadeReal = selectedHouses.length / equipePres;
