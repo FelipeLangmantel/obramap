@@ -146,6 +146,19 @@ interface UserSession {
   termination_reason: string | null;
 }
 
+const SESSION_ONLINE_WINDOW_MS = 30 * 60 * 1000;
+
+function isSessionOnline(session: UserSession) {
+  if (!session.is_active || !session.last_active_at) return false;
+  const lastActiveAt = new Date(session.last_active_at).getTime();
+  if (Number.isNaN(lastActiveAt)) return false;
+  return Date.now() - lastActiveAt <= SESSION_ONLINE_WINDOW_MS;
+}
+
+function isSessionInactive(session: UserSession) {
+  return session.is_active && !isSessionOnline(session);
+}
+
 // ✅ Importado da fonte única de verdade – novos módulos aparecem automaticamente
 import { MENU_MODULES, MANAGEMENT_MODULES, MENU_TO_MODULE_KEY, getDefaultPermissions, getAllModuleIds, getAllManagementIds } from "@/constants/modulePermissions";
 
@@ -958,7 +971,7 @@ export function UserPermissionsPanel() {
               },
               {
                 label: "Usuários Online",
-                value: new Set(sessions.filter(s => s.is_active).map(s => s.user_id)).size,
+                value: new Set(sessions.filter(isSessionOnline).map(s => s.user_id)).size,
                 icon: <Users className="h-4 w-4" />,
                 color: "text-blue-600",
                 bg: "bg-blue-500/10",
@@ -1002,7 +1015,7 @@ export function UserPermissionsPanel() {
                 <div>
                   <strong>Sessões duplicadas detectadas:</strong>{" "}
                   {duplicados.map(([uid, count]) => `${getUserName(uid)} (${count} ativas)`).join(", ")}
-                  {" — "}isto ocorre quando o usuário fecha o navegador sem fazer logout. As sessões antigas serão encerradas automaticamente por inatividade em até 20 minutos.
+                  {" — "}isto ocorre quando o usuário fecha o navegador sem fazer logout. Sessões sem atividade aparecem como inativas após 30min; o botão Limpar inativas encerra sessões sem atividade há mais de 2h.
                 </div>
               </div>
             );
@@ -1039,7 +1052,7 @@ export function UserPermissionsPanel() {
                     } catch (e: any) {
                       toast.error("Erro ao limpar sessões: " + e.message);
                     }
-                  }}>
+                  }} title="Encerra sessões ativas sem atividade há mais de 2h.">
                     <Trash2 className="h-3 w-3" /> Limpar inativas
                   </Button>
                   <Button
@@ -1083,8 +1096,7 @@ export function UserPermissionsPanel() {
                           {visibleSessions.map((session) => {
                             const locationParts = [session.city, session.region].filter(Boolean);
                             const locationStr = locationParts.length > 0 ? locationParts.join(", ") : null;
-                            const isInactive = session.is_active && session.last_active_at
-                              && (new Date().getTime() - new Date(session.last_active_at).getTime()) > 30 * 60 * 1000;
+                            const isInactive = isSessionInactive(session);
                             const terminationLabel: Record<string, string> = {
                               inatividade: "Inatividade",
                               admin: "Encerrada pelo admin",
@@ -1202,7 +1214,7 @@ export function UserPermissionsPanel() {
             <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"/> Online agora</span>
             <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block"/> Inativa há mais de 30min</span>
             <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block"/> Encerrada</span>
-            <span className="ml-auto">Sessões são encerradas automaticamente após 20min de inatividade · Exibindo últimos 30 dias</span>
+            <span className="ml-auto">Sessões ficam inativas após 30min sem atividade. O botão Limpar inativas encerra sessões sem atividade há mais de 2h. · Exibindo últimos 30 dias</span>
           </div>
         </TabsContent>
 
