@@ -717,6 +717,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isEditor,
         isViewer,
         canEdit,
+        canSignDocuments,
         mustChangePassword,
         canAccessMenu,
         canAccessManagement,
