@@ -355,7 +355,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 
     const channel = supabase
-      .channel('user-permissions-changes')
+      .channel(`user-permissions-changes:${user.id}`)
       .on(
         'postgres_changes',
         {
@@ -366,6 +366,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         },
         () => {
           refreshPermissions();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'user_roles',
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          hasFetchedUserData.current = null;
+          if (user?.id) fetchUserData(user.id);
         }
       )
       .on(
@@ -393,12 +406,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (user?.id) fetchUserData(user.id);
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'company_modules',
+          filter: profile?.company_id ? `company_id=eq.${profile.company_id}` : undefined,
+        },
+        () => {
+          hasFetchedUserData.current = null;
+          if (user?.id) fetchUserData(user.id);
+        }
+      )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user?.id, refreshPermissions]);
+  }, [user?.id, profile?.company_id, refreshPermissions]);
+
 
   // Manter last_active_at atualizado a cada 5 minutos e verificar inatividade (20min)
   useEffect(() => {

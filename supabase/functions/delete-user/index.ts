@@ -22,28 +22,44 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Sessão ausente. Faça login novamente." }, 401);
     }
 
-    // Create client with user's token to verify they are system_admin
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_ANON_KEY") ?? "",
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    // Get current user
     const { data: { user: currentUser }, error: authError } = await supabaseClient.auth.getUser();
     if (authError || !currentUser) {
       return jsonResponse({ error: "Sessão inválida. Faça login novamente." }, 401);
     }
 
-    // Check if current user is system_admin
-    const { data: profile, error: profileError } = await supabaseClient
+    // Carrega perfil do solicitante (system_role + company_id)
+    const { data: callerProfile, error: callerError } = await supabaseClient
       .from("profiles")
-      .select("system_role")
+      .select("system_role, company_id")
       .eq("user_id", currentUser.id)
       .single();
 
-    if (profileError || profile?.system_role !== "system_admin") {
-      return jsonResponse({ error: "Sem permissão. Apenas System Admin pode excluir usuários." }, 403);
+    if (callerError || !callerProfile) {
+      return jsonResponse({ error: "Não foi possível validar suas permissões." }, 403);
+    }
+
+    const isSystemAdmin = callerProfile.system_role === "system_admin";
+
+    // Se não for system_admin, precisa ser admin de empresa (user_roles.role = 'admin')
+    let callerIsCompanyAdmin = false;
+    if (!isSystemAdmin) {
+      const { data: roleRow } = await supabaseClient
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", currentUser.id)
+        .eq("role", "admin")
+        .maybeSingle();
+      callerIsCompanyAdmin = !!roleRow;
+    }
+
+    if (!isSystemAdmin && !callerIsCompanyAdmin) {
+      return jsonResponse({ error: "Sem permissão. Apenas Administradores podem excluir usuários." }, 403);
     }
 
     let payload: { user_id?: string };
@@ -58,15 +74,20 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Parâmetro obrigatório ausente: user_id." }, 400);
     }
 
-    // Prevent self-deletion
     if (user_id === currentUser.id) {
       return jsonResponse({ error: "Você não pode excluir a própria conta." }, 400);
     }
 
-    // Check if target user is system_admin (cannot delete system admins)
-    const { data: targetProfile, error: targetError } = await supabaseClient
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    );
+
+    // Busca perfil-alvo (via admin para evitar bloqueio por RLS)
+    const { data: targetProfile, error: targetError } = await supabaseAdmin
       .from("profiles")
-      .select("system_role, email")
+      .select("user_id, system_role, email, company_id")
       .eq("user_id", user_id)
       .maybeSingle();
 
@@ -75,37 +96,50 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Erro ao verificar o usuário selecionado." }, 500);
     }
 
-    if (!targetProfile) {
-      return jsonResponse({ error: "Usuário não encontrado no ObraMap." }, 404);
+    // Mesmo que o profile não exista mais, ainda pode haver registro órfão em auth.users.
+    // System admin pode prosseguir; admin de empresa precisa do profile para validar empresa.
+    if (!targetProfile && !isSystemAdmin) {
+      return jsonResponse({ error: "Usuário não encontrado nesta empresa." }, 404);
     }
 
     if (targetProfile?.system_role === "system_admin") {
       return jsonResponse({ error: "Não é possível excluir usuários System Admin." }, 400);
     }
 
-    // Create admin client to delete from auth.users
-    const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-      { auth: { autoRefreshToken: false, persistSession: false } }
-    );
-
-    // Delete user from auth.users (this will cascade to profiles due to FK)
-    const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(user_id);
-
-    if (deleteError) {
-      // If user is already gone, treat as success
-      if (deleteError.status === 404 || deleteError.message?.includes('not found')) {
-        console.log("User already deleted from auth, cleaning up profile if needed");
-        // Ensure profile is also removed
-        await supabaseAdmin.from("profiles").delete().eq("user_id", user_id);
-      } else {
-        console.error("Error deleting user:", deleteError);
-        return jsonResponse({ error: `Erro ao remover usuário do Auth: ${deleteError.message}` }, 500);
+    // Admin de empresa só pode excluir usuários da mesma empresa
+    if (!isSystemAdmin) {
+      if (!callerProfile.company_id || targetProfile?.company_id !== callerProfile.company_id) {
+        return jsonResponse({ error: "Você só pode excluir usuários da sua empresa." }, 403);
       }
     }
 
-    return jsonResponse({ success: true, message: "Usuário excluído com sucesso." });
+    // 1) Remove de auth.users (cascata limpa profile/user_roles/user_permissions via FK)
+    const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(user_id);
+
+    let authRemoved = true;
+    if (deleteError) {
+      const notFound = deleteError.status === 404 || (deleteError.message || "").toLowerCase().includes("not found");
+      if (!notFound) {
+        console.error("Error deleting auth user:", deleteError);
+        return jsonResponse({
+          error: `Falha ao excluir do Auth: ${deleteError.message}. Nenhuma alteração realizada.`,
+        }, 500);
+      }
+      authRemoved = false; // já não existia em auth.users
+    }
+
+    // 2) Garante limpeza no public schema caso a cascata não tenha resolvido tudo
+    await supabaseAdmin.from("user_permissions").delete().eq("user_id", user_id);
+    await supabaseAdmin.from("user_roles").delete().eq("user_id", user_id);
+    await supabaseAdmin.from("profiles").delete().eq("user_id", user_id);
+
+    return jsonResponse({
+      success: true,
+      auth_removed: authRemoved,
+      message: authRemoved
+        ? "Usuário excluído definitivamente (painel + Auth)."
+        : "Usuário já não existia no Auth; registros do painel foram limpos.",
+    });
   } catch (error: unknown) {
     console.error("Error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
