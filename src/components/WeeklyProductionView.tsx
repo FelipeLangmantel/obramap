@@ -387,6 +387,17 @@ export function WeeklyProductionView() {
   const macros = currentProject?.macrosTemplate || [];
   const houses = currentProject?.houses || [];
 
+  // Saldo disponível por casa para o serviço selecionado
+  const weeklyMaxAvailable = (() => {
+    if (!selectedMacro || !selectedScope || selectedHouses.length === 0) return 100;
+    const availables = selectedHouses.map((houseId) => {
+      const h = houses.find((x: any) => x.id === houseId);
+      return getAvailablePercent(h, selectedMacro, selectedScope);
+    });
+    return Math.max(0, Math.min(...availables));
+  })();
+
+
   const loadDiaryProductionMatches = useCallback(async () => {
     if (!currentProject?.id) return new Map<string, number>();
     const { data, error } = await (supabase as any)
@@ -2169,25 +2180,38 @@ export function WeeklyProductionView() {
                     </div>
 
                     {customPercentMode && (
-                      <div className="flex items-center gap-2">
-                        <Slider
-                          value={[massPercentage]}
-                          onValueChange={(v) => {
-                            setMassPercentage(v[0]);
-                            const newPercentages: Record<number, number> = {};
-                            selectedHouses.forEach(houseId => {
-                              newPercentages[houseId] = v[0];
-                            });
-                            setHousePercentages(newPercentages);
-                          }}
-                          max={100}
-                          min={0}
-                          step={5}
-                          className="flex-1"
-                        />
-                        <Badge variant="outline">{massPercentage}%</Badge>
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                          <span>Máximo disponível: {weeklyMaxAvailable}%</span>
+                          {weeklyMaxAvailable <= 0 && (
+                            <span className="font-medium text-destructive">Sem saldo para lançar</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Slider
+                            value={[Math.min(massPercentage, weeklyMaxAvailable)]}
+                            onValueChange={(v) => {
+                              const clamped = Math.max(0, Math.min(weeklyMaxAvailable, v[0]));
+                              setMassPercentage(clamped);
+                              const newPercentages: Record<number, number> = {};
+                              selectedHouses.forEach(houseId => {
+                                const h = houses.find((x: any) => x.id === houseId);
+                                const avail = getAvailablePercent(h, selectedMacro, selectedScope);
+                                newPercentages[houseId] = Math.min(clamped, avail);
+                              });
+                              setHousePercentages(newPercentages);
+                            }}
+                            max={Math.max(weeklyMaxAvailable, 1)}
+                            min={0}
+                            step={5}
+                            className="flex-1"
+                            disabled={weeklyMaxAvailable <= 0}
+                          />
+                          <Badge variant="outline">{Math.min(massPercentage, weeklyMaxAvailable)}%</Badge>
+                        </div>
                       </div>
                     )}
+
                   </div>
                 )}
 

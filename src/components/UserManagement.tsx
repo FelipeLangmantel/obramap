@@ -193,27 +193,25 @@ export function UserManagement() {
       return;
     }
 
-    if (!confirm(`Tem certeza que deseja excluir o usuário ${userEmail}?`)) {
+    if (!confirm(`Excluir definitivamente ${userEmail}?\n\nEsta ação remove o usuário do painel E do sistema de login (Auth). Não pode ser desfeita.`)) {
       return;
     }
 
     try {
-      // Note: Deleting from auth.users requires admin privileges
-      // For now, we'll just remove from our tables (cascade will handle it if user is deleted from auth)
-      const { error } = await supabase
-        .from("profiles")
-        .delete()
-        .eq("user_id", userId);
-
+      const { data, error } = await supabase.functions.invoke("delete-user", {
+        body: { user_id: userId },
+      });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
       setUsers((prev) => prev.filter((u) => u.user_id !== userId));
-      toast.success("Usuário removido");
-    } catch (error) {
+      toast.success(data?.message || "Usuário excluído definitivamente");
+    } catch (error: any) {
       console.error("Error deleting user:", error);
-      toast.error("Erro ao excluir usuário");
+      toast.error(error?.message || "Erro ao excluir usuário");
     }
   };
+
 
   const resetForm = () => {
     setEmail("");
