@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -178,6 +178,20 @@ export default function RelatorioObraView() {
   const [weeklyProductions, setWeeklyProductions] = useState<WeeklyProductionRow[]>([]);
   const [weeklyPlanWeeks, setWeeklyPlanWeeks] = useState<WeeklyPlanWeekRow[]>([]);
   const [weeklyPlanServices, setWeeklyPlanServices] = useState<WeeklyPlanServiceRow[]>([]);
+  const realtimeReloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const loadDataRef = useRef<() => Promise<void>>(async () => undefined);
+  const reportEntryIdsRef = useRef<Set<string>>(new Set());
+
+  const scheduleRealtimeReload = (reason: string) => {
+    if (realtimeReloadTimerRef.current) clearTimeout(realtimeReloadTimerRef.current);
+    realtimeReloadTimerRef.current = setTimeout(() => {
+      realtimeReloadTimerRef.current = null;
+      if (import.meta.env.DEV) {
+        console.debug("[RelatorioObraView] realtime reload", { reason });
+      }
+      void loadDataRef.current();
+    }, 1000);
+  };
 
   const handlePeriodoChange = (value: Periodo) => {
     setPeriodo(value);
@@ -209,6 +223,10 @@ export default function RelatorioObraView() {
     loadData();
   }, [currentProject?.id, dataInicio, dataFim]);
 
+  useEffect(() => {
+    reportEntryIdsRef.current = new Set(entries.map((entry) => entry.id));
+  }, [entries]);
+
   // Realtime: recarregar quando diary_items, diary_entries ou desvios mudam
   // Pausa o canal quando a aba está oculta para reduzir conexões simultâneas.
   useEffect(() => {
@@ -222,43 +240,53 @@ export default function RelatorioObraView() {
           event: "*",
           schema: "public",
           table: "diary_items",
-        }, () => loadData())
+        }, (payload: any) => {
+          const row = payload.new || payload.old;
+          const diaryEntryId = row?.diary_entry_id;
+          if (diaryEntryId && !reportEntryIdsRef.current.has(diaryEntryId)) {
+            if (import.meta.env.DEV) {
+              console.debug("[RelatorioObraView] diary_items event ignored outside loaded period", { diaryEntryId });
+            }
+            return;
+          }
+          scheduleRealtimeReload("diary_items");
+        })
         .on("postgres_changes", {
           event: "*",
           schema: "public",
           table: "diary_entries",
           filter: `project_id=eq.${currentProject.id}`,
-        }, () => loadData())
+        }, () => scheduleRealtimeReload("diary_entries"))
         .on("postgres_changes", {
           event: "*",
           schema: "public",
           table: "production_deviations",
           filter: `project_id=eq.${currentProject.id}`,
-        }, () => loadData())
+        }, () => scheduleRealtimeReload("production_deviations"))
         .on("postgres_changes", {
           event: "*",
           schema: "public",
           table: "houses",
           filter: `project_id=eq.${currentProject.id}`,
-        }, () => loadData())
+        }, () => scheduleRealtimeReload("houses"))
         .on("postgres_changes", {
           event: "*",
           schema: "public",
           table: "weekly_productions",
           filter: `project_id=eq.${currentProject.id}`,
-        }, () => loadData())
+        }, () => scheduleRealtimeReload("weekly_productions"))
         .on("postgres_changes", {
           event: "*",
           schema: "public",
           table: "weekly_plan_weeks",
           filter: `project_id=eq.${currentProject.id}`,
-        }, () => loadData())
+        }, () => scheduleRealtimeReload("weekly_plan_weeks"))
         .on("postgres_changes", {
           event: "*",
           schema: "public",
           table: "weekly_plan_services",
           filter: `project_id=eq.${currentProject.id}`,
-        }, () => loadData())
+        }, () => scheduleRealtimeReload("weekly_plan_services"))
         .subscribe();
     };
 
@@ -268,7 +296,7 @@ export default function RelatorioObraView() {
       } else if (!channel) {
         subscribe();
         // Reload garante que nada foi perdido enquanto o canal estava pausado
-        loadData();
+        scheduleRealtimeReload("visibility_resume");
       }
     };
 
@@ -278,6 +306,10 @@ export default function RelatorioObraView() {
     return () => {
       document.removeEventListener("visibilitychange", handleVisibility);
       if (channel) supabase.removeChannel(channel);
+      if (realtimeReloadTimerRef.current) {
+        clearTimeout(realtimeReloadTimerRef.current);
+        realtimeReloadTimerRef.current = null;
+      }
     };
   }, [currentProject?.id]);
 
@@ -414,6 +446,7 @@ export default function RelatorioObraView() {
       setLoading(false);
     }
   };
+  loadDataRef.current = loadData;
 
   // KPIs
   const kpis = useMemo(() => {
