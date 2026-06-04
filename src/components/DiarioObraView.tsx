@@ -2661,7 +2661,9 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
             signerId={user?.id || null}
             signerName={profile?.display_name || user?.email || null}
             isLocked={diaryFormDisabled}
+            canSign={canSignDocuments}
           />
+
 
           {/* FOOTER: navegação + log + visualizações */}
           {entryId && (
