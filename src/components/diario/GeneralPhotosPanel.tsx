@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { Loader2, Trash2, ImageIcon, Link2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { getCachedPhotoSignedUrl } from "@/lib/photoSignedUrlCache";
 
 interface PhotoRow {
   id: string;
@@ -152,10 +153,11 @@ export function GeneralPhotosPanel() {
 
     const withUrls = await Promise.all(
       (rows || []).map(async (r: any) => {
-        const { data: signed } = await (supabase.storage.from("diary-photos") as any)
-          .createSignedUrl(r.storage_path, 60 * 60, {
-            transform: { width: 500, resize: "contain", quality: 65 },
-          });
+        const signedUrl = await getCachedPhotoSignedUrl({
+          bucket: "diary-photos",
+          path: r.storage_path,
+          transform: { width: 500, resize: "contain", quality: 65 },
+        });
         const item = r.diary_item_id ? itemMap.get(r.diary_item_id) : null;
         return {
           ...r,
@@ -163,7 +165,7 @@ export function GeneralPhotosPanel() {
           item_macro_name: item?.macro_name || null,
           item_scope_name: item?.scope_name || null,
           item_house_ids: item?.house_ids || [],
-          url: signed?.signedUrl || "",
+          url: signedUrl || "",
         } as PhotoRow;
       })
     );

@@ -10,6 +10,7 @@ import { Camera, Loader2, Trash2, ImageIcon, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { compressImageSafe } from "@/lib/compressImage";
+import { getCachedPhotoSignedUrl } from "@/lib/photoSignedUrlCache";
 
 interface FotoServico {
   id: string;
@@ -82,11 +83,12 @@ export function DiaryItemPhotoButton({
       .order("created_at", { ascending: true });
     if (!data) { setFotos([]); setLoading(false); return; }
     const withUrl = await Promise.all(data.map(async (f: any) => {
-      const { data: signed } = await (supabase.storage
-        .from("diary-photos") as any).createSignedUrl(f.storage_path, 60 * 60, {
-          transform: { width: 700, resize: "contain", quality: 70 },
-        });
-      return { ...f, url: signed?.signedUrl || "" } as FotoServico;
+      const signedUrl = await getCachedPhotoSignedUrl({
+        bucket: "diary-photos",
+        path: f.storage_path,
+        transform: { width: 700, resize: "contain", quality: 70 },
+      });
+      return { ...f, url: signedUrl || "" } as FotoServico;
     }));
     setFotos(withUrl);
     setLoading(false);

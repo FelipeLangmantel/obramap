@@ -14,6 +14,7 @@ import { ptBR } from "date-fns/locale";
 import { FileText, Loader2, CalendarDays, Users, ClipboardCheck, Hammer, AlertTriangle, MessageSquare, CheckCircle2, Camera } from "lucide-react";
 import { toast } from "sonner";
 import { calculateHouseProgress } from "@/data/constructionData";
+import { getCachedPhotoSignedUrl } from "@/lib/photoSignedUrlCache";
 
 type Periodo = "semanal" | "quinzenal" | "mensal" | "personalizado";
 type PhotoReportType = "simples" | "gerencial";
@@ -377,10 +378,11 @@ export default function RelatorioObraView() {
         } else {
           const photosWithUrls = await Promise.all(
             photosData.map(async (photo: any) => {
-              const { data: signed } = await (supabase.storage.from("diary-photos") as any)
-                .createSignedUrl(photo.storage_path, 60 * 60, {
-                  transform: { width: 900, resize: "contain", quality: 70 },
-                });
+              const signedUrl = await getCachedPhotoSignedUrl({
+                bucket: "diary-photos",
+                path: photo.storage_path,
+                transform: { width: 900, resize: "contain", quality: 70 },
+              });
 
               return {
                 id: photo.id,
@@ -390,7 +392,7 @@ export default function RelatorioObraView() {
                 legenda: photo.legenda,
                 house_number: photo.house_number,
                 created_at: photo.created_at,
-                url: signed?.signedUrl || "",
+                url: signedUrl || "",
               } as PhotoReportRow;
             })
           );

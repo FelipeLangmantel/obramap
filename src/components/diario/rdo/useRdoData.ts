@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { getCachedPhotoSignedUrl } from "@/lib/photoSignedUrlCache";
 import type {
   RdoLabor, RdoEquipment, RdoActivity, RdoOccurrence,
   RdoChecklistItem, RdoComment, RdoAttachment,
@@ -29,10 +30,11 @@ export function useRdoData(entryId: string | null) {
 
     const withUrls = await Promise.all(
       data.map(async (a) => {
-        const { data: signed } = await supabase.storage
-          .from("diary-attachments")
-          .createSignedUrl(a.storage_path, 60 * 60);
-        return { ...a, url: signed?.signedUrl || "" } as RdoAttachment;
+        const signedUrl = await getCachedPhotoSignedUrl({
+          bucket: "diary-attachments",
+          path: a.storage_path,
+        });
+        return { ...a, url: signedUrl || "" } as RdoAttachment;
       })
     );
 

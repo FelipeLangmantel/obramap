@@ -73,6 +73,7 @@ import {
 import { OfflineBanner } from "@/components/offline/OfflineStatusBadge";
 import { subscribeSync } from "@/offline/sync";
 import { compressImageSafe } from "@/lib/compressImage";
+import { getCachedPhotoSignedUrl } from "@/lib/photoSignedUrlCache";
 
 // Compressão segura via createImageBitmap (evita estouro de memória em mobile)
 async function comprimirImagem(file: File, maxDim = 1024, quality = 0.7): Promise<Blob> {
@@ -564,15 +565,16 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
     }
     const fotosComUrl = await Promise.all(
       fotosData.map(async (f) => {
-        const { data: signed } = await (supabase.storage
-          .from("diary-photos") as any).createSignedUrl(f.storage_path, 60 * 60, {
-            transform: { width: 900, resize: "contain", quality: 70 },
-          });
+        const signedUrl = await getCachedPhotoSignedUrl({
+          bucket: "diary-photos",
+          path: f.storage_path,
+          transform: { width: 900, resize: "contain", quality: 70 },
+        });
         const diaryItemId = (f as any).diary_item_id as string | null;
         const itemInfo = diaryItemId ? itemInfoById.get(diaryItemId) : null;
         return {
           id: f.id, storage_path: f.storage_path, legenda: f.legenda,
-          url: signed?.signedUrl || "",
+          url: signedUrl || "",
           diary_item_id: diaryItemId,
           house_number: (f as any).house_number ?? null,
           macro_name: itemInfo?.macro_name ?? null,

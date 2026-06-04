@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { getCachedPhotoSignedUrl } from "@/lib/photoSignedUrlCache";
 
 export interface HousePhotoEntry {
   photo_id: string;
@@ -56,11 +57,12 @@ export function useHousePhotoHistory(
     const rows = limit == null ? allRows : allRows.slice(0, limit);
     setHasMore(limit != null && allRows.length > rows.length);
     const withUrls = await Promise.all(rows.map(async (r) => {
-      const { data: signed } = await (supabase.storage
-        .from("diary-photos") as any).createSignedUrl(r.storage_path, 60 * 60, {
-          transform: { width: 900, resize: "contain", quality: 70 },
-        });
-      return { ...r, url: signed?.signedUrl || "" } as HousePhotoEntry;
+      const signedUrl = await getCachedPhotoSignedUrl({
+        bucket: "diary-photos",
+        path: r.storage_path,
+        transform: { width: 900, resize: "contain", quality: 70 },
+      });
+      return { ...r, url: signedUrl || "" } as HousePhotoEntry;
     }));
     return withUrls;
   }, [houseId, projectId]);
