@@ -50,6 +50,7 @@ interface AuthContextType {
   isEditor: boolean; // Legacy
   isViewer: boolean;
   canEdit: boolean;
+  canSignDocuments: boolean;
   mustChangePassword: boolean;
   canAccessMenu: (menuId: string) => boolean;
   canAccessManagement: (sectionId: string) => boolean;
