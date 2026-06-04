@@ -5,17 +5,27 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-  AlertDialogTrigger,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Trash2, ImageIcon, Link2, RefreshCw } from "lucide-react";
+import { Loader2, Trash2, ImageIcon, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { getCachedPhotoSignedUrl } from "@/lib/photoSignedUrlCache";
 
@@ -35,6 +45,7 @@ interface PhotoRow {
 }
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
+
 const daysAgoISO = (n: number) => {
   const d = new Date();
   d.setDate(d.getDate() - n);
@@ -63,19 +74,22 @@ const getPhotoType = (photo: PhotoRow) => {
   return "Foto geral";
 };
 
-/**
- * Painel de "Fotos Gerais" — fotos sem casa vinculada (house_number IS NULL).
- * Permite filtrar por data, vincular foto a uma casa, e excluir em lote.
- */
+const isLinkedPhoto = (photo: PhotoRow) => {
+  return Boolean(photo.diary_item_id || photo.house_number != null || (photo.item_house_ids || []).length > 0);
+};
+
 export function GeneralPhotosPanel() {
   const { currentProject } = useConstruction();
   const [from, setFrom] = useState<string>(daysAgoISO(30));
   const [to, setTo] = useState<string>(todayISO());
   const [loading, setLoading] = useState(false);
   const [photos, setPhotos] = useState<PhotoRow[]>([]);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [houseFilter, setHouseFilter] = useState("all");
+  const [previewPhoto, setPreviewPhoto] = useState<PhotoRow | null>(null);
+  const [photoToDelete, setPhotoToDelete] = useState<PhotoRow | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [bulkHouse, setBulkHouse] = useState<string>("none");
+  const [captionDraft, setCaptionDraft] = useState("");
+  const [savingCaption, setSavingCaption] = useState(false);
 
   const houseIds = useMemo(() => {
     return (currentProject?.houses || [])
@@ -90,9 +104,7 @@ export function GeneralPhotosPanel() {
       return;
     }
     setLoading(true);
-    setSelected(new Set());
 
-    // Pega entradas do diário do projeto no intervalo
     const { data: entries, error: entErr } = await supabase
       .from("diary_entries")
       .select("id, entry_date")
@@ -105,6 +117,7 @@ export function GeneralPhotosPanel() {
       setLoading(false);
       return;
     }
+
     const entryMap = new Map((entries || []).map((e: any) => [e.id, e.entry_date]));
     const entryIds = Array.from(entryMap.keys());
     if (entryIds.length === 0) {
@@ -169,6 +182,7 @@ export function GeneralPhotosPanel() {
         } as PhotoRow;
       })
     );
+
     setPhotos(withUrls);
     setLoading(false);
   }, [currentProject?.id, from, to]);
@@ -177,83 +191,66 @@ export function GeneralPhotosPanel() {
     load();
   }, [load]);
 
-  const toggle = (id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
+  const filteredPhotos = useMemo(() => {
+    if (houseFilter === "all") return photos;
+    if (houseFilter === "general") return photos.filter((p) => !isLinkedPhoto(p));
+    const houseNumber = Number(houseFilter);
+    return photos.filter((p) => {
+      if (p.house_number === houseNumber) return true;
+      return (p.item_house_ids || []).includes(houseNumber);
     });
-  };
-
-  const toggleAll = () => {
-    if (selected.size === photos.length) setSelected(new Set());
-    else setSelected(new Set(photos.map((p) => p.id)));
-  };
-
-  const handleRelinkOne = async (photo: PhotoRow, value: string) => {
-    const newHouse = value === "none" ? null : Number(value);
-    if (newHouse === photo.house_number) return;
-    const { error } = await supabase
-      .from("diary_photos")
-      .update({ house_number: newHouse })
-      .eq("id", photo.id);
-    if (error) {
-      toast.error("Falha ao vincular: " + error.message);
-      return;
-    }
-    toast.success(newHouse != null ? `Vinculada à Casa ${newHouse}` : "Marcada como geral");
-    // Se ganhou casa, sai da lista (esta lista é só de "sem casa")
-    setPhotos((prev) => prev.map((p) => (p.id === photo.id ? { ...p, house_number: newHouse } : p)));
-  };
-
-  const handleBulkLink = async () => {
-    if (selected.size === 0 || bulkHouse === "none") return;
-    const newHouse = Number(bulkHouse);
-    const ids = Array.from(selected);
-    const { error } = await supabase
-      .from("diary_photos")
-      .update({ house_number: newHouse })
-      .in("id", ids);
-    if (error) {
-      toast.error("Falha ao vincular em lote: " + error.message);
-      return;
-    }
-    toast.success(`${ids.length} foto(s) vinculada(s) à Casa ${newHouse}`);
-    setPhotos((prev) => prev.map((p) => (selected.has(p.id) ? { ...p, house_number: newHouse } : p)));
-    setSelected(new Set());
-  };
-
-  const handleBulkDelete = async () => {
-    if (selected.size === 0) return;
-    setDeleting(true);
-    const ids = Array.from(selected);
-    const paths = photos.filter((p) => selected.has(p.id)).map((p) => p.storage_path);
-
-    // Deleta storage (não bloqueia se algum falhar)
-    if (paths.length > 0) {
-      await supabase.storage.from("diary-photos").remove(paths);
-    }
-    const { error } = await supabase.from("diary_photos").delete().in("id", ids);
-    setDeleting(false);
-    if (error) {
-      toast.error("Falha ao excluir: " + error.message);
-      return;
-    }
-    toast.success(`${ids.length} foto(s) excluída(s)`);
-    setPhotos((prev) => prev.filter((p) => !selected.has(p.id)));
-    setSelected(new Set());
-  };
+  }, [houseFilter, photos]);
 
   const grouped = useMemo(() => {
     const m = new Map<string, PhotoRow[]>();
-    for (const p of photos) {
+    for (const p of filteredPhotos) {
       const key = p.entry_date || "—";
       if (!m.has(key)) m.set(key, []);
       m.get(key)!.push(p);
     }
     return Array.from(m.entries()).sort(([a], [b]) => (a < b ? 1 : -1));
-  }, [photos]);
+  }, [filteredPhotos]);
+
+  const openPreview = (photo: PhotoRow) => {
+    setPreviewPhoto(photo);
+    setCaptionDraft(photo.legenda || "");
+  };
+
+  const handleDeletePhoto = async () => {
+    if (!photoToDelete) return;
+    setDeleting(true);
+    await supabase.storage.from("diary-photos").remove([photoToDelete.storage_path]);
+    const { error } = await supabase.from("diary_photos").delete().eq("id", photoToDelete.id);
+    setDeleting(false);
+    if (error) {
+      toast.error("Falha ao excluir: " + error.message);
+      return;
+    }
+    toast.success("Foto excluída.");
+    setPhotos((prev) => prev.filter((p) => p.id !== photoToDelete.id));
+    if (previewPhoto?.id === photoToDelete.id) setPreviewPhoto(null);
+    setPhotoToDelete(null);
+  };
+
+  const handleSaveCaption = async () => {
+    if (!previewPhoto || isLinkedPhoto(previewPhoto)) return;
+    setSavingCaption(true);
+    try {
+      const legenda = captionDraft.trim() || null;
+      const { error } = await supabase
+        .from("diary_photos")
+        .update({ legenda } as any)
+        .eq("id", previewPhoto.id);
+      if (error) throw error;
+      setPreviewPhoto({ ...previewPhoto, legenda });
+      setPhotos((prev) => prev.map((p) => (p.id === previewPhoto.id ? { ...p, legenda } : p)));
+      toast.success("Legenda salva.");
+    } catch (err: any) {
+      toast.error("Erro ao salvar legenda: " + (err.message || ""));
+    } finally {
+      setSavingCaption(false);
+    }
+  };
 
   if (!currentProject) {
     return (
@@ -275,7 +272,7 @@ export function GeneralPhotosPanel() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-[1fr,1fr,auto] gap-3 items-end">
+          <div className="grid grid-cols-1 gap-3 items-end sm:grid-cols-2 lg:grid-cols-[1fr,1fr,220px,auto]">
             <div>
               <Label htmlFor="from" className="text-xs">De</Label>
               <Input id="from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
@@ -284,6 +281,21 @@ export function GeneralPhotosPanel() {
               <Label htmlFor="to" className="text-xs">Até</Label>
               <Input id="to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
             </div>
+            <div>
+              <Label className="text-xs">Filtrar por casa</Label>
+              <Select value={houseFilter} onValueChange={setHouseFilter}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="max-h-72">
+                  <SelectItem value="all">Todas as fotos</SelectItem>
+                  <SelectItem value="general">Geral / sem casa</SelectItem>
+                  {houseIds.map((n) => (
+                    <SelectItem key={n} value={String(n)}>Casa {String(n).padStart(2, "0")}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <Button variant="outline" onClick={load} disabled={loading} className="gap-2">
               <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
               Atualizar
@@ -291,64 +303,10 @@ export function GeneralPhotosPanel() {
           </div>
 
           {photos.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2 p-2 rounded-md border bg-muted/30">
-              <Checkbox
-                checked={selected.size === photos.length && photos.length > 0}
-                onCheckedChange={toggleAll}
-                aria-label="Selecionar todas"
-              />
-              <span className="text-sm">
-                {selected.size > 0 ? `${selected.size} selecionada(s)` : "Selecionar todas"}
-              </span>
-
-              <div className="flex items-center gap-2 ml-auto flex-wrap">
-                <Select value={bulkHouse} onValueChange={setBulkHouse}>
-                  <SelectTrigger className="w-[180px] h-9">
-                    <SelectValue placeholder="Vincular casa..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Selecione casa</SelectItem>
-                    {houseIds.map((n) => (
-                      <SelectItem key={n} value={String(n)}>Casa {n}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleBulkLink}
-                  disabled={selected.size === 0 || bulkHouse === "none"}
-                  className="gap-1"
-                >
-                  <Link2 className="h-4 w-4" /> Vincular
-                </Button>
-
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      disabled={selected.size === 0 || deleting}
-                      className="gap-1"
-                    >
-                      <Trash2 className="h-4 w-4" /> Excluir
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Excluir fotos selecionadas?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        {selected.size} foto(s) serão excluídas permanentemente. Esta ação não pode ser desfeita.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleBulkDelete}>Excluir</AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
-            </div>
+            <p className="text-xs text-muted-foreground">
+              Exibindo {filteredPhotos.length} de {photos.length} foto(s). Fotos vinculadas mostram casa, serviço e etapa;
+              fotos gerais mantêm legenda editável.
+            </p>
           )}
         </CardContent>
       </Card>
@@ -363,6 +321,12 @@ export function GeneralPhotosPanel() {
             Nenhuma foto no período selecionado.
           </CardContent>
         </Card>
+      ) : filteredPhotos.length === 0 ? (
+        <Card>
+          <CardContent className="p-8 text-center text-muted-foreground text-sm">
+            Nenhuma foto encontrada para o filtro selecionado.
+          </CardContent>
+        </Card>
       ) : (
         grouped.map(([date, items]) => (
           <Card key={date}>
@@ -373,67 +337,63 @@ export function GeneralPhotosPanel() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
                 {items.map((p) => {
-                  const isSel = selected.has(p.id);
+                  const linked = isLinkedPhoto(p);
                   return (
-                    <div
-                      key={p.id}
-                      className={`overflow-hidden rounded-lg border bg-card shadow-sm ${isSel ? "ring-2 ring-primary" : ""}`}
-                    >
+                    <div key={p.id} className="overflow-hidden rounded-lg border bg-card shadow-sm">
                       <div className="relative bg-muted/50">
-                      <div className="absolute top-1 left-1 z-10 bg-background/80 rounded p-0.5">
-                        <Checkbox
-                          checked={isSel}
-                          onCheckedChange={() => toggle(p.id)}
-                          aria-label="Selecionar foto"
-                        />
-                      </div>
-                      {p.url ? (
-                        <img
-                          src={p.url}
-                          alt={p.legenda || "foto"}
-                          loading="lazy"
-                          className="h-36 w-full object-contain"
-                        />
-                      ) : (
-                        <div className="flex h-36 w-full items-center justify-center text-muted-foreground">
-                          <ImageIcon className="h-6 w-6" />
-                        </div>
-                      )}
-                      </div>
-                      <div className="p-1.5 space-y-1">
-                        <div className="space-y-0.5 text-[11px]">
-                          <p><span className="font-medium">Data:</span> {formatDateBR(p.entry_date)}</p>
-                          <p><span className="font-medium">Casa:</span> {formatHouseLabel(p)}</p>
-                          <p><span className="font-medium">Serviço:</span> {p.item_scope_name || "Geral"}</p>
-                          {p.item_macro_name && (
-                            <p className="text-muted-foreground">{p.item_macro_name}</p>
-                          )}
-                          <p className="text-muted-foreground">{getPhotoType(p)}</p>
-                        </div>
-                        <div className="rounded-md border bg-muted/30 p-2">
-                          <p className="text-[11px] font-medium text-muted-foreground">Legenda/descrição</p>
-                          {p.legenda ? (
-                            <p className="mt-1 line-clamp-2 text-xs leading-snug text-foreground">{p.legenda}</p>
-                          ) : (
-                            <p className="mt-1 text-xs italic text-muted-foreground">Sem legenda adicionada.</p>
-                          )}
-                        </div>
-                        <Select
-                          value={p.house_number == null ? "none" : String(p.house_number)}
-                          onValueChange={(v) => handleRelinkOne(p, v)}
+                        <button
+                          type="button"
+                          className="flex h-28 w-full items-center justify-center sm:h-32"
+                          onClick={() => openPreview(p)}
                         >
-                          <SelectTrigger className="h-7 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">Geral (sem casa)</SelectItem>
-                            {houseIds.map((n) => (
-                              <SelectItem key={n} value={String(n)}>Casa {n}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          {p.url ? (
+                            <img
+                              src={p.url}
+                              alt={p.legenda || "Foto do diário"}
+                              loading="lazy"
+                              className="h-full w-full object-contain"
+                            />
+                          ) : (
+                            <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                          )}
+                        </button>
+                        <Badge className="absolute bottom-1.5 left-1.5 max-w-[calc(100%-3rem)] truncate bg-background/90 text-foreground">
+                          {formatHouseLabel(p)}
+                        </Badge>
+                        <Button
+                          size="icon"
+                          variant="destructive"
+                          className="absolute right-1.5 top-1.5 h-7 w-7"
+                          onClick={() => setPhotoToDelete(p)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                      <div className="space-y-1.5 p-2 text-[11px]">
+                        <div className="flex flex-wrap gap-1">
+                          <Badge variant={linked ? "secondary" : "outline"} className="text-[10px]">
+                            {getPhotoType(p)}
+                          </Badge>
+                          <Badge variant="outline" className="text-[10px]">{formatDateBR(p.entry_date)}</Badge>
+                        </div>
+                        {linked ? (
+                          <div className="space-y-0.5 text-muted-foreground">
+                            {p.item_scope_name && <p className="line-clamp-1">Serviço: {p.item_scope_name}</p>}
+                            {p.item_macro_name && <p className="line-clamp-1">Etapa: {p.item_macro_name}</p>}
+                            {p.legenda && <p className="line-clamp-2 text-foreground">{p.legenda}</p>}
+                          </div>
+                        ) : (
+                          <div className="rounded-md border bg-muted/30 p-2">
+                            <p className="font-medium text-muted-foreground">Legenda/descrição</p>
+                            {p.legenda ? (
+                              <p className="mt-1 line-clamp-2 text-xs leading-snug text-foreground">{p.legenda}</p>
+                            ) : (
+                              <p className="mt-1 text-xs italic text-muted-foreground">Sem legenda adicionada.</p>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -443,6 +403,82 @@ export function GeneralPhotosPanel() {
           </Card>
         ))
       )}
+
+      <Dialog open={!!previewPhoto} onOpenChange={(open) => {
+        if (!open) setPreviewPhoto(null);
+      }}>
+        <DialogContent className="max-h-[92vh] max-w-[95vw] overflow-y-auto sm:max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>{previewPhoto ? formatHouseLabel(previewPhoto) : "Foto"}</DialogTitle>
+            <DialogDescription>
+              {previewPhoto ? getPhotoType(previewPhoto) : "Visualização da foto"}
+            </DialogDescription>
+          </DialogHeader>
+          {previewPhoto && (
+            <div className="space-y-3">
+              <div className="flex max-h-[70vh] min-h-[220px] items-center justify-center rounded-lg bg-muted/50">
+                {previewPhoto.url ? (
+                  <img
+                    src={previewPhoto.url}
+                    alt={previewPhoto.legenda || "Foto do diário"}
+                    className="max-h-[70vh] max-w-full rounded-lg object-contain"
+                  />
+                ) : (
+                  <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                )}
+              </div>
+
+              <div className="flex flex-wrap gap-2 text-xs">
+                <Badge variant="outline">Data: {formatDateBR(previewPhoto.entry_date)}</Badge>
+                <Badge variant="outline">{formatHouseLabel(previewPhoto)}</Badge>
+                {previewPhoto.item_scope_name && <Badge variant="secondary">Serviço: {previewPhoto.item_scope_name}</Badge>}
+                {previewPhoto.item_macro_name && <Badge variant="secondary">Etapa: {previewPhoto.item_macro_name}</Badge>}
+              </div>
+
+              {isLinkedPhoto(previewPhoto) ? (
+                previewPhoto.legenda ? (
+                  <p className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">{previewPhoto.legenda}</p>
+                ) : null
+              ) : (
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Legenda/descrição</Label>
+                  <Textarea
+                    value={captionDraft}
+                    onChange={(e) => setCaptionDraft(e.target.value)}
+                    placeholder="Escreva uma legenda para esta foto..."
+                    className="min-h-[80px]"
+                  />
+                  <div className="flex justify-end">
+                    <Button type="button" size="sm" onClick={handleSaveCaption} disabled={savingCaption}>
+                      {savingCaption && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                      Salvar legenda
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!photoToDelete} onOpenChange={(open) => {
+        if (!open) setPhotoToDelete(null);
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir foto?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta foto será excluída permanentemente. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeletePhoto} disabled={deleting}>
+              {deleting ? "Excluindo..." : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

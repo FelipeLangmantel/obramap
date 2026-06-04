@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Camera, Loader2, Trash2, ImageIcon, Link2 } from "lucide-react";
+import { Camera, Loader2, Trash2, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { compressImageSafe } from "@/lib/compressImage";
@@ -160,27 +160,6 @@ export function DiaryItemPhotoButton({
     }
   };
 
-  const handleRelink = async (foto: FotoServico, newHouseValue: string) => {
-    const newHouse = newHouseValue === "all" ? null : Number(newHouseValue);
-    if (newHouse === foto.house_number) return;
-    try {
-      const { error } = await supabase
-        .from("diary_photos")
-        .update({ house_number: newHouse } as any)
-        .eq("id", foto.id);
-      if (error) throw error;
-      setFotos(prev => prev.map(f => f.id === foto.id ? { ...f, house_number: newHouse } : f));
-      onChanged?.();
-      toast.success(
-        newHouse != null
-          ? `Foto vinculada à Casa ${String(newHouse).padStart(2, "0")}.`
-          : "Foto marcada como geral."
-      );
-    } catch (err: any) {
-      toast.error("Erro ao revincular: " + (err.message || ""));
-    }
-  };
-
   const handleSaveCaption = async () => {
     if (!selectedPhoto) return;
     setSavingCaption(true);
@@ -220,7 +199,7 @@ export function DiaryItemPhotoButton({
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-h-[90vh] max-w-[95vw] overflow-y-auto sm:max-w-5xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ImageIcon className="h-5 w-5" />
@@ -305,7 +284,7 @@ export function DiaryItemPhotoButton({
                 Nenhuma foto anexada a este serviço ainda.
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
                 {fotos.map(f => (
                   <div
                     key={f.id}
@@ -317,7 +296,7 @@ export function DiaryItemPhotoButton({
                     <div className="relative">
                       <button
                         type="button"
-                        className="flex h-36 w-full items-center justify-center bg-muted/50"
+                        className="flex h-28 w-full items-center justify-center bg-muted/50 sm:h-32"
                         onClick={() => {
                           setSelectedPhoto(f);
                           setCaptionDraft(f.legenda || "");
@@ -342,11 +321,13 @@ export function DiaryItemPhotoButton({
                       )}
                     </div>
                     <div className="border-t bg-background p-2">
-                      <p className="text-[11px] font-medium text-muted-foreground">Legenda/descrição</p>
-                      {f.legenda ? (
-                        <p className="mt-1 line-clamp-2 text-xs leading-snug text-foreground">{f.legenda}</p>
-                      ) : (
-                        <p className="mt-1 text-xs italic text-muted-foreground">Sem legenda adicionada.</p>
+                      <p className="text-xs font-medium">
+                        {f.house_number != null
+                          ? `Casa ${String(f.house_number).padStart(2, "0")}`
+                          : "Foto geral do serviço"}
+                      </p>
+                      {f.legenda && (
+                        <p className="mt-1 line-clamp-2 text-xs leading-snug text-muted-foreground">{f.legenda}</p>
                       )}
                       <Button
                         type="button"
@@ -361,29 +342,6 @@ export function DiaryItemPhotoButton({
                         {!disabled ? "Ver / editar legenda" : "Ver foto"}
                       </Button>
                     </div>
-                    {!disabled && (
-                      <div className="p-1.5 bg-background border-t">
-                        <Select
-                          value={f.house_number != null ? String(f.house_number) : "all"}
-                          onValueChange={(v) => handleRelink(f, v)}
-                        >
-                          <SelectTrigger className="h-7 text-[11px] px-2">
-                            <div className="flex items-center gap-1 truncate">
-                              <Link2 className="h-3 w-3 shrink-0" />
-                              <SelectValue />
-                            </div>
-                          </SelectTrigger>
-                          <SelectContent className="max-h-72">
-                            <SelectItem value="all">Geral (sem casa)</SelectItem>
-                            {sortedHouses.map(h => (
-                              <SelectItem key={h} value={String(h)}>
-                                Casa {String(h).padStart(2, "0")}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
                   </div>
                 ))}
               </div>
@@ -395,15 +353,15 @@ export function DiaryItemPhotoButton({
       <Dialog open={!!selectedPhoto} onOpenChange={(nextOpen) => {
         if (!nextOpen) setSelectedPhoto(null);
       }}>
-        <DialogContent className="max-h-[92vh] max-w-[95vw] overflow-y-auto sm:max-w-3xl">
+        <DialogContent className="max-h-[92vh] max-w-[95vw] overflow-y-auto sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>Foto do serviço</DialogTitle>
             <DialogDescription>Visualize a foto e edite a legenda opcional.</DialogDescription>
           </DialogHeader>
           {selectedPhoto && (
             <div className="space-y-3">
-              <div className="flex max-h-[66vh] min-h-[220px] items-center justify-center rounded-lg bg-muted/50">
-                <img src={selectedPhoto.url} alt={selectedPhoto.legenda || "Foto do serviço"} className="max-h-[66vh] max-w-full rounded-lg object-contain" />
+              <div className="flex max-h-[72vh] min-h-[220px] items-center justify-center rounded-lg bg-muted/50">
+                <img src={selectedPhoto.url} alt={selectedPhoto.legenda || "Foto do serviço"} className="max-h-[72vh] max-w-full rounded-lg object-contain" />
               </div>
               {!disabled ? (
                 <div className="space-y-2">
