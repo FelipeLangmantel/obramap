@@ -106,6 +106,7 @@ const HOLDING_PERMISSION_OPTIONS = [
   { id: "anexar_documentos", label: "Anexar documentos" },
   { id: "ver_restricoes", label: "Ver restrições" },
   { id: "resolver_restricoes", label: "Resolver restrições" },
+  { id: "can_sign_documents", label: "Pode assinar documentos/RDO" },
 ];
 
 interface Department {

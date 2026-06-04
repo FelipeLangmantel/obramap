@@ -29,10 +29,11 @@ interface Props {
   signerId: string | null;
   signerName: string | null;
   isLocked: boolean;
+  canSign?: boolean;
 }
 
 export function RdoApprovalSection({
-  entryId, companyId, status, signerId, signerName, isLocked,
+  entryId, companyId, status, signerId, signerName, isLocked, canSign,
 }: Props) {
   const [signatures, setSignatures] = useState<SignatureRow[]>([]);
   const [openSlot, setOpenSlot] = useState<1 | 2 | null>(null);
@@ -107,7 +108,7 @@ export function RdoApprovalSection({
                           </p>
                         )}
                       </div>
-                      {!isLocked && entryId && companyId && (
+                      {(!isLocked || canSign) && status !== "aprovado" && entryId && companyId && (
                         <Button size="sm" variant="outline" onClick={() => setOpenSlot(slot)}>
                           <PenLine className="h-3.5 w-3.5 mr-1" />
                           {sig ? "Refazer" : "Assinar"}

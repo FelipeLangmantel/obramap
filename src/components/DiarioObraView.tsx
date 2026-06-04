@@ -136,7 +136,7 @@ interface DiarioObraViewProps {
 
 export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAlert }: DiarioObraViewProps = {}) {
   const { currentProject, updateBatchScopeProgress, refreshHousesFromDB } = useConstruction();
-  const { user, profile, company, canEdit, requireEdit } = useAuth();
+  const { user, profile, company, canEdit, canSignDocuments, requireEdit } = useAuth();
   const houses = currentProject?.houses || [];
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -2661,7 +2661,9 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
             signerId={user?.id || null}
             signerName={profile?.display_name || user?.email || null}
             isLocked={diaryFormDisabled}
+            canSign={canSignDocuments}
           />
+
 
           {/* FOOTER: navegação + log + visualizações */}
           {entryId && (

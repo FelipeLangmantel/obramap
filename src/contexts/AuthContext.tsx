@@ -50,6 +50,7 @@ interface AuthContextType {
   isEditor: boolean; // Legacy
   isViewer: boolean;
   canEdit: boolean;
+  canSignDocuments: boolean;
   mustChangePassword: boolean;
   canAccessMenu: (menuId: string) => boolean;
   canAccessManagement: (sectionId: string) => boolean;
@@ -653,6 +654,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         : permissions?.can_edit === false
           ? false  // editor com can_edit=false explícito: bloqueado
           : true;  // editor sem restrição: pode editar
+  // canSignDocuments: permissão específica para assinar Diário/RDO sem ganhar edição geral
+  const canSignDocuments =
+    canEdit || permissions?.holding_permissions?.can_sign_documents === true;
   const mustChangePassword = profile?.must_change_password || false;
 
   const { toast: showToast } = useToast();
@@ -713,6 +717,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isEditor,
         isViewer,
         canEdit,
+        canSignDocuments,
         mustChangePassword,
         canAccessMenu,
         canAccessManagement,
