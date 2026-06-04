@@ -68,7 +68,7 @@ export function RdoVideosSection({ entryId, companyId, videos, disabled, onChang
       setProgress(40);
       const { error: upErr } = await supabase.storage
         .from("diary-attachments")
-        .upload(path, file, { contentType: file.type || "video/mp4", upsert: false });
+        .upload(path, file, { contentType: file.type || "video/mp4", upsert: false, cacheControl: "3600" });
       if (upErr) throw upErr;
       setProgress(80);
       const { error: dbErr } = await supabase.from("diary_attachments").insert({

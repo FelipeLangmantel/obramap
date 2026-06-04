@@ -48,7 +48,7 @@ export function RdoAttachmentsSection({ entryId, companyId, attachments, disable
       const path = `${companyId}/${resolvedEntryId}/anexos/${Date.now()}_${safeName}`;
       const { error: upErr } = await supabase.storage
         .from("diary-attachments")
-        .upload(path, file, { contentType: file.type, upsert: false });
+        .upload(path, file, { contentType: file.type, upsert: false, cacheControl: "3600" });
       if (upErr) throw upErr;
       const { error: dbErr } = await supabase.from("diary_attachments").insert({
         company_id: companyId,

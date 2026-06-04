@@ -782,7 +782,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
         const path = `${company.id}/${resolvedEntryId}/${Date.now()}_${extSafeName}`;
         const { error: uploadError } = await supabase.storage
           .from("diary-photos")
-          .upload(path, payload, { contentType, upsert: false });
+          .upload(path, payload, { contentType, upsert: false, cacheControl: "3600" });
         if (uploadError) throw uploadError;
         const { error: dbError } = await supabase.from("diary_photos").insert({
           diary_entry_id: resolvedEntryId,

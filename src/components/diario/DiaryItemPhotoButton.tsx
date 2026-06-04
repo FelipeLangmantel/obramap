@@ -119,7 +119,7 @@ export function DiaryItemPhotoButton({
         const path = `${companyId}/${diaryEntryId}/${diaryItemId}/${houseSeg}${Date.now()}_${extSafeName}`;
         const { error: upErr } = await supabase.storage
           .from("diary-photos")
-          .upload(path, payload, { contentType, upsert: false });
+          .upload(path, payload, { contentType, upsert: false, cacheControl: "3600" });
         if (upErr) throw upErr;
         const { error: dbErr } = await supabase.from("diary_photos").insert({
           diary_entry_id: diaryEntryId,
