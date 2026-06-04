@@ -29,10 +29,11 @@ interface Props {
   signerId: string | null;
   signerName: string | null;
   isLocked: boolean;
+  canSign?: boolean;
 }
 
 export function RdoApprovalSection({
-  entryId, companyId, status, signerId, signerName, isLocked,
+  entryId, companyId, status, signerId, signerName, isLocked, canSign,
 }: Props) {
   const [signatures, setSignatures] = useState<SignatureRow[]>([]);
   const [openSlot, setOpenSlot] = useState<1 | 2 | null>(null);
