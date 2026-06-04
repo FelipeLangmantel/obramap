@@ -12858,6 +12858,7 @@ export type Database = {
         }
         Returns: number
       }
+      can_sign_documents: { Args: never; Returns: boolean }
       can_write: { Args: never; Returns: boolean }
       carry_over_stock: {
         Args: { p_from_period_id: string; p_to_period_id: string }
