@@ -84,6 +84,13 @@ interface MapLayout {
 
 const MAP_LAYOUT_STORAGE_KEY = "obramap_interactive_map_layout";
 const MAP_LAYOUT_CACHE_KEY = "obramap_interactive_map_layout_cache";
+const MARKER_SIZE_STORAGE_KEY = "obramap_interactive_map_marker_size";
+const DEFAULT_MARKER_SIZE = 28;
+const MARKER_SIZE_OPTIONS = [
+  { label: "Pequeno", value: 22 },
+  { label: "Médio", value: DEFAULT_MARKER_SIZE },
+  { label: "Grande", value: 40 },
+] as const;
 
 interface CachedMapLayout extends MapLayout {
   cachedAt: number;
@@ -92,6 +99,7 @@ interface CachedMapLayout extends MapLayout {
 }
 
 const getMapLayoutCacheKey = (projectId: string) => `${MAP_LAYOUT_CACHE_KEY}_${projectId}`;
+const getMarkerSizeStorageKey = (projectId: string) => `${MARKER_SIZE_STORAGE_KEY}_${projectId}`;
 
 const readCachedMapLayout = (projectId: string): CachedMapLayout | null => {
   try {
@@ -344,6 +352,8 @@ export function InteractiveMapView() {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterMacro, setFilterMacro] = useState<string>("all");
   const [filterScope, setFilterScope] = useState<string>("all");
+  const [markerSize, setMarkerSize] = useState(DEFAULT_MARKER_SIZE);
+  const [isMarkerSizeLoaded, setIsMarkerSizeLoaded] = useState(false);
 
   const houses = currentProject?.houses || [];
   const legendItems = currentProject?.customLegendItems || DEFAULT_LEGEND_ITEMS;
@@ -370,12 +380,45 @@ export function InteractiveMapView() {
   useEffect(() => {
     dragStartRef.current = dragStart;
   }, [dragStart]);
+
+  useEffect(() => {
+    const projectId = currentProject?.id;
+    setIsMarkerSizeLoaded(false);
+
+    if (!projectId) {
+      setMarkerSize(DEFAULT_MARKER_SIZE);
+      setIsMarkerSizeLoaded(true);
+      return;
+    }
+
+    try {
+      const raw = localStorage.getItem(getMarkerSizeStorageKey(projectId));
+      const savedSize = raw ? Number(raw) : DEFAULT_MARKER_SIZE;
+      const isValidSize = MARKER_SIZE_OPTIONS.some(option => option.value === savedSize);
+      setMarkerSize(isValidSize ? savedSize : DEFAULT_MARKER_SIZE);
+    } catch {
+      setMarkerSize(DEFAULT_MARKER_SIZE);
+    } finally {
+      setIsMarkerSizeLoaded(true);
+    }
+  }, [currentProject?.id]);
+
+  useEffect(() => {
+    const projectId = currentProject?.id;
+    if (!projectId || !isMarkerSizeLoaded) return;
+
+    try {
+      localStorage.setItem(getMarkerSizeStorageKey(projectId), String(markerSize));
+    } catch {
+      // Ignore storage quota/privacy errors. Marker size is a local preference only.
+    }
+  }, [currentProject?.id, isMarkerSizeLoaded, markerSize]);
   
   // Dynamic house radius - mantém tamanho visual consistente ao fazer zoom
   const displayRadius = useMemo(() => {
     // Raio base no SVG, sem compensação de zoom (o SVG já escala)
-    return BASE_HOUSE_RADIUS;
-  }, []);
+    return markerSize / 2;
+  }, [markerSize]);
 
   // Load saved map layout from database for current project
   useEffect(() => {
@@ -1839,6 +1882,21 @@ export function InteractiveMapView() {
             <RotateCcw className="h-4 w-4" />
           </Button>
           <Badge variant="outline" className="text-xs h-6">{Math.round(scale * 100)}%</Badge>
+          <div className="flex items-center gap-1.5 pl-2 ml-1 border-l">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">Tamanho dos marcadores</span>
+            <Select value={String(markerSize)} onValueChange={(value) => setMarkerSize(Number(value))}>
+              <SelectTrigger className="h-8 w-24 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {MARKER_SIZE_OPTIONS.map(option => (
+                  <SelectItem key={option.value} value={String(option.value)}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -2199,7 +2257,7 @@ export function InteractiveMapView() {
                   {/* House number */}
                   <text
                     x={house.x}
-                    y={house.y + 4}
+                    y={house.y + Math.max(3, r * 0.28)}
                     fill="white"
                     fontSize={Math.max(8, r * 0.6)}
                     fontWeight="bold"
