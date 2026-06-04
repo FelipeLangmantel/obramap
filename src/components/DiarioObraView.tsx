@@ -2558,8 +2558,11 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
               />
             <div className="space-y-3">
               {fotos.length > 0 && (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
                   {fotos.map(foto => {
+                    const isLinkedPhoto = Boolean(
+                      foto.diary_item_id || foto.house_number != null || foto.scope_name || foto.macro_name
+                    );
                     const openPhoto = () => {
                       setFotoAmpliada(foto);
                       setFotoLegendaDraft(foto.legenda || "");
@@ -2571,7 +2574,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                           <button
                             type="button"
                             onClick={openPhoto}
-                            className="flex h-40 w-full items-center justify-center bg-muted/50 focus:outline-none focus:ring-2 focus:ring-ring"
+                            className="flex h-28 w-full items-center justify-center bg-muted/50 focus:outline-none focus:ring-2 focus:ring-ring sm:h-32"
                             aria-label="Abrir foto ampliada"
                           >
                             <img
@@ -2585,31 +2588,55 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                             <button
                               type="button"
                               onClick={() => handleRemoverFoto(foto.id, foto.storage_path)}
-                              className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-destructive text-destructive-foreground opacity-0 shadow transition-opacity group-hover:opacity-100"
+                              className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-destructive text-destructive-foreground opacity-0 shadow-sm transition-opacity group-hover:opacity-90"
                               aria-label="Remover foto"
                             >
-                              <X className="h-3.5 w-3.5" />
+                              <X className="h-3 w-3" />
                             </button>
                           )}
                         </div>
-                        <div className="space-y-2 p-3">
-                          <div>
+                        <div className="space-y-1.5 p-2 text-[11px]">
+                          <div className="flex flex-wrap gap-1">
+                            <Badge variant={isLinkedPhoto ? "secondary" : "outline"} className="text-[10px]">
+                              {isLinkedPhoto ? "Foto vinculada" : "Foto geral"}
+                            </Badge>
+                            <Badge variant="outline" className="text-[10px]">
+                              {format(parseISO(entryDate), "dd/MM/yyyy")}
+                            </Badge>
+                          </div>
+
+                          {isLinkedPhoto ? (
+                            <div className="space-y-0.5 text-muted-foreground">
+                              {foto.house_number != null && (
+                                <p className="font-medium text-foreground">
+                                  Casa {String(foto.house_number).padStart(2, "0")}
+                                </p>
+                              )}
+                              {foto.scope_name && <p className="line-clamp-1">Serviço: {foto.scope_name}</p>}
+                              {foto.macro_name && <p className="line-clamp-1">Etapa: {foto.macro_name}</p>}
+                              {foto.legenda && <p className="line-clamp-2 text-foreground">{foto.legenda}</p>}
+                            </div>
+                          ) : (
+                            <>
+                          <div className="rounded-md border bg-muted/30 p-2">
                             <p className="text-xs font-medium text-muted-foreground">Legenda/descrição</p>
                             {foto.legenda ? (
-                              <p className="mt-1 line-clamp-3 text-sm leading-snug text-foreground">{foto.legenda}</p>
+                              <p className="mt-1 line-clamp-2 text-xs leading-snug text-foreground">{foto.legenda}</p>
                             ) : (
-                              <p className="mt-1 text-sm italic text-muted-foreground">Sem legenda adicionada.</p>
+                              <p className="mt-1 text-xs italic text-muted-foreground">Sem legenda adicionada.</p>
                             )}
                           </div>
                           <Button
                             type="button"
-                            variant="outline"
+                            variant="ghost"
                             size="sm"
-                            className="w-full justify-center"
+                            className="h-7 w-full justify-center text-xs"
                             onClick={openPhoto}
                           >
                             {!diaryFormDisabled ? "Ver / editar legenda" : "Ver foto"}
                           </Button>
+                            </>
+                          )}
                         </div>
                       </div>
                     );

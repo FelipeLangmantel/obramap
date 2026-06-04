@@ -88,15 +88,24 @@ export function GeneralPhotosPanel() {
   const [previewPhoto, setPreviewPhoto] = useState<PhotoRow | null>(null);
   const [photoToDelete, setPhotoToDelete] = useState<PhotoRow | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [captionDraft, setCaptionDraft] = useState("");
   const [savingCaption, setSavingCaption] = useState(false);
 
   const houseIds = useMemo(() => {
-    return (currentProject?.houses || [])
-      .map((h: any) => Number(h.numero ?? h.number))
-      .filter((n: number) => Number.isFinite(n))
-      .sort((a: number, b: number) => a - b);
-  }, [currentProject]);
+    const ids = new Set<number>();
+    for (const h of currentProject?.houses || []) {
+      const n = Number((h as any).numero ?? (h as any).number ?? (h as any).house_number);
+      if (Number.isFinite(n)) ids.add(n);
+    }
+    for (const photo of photos) {
+      if (photo.house_number != null && Number.isFinite(photo.house_number)) ids.add(photo.house_number);
+      for (const n of photo.item_house_ids || []) {
+        if (Number.isFinite(n)) ids.add(n);
+      }
+    }
+    return Array.from(ids).sort((a, b) => a - b);
+  }, [currentProject, photos]);
 
   const load = useCallback(async () => {
     if (!currentProject?.id) {
@@ -218,6 +227,7 @@ export function GeneralPhotosPanel() {
 
   const handleDeletePhoto = async () => {
     if (!photoToDelete) return;
+    if (deleteConfirmText !== "excluir") return;
     setDeleting(true);
     await supabase.storage.from("diary-photos").remove([photoToDelete.storage_path]);
     const { error } = await supabase.from("diary_photos").delete().eq("id", photoToDelete.id);
@@ -230,6 +240,7 @@ export function GeneralPhotosPanel() {
     setPhotos((prev) => prev.filter((p) => p.id !== photoToDelete.id));
     if (previewPhoto?.id === photoToDelete.id) setPreviewPhoto(null);
     setPhotoToDelete(null);
+    setDeleteConfirmText("");
   };
 
   const handleSaveCaption = async () => {
@@ -365,10 +376,13 @@ export function GeneralPhotosPanel() {
                         <Button
                           size="icon"
                           variant="destructive"
-                          className="absolute right-1.5 top-1.5 h-7 w-7"
-                          onClick={() => setPhotoToDelete(p)}
+                          className="absolute right-1 top-1 h-6 w-6 rounded-full opacity-90 shadow-sm"
+                          onClick={() => {
+                            setDeleteConfirmText("");
+                            setPhotoToDelete(p);
+                          }}
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
+                          <Trash2 className="h-3 w-3" />
                         </Button>
                       </div>
                       <div className="space-y-1.5 p-2 text-[11px]">
@@ -462,19 +476,39 @@ export function GeneralPhotosPanel() {
       </Dialog>
 
       <AlertDialog open={!!photoToDelete} onOpenChange={(open) => {
-        if (!open) setPhotoToDelete(null);
+        if (!open) {
+          setPhotoToDelete(null);
+          setDeleteConfirmText("");
+        }
       }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir foto?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta foto será excluída permanentemente. Esta ação não pode ser desfeita.
+              Essa ação não pode ser desfeita. Para confirmar, digite excluir.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {photoToDelete && (
+            <div className="space-y-3">
+              <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+                <p className="font-medium text-foreground">{formatHouseLabel(photoToDelete)}</p>
+                <p>{getPhotoType(photoToDelete)}</p>
+                {photoToDelete.item_scope_name && <p>Serviço: {photoToDelete.item_scope_name}</p>}
+                {photoToDelete.item_macro_name && <p>Etapa: {photoToDelete.item_macro_name}</p>}
+                <p>Data: {formatDateBR(photoToDelete.entry_date)}</p>
+              </div>
+              <Input
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="Digite excluir"
+                autoComplete="off"
+              />
+            </div>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeletePhoto} disabled={deleting}>
-              {deleting ? "Excluindo..." : "Excluir"}
+            <AlertDialogAction onClick={handleDeletePhoto} disabled={deleting || deleteConfirmText !== "excluir"}>
+              {deleting ? "Excluindo..." : "Excluir foto"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

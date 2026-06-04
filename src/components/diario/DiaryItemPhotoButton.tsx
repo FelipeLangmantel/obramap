@@ -1,7 +1,18 @@
 import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -56,6 +67,8 @@ export function DiaryItemPhotoButton({
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<FotoServico | null>(null);
+  const [photoToDelete, setPhotoToDelete] = useState<FotoServico | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [captionDraft, setCaptionDraft] = useState("");
   const [savingCaption, setSavingCaption] = useState(false);
   const [selectedHouse, setSelectedHouse] = useState<string>(
@@ -148,10 +161,14 @@ export function DiaryItemPhotoButton({
   };
 
   const handleRemove = async (foto: FotoServico) => {
+    if (deleteConfirmText !== "excluir") return;
     try {
       await supabase.storage.from("diary-photos").remove([foto.storage_path]);
       await supabase.from("diary_photos").delete().eq("id", foto.id);
       setFotos(prev => prev.filter(f => f.id !== foto.id));
+      if (selectedPhoto?.id === foto.id) setSelectedPhoto(null);
+      setPhotoToDelete(null);
+      setDeleteConfirmText("");
       await refreshCount();
       onChanged?.();
       toast.success("Foto removida.");
@@ -313,10 +330,13 @@ export function DiaryItemPhotoButton({
                         <Button
                           size="icon"
                           variant="destructive"
-                          className="absolute right-2 top-2 h-7 w-7 opacity-0 transition group-hover:opacity-100"
-                          onClick={() => handleRemove(f)}
+                          className="absolute right-1 top-1 h-6 w-6 rounded-full opacity-0 shadow-sm transition group-hover:opacity-90"
+                          onClick={() => {
+                            setDeleteConfirmText("");
+                            setPhotoToDelete(f);
+                          }}
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
+                          <Trash2 className="h-3 w-3" />
                         </Button>
                       )}
                     </div>
@@ -329,18 +349,7 @@ export function DiaryItemPhotoButton({
                       {f.legenda && (
                         <p className="mt-1 line-clamp-2 text-xs leading-snug text-muted-foreground">{f.legenda}</p>
                       )}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="mt-2 h-7 w-full text-xs"
-                        onClick={() => {
-                          setSelectedPhoto(f);
-                          setCaptionDraft(f.legenda || "");
-                        }}
-                      >
-                        {!disabled ? "Ver / editar legenda" : "Ver foto"}
-                      </Button>
+                      <p className="mt-1 text-[11px] text-muted-foreground">Foto vinculada ao serviço</p>
                     </div>
                   </div>
                 ))}
@@ -386,6 +395,49 @@ export function DiaryItemPhotoButton({
           )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!photoToDelete} onOpenChange={(open) => {
+        if (!open) {
+          setPhotoToDelete(null);
+          setDeleteConfirmText("");
+        }
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir foto?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Essa ação não pode ser desfeita. Para confirmar, digite excluir.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {photoToDelete && (
+            <div className="space-y-3">
+              <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+                <p className="font-medium text-foreground">
+                  {photoToDelete.house_number != null
+                    ? `Casa ${String(photoToDelete.house_number).padStart(2, "0")}`
+                    : "Foto geral do serviço"}
+                </p>
+                <p>Foto vinculada ao serviço</p>
+              </div>
+              <Input
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="Digite excluir"
+                autoComplete="off"
+              />
+            </div>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => photoToDelete && handleRemove(photoToDelete)}
+              disabled={deleteConfirmText !== "excluir"}
+            >
+              Excluir foto
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
