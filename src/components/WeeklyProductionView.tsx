@@ -397,6 +397,16 @@ export function WeeklyProductionView() {
     return Math.max(0, Math.min(...availables));
   })();
 
+  const buildInitialHousePercentages = (maxAvailable: number) => {
+    const percentages: Record<number, number> = {};
+    selectedHouses.forEach((houseId) => {
+      const house = houses.find((x: any) => x.id === houseId);
+      const available = getAvailablePercent(house, selectedMacro, selectedScope);
+      percentages[houseId] = Math.max(0, Math.min(maxAvailable, available));
+    });
+    return percentages;
+  };
+
 
   const loadDiaryProductionMatches = useCallback(async () => {
     if (!currentProject?.id) return new Map<string, number>();
@@ -2171,7 +2181,11 @@ export function WeeklyProductionView() {
                         checked={customPercentMode}
                         onCheckedChange={(checked) => {
                           setCustomPercentMode(checked);
-                          if (!checked) {
+                          if (checked) {
+                            const initialPercentage = Math.max(0, weeklyMaxAvailable);
+                            setMassPercentage(initialPercentage);
+                            setHousePercentages(buildInitialHousePercentages(initialPercentage));
+                          } else {
                             setHousePercentages({});
                             setMassPercentage(100);
                           }
