@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Upload, RotateCcw, Move3D, X, ChevronDown, ChevronRight, Save, Loader2, Home, AlertTriangle, Target, Layers, Camera, MousePointerClick, ScanSearch, RefreshCw, Eye, EyeOff, Boxes, Sparkles, SlidersHorizontal, Download } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
@@ -1561,6 +1562,7 @@ export function Map3DView() {
   const [multiSelectedMeshKeys, setMultiSelectedMeshKeys] = useState<Set<string>>(new Set());
   const [reviewLinksMode, setReviewLinksMode] = useState(false);
   const [reviewLinksFilter, setReviewLinksFilter] = useState<ReviewLinksFilter>("all");
+  const [reviewLinksServiceFilter, setReviewLinksServiceFilter] = useState("all");
   const [reviewLinkHoverTooltip, setReviewLinkHoverTooltip] = useState<ReviewLinkHoverTooltip>(null);
   const [hideLinkedInReview, setHideLinkedInReview] = useState(false);
   const [isolatedKeys, setIsolatedKeys] = useState<Set<string> | null>(null);
@@ -1793,6 +1795,7 @@ export function Map3DView() {
     setMultiSelectedMeshKeys(new Set());
     setReviewLinksMode(false);
     setReviewLinksFilter("all");
+    setReviewLinksServiceFilter("all");
     setReviewLinkHoverTooltip(null);
     setHideLinkedInReview(false);
     setIsolatedKeys(null);
@@ -2929,6 +2932,21 @@ export function Map3DView() {
   }, [serviceOptions]);
 
   // Aplica modo de visualização à cena
+  const matchesReviewLinksVisualFilter = useCallback((saved: ProjectModelMesh | null | undefined) => {
+    const isLinked = isCompleteProductionLink(saved);
+    const isPending = !saved?.ignored && !isContextProjectModelMesh(saved) && !isLinked;
+
+    let matchesStatusFilter = true;
+    if (reviewLinksFilter === "linked") matchesStatusFilter = isLinked;
+    if (reviewLinksFilter === "pending") matchesStatusFilter = isPending;
+
+    const matchesServiceFilter = reviewLinksServiceFilter === "all"
+      ? true
+      : isLinked && getRealServiceFilterKey(saved) === reviewLinksServiceFilter;
+
+    return matchesStatusFilter && matchesServiceFilter;
+  }, [isCompleteProductionLink, reviewLinksFilter, reviewLinksServiceFilter]);
+
   const getReviewLinkTooltipData = useCallback((layerKey: string, mesh?: THREE.Mesh): Omit<NonNullable<ReviewLinkHoverTooltip>, "x" | "y"> => {
     const saved = getCurrentMeshRecord(layerKey);
     const meshName = saved?.mesh_name || mesh?.name || layerKey;
@@ -2977,13 +2995,17 @@ export function Map3DView() {
       setReviewLinkHoverTooltip(null);
       return;
     }
+    if (!matchesReviewLinksVisualFilter(saved)) {
+      setReviewLinkHoverTooltip(null);
+      return;
+    }
     const sourceEvent = event?.nativeEvent ?? event;
     setReviewLinkHoverTooltip({
       ...getReviewLinkTooltipData(layerKey, mesh),
       x: Number(sourceEvent?.clientX ?? 0),
       y: Number(sourceEvent?.clientY ?? 0),
     });
-  }, [getCurrentMeshRecord, getReviewLinkTooltipData, isCompleteProductionLink, reviewLinksFilter, reviewLinksMode, reviewMode]);
+  }, [getCurrentMeshRecord, getReviewLinkTooltipData, isCompleteProductionLink, matchesReviewLinksVisualFilter, reviewLinksFilter, reviewLinksMode, reviewMode]);
 
   const handleSupplementalReviewLinkHover = useCallback((_part: SupplementalGlbPart, obj: THREE.Object3D, event: any) => {
     handleReviewLinkHover(obj, event);
@@ -3996,7 +4018,7 @@ export function Map3DView() {
   }, [buildCurrentMeshMap, getRealServiceLabel, isCompleteProductionLink, meshHooks.meshMap, traverseActiveModelMeshes]);
 
   const reviewVisibilityStats = useMemo(() => {
-    const stats = { total: 0, linked: 0, pending: 0, context: 0, ignored: 0 };
+    const stats = { total: 0, linked: 0, pending: 0, context: 0, ignored: 0, filtered: 0, serviceLinked: 0 };
     const sourceMap = buildCurrentMeshMap(meshHooks.meshMap);
     traverseActiveModelMeshes((mesh) => {
       stats.total++;
@@ -4005,18 +4027,24 @@ export function Map3DView() {
         stats.ignored++;
         return;
       }
+      if (matchesReviewLinksVisualFilter(saved)) {
+        stats.filtered++;
+      }
       if (isContextProjectModelMesh(saved)) {
         stats.context++;
         return;
       }
       if (isCompleteProductionLink(saved)) {
         stats.linked++;
+        if (reviewLinksServiceFilter !== "all" && getRealServiceFilterKey(saved) === reviewLinksServiceFilter) {
+          stats.serviceLinked++;
+        }
         return;
       }
       stats.pending++;
     });
     return stats;
-  }, [buildCurrentMeshMap, isCompleteProductionLink, meshHooks.meshMap, supplementalGlbParts, traverseActiveModelMeshes]);
+  }, [buildCurrentMeshMap, isCompleteProductionLink, matchesReviewLinksVisualFilter, meshHooks.meshMap, reviewLinksServiceFilter, supplementalGlbParts, traverseActiveModelMeshes]);
 
   useEffect(() => {
     const restoreReviewLinksHighlight = () => {
@@ -4128,13 +4156,19 @@ export function Map3DView() {
       if (isEffectivelyVisible(mesh)) realStats.visibleBefore++;
       const saved = sourceMap.get(getMeshLayerKey(mesh));
       if (!saved) {
-        mesh.visible = mode !== "real";
+        mesh.visible = mode !== "real" && (
+          !reviewMode || !reviewLinksMode || matchesReviewLinksVisualFilter(null)
+        );
         if (mode === "real") realStats.unlinkedHidden++;
         return;
       }
       if (saved.ignored) {
         mesh.visible = false;
         if (mode === "real") realStats.ignored++;
+        return;
+      }
+      if (mode !== "real" && reviewMode && reviewLinksMode && !matchesReviewLinksVisualFilter(saved)) {
+        mesh.visible = false;
         return;
       }
       if (mode !== "real" && reviewMode && hideLinkedInReview && isCompleteProductionLink(saved) && !isContextProjectModelMesh(saved)) {
@@ -4202,7 +4236,7 @@ export function Map3DView() {
       }
     }
     return realStats;
-  }, [buildCurrentMeshMap, hiddenRealServiceKeys, hideLinkedInReview, isCompleteProductionLink, meshHooks.meshMap, projectId, reviewMode, sceneObj, sceneReady, supplementalGlbParts.length, traverseActiveModelMeshes]);
+  }, [buildCurrentMeshMap, hiddenRealServiceKeys, hideLinkedInReview, isCompleteProductionLink, matchesReviewLinksVisualFilter, meshHooks.meshMap, projectId, reviewLinksMode, reviewMode, sceneObj, sceneReady, supplementalGlbParts.length, traverseActiveModelMeshes]);
 
   const reexibirTodasCamadas = useCallback(async () => {
     const beforeState = smartLinkPreviewStateRef.current;
@@ -4373,6 +4407,14 @@ export function Map3DView() {
       clearMeshSelection("review linked filter");
     }
   }, [clearMeshSelection, getCurrentMeshRecord, hideLinkedInReview, isCompleteProductionLink, selectedMeshKey]);
+
+  useEffect(() => {
+    if (!reviewMode || !reviewLinksMode || !selectedMeshKey) return;
+    const saved = getCurrentMeshRecord(selectedMeshKey);
+    if (!matchesReviewLinksVisualFilter(saved)) {
+      clearMeshSelection("review service filter");
+    }
+  }, [clearMeshSelection, getCurrentMeshRecord, matchesReviewLinksVisualFilter, reviewLinksMode, reviewMode, selectedMeshKey]);
 
   // Desabilita autoMode (LayersPanel) fora do modo simulação
   useEffect(() => {
@@ -5891,6 +5933,7 @@ export function Map3DView() {
                     }
                     setReviewLinksMode((value) => !value);
                     setReviewLinksFilter("all");
+                    setReviewLinksServiceFilter("all");
                     setReviewLinkHoverTooltip(null);
                   }}
                   disabled={isLoading}
@@ -5919,7 +5962,32 @@ export function Map3DView() {
                     {label}
                   </Button>
                 ))}
+                {reviewLinksMode && (
+                  <Select
+                    value={reviewLinksServiceFilter}
+                    onValueChange={(value) => {
+                      setReviewLinksServiceFilter(value);
+                      setReviewLinkHoverTooltip(null);
+                    }}
+                    disabled={isLoading}
+                  >
+                    <SelectTrigger className="h-7 w-[220px] text-xs">
+                      <SelectValue placeholder="Filtrar servico" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-80">
+                      <SelectItem value="all">Todos os servicos</SelectItem>
+                      {serviceOptions.map((service) => (
+                        <SelectItem key={service.id} value={service.id}>
+                          {service.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
                 <span className="whitespace-nowrap text-muted-foreground">
+                  {reviewLinksServiceFilter !== "all" && (
+                    <>{reviewVisibilityStats.filtered} filtradas - {reviewVisibilityStats.serviceLinked} no servico - </>
+                  )}
                   {reviewVisibilityStats.total} total · {reviewVisibilityStats.linked} vinc. · {reviewVisibilityStats.pending} pend. · {reviewVisibilityStats.context} ctx · {reviewVisibilityStats.ignored} ign.
                 </span>
               </div>
