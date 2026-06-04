@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import { getAvailablePercent, validateBatchLaunch } from "@/lib/productionEngine";
+import { getAvailablePercent, safeDisplayPercent, validateBatchLaunch } from "@/lib/productionEngine";
 import { Textarea } from "@/components/ui/textarea";
 import { 
   ClipboardList, 
@@ -148,11 +148,15 @@ function productionDiaryMatchKey(
   ].join("|");
 }
 
+function normalizePercent(value: unknown) {
+  if (value == null) return null;
+  const numericPercent = Number(value);
+  return Number.isFinite(numericPercent) ? numericPercent : null;
+}
+
 function getProductionHousePercent(prod: WeeklyProduction) {
   const rawPercent = prod.percentual_executado ?? prod.source_percentual ?? null;
-  if (rawPercent == null) return null;
-  const numericPercent = Number(rawPercent);
-  return Number.isFinite(numericPercent) ? Math.max(0, Math.min(100, numericPercent)) : null;
+  return safeDisplayPercent(normalizePercent(rawPercent), null);
 }
 
 function getProductionProgressFromHouses(prod: WeeklyProduction, houses: any[]) {
@@ -441,7 +445,8 @@ export function WeeklyProductionView() {
         weekEnd,
         (item.house_ids || []).map(Number),
       );
-      matches.set(key, Number(item.percentual_executado ?? 100));
+      const diaryPercent = safeDisplayPercent(normalizePercent(item.percentual_executado), null);
+      if (diaryPercent != null) matches.set(key, diaryPercent);
     }
     return matches;
   }, [currentProject?.id]);
@@ -450,14 +455,22 @@ export function WeeklyProductionView() {
     return rows.map((row) => {
       const houseProgress = getProductionProgressFromHouses(row, houses);
       if (row.is_initial_database) {
-        return { ...row, source_origin: "initial" as const, source_percentual: row.percentual_executado ?? houseProgress ?? 100 };
+        return {
+          ...row,
+          source_origin: "initial" as const,
+          source_percentual: safeDisplayPercent(normalizePercent(row.percentual_executado), houseProgress),
+        };
       }
       const key = productionDiaryMatchKey(row.macro_id, row.scope_id, row.week_start, row.week_end, row.house_ids || []);
       const diaryPercent = diaryMatches.get(key);
       if (diaryPercent !== undefined) {
         return { ...row, source_origin: "diary" as const, source_percentual: diaryPercent };
       }
-      return { ...row, source_origin: "weekly" as const, source_percentual: row.percentual_executado ?? houseProgress };
+      return {
+        ...row,
+        source_origin: "weekly" as const,
+        source_percentual: safeDisplayPercent(normalizePercent(row.percentual_executado), houseProgress),
+      };
     });
   }, [houses]);
 
