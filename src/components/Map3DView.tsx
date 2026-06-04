@@ -1587,7 +1587,6 @@ export function Map3DView() {
   const [smartLinkFocusedCandidateKey, setSmartLinkFocusedCandidateKey] = useState<string | null>(null);
   const [smartLinkHoverTooltip, setSmartLinkHoverTooltip] = useState<SmartLinkHoverTooltip>(null);
   const [smartLinkApplying, setSmartLinkApplying] = useState(false);
-  const reviewLinksHighlightRef = useRef<Array<{ mesh: THREE.Mesh; originalMaterial: THREE.Material | THREE.Material[] }>>([]);
   const smartLinkPreviewMaterialsRef = useRef<Array<{ mesh: THREE.Mesh; originalMaterial: THREE.Material | THREE.Material[] }>>([]);
   const smartLinkPreviewStateRef = useRef({
     isLoading: false,
@@ -4045,68 +4044,6 @@ export function Map3DView() {
     });
     return stats;
   }, [buildCurrentMeshMap, isCompleteProductionLink, matchesReviewLinksVisualFilter, meshHooks.meshMap, reviewLinksServiceFilter, supplementalGlbParts, traverseActiveModelMeshes]);
-
-  useEffect(() => {
-    const restoreReviewLinksHighlight = () => {
-      reviewLinksHighlightRef.current.forEach(({ mesh, originalMaterial }) => {
-        const currentMaterial = mesh.material as THREE.Material | THREE.Material[];
-        mesh.material = originalMaterial;
-        const currentMaterials = Array.isArray(currentMaterial) ? currentMaterial : [currentMaterial];
-        currentMaterials.forEach((material) => {
-          if ((material.userData as any)?.__obramapReviewLinksMaterial) {
-            material.dispose();
-          }
-        });
-        const restoredMaterials = Array.isArray(originalMaterial) ? originalMaterial : [originalMaterial];
-        restoredMaterials.forEach((material) => {
-          material.needsUpdate = true;
-        });
-      });
-      reviewLinksHighlightRef.current = [];
-    };
-
-    restoreReviewLinksHighlight();
-    if (!reviewMode || !reviewLinksMode) return restoreReviewLinksHighlight;
-
-    const linkedMeshes: THREE.Mesh[] = [];
-    traverseActiveModelMeshes((mesh) => {
-      const saved = getCurrentMeshRecord(getMeshLayerKey(mesh));
-      if (isCompleteProductionLink(saved)) linkedMeshes.push(mesh);
-    });
-
-    const makeReviewMaterial = (material: THREE.Material) => {
-      const clone = material.clone();
-      clone.userData = {
-        ...clone.userData,
-        __obramapReviewLinksMaterial: true,
-      };
-      const anyClone = clone as any;
-      if (anyClone.emissive?.set) {
-        anyClone.emissive.set(0x38bdf8);
-        anyClone.emissiveIntensity = Math.max(Number(anyClone.emissiveIntensity || 0), 0.22);
-      } else if (anyClone.color?.lerp) {
-        anyClone.color.lerp(new THREE.Color(0x38bdf8), 0.22);
-      }
-      clone.transparent = true;
-      clone.opacity = Math.max(Number((clone as any).opacity ?? 1), 0.82);
-      clone.needsUpdate = true;
-      return clone;
-    };
-
-    reviewLinksHighlightRef.current = linkedMeshes.map((mesh) => {
-      const originalMaterial = mesh.material as THREE.Material | THREE.Material[];
-      mesh.material = Array.isArray(originalMaterial)
-        ? originalMaterial.map(makeReviewMaterial)
-        : makeReviewMaterial(originalMaterial);
-      return { mesh, originalMaterial };
-    });
-
-    if (import.meta.env.DEV) {
-      console.log("[Review Links] highlight applied", { count: linkedMeshes.length });
-    }
-
-    return restoreReviewLinksHighlight;
-  }, [getCurrentMeshRecord, isCompleteProductionLink, reviewLinksMode, reviewMode, traverseActiveModelMeshes]);
 
   const selectedZoomOption = ZOOM_SENSITIVITY_OPTIONS.find((option) => option.value === zoomSensitivity) ?? ZOOM_SENSITIVITY_OPTIONS[1];
   const orbitZoomSpeed = 2.8 * selectedZoomOption.multiplier;
