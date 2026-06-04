@@ -654,6 +654,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         : permissions?.can_edit === false
           ? false  // editor com can_edit=false explícito: bloqueado
           : true;  // editor sem restrição: pode editar
+  // canSignDocuments: permissão específica para assinar Diário/RDO sem ganhar edição geral
+  const canSignDocuments =
+    canEdit || permissions?.holding_permissions?.can_sign_documents === true;
   const mustChangePassword = profile?.must_change_password || false;
 
   const { toast: showToast } = useToast();
