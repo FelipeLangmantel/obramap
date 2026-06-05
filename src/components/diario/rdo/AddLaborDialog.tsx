@@ -22,7 +22,7 @@ export function AddLaborDialog({ open, onOpenChange, entryId, companyId, onSaved
   const [types, setTypes] = useState<LaborType[]>([]);
   const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState<"todos" | "propria" | "terceiros">("todos");
-  const [selected, setSelected] = useState<Record<string, number>>({});
+  const [selected, setSelected] = useState<Record<string, string>>({});
   const [novoNome, setNovoNome] = useState("");
   const [novoCat, setNovoCat] = useState<"propria" | "terceiros">("propria");
   const [creating, setCreating] = useState(false);
@@ -61,13 +61,23 @@ export function AddLaborDialog({ open, onOpenChange, entryId, companyId, onSaved
     setSelected(prev => {
       const next = { ...prev };
       if (id in next) delete next[id];
-      else next[id] = 1;
+      else next[id] = "1";
       return next;
     });
   };
 
-  const setQty = (id: string, qty: number) => {
-    setSelected(prev => ({ ...prev, [id]: Math.max(1, qty) }));
+  const normalizeQty = (value: string | number | undefined) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed >= 1 ? Math.floor(parsed) : 1;
+  };
+
+  const setQtyDraft = (id: string, value: string) => {
+    const numericDraft = value.replace(/\D/g, "");
+    setSelected(prev => ({ ...prev, [id]: numericDraft }));
+  };
+
+  const commitQty = (id: string) => {
+    setSelected(prev => ({ ...prev, [id]: String(normalizeQty(prev[id])) }));
   };
 
   const handleCriarNovo = async () => {
@@ -81,7 +91,7 @@ export function AddLaborDialog({ open, onOpenChange, entryId, companyId, onSaved
         .single();
       if (error) throw error;
       setTypes(prev => [...prev, data as any]);
-      setSelected(prev => ({ ...prev, [data.id]: 1 }));
+      setSelected(prev => ({ ...prev, [data.id]: "1" }));
       setNovoNome("");
       toast.success("Tipo de mão de obra criado.");
     } catch (err: any) {
@@ -106,7 +116,7 @@ export function AddLaborDialog({ open, onOpenChange, entryId, companyId, onSaved
           diary_entry_id: entryId,
           nome: t.nome,
           categoria: t.categoria,
-          quantidade: selected[id],
+          quantidade: normalizeQty(selected[id]),
         };
       });
       const { error } = await supabase.from("diary_labor").insert(rows);
@@ -166,10 +176,14 @@ export function AddLaborDialog({ open, onOpenChange, entryId, companyId, onSaved
                         <span className="flex-1 text-sm">{t.nome}</span>
                         {isSel && (
                           <Input
-                            type="number"
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
                             min={1}
                             value={selected[t.id]}
-                            onChange={e => setQty(t.id, Number(e.target.value))}
+                            onFocus={e => e.currentTarget.select()}
+                            onChange={e => setQtyDraft(t.id, e.target.value)}
+                            onBlur={() => commitQty(t.id)}
                             className="w-20 h-8"
                           />
                         )}
