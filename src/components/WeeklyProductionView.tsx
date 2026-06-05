@@ -368,6 +368,7 @@ export function WeeklyProductionView() {
   const [customPercentMode, setCustomPercentMode] = useState(false);
   const [massPercentage, setMassPercentage] = useState(100);
   const [housePercentages, setHousePercentages] = useState<Record<number, number>>({});
+  const autoPartialModeRef = useRef(false);
   
   // Drag selection state
   const [isDragging, setIsDragging] = useState(false);
@@ -410,6 +411,36 @@ export function WeeklyProductionView() {
     });
     return percentages;
   };
+
+  const selectedHousesKey = selectedHouses.join(",");
+  const hasSelectedPartialProgress = useMemo(() => {
+    if (!selectedMacro || !selectedScope || selectedHouses.length === 0) return false;
+    return selectedHouses.some((houseId) => {
+      const house = houses.find((x: any) => x.id === houseId);
+      const available = getAvailablePercent(house, selectedMacro, selectedScope);
+      return available > 0 && available < 100;
+    });
+  }, [houses, selectedHousesKey, selectedMacro, selectedScope]);
+
+  useEffect(() => {
+    if (!selectedMacro || !selectedScope || selectedHouses.length === 0) return;
+
+    if (hasSelectedPartialProgress) {
+      const initialPercentage = Math.max(0, weeklyMaxAvailable);
+      setCustomPercentMode(true);
+      setMassPercentage(initialPercentage);
+      setHousePercentages(buildInitialHousePercentages(initialPercentage));
+      autoPartialModeRef.current = true;
+      return;
+    }
+
+    if (autoPartialModeRef.current) {
+      setCustomPercentMode(false);
+      setHousePercentages({});
+      setMassPercentage(100);
+      autoPartialModeRef.current = false;
+    }
+  }, [selectedHousesKey, selectedMacro, selectedScope, hasSelectedPartialProgress, weeklyMaxAvailable]);
 
 
   const loadDiaryProductionMatches = useCallback(async () => {
@@ -2188,12 +2219,13 @@ export function WeeklyProductionView() {
                     <div className="flex items-center justify-between pt-2">
                       <div className="flex items-center gap-1">
                         <Percent className="w-3 h-3 text-muted-foreground" />
-                        <Label className="text-xs">% Parcial</Label>
+                        <Label className="text-xs">Parcial</Label>
                       </div>
                       <Switch
                         checked={customPercentMode}
                         onCheckedChange={(checked) => {
                           setCustomPercentMode(checked);
+                          autoPartialModeRef.current = false;
                           if (checked) {
                             const initialPercentage = Math.max(0, weeklyMaxAvailable);
                             setMassPercentage(initialPercentage);
