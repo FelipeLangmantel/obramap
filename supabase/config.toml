@@ -1,43 +1,33 @@
 project_id = "zcsoudhbfeiszutasead"
 
-[functions.analyze-floor-plan]
-verify_jwt = false
-
-[functions.parse-budget-pdf]
-verify_jwt = false
-
-[functions.parse-inputs-import]
-verify_jwt = false
-
-[functions.parse-budget-items]
-verify_jwt = false
-
-[functions.parse-macros-import]
-verify_jwt = false
-
-[functions.delete-user]
-verify_jwt = false
-
-[functions.transition-supply-status]
-verify_jwt = false
-
-[functions.process-email-queue]
-verify_jwt = true
-
-[functions.send-transactional-email]
-verify_jwt = true
-
-[functions.preview-transactional-email]
-verify_jwt = false
-
-[functions.handle-email-unsubscribe]
-verify_jwt = false
-
-[functions.handle-email-suppression]
-verify_jwt = false
-
-[functions.notify-system-notification]
-verify_jwt = false
-
-[functions.send-user-welcome-email]
-verify_jwt = true
+[functions]
+  [functions.analyze-floor-plan]
+    verify_jwt = false
+  [functions.auth-email-hook]
+    verify_jwt = false
+  [functions.delete-user]
+    verify_jwt = false
+  [functions.handle-email-suppression]
+    verify_jwt = false
+  [functions.handle-email-unsubscribe]
+    verify_jwt = false
+  [functions.notify-system-notification]
+    verify_jwt = false
+  [functions.parse-budget-items]
+    verify_jwt = false
+  [functions.parse-budget-pdf]
+    verify_jwt = false
+  [functions.parse-inputs-import]
+    verify_jwt = false
+  [functions.parse-macros-import]
+    verify_jwt = false
+  [functions.preview-transactional-email]
+    verify_jwt = false
+  [functions.process-email-queue]
+    verify_jwt = true
+  [functions.send-transactional-email]
+    verify_jwt = true
+  [functions.send-user-welcome-email]
+    verify_jwt = true
+  [functions.transition-supply-status]
+    verify_jwt = false
