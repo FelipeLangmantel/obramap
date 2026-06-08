@@ -40,6 +40,7 @@ import { FinancialAnalyticsPanel } from "./financial/FinancialAnalyticsPanel";
 import { generatePDFReport } from "./financial/generatePDFReport";
 import { SupplierTypesManagement } from "./financial/SupplierTypesManagement";
 import { InvoiceManagementView } from "./financial/InvoiceManagementView";
+import { FinancialReconciliationPanel } from "./financial/FinancialReconciliationPanel";
 
 interface FinancialEntry {
   id: string;
@@ -655,6 +656,7 @@ export function FinancialFlowView() {
             Análises
           </TabsTrigger>
           <TabsTrigger value="flow">Fluxo de Caixa</TabsTrigger>
+          <TabsTrigger value="reconciliation">Conciliação</TabsTrigger>
           <TabsTrigger value="invoices">
             <FileText className="h-4 w-4 mr-2" />
             Notas Fiscais
@@ -852,6 +854,12 @@ export function FinancialFlowView() {
 
         <TabsContent value="analytics">
           <FinancialAnalyticsPanel entries={entries} categories={categories} />
+        </TabsContent>
+
+        <TabsContent value="reconciliation">
+          {activeTab === "reconciliation" && (
+            <FinancialReconciliationPanel entries={entries} />
+          )}
         </TabsContent>
 
         <TabsContent value="invoices">
