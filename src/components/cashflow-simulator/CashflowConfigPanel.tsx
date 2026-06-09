@@ -172,7 +172,7 @@ export function CashflowConfigPanel({ simulator, collapsed, onToggleCollapse }: 
   return (
     <Card className="h-full flex flex-col border-border">
       <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
-        <CardTitle className="text-sm font-semibold">Configuração de Insumos</CardTitle>
+        <CardTitle className="text-sm font-semibold">Insumos previstos</CardTitle>
         <Button variant="ghost" size="icon" onClick={onToggleCollapse} className="h-7 w-7">
           <ChevronLeft className="h-4 w-4" />
         </Button>
@@ -189,6 +189,10 @@ export function CashflowConfigPanel({ simulator, collapsed, onToggleCollapse }: 
             </div>
           </div>
         )}
+
+        <div className="rounded-md border border-dashed border-border bg-muted/30 p-2 text-[11px] text-muted-foreground">
+          Configure fornecedor, lead time e parcelas para simular a programação de saída de dinheiro. Isso não cria conta a pagar.
+        </div>
 
         {/* Period selector */}
         <div>

@@ -36,7 +36,7 @@ export function CashflowConsolidatedTab({ simulator }: Props) {
       {/* Stacked bar chart by family */}
       <Card className="border-border">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Desembolso Mensal por Família</CardTitle>
+          <CardTitle className="text-sm">Desembolso mensal previsto por família</CardTitle>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={300}>
@@ -75,7 +75,7 @@ export function CashflowConsolidatedTab({ simulator }: Props) {
       {/* Supplier × Month matrix */}
       <Card className="border-border">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Matriz Fornecedor × Mês</CardTitle>
+          <CardTitle className="text-sm">Matriz prevista Fornecedor × Mês</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-auto max-h-[400px] scrollbar-none">

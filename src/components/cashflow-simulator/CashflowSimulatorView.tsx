@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Table2, BarChart3, Settings2, Loader2 } from "lucide-react";
+import { AlertTriangle, Calendar, Table2, BarChart3, Info } from "lucide-react";
 import { useCashflowSimulator } from "@/hooks/useCashflowSimulator";
 import { CashflowConfigPanel } from "./CashflowConfigPanel";
 import { CashflowCalendarTab } from "./CashflowCalendarTab";
@@ -32,9 +32,9 @@ export default function CashflowSimulatorView() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-foreground">Simulador de Desembolsos</h2>
+          <h2 className="text-xl font-bold text-foreground">Programação de Desembolsos</h2>
           <p className="text-sm text-muted-foreground">
-            Projeção de fluxo de caixa baseada no planejamento por período
+            Previsão simulada com base no orçamento de materiais, planejamento por período, fornecedores, lead time e parcelas.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -45,6 +45,51 @@ export default function CashflowSimulatorView() {
             {simulator.installments.length} parcelas
           </Badge>
         </div>
+      </div>
+
+      <div className="grid gap-3 xl:grid-cols-[1fr_0.9fr_0.9fr]">
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="p-3 flex gap-3 text-sm">
+            <Info className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+            <div className="space-y-2">
+              <p className="font-medium text-foreground">Previsão simulada de saída de dinheiro</p>
+              <p className="text-muted-foreground">
+                Esta tela não gera contas a pagar automaticamente e não cria lançamentos financeiros reais.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="secondary">Previsto</Badge>
+                <Badge variant="secondary">Simulado</Badge>
+                <Badge variant="outline">Não consolidado como conta a pagar</Badge>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-amber-500/25 bg-amber-500/5">
+          <CardContent className="p-3 flex gap-3 text-sm">
+            <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-medium text-foreground">Custos não previstos</p>
+              <p className="text-muted-foreground">
+                Nesta versão, custos não previstos devem ser lançados no Fluxo Financeiro. Em uma próxima fase, esta tela poderá ter itens manuais, recorrência, medições e aprovação.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border bg-card">
+          <CardContent className="p-3 text-sm">
+            <p className="font-medium text-foreground">Próxima evolução do módulo</p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <Badge variant="outline">Item manual</Badge>
+              <Badge variant="outline">Custo não previsto</Badge>
+              <Badge variant="outline">Recorrência mensal</Badge>
+              <Badge variant="outline">Medição</Badge>
+              <Badge variant="outline">Pago/a pagar/atrasado</Badge>
+              <Badge variant="outline">Vínculo com financeiro</Badge>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Main content: config panel + results */}

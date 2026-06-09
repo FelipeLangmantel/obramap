@@ -166,9 +166,13 @@ export function CashflowCalendarTab({ simulator }: Props) {
         <SheetContent className="w-[450px] sm:max-w-[450px]">
           <SheetHeader>
             <SheetTitle>
-              Desembolsos — {selectedDay ? format(new Date(selectedDay + "T12:00:00"), "dd/MM/yyyy") : ""}
+              Desembolsos previstos — {selectedDay ? format(new Date(selectedDay + "T12:00:00"), "dd/MM/yyyy") : ""}
             </SheetTitle>
-            <Badge variant="outline" className="w-fit text-primary border-primary/30">{formatCurrency(selectedTotal)}</Badge>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="outline" className="w-fit text-primary border-primary/30">{formatCurrency(selectedTotal)}</Badge>
+              <Badge variant="secondary">Previsto</Badge>
+              <Badge variant="secondary">Simulado</Badge>
+            </div>
           </SheetHeader>
           <div className="mt-4 space-y-2 max-h-[calc(100vh-120px)] overflow-auto scrollbar-none">
             {selectedItems.map(item => (
@@ -186,6 +190,10 @@ export function CashflowCalendarTab({ simulator }: Props) {
                   <span>{item.macro_name} › {item.scope_name}</span>
                   <span className="mx-1">•</span>
                   <span>{item.period_name}</span>
+                </div>
+                <div className="flex flex-wrap gap-1 pt-1">
+                  <Badge variant="outline" className="text-[10px]">Orçamento/planejamento</Badge>
+                  <Badge variant="secondary" className="text-[10px]">Não consolidado como conta a pagar</Badge>
                 </div>
               </div>
             ))}

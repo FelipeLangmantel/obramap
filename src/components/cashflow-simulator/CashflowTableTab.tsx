@@ -60,7 +60,7 @@ export function CashflowTableTab({ simulator }: Props) {
   };
 
   const exportCSV = () => {
-    const headers = ["Data", "Fornecedor", "Insumo", "Família", "Escopo", "Período", "Parcela", "%", "Valor"];
+    const headers = ["Data prevista", "Fornecedor", "Insumo/material", "Família", "Etapa/serviço", "Período de planejamento", "Parcela", "%", "Valor", "Origem", "Status"];
     const rows = filtered.map(i => [
       format(i.installment_date, "dd/MM/yyyy"),
       i.supplier_name,
@@ -71,6 +71,8 @@ export function CashflowTableTab({ simulator }: Props) {
       i.installment_number,
       i.installment_pct,
       i.installment_value.toFixed(2),
+      "Orçamento/planejamento",
+      "Previsto/simulado",
     ]);
     const csv = [headers.join(";"), ...rows.map(r => r.join(";"))].join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
@@ -130,13 +132,16 @@ export function CashflowTableTab({ simulator }: Props) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="text-xs"><SortButton col="installment_date" label="Data" /></TableHead>
+                <TableHead className="text-xs"><SortButton col="installment_date" label="Data prevista" /></TableHead>
                 <TableHead className="text-xs"><SortButton col="supplier_name" label="Fornecedor" /></TableHead>
-                <TableHead className="text-xs"><SortButton col="input_name" label="Insumo" /></TableHead>
+                <TableHead className="text-xs"><SortButton col="input_name" label="Insumo/material" /></TableHead>
                 <TableHead className="text-xs"><SortButton col="family" label="Família" /></TableHead>
+                <TableHead className="text-xs">Etapa/serviço</TableHead>
                 <TableHead className="text-xs">Período</TableHead>
                 <TableHead className="text-xs text-center">Parc.</TableHead>
                 <TableHead className="text-xs text-right"><SortButton col="installment_value" label="Valor" /></TableHead>
+                <TableHead className="text-xs">Origem</TableHead>
+                <TableHead className="text-xs">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -146,14 +151,24 @@ export function CashflowTableTab({ simulator }: Props) {
                   <TableCell className="text-xs">{item.supplier_name}</TableCell>
                   <TableCell className="text-xs max-w-[200px] truncate">{item.input_name}</TableCell>
                   <TableCell className="text-xs">{item.family}</TableCell>
+                  <TableCell className="text-xs max-w-[180px] truncate">{item.macro_name} › {item.scope_name}</TableCell>
                   <TableCell className="text-xs">{item.period_name}</TableCell>
                   <TableCell className="text-xs text-center">{item.installment_number} ({item.installment_pct}%)</TableCell>
                   <TableCell className="text-xs text-right font-medium">{formatCurrency(item.installment_value)}</TableCell>
+                  <TableCell className="text-xs">
+                    <Badge variant="outline" className="whitespace-nowrap">Orçamento/planejamento</Badge>
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    <div className="flex flex-wrap gap-1">
+                      <Badge variant="secondary">Previsto</Badge>
+                      <Badge variant="secondary">Simulado</Badge>
+                    </div>
+                  </TableCell>
                 </TableRow>
               ))}
               {filtered.length > 500 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-xs text-muted-foreground py-2">
+                  <TableCell colSpan={10} className="text-center text-xs text-muted-foreground py-2">
                     Mostrando 500 de {filtered.length} linhas. Exporte CSV para ver todas.
                   </TableCell>
                 </TableRow>
