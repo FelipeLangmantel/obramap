@@ -11,6 +11,77 @@ const jsonResponse = (body: Record<string, unknown>, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object" && "message" in error) {
+    return String((error as { message?: unknown }).message ?? "Unknown error");
+  }
+  return "Unknown error";
+}
+
+function isAuthUserNotFound(error: { status?: number; message?: string } | null | undefined) {
+  const message = (error?.message || "").toLowerCase();
+  return error?.status === 404 || message.includes("not found") || message.includes("user not found");
+}
+
+function isAuthDatabaseLoadError(error: { message?: string } | null | undefined) {
+  return (error?.message || "").toLowerCase().includes("database error loading user");
+}
+
+async function deleteAuthUserSafely(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  userId: string,
+  context: Record<string, unknown>,
+) {
+  const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+
+  if (!deleteError) {
+    return { authRemoved: true, fallbackUsed: false };
+  }
+
+  if (isAuthUserNotFound(deleteError)) {
+    console.warn("Auth user already absent during delete-user", {
+      ...context,
+      authError: deleteError.message,
+    });
+    return { authRemoved: false, fallbackUsed: false };
+  }
+
+  if (!isAuthDatabaseLoadError(deleteError)) {
+    console.error("Auth admin deleteUser failed", {
+      ...context,
+      status: deleteError.status,
+      authError: deleteError.message,
+    });
+    throw deleteError;
+  }
+
+  console.warn("Auth admin deleteUser failed loading user; trying direct auth.users fallback", {
+    ...context,
+    status: deleteError.status,
+    authError: deleteError.message,
+  });
+
+  const { error: directDeleteError } = await supabaseAdmin
+    .schema("auth")
+    .from("users")
+    .delete()
+    .eq("id", userId);
+
+  if (directDeleteError) {
+    console.error("Direct auth.users fallback delete failed", {
+      ...context,
+      authError: deleteError.message,
+      fallbackError: directDeleteError.message,
+      fallbackCode: directDeleteError.code,
+    });
+    throw deleteError;
+  }
+
+  console.warn("Direct auth.users fallback delete succeeded", context);
+  return { authRemoved: true, fallbackUsed: true };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -19,21 +90,34 @@ Deno.serve(async (req) => {
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return jsonResponse({ error: "Sessão ausente. Faça login novamente." }, 401);
+      return jsonResponse({ error: "Sessao ausente. Faca login novamente." }, 401);
     }
 
-    const supabaseClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      { global: { headers: { Authorization: authHeader } } }
-    );
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-    const { data: { user: currentUser }, error: authError } = await supabaseClient.auth.getUser();
+    if (!supabaseUrl || !anonKey || !serviceRoleKey) {
+      console.error("delete-user configuration error", {
+        hasSupabaseUrl: Boolean(supabaseUrl),
+        hasAnonKey: Boolean(anonKey),
+        hasServiceRoleKey: Boolean(serviceRoleKey),
+      });
+      return jsonResponse({ error: "Configuracao do servidor indisponivel." }, 500);
+    }
+
+    const supabaseClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const {
+      data: { user: currentUser },
+      error: authError,
+    } = await supabaseClient.auth.getUser();
     if (authError || !currentUser) {
-      return jsonResponse({ error: "Sessão inválida. Faça login novamente." }, 401);
+      return jsonResponse({ error: "Sessao invalida. Faca login novamente." }, 401);
     }
 
-    // Carrega perfil do solicitante (system_role + company_id)
     const { data: callerProfile, error: callerError } = await supabaseClient
       .from("profiles")
       .select("system_role, company_id")
@@ -41,13 +125,13 @@ Deno.serve(async (req) => {
       .single();
 
     if (callerError || !callerProfile) {
-      return jsonResponse({ error: "Não foi possível validar suas permissões." }, 403);
+      return jsonResponse({ error: "Nao foi possivel validar suas permissoes." }, 403);
     }
 
     const isSystemAdmin = callerProfile.system_role === "system_admin";
+    const hasCompanyAdminProfile = callerProfile.system_role === "admin";
 
-    // Se não for system_admin, precisa ser admin de empresa (user_roles.role = 'admin')
-    let callerIsCompanyAdmin = false;
+    let callerIsCompanyAdmin = hasCompanyAdminProfile;
     if (!isSystemAdmin) {
       const { data: roleRow } = await supabaseClient
         .from("user_roles")
@@ -55,36 +139,33 @@ Deno.serve(async (req) => {
         .eq("user_id", currentUser.id)
         .eq("role", "admin")
         .maybeSingle();
-      callerIsCompanyAdmin = !!roleRow;
+      callerIsCompanyAdmin = callerIsCompanyAdmin || !!roleRow;
     }
 
     if (!isSystemAdmin && !callerIsCompanyAdmin) {
-      return jsonResponse({ error: "Sem permissão. Apenas Administradores podem excluir usuários." }, 403);
+      return jsonResponse({ error: "Sem permissao. Apenas Administradores podem excluir usuarios." }, 403);
     }
 
     let payload: { user_id?: string };
     try {
       payload = await req.json();
     } catch {
-      return jsonResponse({ error: "Payload inválido." }, 400);
+      return jsonResponse({ error: "Payload invalido." }, 400);
     }
-    const { user_id } = payload;
 
+    const { user_id } = payload;
     if (!user_id) {
-      return jsonResponse({ error: "Parâmetro obrigatório ausente: user_id." }, 400);
+      return jsonResponse({ error: "Parametro obrigatorio ausente: user_id." }, 400);
     }
 
     if (user_id === currentUser.id) {
-      return jsonResponse({ error: "Você não pode excluir a própria conta." }, 400);
+      return jsonResponse({ error: "Voce nao pode excluir a propria conta." }, 400);
     }
 
-    const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-      { auth: { autoRefreshToken: false, persistSession: false } }
-    );
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
 
-    // Busca perfil-alvo (via admin para evitar bloqueio por RLS)
     const { data: targetProfile, error: targetError } = await supabaseAdmin
       .from("profiles")
       .select("user_id, system_role, email, company_id")
@@ -92,57 +173,92 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (targetError) {
-      console.error("Error fetching target profile:", targetError);
-      return jsonResponse({ error: "Erro ao verificar o usuário selecionado." }, 500);
+      console.error("Error fetching target profile:", {
+        requested_user_id: user_id,
+        error: targetError.message,
+      });
+      return jsonResponse({ error: "Erro ao verificar o usuario selecionado." }, 500);
     }
 
-    // Mesmo que o profile não exista mais, ainda pode haver registro órfão em auth.users.
-    // System admin pode prosseguir; admin de empresa precisa do profile para validar empresa.
     if (!targetProfile && !isSystemAdmin) {
-      return jsonResponse({ error: "Usuário não encontrado nesta empresa." }, 404);
+      return jsonResponse({ error: "Usuario nao encontrado nesta empresa." }, 404);
     }
 
     if (targetProfile?.system_role === "system_admin") {
-      return jsonResponse({ error: "Não é possível excluir usuários System Admin." }, 400);
+      return jsonResponse({ error: "Nao e possivel excluir usuarios System Admin." }, 400);
     }
 
-    // Admin de empresa só pode excluir usuários da mesma empresa
     if (!isSystemAdmin) {
       if (!callerProfile.company_id || targetProfile?.company_id !== callerProfile.company_id) {
-        return jsonResponse({ error: "Você só pode excluir usuários da sua empresa." }, 403);
+        return jsonResponse({ error: "Voce so pode excluir usuarios da sua empresa." }, 403);
       }
     }
 
-    // 1) Remove de auth.users (cascata limpa profile/user_roles/user_permissions via FK)
-    const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(user_id);
+    const logContext = {
+      requested_user_id: user_id,
+      target_email: targetProfile?.email ?? null,
+      target_company_id: targetProfile?.company_id ?? null,
+      caller_user_id: currentUser.id,
+      caller_company_id: callerProfile.company_id ?? null,
+      caller_is_system_admin: isSystemAdmin,
+    };
 
-    let authRemoved = true;
-    if (deleteError) {
-      const notFound = deleteError.status === 404 || (deleteError.message || "").toLowerCase().includes("not found");
-      if (!notFound) {
-        console.error("Error deleting auth user:", deleteError);
-        return jsonResponse({
-          error: `Falha ao excluir do Auth: ${deleteError.message}. Nenhuma alteração realizada.`,
-        }, 500);
-      }
-      authRemoved = false; // já não existia em auth.users
+    let authRemoved = false;
+    let fallbackUsed = false;
+    try {
+      const result = await deleteAuthUserSafely(supabaseAdmin, user_id, logContext);
+      authRemoved = result.authRemoved;
+      fallbackUsed = result.fallbackUsed;
+    } catch (deleteError) {
+      const message = getErrorMessage(deleteError);
+      return jsonResponse({
+        error: `Falha ao excluir do Auth: ${message}. Nenhuma alteracao realizada.`,
+      }, 500);
     }
 
-    // 2) Garante limpeza no public schema caso a cascata não tenha resolvido tudo
-    await supabaseAdmin.from("user_permissions").delete().eq("user_id", user_id);
-    await supabaseAdmin.from("user_roles").delete().eq("user_id", user_id);
-    await supabaseAdmin.from("profiles").delete().eq("user_id", user_id);
+    const cleanupErrors: string[] = [];
+
+    const { error: permCleanupError } = await supabaseAdmin
+      .from("user_permissions")
+      .delete()
+      .eq("user_id", user_id);
+    if (permCleanupError) cleanupErrors.push(`user_permissions: ${permCleanupError.message}`);
+
+    const { error: roleCleanupError } = await supabaseAdmin
+      .from("user_roles")
+      .delete()
+      .eq("user_id", user_id);
+    if (roleCleanupError) cleanupErrors.push(`user_roles: ${roleCleanupError.message}`);
+
+    const { error: profileCleanupError } = await supabaseAdmin
+      .from("profiles")
+      .delete()
+      .eq("user_id", user_id);
+    if (profileCleanupError) cleanupErrors.push(`profiles: ${profileCleanupError.message}`);
+
+    if (cleanupErrors.length > 0) {
+      console.error("delete-user public cleanup failed after auth delete", {
+        ...logContext,
+        authRemoved,
+        fallbackUsed,
+        cleanupErrors,
+      });
+      return jsonResponse({
+        error: "Usuario removido do Auth, mas houve falha ao limpar registros do painel. Acione o suporte.",
+      }, 500);
+    }
 
     return jsonResponse({
       success: true,
       auth_removed: authRemoved,
+      fallback_used: fallbackUsed,
       message: authRemoved
-        ? "Usuário excluído definitivamente (painel + Auth)."
-        : "Usuário já não existia no Auth; registros do painel foram limpos.",
+        ? "Usuario excluido definitivamente (painel + Auth)."
+        : "Usuario ja nao existia no Auth; registros do painel foram limpos.",
     });
   } catch (error: unknown) {
     console.error("Error:", error);
-    const message = error instanceof Error ? error.message : "Unknown error";
+    const message = getErrorMessage(error);
     return jsonResponse({ error: message }, 500);
   }
 });
