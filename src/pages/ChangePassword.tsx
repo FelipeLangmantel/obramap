@@ -10,11 +10,13 @@ import { toast } from "sonner";
 import { Loader2, Eye, EyeOff, Lock } from "lucide-react";
 import { z } from "zod";
 import obraMapLogo from "@/assets/obramap-logo-new.png";
-
-const MIN_PASSWORD_LENGTH = 8;
+import { PasswordRequirements } from "@/components/auth/PasswordRequirements";
+import { isPasswordValid, PASSWORD_MIN_LENGTH } from "@/lib/passwordValidation";
 
 const passwordSchema = z.object({
-  newPassword: z.string().min(MIN_PASSWORD_LENGTH, `Senha deve ter pelo menos ${MIN_PASSWORD_LENGTH} caracteres`),
+  newPassword: z.string().refine(isPasswordValid, {
+    message: "A senha não atende aos requisitos de segurança",
+  }),
   confirmPassword: z.string(),
 }).refine((data) => data.newPassword === data.confirmPassword, {
   message: "As senhas não coincidem",
@@ -27,7 +29,7 @@ const translatePasswordError = (message: string) => {
     return "A nova senha precisa ser diferente da senha atual ou temporária.";
   }
   if (lower.includes("password should be at least") || lower.includes("password must be at least")) {
-    return `A senha deve ter pelo menos ${MIN_PASSWORD_LENGTH} caracteres.`;
+    return `A senha deve ter pelo menos ${PASSWORD_MIN_LENGTH} caracteres.`;
   }
   if (message.includes("Auth session missing") || lower.includes("session")) {
     return "Sessão expirada. Solicite um novo acesso.";
@@ -70,6 +72,9 @@ export default function ChangePassword() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const passwordMeetsRequirements = isPasswordValid(newPassword);
+  const passwordsMatch = newPassword === confirmPassword && confirmPassword.length > 0;
+  const canSubmit = passwordMeetsRequirements && passwordsMatch && !isLoading;
 
   // Detectar se veio de link de recuperação de senha
   useEffect(() => {
@@ -182,7 +187,7 @@ export default function ChangePassword() {
                 <p className="font-medium text-foreground">Antes de continuar</p>
                 <ul className="mt-2 list-disc space-y-1 pl-5">
                   <li>A nova senha deve ser diferente da senha temporária ou atual.</li>
-                  <li>Use uma senha segura, com pelo menos {MIN_PASSWORD_LENGTH} caracteres.</li>
+                  <li>Use uma senha segura, com pelo menos {PASSWORD_MIN_LENGTH} caracteres, uma letra maiúscula e um caractere especial.</li>
                   <li>Confirme a nova senha exatamente igual no segundo campo.</li>
                 </ul>
               </div>
@@ -209,6 +214,7 @@ export default function ChangePassword() {
                 {errors.newPassword && (
                   <p className="text-sm text-destructive">{errors.newPassword}</p>
                 )}
+                <PasswordRequirements password={newPassword} />
               </div>
 
               <div className="space-y-2">
@@ -236,7 +242,7 @@ export default function ChangePassword() {
                 )}
               </div>
 
-              <Button type="submit" className="w-full" disabled={isLoading}>
+              <Button type="submit" className="w-full" disabled={!canSubmit}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Alterar Senha
               </Button>

@@ -6,6 +6,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
 import { Shield, AlertTriangle, CheckCircle2, Loader2, Eye, EyeOff, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
+import { PasswordRequirements } from '@/components/auth/PasswordRequirements';
+import { isPasswordValid } from '@/lib/passwordValidation';
 
 interface Step1CreateAdminProps {
   onAdminCreated: (userId: string) => void;
@@ -30,6 +32,11 @@ export const Step1CreateAdmin: React.FC<Step1CreateAdminProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [wasPromoted, setWasPromoted] = useState(false);
+  const isFillingNewUserFields = Boolean(
+    formData.fullName.trim() || formData.password || formData.confirmPassword
+  );
+  const isNewUserPasswordReady =
+    isPasswordValid(formData.password) && formData.password === formData.confirmPassword;
 
   const validateForm = () => {
     if (!formData.email.trim() || !formData.email.includes('@')) {
@@ -48,8 +55,8 @@ export const Step1CreateAdmin: React.FC<Step1CreateAdminProps> = ({
       setError('E-mail válido é obrigatório');
       return false;
     }
-    if (formData.password.length < 6) {
-      setError('Senha deve ter pelo menos 6 caracteres');
+    if (!isPasswordValid(formData.password)) {
+      setError('A senha não atende aos requisitos de segurança');
       return false;
     }
     if (formData.password !== formData.confirmPassword) {
@@ -252,7 +259,7 @@ export const Step1CreateAdmin: React.FC<Step1CreateAdminProps> = ({
             <Input
               id="password"
               type={showPassword ? 'text' : 'password'}
-              placeholder="Mínimo 6 caracteres"
+              placeholder="Mínimo 8 caracteres, 1 maiúscula e 1 especial"
               value={formData.password}
               onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
               disabled={isLoading}
@@ -267,6 +274,7 @@ export const Step1CreateAdmin: React.FC<Step1CreateAdminProps> = ({
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </Button>
           </div>
+          <PasswordRequirements password={formData.password} />
         </div>
 
         <div className="space-y-2">
@@ -299,7 +307,11 @@ export const Step1CreateAdmin: React.FC<Step1CreateAdminProps> = ({
           </Alert>
         )}
 
-        <Button type="submit" className="w-full gap-2" disabled={isLoading}>
+        <Button
+          type="submit"
+          className="w-full gap-2"
+          disabled={isLoading || (isFillingNewUserFields && !isNewUserPasswordReady)}
+        >
           {isLoading ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />

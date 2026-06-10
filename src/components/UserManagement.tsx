@@ -32,6 +32,8 @@ import { toast } from "sonner";
 import { Loader2, UserPlus, Shield, Pencil, Eye, Trash2, Phone } from "lucide-react";
 import { z } from "zod";
 import { maskPhoneInputBR, toE164BR, formatPhoneBR } from "@/lib/phone";
+import { PasswordRequirements } from "@/components/auth/PasswordRequirements";
+import { isPasswordValid } from "@/lib/passwordValidation";
 
 interface UserWithRole {
   id: string;
@@ -45,7 +47,9 @@ interface UserWithRole {
 
 const createUserSchema = z.object({
   email: z.string().email("Email inválido"),
-  password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
+  password: z.string().refine(isPasswordValid, {
+    message: "A senha não atende aos requisitos de segurança",
+  }),
   displayName: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
   phone: z.string().refine((v) => !v || /^\+55[1-9]{2}9?[0-9]{8}$/.test(v), {
     message: "Telefone inválido. Use DDD + número (ex: 11 98765-4321)",
@@ -67,6 +71,7 @@ export function UserManagement() {
   const [phoneRaw, setPhoneRaw] = useState("");
   const [role, setRole] = useState<AppRole>("viewer");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const passwordMeetsRequirements = isPasswordValid(password);
 
   const fetchUsers = async () => {
     setIsLoading(true);
@@ -346,12 +351,13 @@ export function UserManagement() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Mínimo 6 caracteres"
+                  placeholder="Mínimo 8 caracteres, 1 maiúscula e 1 especial"
                   className={errors.password ? "border-destructive" : ""}
                 />
                 {errors.password && (
                   <p className="text-sm text-destructive">{errors.password}</p>
                 )}
+                <PasswordRequirements password={password} />
               </div>
 
               <div className="space-y-2">
@@ -410,7 +416,7 @@ export function UserManagement() {
                 >
                   Cancelar
                 </Button>
-                <Button type="submit" disabled={isCreating}>
+                <Button type="submit" disabled={isCreating || !passwordMeetsRequirements}>
                   {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Criar Usuário
                 </Button>
