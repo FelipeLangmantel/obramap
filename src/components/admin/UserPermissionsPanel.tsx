@@ -372,7 +372,7 @@ export function UserPermissionsPanel() {
     e.preventDefault();
     setErrors({});
 
-    const result = createUserSchema.safeParse({ email, password, displayName, role });
+    const result = createUserSchema.safeParse({ email, displayName, role });
     if (!result.success) {
       const fieldErrors: Record<string, string> = {};
       result.error.errors.forEach((err) => {
@@ -383,12 +383,13 @@ export function UserPermissionsPanel() {
     }
 
     setIsCreating(true);
+    const tempPassword = generateTempPassword();
     try {
       const normalizedEmail = email.trim().toLowerCase();
       const { data, error } = await supabase.rpc('create_company_user', {
         p_email: normalizedEmail,
         p_display_name: displayName,
-        p_temp_password: password,
+        p_temp_password: tempPassword,
         p_role: role,
         p_company_id: company!.id,
       });
@@ -396,6 +397,38 @@ export function UserPermissionsPanel() {
       if (error) throw error;
 
       const newUserId = (data as any)?.user_id;
+
+      // Aplicar departamento e obras permitidas
+      if (newUserId) {
+        try {
+          const defaults = getDefaultPermissions(role);
+          const allowedIds = newUserProjectIds.length > 0 ? newUserProjectIds : null;
+          const { data: existing } = await supabase
+            .from("user_permissions")
+            .select("id")
+            .eq("user_id", newUserId)
+            .maybeSingle();
+          if (existing?.id) {
+            await supabase.from("user_permissions").update({
+              department: newUserDepartment,
+              allowed_project_ids: allowedIds,
+              updated_at: new Date().toISOString(),
+            }).eq("id", existing.id);
+          } else {
+            await supabase.from("user_permissions").insert({
+              user_id: newUserId,
+              department: newUserDepartment,
+              allowed_project_ids: allowedIds,
+              visible_menus: defaults.visible_menus,
+              visible_management_sections: defaults.visible_management_sections,
+              can_edit: role !== "viewer",
+            });
+          }
+        } catch (permErr) {
+          console.error("Erro ao aplicar departamento/obras:", permErr);
+        }
+      }
+
       let welcomeEmailSent = false;
       try {
         if (!newUserId) {
@@ -406,7 +439,7 @@ export function UserPermissionsPanel() {
             user_id: newUserId,
             email: normalizedEmail,
             display_name: displayName,
-            temporary_password: password,
+            temporary_password: tempPassword,
             company_id: company!.id,
             company_name: company?.name,
           },
@@ -421,7 +454,7 @@ export function UserPermissionsPanel() {
       }
 
       if (welcomeEmailSent) {
-        toast.success("Usuario criado! E-mail de boas-vindas enviado.");
+        toast.success("Usuário criado! E-mail de boas-vindas com senha temporária enviado.");
       }
       setIsCreateDialogOpen(false);
       resetForm();
