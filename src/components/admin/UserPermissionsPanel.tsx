@@ -58,7 +58,8 @@ import {
   MapPin,
   Monitor,
   Smartphone,
-  RefreshCw,
+  RefreshCw, 
+  Mail,
   AlertTriangle,
   Activity,
   Filter,
@@ -539,6 +540,27 @@ export function UserPermissionsPanel() {
     setIsResettingPassword(false);
   };
 
+  const [isResendingEmail, setIsResendingEmail] = useState<string | null>(null);
+
+  const handleResendWelcomeEmail = async (userId: string) => {
+    setIsResendingEmail(userId);
+    try {
+      const { data, error } = await supabase.functions.invoke('resend-welcome-email', {
+        body: { user_id: userId },
+      });
+      if (error) {
+        const msg = await getEdgeFunctionErrorMessage(error);
+        throw new Error(msg);
+      }
+      if (data?.error) throw new Error(data.error);
+      toast.success("E-mail de boas-vindas reenviado com nova senha temporária!");
+      fetchData();
+    } catch (err: any) {
+      toast.error(err?.message || "Erro ao reenviar e-mail de boas-vindas");
+    }
+    setIsResendingEmail(null);
+  };
+
   const openPermissionDialog = (userId: string) => {
     setSelectedUserId(userId);
     const existingPermission = permissions[userId];
@@ -827,7 +849,7 @@ export function UserPermissionsPanel() {
                            <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30 text-[10px]">Aguardando troca</Badge>
                          ) : (
                            <Badge className="bg-emerald-500/20 text-emerald-600 border-emerald-500/30 text-[10px]">Ativa</Badge>
-                         )}
+                           )}
                        </TableCell>
                        <TableCell>
                          <Badge variant="outline">
@@ -869,6 +891,19 @@ export function UserPermissionsPanel() {
                              >
                                <RefreshCw className={cn("h-3 w-3", isResettingPassword && "animate-spin")} />
                                Gerar senha
+                             </Button>
+                            )}
+                           {u.must_change_password && (
+                             <Button
+                               variant="outline"
+                               size="sm"
+                               className="text-xs gap-1"
+                               disabled={isResendingEmail === u.user_id}
+                               onClick={() => handleResendWelcomeEmail(u.user_id)}
+                               title="Reenviar e-mail de boas-vindas com nova senha temporária"
+                             >
+                               <Mail className={cn("h-3 w-3", isResendingEmail === u.user_id && "animate-pulse")} />
+                               Reenviar e-mail
                              </Button>
                            )}
                            <Button
