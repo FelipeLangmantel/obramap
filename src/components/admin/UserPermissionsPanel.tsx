@@ -892,6 +892,19 @@ export function UserPermissionsPanel() {
                                <RefreshCw className={cn("h-3 w-3", isResettingPassword && "animate-spin")} />
                                Gerar senha
                              </Button>
+                            )}
+                           {u.must_change_password && (
+                             <Button
+                               variant="outline"
+                               size="sm"
+                               className="text-xs gap-1"
+                               disabled={isResendingEmail === u.user_id}
+                               onClick={() => handleResendWelcomeEmail(u.user_id)}
+                               title="Reenviar e-mail de boas-vindas com nova senha temporária"
+                             >
+                               <Mail className={cn("h-3 w-3", isResendingEmail === u.user_id && "animate-pulse")} />
+                               Reenviar e-mail
+                             </Button>
                            )}
                            <Button
                              variant="ghost"
