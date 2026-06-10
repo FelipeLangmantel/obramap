@@ -1308,16 +1308,6 @@ export function UserPermissionsPanel() {
               {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
             </div>
             <div className="space-y-2">
-              <Label>Senha</Label>
-              <Input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className={errors.password ? "border-destructive" : ""}
-              />
-              {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
-            </div>
-            <div className="space-y-2">
               <Label>Perfil</Label>
               <Select value={role} onValueChange={(v) => setRole(v as AppRole)}>
                 <SelectTrigger>
@@ -1329,6 +1319,60 @@ export function UserPermissionsPanel() {
                   <SelectItem value="admin">Administrador (acesso total)</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Cargo / Departamento</Label>
+              <Select value={newUserDepartment} onValueChange={setNewUserDepartment}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="geral">Geral</SelectItem>
+                  {departments.map((dept) => (
+                    <SelectItem key={dept.id} value={dept.name}>{dept.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Acesso às Obras</Label>
+              <p className="text-xs text-muted-foreground">
+                Se nenhuma obra for selecionada, o usuário terá acesso a todas.
+              </p>
+              <div className="grid grid-cols-2 gap-1.5 max-h-40 overflow-y-auto rounded-md border p-2">
+                {projects.length === 0 && (
+                  <p className="col-span-2 text-xs text-muted-foreground">Nenhuma obra cadastrada.</p>
+                )}
+                {projects.map((project) => {
+                  const isChecked = newUserProjectIds.includes(project.id);
+                  return (
+                    <button
+                      key={project.id}
+                      type="button"
+                      title={project.name}
+                      onClick={() => toggleNewUserProject(project.id)}
+                      className={cn(
+                        "flex items-center gap-2 px-3 py-2 rounded-md border text-sm text-left transition-colors",
+                        isChecked
+                          ? "border-primary bg-primary/5 text-foreground"
+                          : "border-border bg-background text-muted-foreground hover:border-muted-foreground/30"
+                      )}
+                    >
+                      <div className={cn(
+                        "h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-colors",
+                        isChecked ? "bg-primary border-primary" : "border-muted-foreground/30"
+                      )}>
+                        {isChecked && <Settings className="h-2.5 w-2.5 text-primary-foreground" />}
+                      </div>
+                      <span className="truncate">{project.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="rounded-md bg-muted/50 border border-border p-3 text-xs text-muted-foreground">
+              Uma senha temporária será gerada automaticamente e enviada por e-mail ao novo usuário.
+              No primeiro acesso, ele será solicitado a definir uma nova senha.
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
