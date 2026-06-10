@@ -223,9 +223,10 @@ export function UserPermissionsPanel() {
   
   // Form state for new user
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [role, setRole] = useState<AppRole>("viewer");
+  const [newUserDepartment, setNewUserDepartment] = useState<string>("geral");
+  const [newUserProjectIds, setNewUserProjectIds] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isCreating, setIsCreating] = useState(false);
   
