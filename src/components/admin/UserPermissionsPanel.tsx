@@ -540,6 +540,27 @@ export function UserPermissionsPanel() {
     setIsResettingPassword(false);
   };
 
+  const [isResendingEmail, setIsResendingEmail] = useState<string | null>(null);
+
+  const handleResendWelcomeEmail = async (userId: string) => {
+    setIsResendingEmail(userId);
+    try {
+      const { data, error } = await supabase.functions.invoke('resend-welcome-email', {
+        body: { user_id: userId },
+      });
+      if (error) {
+        const msg = await getEdgeFunctionErrorMessage(error);
+        throw new Error(msg);
+      }
+      if (data?.error) throw new Error(data.error);
+      toast.success("E-mail de boas-vindas reenviado com nova senha temporária!");
+      fetchData();
+    } catch (err: any) {
+      toast.error(err?.message || "Erro ao reenviar e-mail de boas-vindas");
+    }
+    setIsResendingEmail(null);
+  };
+
   const openPermissionDialog = (userId: string) => {
     setSelectedUserId(userId);
     const existingPermission = permissions[userId];
