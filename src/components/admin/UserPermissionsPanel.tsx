@@ -69,8 +69,6 @@ import { AuditLogPanel } from "./AuditLogPanel";
 import { EditRequestsPanel } from "./EditRequestsPanel";
 import { ProductionApprovalPanel } from "./ProductionApprovalPanel";
 import { useCoordenadorAccess } from "@/hooks/useCoordenadorAccess";
-import { PasswordRequirements } from "@/components/auth/PasswordRequirements";
-import { isPasswordValid } from "@/lib/passwordValidation";
 
 type AppRole = "admin" | "editor" | "viewer";
 
@@ -170,9 +168,6 @@ const MANAGEMENT_OPTIONS = MANAGEMENT_MODULES;
 
 const createUserSchema = z.object({
   email: z.string().email("Email inválido"),
-  password: z.string().refine(isPasswordValid, {
-    message: "A senha não atende aos requisitos de segurança",
-  }),
   displayName: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
   role: z.enum(["admin", "editor", "viewer"]),
 });
@@ -228,14 +223,12 @@ export function UserPermissionsPanel() {
   
   // Form state for new user
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState(() => generateTempPassword());
   const [displayName, setDisplayName] = useState("");
   const [role, setRole] = useState<AppRole>("viewer");
   const [newUserDepartment, setNewUserDepartment] = useState<string>("geral");
   const [newUserProjectIds, setNewUserProjectIds] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isCreating, setIsCreating] = useState(false);
-  const passwordMeetsRequirements = isPasswordValid(password);
   
   // Permission editing state
   const [editingPermission, setEditingPermission] = useState<UserPermission | null>(null);
@@ -379,7 +372,7 @@ export function UserPermissionsPanel() {
     e.preventDefault();
     setErrors({});
 
-    const result = createUserSchema.safeParse({ email, password, displayName, role });
+    const result = createUserSchema.safeParse({ email, displayName, role });
     if (!result.success) {
       const fieldErrors: Record<string, string> = {};
       result.error.errors.forEach((err) => {
@@ -390,7 +383,7 @@ export function UserPermissionsPanel() {
     }
 
     setIsCreating(true);
-    const tempPassword = password;
+    const tempPassword = generateTempPassword();
     try {
       const normalizedEmail = email.trim().toLowerCase();
       const { data, error } = await supabase.rpc('create_company_user', {
@@ -668,7 +661,6 @@ export function UserPermissionsPanel() {
 
   const resetForm = () => {
     setEmail("");
-    setPassword(generateTempPassword());
     setDisplayName("");
     setRole("viewer");
     setNewUserDepartment("geral");
@@ -1316,18 +1308,6 @@ export function UserPermissionsPanel() {
               {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
             </div>
             <div className="space-y-2">
-              <Label>Senha</Label>
-              <Input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Mínimo 8 caracteres, 1 maiúscula e 1 especial"
-                className={errors.password ? "border-destructive" : ""}
-              />
-              {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
-              <PasswordRequirements password={password} />
-            </div>
-            <div className="space-y-2">
               <Label>Perfil</Label>
               <Select value={role} onValueChange={(v) => setRole(v as AppRole)}>
                 <SelectTrigger>
@@ -1398,7 +1378,7 @@ export function UserPermissionsPanel() {
               <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={isCreating || !passwordMeetsRequirements}>
+              <Button type="submit" disabled={isCreating}>
                 {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Criar Usuário
               </Button>
