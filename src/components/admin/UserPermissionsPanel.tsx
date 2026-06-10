@@ -168,10 +168,21 @@ const MANAGEMENT_OPTIONS = MANAGEMENT_MODULES;
 
 const createUserSchema = z.object({
   email: z.string().email("Email inválido"),
-  password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
   displayName: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
   role: z.enum(["admin", "editor", "viewer"]),
 });
+
+function generateTempPassword(): string {
+  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const lower = "abcdefghijkmnpqrstuvwxyz";
+  const digits = "23456789";
+  const symbols = "!@#$%&*?";
+  const all = upper + lower + digits + symbols;
+  const pick = (s: string) => s[Math.floor(Math.random() * s.length)];
+  const base = [pick(upper), pick(lower), pick(digits), pick(symbols)];
+  for (let i = 0; i < 10; i++) base.push(pick(all));
+  return base.sort(() => Math.random() - 0.5).join("");
+}
 
 const getEdgeFunctionErrorMessage = async (error: unknown) => {
   const fallback = error instanceof Error ? error.message : "Erro ao executar a funcao";
