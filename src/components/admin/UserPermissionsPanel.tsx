@@ -661,10 +661,17 @@ export function UserPermissionsPanel() {
 
   const resetForm = () => {
     setEmail("");
-    setPassword("");
     setDisplayName("");
     setRole("viewer");
+    setNewUserDepartment("geral");
+    setNewUserProjectIds([]);
     setErrors({});
+  };
+
+  const toggleNewUserProject = (projectId: string) => {
+    setNewUserProjectIds((prev) =>
+      prev.includes(projectId) ? prev.filter((p) => p !== projectId) : [...prev, projectId]
+    );
   };
 
   const toggleMenu = (menuId: string) => {
