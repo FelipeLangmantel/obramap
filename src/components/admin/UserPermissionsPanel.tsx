@@ -386,17 +386,25 @@ export function UserPermissionsPanel() {
     const tempPassword = generateTempPassword();
     try {
       const normalizedEmail = email.trim().toLowerCase();
-      const { data, error } = await supabase.rpc('create_company_user', {
-        p_email: normalizedEmail,
-        p_display_name: displayName,
-        p_temp_password: tempPassword,
-        p_role: role,
-        p_company_id: company!.id,
+
+      // Cria usuario via edge function (usa Admin API -> garante auth.users + auth.identities)
+      const { data, error } = await supabase.functions.invoke('create-user', {
+        body: {
+          email: normalizedEmail,
+          password: tempPassword,
+          display_name: displayName,
+          role,
+          company_id: company!.id,
+        },
       });
 
-      if (error) throw error;
+      if (error) {
+        const msg = await getEdgeFunctionErrorMessage(error);
+        throw new Error(msg);
+      }
+      if (data?.error) throw new Error(data.error);
 
-      const newUserId = (data as any)?.user_id;
+      const newUserId = data?.user_id as string | undefined;
 
       // Aplicar departamento e obras permitidas
       if (newUserId) {
@@ -429,47 +437,29 @@ export function UserPermissionsPanel() {
         }
       }
 
-      let welcomeEmailSent = false;
-      try {
-        if (!newUserId) {
-          throw new Error("Usuario criado, mas a RPC nao retornou user_id para envio do e-mail.");
-        }
-        const { data: emailData, error: emailError } = await supabase.functions.invoke("send-user-welcome-email", {
-          body: {
-            user_id: newUserId,
-            email: normalizedEmail,
-            display_name: displayName,
-            temporary_password: tempPassword,
-            company_id: company!.id,
-            company_name: company?.name,
-          },
-        });
-
-        if (emailError) throw emailError;
-        if (emailData?.error) throw new Error(emailData.error);
-        welcomeEmailSent = true;
-      } catch (emailError: unknown) {
-        const message = await getEdgeFunctionErrorMessage(emailError);
-        toast.warning(`Usuario criado, mas houve falha ao enviar o e-mail de boas-vindas: ${message}`);
-      }
-
-      if (welcomeEmailSent) {
+      if (data?.welcome_email_sent) {
         toast.success("Usuário criado! E-mail de boas-vindas com senha temporária enviado.");
+      } else {
+        const reason = data?.welcome_email_error || "Verifique a configuração de e-mail.";
+        toast.warning(`Usuário criado, mas o e-mail de boas-vindas falhou: ${reason}`);
       }
+
       setIsCreateDialogOpen(false);
       resetForm();
       fetchData();
     } catch (error: any) {
-      if (error.message?.includes('ja cadastrado')) {
+      const message = error?.message || 'Erro ao criar usuário';
+      if (message.includes('ja cadastrado') || message.toLowerCase().includes('already')) {
         toast.error('Este email já está cadastrado');
-      } else if (error.message?.includes('Sem permissao')) {
+      } else if (message.includes('Sem permissao') || message.toLowerCase().includes('unauthorized')) {
         toast.error('Sem permissão para criar usuários nesta empresa');
       } else {
-        toast.error(error.message || 'Erro ao criar usuário');
+        toast.error(message);
       }
     }
     setIsCreating(false);
   };
+
 
   const handleUpdateRole = async (userId: string, newRole: AppRole) => {
     try {
