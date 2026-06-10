@@ -21,16 +21,43 @@ function jsonResponse(body: Record<string, unknown>, status = 200) {
   });
 }
 
+async function readSafeErrorBody(response: Response) {
+  const contentType = response.headers.get("content-type") ?? "";
+  try {
+    if (contentType.includes("application/json")) {
+      const body = await response.json();
+      return {
+        error: typeof body?.error === "string" ? body.error : undefined,
+        reason: typeof body?.reason === "string" ? body.reason : undefined,
+        success: typeof body?.success === "boolean" ? body.success : undefined,
+      };
+    }
+
+    const text = await response.text();
+    return { error: text.slice(0, 500) };
+  } catch {
+    return { error: "Could not read error response body" };
+  }
+}
+
 async function enqueueWelcomeEmail(payload: {
   email: string;
   displayName: string;
-  temporaryPassword?: string;
+  temporaryPassword: string;
   companyName?: string | null;
 }) {
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
   const appUrl = Deno.env.get("OBRA_MAP_APP_URL") || "https://obramap.app.br";
   const logoUrl = `${appUrl.replace(/\/$/, "")}/obramap_icon_dark.png`;
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    console.error("Welcome email configuration error", {
+      hasSupabaseUrl: Boolean(supabaseUrl),
+      hasServiceRoleKey: Boolean(serviceRoleKey),
+    });
+    throw new Error("Server email configuration error");
+  }
 
   const response = await fetch(`${supabaseUrl}/functions/v1/send-transactional-email`, {
     method: "POST",
@@ -54,13 +81,15 @@ async function enqueueWelcomeEmail(payload: {
   });
 
   if (!response.ok) {
-    let message = "Failed to enqueue welcome email";
-    try {
-      const body = await response.json();
-      if (typeof body?.error === "string") message = body.error;
-    } catch {
-      // Keep generic message; never include password in logs or errors.
-    }
+    const safeBody = await readSafeErrorBody(response);
+    const message = safeBody.error || safeBody.reason || "Failed to enqueue welcome email";
+    console.error("Welcome email enqueue failed", {
+      status: response.status,
+      statusText: response.statusText,
+      templateName: "user-welcome",
+      recipientEmail: payload.email,
+      error: message,
+    });
     throw new Error(message);
   }
 }
@@ -120,9 +149,18 @@ Deno.serve(async (req) => {
     const targetUserId = body.user_id;
     const expectedEmail = body.email?.trim().toLowerCase();
     const expectedCompanyId = body.company_id ?? null;
+    const temporaryPassword = body.temporary_password;
 
     if (!targetUserId || !expectedEmail) {
       return jsonResponse({ error: "user_id and email are required" }, 400);
+    }
+
+    if (!temporaryPassword) {
+      console.error("Welcome email payload missing temporary_password", {
+        user_id: targetUserId,
+        email: expectedEmail,
+      });
+      return jsonResponse({ error: "temporary_password is required" }, 400);
     }
 
     if (!isSystemAdmin && expectedCompanyId && expectedCompanyId !== callerProfile.company_id) {
@@ -189,8 +227,8 @@ Deno.serve(async (req) => {
     await enqueueWelcomeEmail({
       email: targetEmail,
       displayName: targetProfile.display_name || targetEmail,
-      temporaryPassword: body.temporary_password,
-      companyName,
+      temporaryPassword,
+      companyName: companyName ?? body.company_name ?? null,
     });
 
     return jsonResponse({ success: true, queued: true });
