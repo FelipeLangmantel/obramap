@@ -849,7 +849,20 @@ export function UserPermissionsPanel() {
                            <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30 text-[10px]">Aguardando troca</Badge>
                          ) : (
                            <Badge className="bg-emerald-500/20 text-emerald-600 border-emerald-500/30 text-[10px]">Ativa</Badge>
-                         )}
+                           )}
+                           {u.must_change_password && (
+                             <Button
+                               variant="outline"
+                               size="sm"
+                               className="text-xs gap-1"
+                               disabled={isResendingEmail === u.user_id}
+                               onClick={() => handleResendWelcomeEmail(u.user_id)}
+                               title="Reenviar e-mail de boas-vindas com nova senha temporária"
+                             >
+                               <Mail className={cn("h-3 w-3", isResendingEmail === u.user_id && "animate-pulse")} />
+                               Reenviar e-mail
+                             </Button>
+                           )}
                        </TableCell>
                        <TableCell>
                          <Badge variant="outline">
