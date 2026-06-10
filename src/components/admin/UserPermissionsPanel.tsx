@@ -168,10 +168,21 @@ const MANAGEMENT_OPTIONS = MANAGEMENT_MODULES;
 
 const createUserSchema = z.object({
   email: z.string().email("Email inválido"),
-  password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
   displayName: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
   role: z.enum(["admin", "editor", "viewer"]),
 });
+
+function generateTempPassword(): string {
+  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const lower = "abcdefghijkmnpqrstuvwxyz";
+  const digits = "23456789";
+  const symbols = "!@#$%&*?";
+  const all = upper + lower + digits + symbols;
+  const pick = (s: string) => s[Math.floor(Math.random() * s.length)];
+  const base = [pick(upper), pick(lower), pick(digits), pick(symbols)];
+  for (let i = 0; i < 10; i++) base.push(pick(all));
+  return base.sort(() => Math.random() - 0.5).join("");
+}
 
 const getEdgeFunctionErrorMessage = async (error: unknown) => {
   const fallback = error instanceof Error ? error.message : "Erro ao executar a funcao";
@@ -212,9 +223,10 @@ export function UserPermissionsPanel() {
   
   // Form state for new user
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [role, setRole] = useState<AppRole>("viewer");
+  const [newUserDepartment, setNewUserDepartment] = useState<string>("geral");
+  const [newUserProjectIds, setNewUserProjectIds] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isCreating, setIsCreating] = useState(false);
   
@@ -360,7 +372,7 @@ export function UserPermissionsPanel() {
     e.preventDefault();
     setErrors({});
 
-    const result = createUserSchema.safeParse({ email, password, displayName, role });
+    const result = createUserSchema.safeParse({ email, displayName, role });
     if (!result.success) {
       const fieldErrors: Record<string, string> = {};
       result.error.errors.forEach((err) => {
@@ -371,12 +383,13 @@ export function UserPermissionsPanel() {
     }
 
     setIsCreating(true);
+    const tempPassword = generateTempPassword();
     try {
       const normalizedEmail = email.trim().toLowerCase();
       const { data, error } = await supabase.rpc('create_company_user', {
         p_email: normalizedEmail,
         p_display_name: displayName,
-        p_temp_password: password,
+        p_temp_password: tempPassword,
         p_role: role,
         p_company_id: company!.id,
       });
@@ -384,6 +397,38 @@ export function UserPermissionsPanel() {
       if (error) throw error;
 
       const newUserId = (data as any)?.user_id;
+
+      // Aplicar departamento e obras permitidas
+      if (newUserId) {
+        try {
+          const defaults = getDefaultPermissions(role);
+          const allowedIds = newUserProjectIds.length > 0 ? newUserProjectIds : null;
+          const { data: existing } = await supabase
+            .from("user_permissions")
+            .select("id")
+            .eq("user_id", newUserId)
+            .maybeSingle();
+          if (existing?.id) {
+            await supabase.from("user_permissions").update({
+              department: newUserDepartment,
+              allowed_project_ids: allowedIds,
+              updated_at: new Date().toISOString(),
+            }).eq("id", existing.id);
+          } else {
+            await supabase.from("user_permissions").insert({
+              user_id: newUserId,
+              department: newUserDepartment,
+              allowed_project_ids: allowedIds,
+              visible_menus: defaults.visible_menus,
+              visible_management_sections: defaults.visible_management_sections,
+              can_edit: role !== "viewer",
+            });
+          }
+        } catch (permErr) {
+          console.error("Erro ao aplicar departamento/obras:", permErr);
+        }
+      }
+
       let welcomeEmailSent = false;
       try {
         if (!newUserId) {
@@ -394,7 +439,7 @@ export function UserPermissionsPanel() {
             user_id: newUserId,
             email: normalizedEmail,
             display_name: displayName,
-            temporary_password: password,
+            temporary_password: tempPassword,
             company_id: company!.id,
             company_name: company?.name,
           },
@@ -409,7 +454,7 @@ export function UserPermissionsPanel() {
       }
 
       if (welcomeEmailSent) {
-        toast.success("Usuario criado! E-mail de boas-vindas enviado.");
+        toast.success("Usuário criado! E-mail de boas-vindas com senha temporária enviado.");
       }
       setIsCreateDialogOpen(false);
       resetForm();
@@ -616,10 +661,17 @@ export function UserPermissionsPanel() {
 
   const resetForm = () => {
     setEmail("");
-    setPassword("");
     setDisplayName("");
     setRole("viewer");
+    setNewUserDepartment("geral");
+    setNewUserProjectIds([]);
     setErrors({});
+  };
+
+  const toggleNewUserProject = (projectId: string) => {
+    setNewUserProjectIds((prev) =>
+      prev.includes(projectId) ? prev.filter((p) => p !== projectId) : [...prev, projectId]
+    );
   };
 
   const toggleMenu = (menuId: string) => {
@@ -1256,16 +1308,6 @@ export function UserPermissionsPanel() {
               {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
             </div>
             <div className="space-y-2">
-              <Label>Senha</Label>
-              <Input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className={errors.password ? "border-destructive" : ""}
-              />
-              {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
-            </div>
-            <div className="space-y-2">
               <Label>Perfil</Label>
               <Select value={role} onValueChange={(v) => setRole(v as AppRole)}>
                 <SelectTrigger>
@@ -1277,6 +1319,60 @@ export function UserPermissionsPanel() {
                   <SelectItem value="admin">Administrador (acesso total)</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Cargo / Departamento</Label>
+              <Select value={newUserDepartment} onValueChange={setNewUserDepartment}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="geral">Geral</SelectItem>
+                  {departments.map((dept) => (
+                    <SelectItem key={dept.id} value={dept.name}>{dept.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Acesso às Obras</Label>
+              <p className="text-xs text-muted-foreground">
+                Se nenhuma obra for selecionada, o usuário terá acesso a todas.
+              </p>
+              <div className="grid grid-cols-2 gap-1.5 max-h-40 overflow-y-auto rounded-md border p-2">
+                {projects.length === 0 && (
+                  <p className="col-span-2 text-xs text-muted-foreground">Nenhuma obra cadastrada.</p>
+                )}
+                {projects.map((project) => {
+                  const isChecked = newUserProjectIds.includes(project.id);
+                  return (
+                    <button
+                      key={project.id}
+                      type="button"
+                      title={project.name}
+                      onClick={() => toggleNewUserProject(project.id)}
+                      className={cn(
+                        "flex items-center gap-2 px-3 py-2 rounded-md border text-sm text-left transition-colors",
+                        isChecked
+                          ? "border-primary bg-primary/5 text-foreground"
+                          : "border-border bg-background text-muted-foreground hover:border-muted-foreground/30"
+                      )}
+                    >
+                      <div className={cn(
+                        "h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-colors",
+                        isChecked ? "bg-primary border-primary" : "border-muted-foreground/30"
+                      )}>
+                        {isChecked && <Settings className="h-2.5 w-2.5 text-primary-foreground" />}
+                      </div>
+                      <span className="truncate">{project.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="rounded-md bg-muted/50 border border-border p-3 text-xs text-muted-foreground">
+              Uma senha temporária será gerada automaticamente e enviada por e-mail ao novo usuário.
+              No primeiro acesso, ele será solicitado a definir uma nova senha.
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
