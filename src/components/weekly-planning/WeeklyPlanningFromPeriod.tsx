@@ -413,7 +413,7 @@ function WeekCalendarConfigurator({
 }: {
   startDate: Date;
   endDate: Date;
-  onConfirm: (weeks: WeekDefinition[]) => void;
+  onConfirm: (weeks: WeekDefinition[]) => void | Promise<void>;
 }) {
   // Working day toggles — which weekdays are work days (0=Sun...6=Sat)
   const [workDays, setWorkDays] = useState<boolean[]>([false, true, true, true, true, true, true]); // Mon-Sat default
@@ -433,6 +433,7 @@ function WeekCalendarConfigurator({
   // Currently painting week
   const [paintingWeek, setPaintingWeek] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
   
   // Auto-split working days into equal weeks
   const autoSplit = useCallback((numWeeks: number) => {
@@ -538,6 +539,17 @@ function WeekCalendarConfigurator({
       next[dayIndex] = !next[dayIndex];
       return next;
     });
+  };
+
+  const handleConfirm = async () => {
+    setIsConfirming(true);
+    try {
+      await onConfirm(weekDefs);
+    } catch (error: any) {
+      toast.error("Erro ao salvar semanas: " + (error?.message || "desconhecido"));
+    } finally {
+      setIsConfirming(false);
+    }
   };
 
   return (
@@ -699,12 +711,12 @@ function WeekCalendarConfigurator({
             </div>
           </div>
           <Button
-            onClick={() => onConfirm(weekDefs)}
-            disabled={!isValid}
+            onClick={handleConfirm}
+            disabled={!isValid || isConfirming}
             className="gap-1"
           >
             <CheckCircle2 className="h-4 w-4" />
-            Confirmar Semanas
+            {isConfirming ? "Salvando..." : "Confirmar Semanas"}
           </Button>
         </div>
       </CardContent>
@@ -987,21 +999,47 @@ export function WeeklyPlanningFromPeriod() {
     loadPeriods();
   }, [loadPeriods]);
 
-  useEffect(() => {
+  const loadSelectedPeriodData = useCallback(async () => {
     if (!selectedPeriodId || !projectId) return;
-    (async () => {
+
       const { data: svcs } = await supabase
         .from("service_planning_by_period")
         .select("id, macro_id, macro_name, scope_id, scope_name, target_houses")
         .eq("planning_period_id", selectedPeriodId)
         .eq("project_id", projectId);
-      if (svcs) setPeriodServices(svcs);
+      const serviceRows = (svcs || []) as ServiceForPeriod[];
+      setPeriodServices(serviceRows);
 
       const { data: existingWeeks } = await supabase
         .from("weekly_plan_weeks")
         .select("id, week_number, week_start, week_end, status")
         .eq("planning_period_id", selectedPeriodId)
         .order("week_number");
+
+      const buildServicesForWeek = (savedServices: any[]): WeekServicePlan[] => {
+        const savedMap = new Map(savedServices.map(s => [`${s.macro_id}:${s.scope_id}`, s]));
+
+        return serviceRows.map(svc => {
+          const saved = savedMap.get(`${svc.macro_id}:${svc.scope_id}`);
+          return {
+            id: saved?.id || null,
+            macro_id: svc.macro_id,
+            macro_name: svc.macro_name,
+            macro_color: saved?.macro_color || getMacroColor(svc.macro_id, macros),
+            scope_id: svc.scope_id,
+            scope_name: svc.scope_name,
+            planned_house_ids: saved?.planned_house_ids || [],
+            planned_houses: saved?.planned_houses || 0,
+            contractor_contract_service_id: saved?.contractor_contract_service_id || null,
+            contractor_id: saved?.contractor_id || null,
+            contractor_name: saved?.contractor_name || null,
+            contractor_house_ids: saved?.contractor_house_ids || [],
+            contractor_houses: saved?.contractor_houses || 0,
+            has_out_of_contract_houses: saved?.has_out_of_contract_houses || false,
+            out_of_contract_house_ids: saved?.out_of_contract_house_ids || [],
+          };
+        });
+      };
 
       if (existingWeeks && existingWeeks.length > 0) {
         const weeksWithSvcs: WeekPlan[] = [];
@@ -1010,17 +1048,12 @@ export function WeeklyPlanningFromPeriod() {
             .from("weekly_plan_services")
             .select("id, macro_id, macro_name, macro_color, scope_id, scope_name, planned_house_ids, planned_houses, contractor_contract_service_id, contractor_id, contractor_name, contractor_house_ids, contractor_houses, has_out_of_contract_houses, out_of_contract_house_ids")
             .eq("weekly_plan_week_id", w.id);
-          const services = (ws || []).map((s: any) => ({
-            ...s,
-            contractor_contract_service_id: s.contractor_contract_service_id || null,
-            contractor_id: s.contractor_id || null,
-            contractor_name: s.contractor_name || null,
-            contractor_house_ids: s.contractor_house_ids || [],
-            contractor_houses: s.contractor_houses || 0,
-            has_out_of_contract_houses: s.has_out_of_contract_houses || false,
-            out_of_contract_house_ids: s.out_of_contract_house_ids || [],
-          })) as WeekServicePlan[];
-          weeksWithSvcs.push({ ...w, services, working_days: [] });
+          const services = buildServicesForWeek(ws || []);
+          const workingDays = eachDayOfInterval({
+            start: parseISO(w.week_start),
+            end: parseISO(w.week_end),
+          }).map(d => format(d, "yyyy-MM-dd"));
+          weeksWithSvcs.push({ ...w, services, working_days: workingDays });
         }
         setWeekPlans(weeksWithSvcs);
         setIsGenerated(true);
@@ -1030,14 +1063,20 @@ export function WeeklyPlanningFromPeriod() {
         setIsGenerated(false);
         setShowWeekConfig(true);
       }
-    })();
+  }, [selectedPeriodId, projectId, macros]);
+
+  useEffect(() => {
+    if (!selectedPeriodId || !projectId) return;
+    loadSelectedPeriodData();
     setSelectedServiceKey("");
     setSelectedHouseIds(new Set());
     setTargetWeek(null);
-  }, [selectedPeriodId, projectId]);
+  }, [selectedPeriodId, projectId, loadSelectedPeriodData]);
 
   // ── Create weeks from calendar config ──────────────────
-  const handleWeekConfigConfirm = useCallback((weekDefs: WeekDefinition[]) => {
+  const handleWeekConfigConfirm = useCallback(async (weekDefs: WeekDefinition[]) => {
+    if (!requireEdit()) return;
+    if (!projectId || !companyId || !selectedPeriodId) return;
     if (periodServices.length === 0) return;
 
     const weeks: WeekPlan[] = weekDefs.map(wd => {
@@ -1071,11 +1110,98 @@ export function WeeklyPlanningFromPeriod() {
       };
     });
 
-    setWeekPlans(weeks);
-    setIsGenerated(true);
-    setShowWeekConfig(false);
-    toast.success(`${weeks.length} semana(s) configurada(s). Distribua os serviços.`);
-  }, [periodServices, macros]);
+    const activeWeekNumbers = weeks.map(w => w.week_number);
+
+    const { data: existingWeeks, error: existingWeeksError } = await supabase
+      .from("weekly_plan_weeks")
+      .select("id, week_number")
+      .eq("planning_period_id", selectedPeriodId);
+
+    if (existingWeeksError) throw existingWeeksError;
+
+    const existingWeekMap = new Map((existingWeeks || []).map(w => [w.week_number, w.id]));
+    const existingWeekIds = (existingWeeks || []).map(w => w.id);
+    const serviceCountByWeekId = new Map<string, number>();
+
+    if (existingWeekIds.length > 0) {
+      const { data: existingServices, error: existingServicesError } = await supabase
+        .from("weekly_plan_services")
+        .select("id, weekly_plan_week_id")
+        .in("weekly_plan_week_id", existingWeekIds);
+
+      if (existingServicesError) throw existingServicesError;
+
+      for (const service of existingServices || []) {
+        serviceCountByWeekId.set(
+          service.weekly_plan_week_id,
+          (serviceCountByWeekId.get(service.weekly_plan_week_id) || 0) + 1
+        );
+      }
+    }
+
+    for (const week of weeks) {
+      const existingWeekId = existingWeekMap.get(week.week_number);
+
+      if (existingWeekId) {
+        const { error } = await supabase
+          .from("weekly_plan_weeks")
+          .update({
+            week_start: week.week_start,
+            week_end: week.week_end,
+            status: week.status,
+          })
+          .eq("id", existingWeekId);
+
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("weekly_plan_weeks")
+          .insert({
+            planning_period_id: selectedPeriodId,
+            project_id: projectId,
+            company_id: companyId,
+            week_number: week.week_number,
+            week_start: week.week_start,
+            week_end: week.week_end,
+            status: week.status,
+          });
+
+        if (error) throw error;
+      }
+    }
+
+    const staleWeeks = (existingWeeks || []).filter(w => !activeWeekNumbers.includes(w.week_number));
+    const staleWeeksWithServices = staleWeeks.filter(w => (serviceCountByWeekId.get(w.id) || 0) > 0);
+
+    if (staleWeeksWithServices.length > 0) {
+      const weekList = staleWeeksWithServices.map(w => `Semana ${w.week_number}`).join(", ");
+      throw new Error(`${weekList} já possui serviços distribuídos. Redistribua antes de remover a semana.`);
+    }
+
+    const staleWeekIds = staleWeeks.map(w => w.id);
+    if (staleWeekIds.length > 0) {
+      const { error } = await supabase
+        .from("weekly_plan_weeks")
+        .delete()
+        .in("id", staleWeekIds);
+
+      if (error) throw error;
+    }
+
+    const { error: periodError } = await supabase
+      .from("planning_periods")
+      .update({
+        weekly_plan_generated: true,
+        weekly_plan_locked: false,
+      })
+      .eq("id", selectedPeriodId);
+
+    if (periodError) throw periodError;
+
+    await loadPeriods();
+    await loadSelectedPeriodData();
+    toast.success(`${weeks.length} semana(s) confirmada(s) e salva(s). Distribua os serviços.`);
+  }, [requireEdit, projectId, companyId, selectedPeriodId, periodServices, macros, loadPeriods, loadSelectedPeriodData]);
 
   // ── Auto-distribute ─────────────────────────────────────
   const autoDistribute = useCallback(() => {
