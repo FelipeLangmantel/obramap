@@ -131,17 +131,18 @@ Deno.serve(async (req) => {
       }),
     });
 
+    const rawBody = await response.text();
     if (!response.ok) {
       let message = "Failed to send welcome email";
       try {
-        const body = await response.json();
+        const body = JSON.parse(rawBody);
         if (typeof body?.error === "string") message = body.error;
       } catch { /* ignore */ }
-      console.error("Resend welcome email failed:", message);
-      return jsonResponse({ error: message, password_reset: true }, 502);
+      console.error("Resend welcome email failed:", response.status, rawBody);
+      return jsonResponse({ error: message, status: response.status, detail: rawBody, password_reset: true }, 502);
     }
 
-    return jsonResponse({ success: true, email_sent: true });
+    return jsonResponse({ success: true, email_sent: true, detail: rawBody });
   } catch (error: unknown) {
     console.error("Resend welcome error:", error instanceof Error ? error.message : "unknown");
     const message = error instanceof Error ? error.message : "Unknown error";
